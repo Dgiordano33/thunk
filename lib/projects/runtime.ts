@@ -6,7 +6,7 @@ import type { WorkspaceContext } from "./index";
 import type { ProcessKind, ProcessSnapshot, RuntimeSnapshot } from "./runtime-types";
 
 type WorkspaceProcess = ProcessSnapshot & { pty: IPty; done: Promise<number> };
-type Runtime = { port: number; processes: Map<ProcessKind, WorkspaceProcess>; setupError: string | null; busy: boolean };
+type Runtime = { port: number; processes: Map<ProcessKind, WorkspaceProcess>; setupError: string | null; busy: boolean; released: Promise<void> };
 const globalRuntime = globalThis as typeof globalThis & { __thunkRuntime?: Map<string, Runtime>; __thunkRuntimeExit?: boolean };
 const runtimes = (globalRuntime.__thunkRuntime ??= new Map());
 // shortcut: retain the last 256 KiB per process; add durable scrollback if longer logs are needed.
@@ -15,17 +15,21 @@ const OUTPUT_LIMIT = 256 * 1024;
 function runtime(id: string) {
   let state = runtimes.get(id);
   if (!state) {
-    state = { port: 0, processes: new Map(), setupError: null, busy: false };
+    state = { port: 0, processes: new Map(), setupError: null, busy: false, released: Promise.resolve() };
     runtimes.set(id, state);
   }
   return state;
 }
 
-export async function withWorkspaceLock<T>(id: string, action: () => Promise<T>): Promise<T> {
+/** Rejects if the workspace is busy, unless `wait` is set, in which case it queues behind the current holder. */
+export async function withWorkspaceLock<T>(id: string, action: () => Promise<T>, { wait = false } = {}): Promise<T> {
   const state = runtime(id);
-  if (state.busy) throw new Error("A workspace operation is already running");
+  if (state.busy && !wait) throw new Error("A workspace operation is already running");
+  while (state.busy) await state.released;
   state.busy = true;
-  try { return await action(); } finally { state.busy = false; }
+  let release!: () => void;
+  state.released = new Promise<void>((resolve) => { release = resolve; });
+  try { return await action(); } finally { state.busy = false; release(); }
 }
 
 async function allocatePort(state: Runtime) {
@@ -84,21 +88,18 @@ async function launch(ctx: WorkspaceContext, kind: ProcessKind, command: string)
 }
 
 export async function prepareWorkspace(ctx: WorkspaceContext) {
-  return withWorkspaceLock(ctx.workspace.id, async () => {
-    const state = runtime(ctx.workspace.id);
+  const state = runtime(ctx.workspace.id);
+  const fail = (err: unknown) => { state.setupError = (err as Error).message; throw err; };
+  const proc = await withWorkspaceLock(ctx.workspace.id, async () => {
     state.setupError = null;
     try {
       const config = await readLifecycleConfig(ctx.project.root);
       await copyWorkspaceFiles(ctx.project.root, ctx.workspace.cwd, config);
-      if (config.scripts.setup) {
-        const proc = await launch(ctx, "setup", config.scripts.setup);
-        if (await proc.done !== 0) throw new Error("Setup failed. See Setup output, then retry.");
-      }
-    } catch (err) {
-      state.setupError = (err as Error).message;
-      throw err;
-    }
+      return config.scripts.setup ? await launch(ctx, "setup", config.scripts.setup) : null;
+    } catch (err) { return fail(err); }
   });
+  // Wait for the script outside the lock so prompts and checkpoints aren't held up for the whole setup.
+  if (proc && await proc.done !== 0) fail(new Error("Setup failed. See Setup output, then retry."));
 }
 
 export async function startWorkspaceProcess(ctx: WorkspaceContext, kind: "run" | "shell") {
@@ -106,6 +107,7 @@ export async function startWorkspaceProcess(ctx: WorkspaceContext, kind: "run" |
     if (ctx.workspace.status === "archived") throw new Error("Unarchive this workspace first");
     const state = runtime(ctx.workspace.id);
     if (kind === "shell" && state.processes.get("shell")?.running) return;
+    if (kind === "run" && state.processes.get("setup")?.running) throw new Error("Wait for setup to finish before running the dev server");
     if (kind === "run" && state.setupError) throw new Error("Fix setup before running the dev server");
     const config = await readLifecycleConfig(ctx.project.root);
     const command = kind === "shell" ? process.env.SHELL || "/bin/bash" : config.scripts.run;

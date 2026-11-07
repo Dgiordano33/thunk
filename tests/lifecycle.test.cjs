@@ -96,6 +96,16 @@ test("squash commits into default branch and allows cleanup", async (t) => {
   await assertWorkspaceCanRemove(ctx);
 });
 
+test("squash allows cleanup after the default branch moved on", async (t) => {
+  const { cwd, root, ctx } = await repo(t);
+  await commit(cwd, "topic\n");
+  await commit(root, "other work\n", "other");
+  await workspaceGitAction(ctx, "squash");
+  await assertWorkspaceCanRemove(ctx);
+  await commit(cwd, "unmerged\n");
+  await assert.rejects(assertWorkspaceCanRemove(ctx), /unmerged/);
+});
+
 test("sync conflict surfaces paths and abort preserves both branches", async (t) => {
   const { cwd, root, ctx } = await repo(t);
   await commit(cwd, "topic\n"); await commit(root, "main\n");
@@ -184,6 +194,31 @@ test("workspace lock rejects overlapping operations", async () => {
   await assert.rejects(runtime.withWorkspaceLock(id, async () => {}), /already running/);
   release(); await first;
   await runtime.withWorkspaceLock(id, async () => {});
+});
+
+test("workspace lock queues waiters in order", async () => {
+  const id = crypto.randomUUID();
+  const order = [];
+  let release;
+  const first = runtime.withWorkspaceLock(id, () => new Promise((resolve) => { release = resolve; }));
+  const second = runtime.withWorkspaceLock(id, async () => { order.push("second"); }, { wait: true });
+  const third = runtime.withWorkspaceLock(id, async () => { order.push("third"); }, { wait: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(order, []);
+  release(); await Promise.all([first, second, third]);
+  assert.deepEqual(order, ["second", "third"]);
+});
+
+test("setup script runs without holding the workspace lock", async (t) => {
+  const { root, cwd } = await fixture(t);
+  const ctx = { project: { root, defaultBranch: "main" }, workspace: { id: crypto.randomUUID(), name: "setup-lock", cwd, status: "active" } };
+  t.after(() => runtime.stopWorkspaceProcesses(ctx.workspace.id));
+  await fs.writeFile(path.join(root, "thunk.json"), JSON.stringify({ scripts: { setup: "sleep 1", run: "true" } }));
+  const setup = runtime.prepareWorkspace(ctx);
+  await eventually(async () => (await runtime.runtimeSnapshot(ctx)).processes.some((p) => p.kind === "setup" && p.running));
+  await runtime.withWorkspaceLock(ctx.workspace.id, async () => {});
+  await assert.rejects(runtime.startWorkspaceProcess(ctx, "run"), /Wait for setup/);
+  await setup;
 });
 
 test("terminal SSE replays deltas, resets truncated output, isolates IDs and cancels cleanly", async () => {

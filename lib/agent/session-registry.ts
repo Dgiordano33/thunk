@@ -325,6 +325,7 @@ export function pushUserMessage(
 function dispatchMessage(live: LiveSession, messageId: string, content: string, images?: PromptImage[]) {
   void (async () => {
     if (live.ctx.project.kind === "repo") {
+      // Queue behind other workspace operations (another session's checkpoint, a rewind) rather than failing the turn.
       await withWorkspaceLock(live.ctx.workspace.id, async () => {
         try {
           await captureCheckpoint(live.ctx.workspace.cwd, live.ctx.workspace.id, live.id, messageId, content);
@@ -332,7 +333,7 @@ function dispatchMessage(live: LiveSession, messageId: string, content: string, 
           // A Git conflict must not prevent asking the agent to resolve it.
           emit(live, { type: "error", message: `Checkpoint unavailable; this turn will run without rewind: ${(err as Error).message}` });
         }
-      });
+      }, { wait: true });
     }
     if (!live.driver.isClosed && live.meta.status === "running") live.driver.send(content, images);
   })().catch((err: Error) => {

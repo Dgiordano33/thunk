@@ -47,10 +47,12 @@ export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
   if (!ws.worktreePath) return;
   await assertClean(ws.cwd);
   if (!project.defaultBranch) throw new Error("Set a default branch before deleting a worktree");
-  // A squash has different commit IDs; compare trees too so a successful squash can be cleaned up.
+  // A squash has different commit IDs, and the target may have moved on since. The work is merged
+  // when merging HEAD into the target would change nothing.
   const target = `refs/heads/${project.defaultBranch}`;
   const ancestor = await tryGit(ws.cwd, ["merge-base", "--is-ancestor", "HEAD", target]);
-  if (ancestor === null && await git(ws.cwd, ["diff", target, "HEAD", "--"])) {
+  const merged = ancestor !== null || await tryGit(ws.cwd, ["merge-tree", "--write-tree", target, "HEAD"]) === await git(ws.cwd, ["rev-parse", `${target}^{tree}`]);
+  if (!merged) {
     throw new Error("Workspace contains unmerged commits. Merge back before deleting it; Archive keeps the worktree.");
   }
 }
