@@ -14,13 +14,15 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   if (!ctx) notFound();
   const [sessions, git] = await Promise.all([listSessions({ workspaceId: id, limit: 50 }), worktreeStatus(ctx.workspace.cwd)]);
 
+  const ordered = [...sessions].reverse();
   return (
     <WorkspaceShell
       workspaceId={id}
+      sessions={ordered}
       tabs={
         <WorkspaceTabs
           workspace={ctx.workspace}
-          sessions={[...sessions].reverse()}
+          sessions={ordered}
           branch={git?.branch ?? null}
           dirty={git?.dirty ?? 0}
         />

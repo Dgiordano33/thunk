@@ -8,6 +8,7 @@ import { MemoryEditor } from "@/components/memory/memory-editor";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/client/api";
+import type { SessionMeta } from "@/lib/agent/types";
 import type { DiffComment } from "@/lib/review/diff";
 import type { Artifact } from "@/lib/documents/types";
 import type { ChangedFile, WorkspaceChanges } from "@/lib/projects/types";
@@ -15,11 +16,12 @@ import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 import { ReviewDiff, SendReview, useDiffComments } from "./diff-review";
 import { Checkpoints } from "./checkpoints";
+import { SessionsList } from "./sessions-list";
 
 const CHANGES_POLL_MS = 5000;
 
 /** Workspace-wide info, shared by every session tab: what was produced and what changed on disk. */
-export function WorkspacePanel({ workspaceId }: { workspaceId: string }) {
+export function WorkspacePanel({ workspaceId, sessions }: { workspaceId: string; sessions: SessionMeta[] }) {
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
@@ -41,9 +43,10 @@ export function WorkspacePanel({ workspaceId }: { workspaceId: string }) {
   const fileCount = changes?.files.length ?? 0;
 
   return (
-    <Tabs defaultValue="artifacts" className="flex h-full flex-col gap-0">
+    <Tabs defaultValue="sessions" className="flex h-full flex-col gap-0">
       <div className="flex h-11 shrink-0 items-end border-b px-2">
         <TabsList variant="line" className="h-full">
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
           <TabsTrigger value="changes">
             Changes
@@ -53,6 +56,11 @@ export function WorkspacePanel({ workspaceId }: { workspaceId: string }) {
           <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
         </TabsList>
       </div>
+      <TabsContent value="sessions" className="min-h-0 flex-1">
+        <div className="h-full overflow-y-auto">
+          <SessionsList workspaceId={workspaceId} sessions={sessions} />
+        </div>
+      </TabsContent>
       <TabsContent value="artifacts" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <Artifacts workspaceId={workspaceId} />
