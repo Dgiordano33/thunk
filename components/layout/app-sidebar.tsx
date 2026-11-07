@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
+import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { workspaceActivity } from "@/lib/ambient/summary";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { Logo } from "@/components/logo";
@@ -133,6 +134,8 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
           })}
         </ul>
       </ScrollArea>
+
+      <SettingsMenu projects={projects} />
     </div>
   );
 }
