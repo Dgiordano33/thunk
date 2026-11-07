@@ -3,6 +3,7 @@ import { SessionView } from "@/components/session/session-view";
 import { liveMeta, listSessions } from "@/lib/agent";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import type { PersistedDocument } from "@/lib/documents/types";
+import { getWorkspaceContext } from "@/lib/projects";
 import { loadDocuments } from "@/lib/supabase/repo/documents";
 import { loadEvents } from "@/lib/supabase/repo/messages";
 import { getSessionRow } from "@/lib/supabase/repo/sessions";
@@ -26,11 +27,21 @@ export default async function SessionPage({ params }: PageProps<"/s/[id]">) {
   if (!meta) notFound();
 
   // Persisted history first; the SSE stream replays anything newer by seq.
-  const [events, documents, sessions] = await Promise.all([
+  const [events, documents, sessions, ctx] = await Promise.all([
     loadEvents(id).catch((): HarnessEvent[] => []),
     loadDocuments(id).catch((): PersistedDocument[] => []),
-    listSessions({ cwd: meta.cwd, limit: 40 }),
+    listSessions({ workspaceId: meta.workspaceId, limit: 40 }),
+    getWorkspaceContext(meta.workspaceId).catch(() => null),
   ]);
 
-  return <SessionView meta={meta} events={events} documents={documents} sessions={sessions} />;
+  return (
+    <SessionView
+      meta={meta}
+      events={events}
+      documents={documents}
+      sessions={sessions}
+      project={ctx?.project ?? null}
+      workspace={ctx?.workspace ?? null}
+    />
+  );
 }

@@ -5,16 +5,27 @@ import { handle, HttpError, parseBody } from "@/lib/api/http";
 export const dynamic = "force-dynamic";
 
 export const GET = handle(async (req: Request) => {
-  const cwd = new URL(req.url).searchParams.get("cwd") ?? undefined;
-  return Response.json({ sessions: await listSessions({ cwd }) });
+  const params = new URL(req.url).searchParams;
+  return Response.json({
+    sessions: await listSessions({
+      workspaceId: params.get("workspaceId") ?? undefined,
+      projectId: params.get("projectId") ?? undefined,
+    }),
+  });
 });
 
-const CreateBody = z.object({
-  cwd: z.string().min(1, "cwd is required"),
-  model: z.string().optional(),
-  permissionMode: z.string().optional(),
-  prompt: z.string().optional(),
-});
+const CreateBody = z
+  .object({
+    workspaceId: z.string().min(1).optional(),
+    cwd: z.string().min(1).optional(),
+    model: z.string().optional(),
+    permissionMode: z.string().optional(),
+    prompt: z.string().optional(),
+    /** Adopt an existing Claude Code transcript (from the project's external sessions list). */
+    resumeSdkSessionId: z.string().min(1).optional(),
+    title: z.string().max(120).optional(),
+  })
+  .refine((b) => b.workspaceId || b.cwd, { message: "workspaceId or cwd is required" });
 
 export const POST = handle(async (req: Request) => {
   const body = await parseBody(req, CreateBody);
@@ -22,5 +33,5 @@ export const POST = handle(async (req: Request) => {
     throw new HttpError(400, err.message);
   });
   if (body.prompt?.trim()) pushUserMessage(live, body.prompt.trim());
-  return Response.json({ id: live.id }, { status: 201 });
+  return Response.json({ id: live.id, workspaceId: live.meta.workspaceId }, { status: 201 });
 });

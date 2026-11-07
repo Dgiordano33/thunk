@@ -3,11 +3,12 @@ import type { SessionMeta, SessionState } from "@/lib/agent/types";
 import type { TablesUpdate } from "../types";
 import { db } from "../server";
 
-export type SessionRow = Omit<SessionMeta, "live"> & { workspaceId: string; totalCostUsd: number; updatedAt: string };
+export type SessionRow = Omit<SessionMeta, "live"> & { totalCostUsd: number; updatedAt: string };
 
 type Row = {
   id: string;
   workspace_id: string;
+  workspaces: { project_id: string } | null;
   sdk_session_id: string | null;
   title: string | null;
   cwd: string;
@@ -20,11 +21,12 @@ type Row = {
 };
 
 const COLUMNS =
-  "id, workspace_id, sdk_session_id, title, cwd, model, permission_mode, status, total_cost_usd, created_at, updated_at";
+  "id, workspace_id, sdk_session_id, title, cwd, model, permission_mode, status, total_cost_usd, created_at, updated_at, workspaces(project_id)";
 
 function toSession(r: Row): SessionRow {
   return {
     id: r.id,
+    projectId: r.workspaces?.project_id ?? "",
     workspaceId: r.workspace_id,
     sdkSessionId: r.sdk_session_id,
     title: r.title,
@@ -38,13 +40,13 @@ function toSession(r: Row): SessionRow {
   };
 }
 
-export async function upsertSession(meta: Omit<SessionMeta, "live">, workspaceId: string) {
+export async function upsertSession(meta: Omit<SessionMeta, "live">) {
   const client = db();
   if (!client) return;
   const { error } = await client.from("sessions").upsert(
     {
       id: meta.id,
-      workspace_id: workspaceId,
+      workspace_id: meta.workspaceId,
       sdk_session_id: meta.sdkSessionId ?? null,
       title: meta.title ?? null,
       cwd: meta.cwd,
@@ -80,16 +82,20 @@ export async function getSessionRow(id: string): Promise<SessionRow | null> {
   if (!client) return null;
   const { data, error } = await client.from("sessions").select(COLUMNS).eq("id", id).maybeSingle();
   if (error) throw error;
-  return data ? toSession(data) : null;
+  return data ? toSession(data as unknown as Row) : null;
 }
 
-export async function listSessionRows(opts: { workspaceId?: string; cwd?: string; limit?: number } = {}) {
+export async function listSessionRows(opts: { workspaceId?: string; projectId?: string; limit?: number } = {}) {
   const client = db();
   if (!client) return [];
-  let q = client.from("sessions").select(COLUMNS).order("updated_at", { ascending: false }).limit(opts.limit ?? 50);
+  let q = client
+    .from("sessions")
+    .select(opts.projectId ? COLUMNS.replace("workspaces(project_id)", "workspaces!inner(project_id)") : COLUMNS)
+    .order("updated_at", { ascending: false })
+    .limit(opts.limit ?? 50);
   if (opts.workspaceId) q = q.eq("workspace_id", opts.workspaceId);
-  if (opts.cwd) q = q.eq("cwd", opts.cwd);
+  if (opts.projectId) q = q.eq("workspaces.project_id", opts.projectId);
   const { data, error } = await q;
   if (error) throw error;
-  return data.map(toSession);
+  return (data as unknown as Row[]).map(toSession);
 }

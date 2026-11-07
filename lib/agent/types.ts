@@ -109,6 +109,8 @@ export type HarnessEventType = HarnessEvent["type"];
 
 export type SessionMeta = {
   id: string;
+  projectId: string;
+  workspaceId: string;
   cwd: string;
   model: string;
   permissionMode: string;

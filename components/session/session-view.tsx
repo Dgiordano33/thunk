@@ -11,6 +11,7 @@ import { api } from "@/lib/client/api";
 import { connectSession } from "@/lib/client/sse";
 import { useDocumentPersistence } from "@/lib/client/use-document-persistence";
 import type { PersistedDocument } from "@/lib/documents/types";
+import type { Project, Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { SessionHeader } from "./session-header";
 
@@ -19,11 +20,15 @@ export function SessionView({
   events,
   documents,
   sessions,
+  project,
+  workspace,
 }: {
   meta: SessionMeta;
   events: HarnessEvent[];
   documents: PersistedDocument[];
   sessions: SessionMeta[];
+  project: Project | null;
+  workspace: Workspace | null;
 }) {
   const ready = useSession((s) => s.sessionId === meta.id);
   const live = useSession((s) => s.sessionId === meta.id && Boolean(s.meta?.live));
@@ -80,7 +85,7 @@ export function SessionView({
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-dvh">
       <ResizablePanel defaultSize="17" minSize="12" maxSize="30">
-        {ready && <Sidebar sessions={sessions} />}
+        {ready && <Sidebar sessions={sessions} project={project} workspace={workspace} />}
       </ResizablePanel>
       <ResizableHandle />
       <ResizablePanel defaultSize="57" minSize="35">

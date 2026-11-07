@@ -3,7 +3,7 @@ import { hasSupabase } from "@/lib/env";
 import { insertDocument, updateDocument } from "@/lib/supabase/repo/documents";
 import { insertEvents } from "@/lib/supabase/repo/messages";
 import { addSessionCost, updateSession, upsertSession } from "@/lib/supabase/repo/sessions";
-import { upsertWorkspace } from "@/lib/supabase/repo/workspaces";
+import { touchWorkspace } from "@/lib/supabase/repo/workspaces";
 import { db } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { onSessionCreated, subscribe, type LiveSession } from "./session-registry";
@@ -25,8 +25,8 @@ function persistSession(live: LiveSession) {
   const permissionToolUse = new Map<string, string>();
 
   const ready = (async () => {
-    const workspaceId = await upsertWorkspace(live.meta.cwd);
-    if (workspaceId) await upsertSession(live.meta, workspaceId);
+    await upsertSession(live.meta);
+    await touchWorkspace(live.meta.workspaceId);
   })().catch((err) => console.error("[thunk] persist session failed", err));
   chain = ready;
 

@@ -3,6 +3,7 @@ import { query, type PermissionResult, type Query, type SDKUserMessage } from "@
 import { AsyncQueue } from "./async-queue";
 import { runSession } from "./event-bridge";
 import { buildOptions } from "./options";
+import type { WorkspaceContext } from "@/lib/projects";
 import type { HarnessEvent, HarnessEventBody, SessionMeta, SessionState } from "./types";
 
 export type PendingRequest = {
@@ -27,6 +28,8 @@ export type TurnState = {
 export type LiveSession = {
   id: string;
   meta: Omit<SessionMeta, "live">;
+  /** The project and workspace this session runs in (cwd, config root, memory). */
+  ctx: WorkspaceContext;
   query: Query;
   input: AsyncQueue<SDKUserMessage>;
   events: HarnessEvent[];
@@ -78,7 +81,7 @@ export function onSessionCreated(hook: (live: LiveSession) => void) {
 
 export type CreateSessionInput = {
   id?: string;
-  cwd: string;
+  ctx: WorkspaceContext;
   model: string;
   permissionMode: string;
   title?: string | null;
@@ -91,7 +94,7 @@ export type CreateSessionInput = {
   events?: HarnessEvent[];
 };
 
-export function createSession(input: CreateSessionInput): LiveSession {
+export async function createSession(input: CreateSessionInput): Promise<LiveSession> {
   const id = input.id ?? crypto.randomUUID();
   const existing = registry.get(id);
   if (existing) return existing;
@@ -99,9 +102,12 @@ export function createSession(input: CreateSessionInput): LiveSession {
   const inputQueue = new AsyncQueue<SDKUserMessage>();
   const live = {
     id,
+    ctx: input.ctx,
     meta: {
       id,
-      cwd: input.cwd,
+      projectId: input.ctx.project.id,
+      workspaceId: input.ctx.workspace.id,
+      cwd: input.ctx.workspace.cwd,
       model: input.model,
       permissionMode: input.permissionMode,
       sdkSessionId: input.resume ?? null,
@@ -122,7 +128,10 @@ export function createSession(input: CreateSessionInput): LiveSession {
     stderrTail: [],
   } as unknown as LiveSession;
 
-  live.query = query({ prompt: inputQueue, options: buildOptions(live, { resume: input.resume }) });
+  // Options read project memory from disk.
+  const options = await buildOptions(live, { resume: input.resume });
+  if (registry.has(id)) return registry.get(id)!; // raced with a concurrent create
+  live.query = query({ prompt: inputQueue, options });
   registry.set(id, live);
 
   for (const hook of g.__thunkSessionHooks!) hook(live);

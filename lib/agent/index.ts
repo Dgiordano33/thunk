@@ -1,8 +1,6 @@
 import "server-only";
-import { stat } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { env } from "@/lib/env";
+import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
 import { maxSeq } from "@/lib/supabase/repo/messages";
 import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import "./persist";
@@ -11,20 +9,36 @@ import { PERMISSION_MODES, type SessionMeta } from "./types";
 
 export * from "./session-registry";
 
-export async function resolveCwd(input: string): Promise<string> {
-  const expanded = input.trim().replace(/^~(?=$|\/)/, os.homedir());
-  const abs = path.resolve(expanded);
-  const s = await stat(abs).catch(() => null);
-  if (!s?.isDirectory()) throw new Error(`Not a directory: ${abs}`);
-  return abs;
-}
+export type StartSessionInput = {
+  /** Start inside an existing workspace... */
+  workspaceId?: string;
+  /** ...or quick-start from a directory: its project and "main" workspace are created on demand. */
+  cwd?: string;
+  model?: string;
+  permissionMode?: string;
+  /** Continue an existing Claude Code transcript (e.g. one started from the terminal). */
+  resumeSdkSessionId?: string;
+  title?: string;
+};
 
-export async function startSession(input: { cwd: string; model?: string; permissionMode?: string }) {
-  const cwd = await resolveCwd(input.cwd);
+export async function startSession(input: StartSessionInput) {
+  const ctx = input.workspaceId
+    ? await getWorkspaceContext(input.workspaceId)
+    : input.cwd
+      ? await contextForDirectory(input.cwd)
+      : null;
+  if (!ctx) throw new Error(input.workspaceId ? "Workspace not found" : "workspaceId or cwd is required");
+  if (ctx.workspace.status === "archived") throw new Error("Workspace is archived");
   const permissionMode = PERMISSION_MODES.includes(input.permissionMode as never)
     ? input.permissionMode!
     : "default";
-  return createSession({ cwd, model: input.model || env.DEFAULT_MODEL, permissionMode });
+  return createSession({
+    ctx,
+    model: input.model || env.DEFAULT_MODEL,
+    permissionMode,
+    resume: input.resumeSdkSessionId,
+    title: input.title ?? null,
+  });
 }
 
 /** Return the live session, recreating it from Supabase (SDK `resume`) if needed. */
@@ -36,7 +50,7 @@ export async function resumeSession(id: string) {
     evictSession(live);
     return createSession({
       id,
-      cwd: live.meta.cwd,
+      ctx: live.ctx,
       model: live.meta.model,
       permissionMode: live.meta.permissionMode,
       title: live.meta.title,
@@ -48,9 +62,11 @@ export async function resumeSession(id: string) {
   }
   const row = await getSessionRow(id);
   if (!row) return null;
+  const ctx = await getWorkspaceContext(row.workspaceId);
+  if (!ctx) throw new Error("This session's workspace no longer exists");
   return createSession({
     id: row.id,
-    cwd: row.cwd,
+    ctx,
     model: row.model,
     permissionMode: row.permissionMode,
     title: row.title,
@@ -66,7 +82,9 @@ export function liveMeta(id: string): SessionMeta | null {
 }
 
 /** Live sessions merged over persisted ones, newest first. */
-export async function listSessions(opts: { cwd?: string; limit?: number } = {}): Promise<SessionMeta[]> {
+export async function listSessions(
+  opts: { workspaceId?: string; projectId?: string; limit?: number } = {},
+): Promise<SessionMeta[]> {
   const rows = await listSessionRows(opts).catch((err) => {
     console.error("[thunk] list sessions failed", err);
     return [];
@@ -74,7 +92,8 @@ export async function listSessions(opts: { cwd?: string; limit?: number } = {}):
   const byId = new Map<string, SessionMeta>();
   for (const r of rows) byId.set(r.id, { ...r, live: false });
   for (const live of listLiveSessions()) {
-    if (opts.cwd && live.meta.cwd !== opts.cwd) continue;
+    if (opts.workspaceId && live.meta.workspaceId !== opts.workspaceId) continue;
+    if (opts.projectId && live.meta.projectId !== opts.projectId) continue;
     byId.set(live.id, { ...live.meta, live: true });
   }
   return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, opts.limit ?? 50);

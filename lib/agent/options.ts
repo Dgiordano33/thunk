@@ -1,5 +1,7 @@
 import "server-only";
 import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
+import { readMemory } from "@/lib/projects/memory";
+import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { buildCanUseTool } from "./permissions";
 import type { LiveSession } from "./session-registry";
 
@@ -14,18 +16,53 @@ The user may edit the document directly and leave comments on highlighted spans,
 - End with a short "Notes" section only if you need to explain something that doesn't belong in the document.
 `.trim();
 
-export function buildOptions(live: LiveSession, { resume }: { resume?: string }): Options {
+function hierarchyPrompt(live: LiveSession, projectMemory: string) {
+  const { project, workspace } = live.ctx;
+  const pmFile = projectMemoryFile(project.root);
+  const wmDir = workspaceMemoryDir(project.root, workspace.slug);
+  const lines = [
+    "# Thunk hierarchy",
+    `Project: **${project.name}** (${project.kind}) at \`${project.root}\`${project.remote ? ` · remote ${project.remote}` : ""}.`,
+    workspace.worktreePath
+      ? `Workspace: **${workspace.name}** · git worktree at \`${workspace.worktreePath}\` on branch \`${workspace.branch}\` (branched from \`${workspace.baseRef}\`). Your cwd is the worktree; the project's CLAUDE.md and .claude/ config come from the main checkout. Do not switch branches or cd into the main checkout.`
+      : `Workspace: **${workspace.name}** · works directly in the project root (no worktree).`,
+    "",
+    "Two memory scopes, both plain markdown files you may read and edit with your file tools:",
+    `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.`,
+    `- Workspace memory (your auto-memory directory): \`${wmDir}\`. Shared by every session in this workspace: what the task is, what has been done, what's next, open questions. Other sessions in this workspace read it, so keep it current.`,
+    "",
+    "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
+  ];
+  if (projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
+  return lines.join("\n");
+}
+
+export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
+  const { project, workspace } = live.ctx;
+  const projectMemory = await readMemory(projectMemoryFile(project.root));
+  const isWorktree = Boolean(workspace.worktreePath);
+
   return {
-    cwd: live.meta.cwd,
+    cwd: workspace.cwd,
+    // In a worktree, CLAUDE.md / .claude / .mcp.json still come from the trusted main checkout.
+    ...(isWorktree ? { projectConfigRoot: project.root } : {}),
+    // Project memory lives outside the repo; grant file-tool access to it.
+    additionalDirectories: [projectMemoryDir(project.root)],
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.
     allowDangerouslySkipPermissions: true,
     includePartialMessages: true,
-    // Load the workspace's CLAUDE.md + .claude/settings(.local).json like Claude Code does in a repo,
+    // Load the project's CLAUDE.md + .claude/settings(.local).json like Claude Code does in a repo,
     // but not ~/.claude (global plugins/hooks). Our permissionMode still wins over defaultMode.
     settingSources: ["project", "local"],
-    systemPrompt: { type: "preset", preset: "claude_code", append: CANVAS_PROMPT },
+    // Auto-memory is per workspace, so every session in it shares one MEMORY.md.
+    settings: { autoMemoryEnabled: true, autoMemoryDirectory: workspaceMemoryDir(project.root, workspace.slug) },
+    systemPrompt: {
+      type: "preset",
+      preset: "claude_code",
+      append: `${CANVAS_PROMPT}\n\n${hierarchyPrompt(live, projectMemory)}`,
+    },
     // `env` replaces process.env entirely, so always spread it.
     env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "thunk/0.1.0" },
     resume,

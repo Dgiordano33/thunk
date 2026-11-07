@@ -307,29 +307,88 @@ export type Database = {
           },
         ]
       }
-      workspaces: {
+      projects: {
         Row: {
           created_at: string
-          cwd: string
+          default_branch: string | null
           id: string
+          kind: string
           name: string
+          remote: string | null
+          root: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          cwd: string
+          default_branch?: string | null
           id?: string
+          kind?: string
           name: string
+          remote?: string | null
+          root: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          cwd?: string
+          default_branch?: string | null
           id?: string
+          kind?: string
           name?: string
+          remote?: string | null
+          root?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      workspaces: {
+        Row: {
+          base_ref: string | null
+          branch: string | null
+          created_at: string
+          cwd: string
+          id: string
+          name: string
+          project_id: string
+          slug: string
+          status: string
+          updated_at: string
+          worktree_path: string | null
+        }
+        Insert: {
+          base_ref?: string | null
+          branch?: string | null
+          created_at?: string
+          cwd: string
+          id?: string
+          name: string
+          project_id: string
+          slug: string
+          status?: string
+          updated_at?: string
+          worktree_path?: string | null
+        }
+        Update: {
+          base_ref?: string | null
+          branch?: string | null
+          created_at?: string
+          cwd?: string
+          id?: string
+          name?: string
+          project_id?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+          worktree_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspaces_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

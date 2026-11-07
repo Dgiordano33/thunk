@@ -1,18 +1,47 @@
 "use client";
 
-import { PlusIcon, ZapIcon } from "lucide-react";
+import { GitBranchIcon, Loader2Icon, PlusIcon, ZapIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { SessionMeta } from "@/lib/agent/types";
+import { api } from "@/lib/client/api";
+import type { Project, Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 
-export function Sidebar({ sessions }: { sessions: SessionMeta[] }) {
+export function Sidebar({
+  sessions,
+  project,
+  workspace,
+}: {
+  sessions: SessionMeta[];
+  project: Project | null;
+  workspace: Workspace | null;
+}) {
+  const router = useRouter();
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
-  const cwd = meta?.cwd ?? "";
+  const [creating, setCreating] = useState(false);
+
+  // New session in the same workspace with the same model and mode.
+  const newSession = async () => {
+    if (!meta) return;
+    setCreating(true);
+    try {
+      const { id } = await api.createSession({
+        workspaceId: meta.workspaceId,
+        model: meta.model,
+        permissionMode: meta.permissionMode,
+      });
+      router.push(`/s/${id}`);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col">
@@ -21,17 +50,31 @@ export function Sidebar({ sessions }: { sessions: SessionMeta[] }) {
           <ZapIcon className="size-4" />
           Thunk
         </Link>
-        <Button size="icon-sm" variant="ghost" asChild aria-label="New session">
-          <Link href={`/?cwd=${encodeURIComponent(cwd)}`}>
-            <PlusIcon />
-          </Link>
+        <Button size="icon-sm" variant="ghost" aria-label="New session" onClick={newSession} disabled={creating}>
+          {creating ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
         </Button>
       </div>
-      <div className="px-3 pb-2">
-        <p className="text-muted-foreground truncate font-mono text-[11px]" title={cwd}>
-          {cwd.replace(/^\/Users\/[^/]+/, "~")}
-        </p>
+
+      <div className="flex flex-col gap-0.5 px-3 pb-2">
+        {project ? (
+          <Link href={`/p/${project.id}`} className="truncate text-xs font-medium hover:underline" title={project.root}>
+            {project.name}
+          </Link>
+        ) : (
+          <p className="text-muted-foreground truncate font-mono text-[11px]">{meta?.cwd}</p>
+        )}
+        {workspace && (
+          <Link
+            href={`/w/${workspace.id}`}
+            className="text-muted-foreground flex items-center gap-1 truncate text-[11px] hover:underline"
+            title={workspace.cwd}
+          >
+            {workspace.worktreePath && <GitBranchIcon className="size-3 shrink-0" />}
+            <span className="truncate">{workspace.worktreePath ? workspace.branch : workspace.name}</span>
+          </Link>
+        )}
       </div>
+
       <ScrollArea className="min-h-0 flex-1">
         <ul className="flex flex-col gap-0.5 px-2 pb-3">
           {sessions.map((s) => {
