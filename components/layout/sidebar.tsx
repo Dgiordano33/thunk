@@ -1,9 +1,10 @@
 "use client";
 
-import { GitBranchIcon, Loader2Icon, PlusIcon, ZapIcon } from "lucide-react";
+import { GitBranchIcon, Loader2Icon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Logo } from "@/components/logo";
 import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,9 +47,9 @@ export function Sidebar({
   return (
     <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col">
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <Link href="/" className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
-          <ZapIcon className="size-4" />
-          Thunk
+        <Link href="/" className="flex items-center">
+          <span className="sr-only">Thunk</span>
+          <Logo className="h-7 w-auto" />
         </Link>
         <Button size="icon-sm" variant="ghost" aria-label="New session" onClick={newSession} disabled={creating}>
           {creating ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}

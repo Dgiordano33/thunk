@@ -1,5 +1,6 @@
 import { FolderGitIcon, FolderIcon } from "lucide-react";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { AddProjectForm } from "@/components/home/add-project-form";
 import { relativeTime } from "@/components/session/labels";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,10 @@ export default async function Home() {
   return (
     <main className="mx-auto flex min-h-full max-w-3xl flex-col gap-10 px-6 py-16">
       <section>
-        <h1 className="text-3xl font-semibold tracking-tight">Thunk</h1>
+        <h1>
+          <span className="sr-only">Thunk</span>
+          <Logo className="h-12 w-auto" />
+        </h1>
         <p className="text-muted-foreground mt-2 mb-6 max-w-lg text-sm leading-relaxed">
           Projects are repos or folders. Workspaces are tasks inside a project, each with its own worktree and shared memory.
           Sessions are the chats inside a workspace.
@@ -32,6 +36,10 @@ export default async function Home() {
 
       <section>
         <h2 className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">Projects</h2>
+        <p className="text-muted-foreground mb-3 text-sm">
+          Folders registered with Thunk by adding a project or starting a session with a folder path.
+          {hasSupabase ? " This list is saved in the configured database and persists across restarts." : " This list is kept in memory until the server restarts."}
+        </p>
         {projects.length === 0 ? (
           <p className="text-muted-foreground text-sm">No projects yet. Add a repo or folder above.</p>
         ) : (
