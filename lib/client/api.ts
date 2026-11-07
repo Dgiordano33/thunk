@@ -1,7 +1,18 @@
+import type { Checkpoint } from "@/lib/projects/checkpoints";
+import type { RuntimeSnapshot, ProcessKind } from "@/lib/projects/runtime-types";
+import type { workspaceGitState } from "@/lib/projects/workspace-git";
+import type { PromptImage } from "@/lib/prompts/schema";
 import type { RevisionComment, RevisionStat } from "@/lib/revisions/build-payload";
-import type { SessionMeta } from "@/lib/agent/types";
-import type { DocComment } from "@/lib/documents/types";
-import type { Project, ProjectSummary, Workspace, WorkspaceSummary } from "@/lib/projects/types";
+import type { ModelOption, SessionMeta } from "@/lib/agent/types";
+import type { Artifact, DocComment } from "@/lib/documents/types";
+import type {
+  Project,
+  ProjectSummary,
+  Workspace,
+  WorkspaceChanges,
+  WorkspacePrStatus,
+  WorkspaceSummary,
+} from "@/lib/projects/types";
 
 async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const res = await fetch(url, {
@@ -32,17 +43,34 @@ export const api = {
   // Workspaces
   listWorkspaces: (projectId: string) =>
     call<{ workspaces: WorkspaceSummary[] }>(`/api/workspaces?projectId=${encodeURIComponent(projectId)}`),
-  createWorkspace: (body: { projectId: string; name: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
+  createWorkspace: (body: { projectId: string; name?: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
   deleteWorkspace: (id: string, opts: { worktree?: boolean; memory?: boolean } = {}) =>
     call(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}&memory=${opts.memory ? 1 : 0}`, { method: "DELETE" }),
+  workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),
+  workspaceProcess: (id: string, body:
+    | { action: "setup" | "run" | "shell" }
+    | { action: "stop"; kind: ProcessKind }
+    | { action: "input"; processId: string; data?: string; cols?: number; rows?: number }
+  ) => post(`/api/workspaces/${id}/runtime`, body),
+  workspaceGit: (id: string) => call<{ git: Awaited<ReturnType<typeof workspaceGitState>> }>(`/api/workspaces/${id}/git`),
+  workspaceGitAction: (id: string, action: string, deleteAfter = false) =>
+    post<{ ok: boolean; deleted: boolean }>(`/api/workspaces/${id}/git`, { action, deleteAfter }),
+  checkpoints: (id: string) => call<{ checkpoints: Checkpoint[] }>(`/api/workspaces/${id}/checkpoints`),
+  rewind: (id: string, checkpointId: string) => post<{ recovery: Checkpoint }>(`/api/workspaces/${id}/checkpoints`, { checkpointId }),
+  workspaceChanges: (id: string) => call<{ changes: WorkspaceChanges | null }>(`/api/workspaces/${id}/changes`),
+  workspaceFileDiff: (id: string, path: string) =>
+    call<{ diff: string }>(`/api/workspaces/${id}/changes?path=${encodeURIComponent(path)}`),
+  workspacePr: (id: string) => call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`),
+  workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),
   putMemory: (scope: "projects" | "workspaces", id: string, content: string) =>
     call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content } }),
+  listModels: () => call<{ models: ModelOption[]; codexError: string | null }>("/api/models"),
   // Sessions
   createSession: (body: {
     workspaceId?: string;
@@ -50,6 +78,7 @@ export const api = {
     model?: string;
     permissionMode?: string;
     prompt?: string;
+    images?: PromptImage[];
     resumeSdkSessionId?: string;
     title?: string;
   }) => post<{ id: string; workspaceId: string }>("/api/sessions", body),
@@ -59,7 +88,8 @@ export const api = {
       `/api/sessions?${new URLSearchParams(Object.entries(opts).filter(([, v]) => v) as [string, string][])}`,
     ),
   resume: (id: string) => post<{ session: SessionMeta; seq: number }>(`/api/sessions/${id}/resume`, {}),
-  send: (id: string, content: string) => post<{ messageId: string }>(`/api/sessions/${id}/input`, { content }),
+  send: (id: string, content: string, images: PromptImage[] = []) => post<{ messageId: string }>(`/api/sessions/${id}/input`, { content, images }),
+  promptContext: (id: string) => call<{ files: string[]; commands: string[] }>(`/api/workspaces/${id}/prompt-context`),
   permission: (
     id: string,
     body: { requestId: string; decision: "allow" | "allow_always" | "deny"; message?: string },

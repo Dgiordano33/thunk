@@ -34,3 +34,16 @@ export type PersistedDocument = {
   status: DocumentStatus;
   comments: DocComment[];
 };
+
+/** A document as listed in the workspace panel: the latest version of one response or plan. */
+export type Artifact = {
+  id: string;
+  sessionId: string;
+  sessionTitle: string | null;
+  kind: DocumentKind;
+  version: number;
+  status: DocumentStatus;
+  title: string;
+  openComments: number;
+  createdAt: string;
+};

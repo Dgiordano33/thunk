@@ -94,6 +94,7 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
             : { source, parent, name, git: initGit },
       );
       router.push(`/p/${project.id}`);
+      router.refresh();
     } catch (err) {
       setError((err as Error).message);
       setPending(false);

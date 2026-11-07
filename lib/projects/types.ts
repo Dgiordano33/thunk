@@ -33,3 +33,51 @@ export type Workspace = {
 
 export type WorkspaceSummary = Workspace & { sessionCount: number; lastSessionAt: string | null };
 export type ProjectSummary = Project & { workspaceCount: number; lastActivityAt: string | null };
+
+export type ChangedFile = {
+  path: string;
+  /** git name-status letter: A, M, D, R…; "U" for untracked. */
+  status: string;
+  additions: number;
+  deletions: number;
+};
+
+export type WorkspaceChanges = {
+  /** What the changes are measured against: the merge-base with the workspace's base ref, else HEAD. */
+  base: string | null;
+  baseLabel: string;
+  files: ChangedFile[];
+  additions: number;
+  deletions: number;
+};
+
+export type CheckState = "pass" | "fail" | "pending" | "skipped";
+
+export type PrCheck = { name: string; state: CheckState; url: string | null };
+
+export type PrReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+
+export type PullRequestInfo = {
+  number: number;
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  title: string;
+  isDraft: boolean;
+  /** Latest run of each check and commit status on the head commit. */
+  checks: PrCheck[];
+  reviewDecision: PrReviewDecision;
+  /** GitHub computes this lazily; UNKNOWN right after a push. */
+  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
+  /** CLEAN, BEHIND, BLOCKED, DIRTY, DRAFT, UNSTABLE, HAS_HOOKS or UNKNOWN. */
+  mergeStateStatus: string;
+};
+
+export type WorkspacePrStatus = {
+  branch: string | null;
+  /** Branch the PR targets. */
+  base: string;
+  pr: PullRequestInfo | null;
+  canCreate: boolean;
+  /** Why a PR can't be created, when it can't. */
+  reason: string | null;
+};

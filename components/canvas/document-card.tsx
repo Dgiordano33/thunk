@@ -43,10 +43,11 @@ export function DocumentCard({ documentId }: { documentId: string }) {
 
   return (
     <article
+      id={`doc-${documentId}`}
       onFocusCapture={() => setActive(documentId)}
       onMouseDown={() => !active && setActive(documentId)}
       className={cn(
-        "bg-card relative rounded-xl border px-8 pt-5 pb-4 shadow-xs transition-[border-color,box-shadow]",
+        "bg-card relative scroll-mt-4 rounded-xl border px-8 pt-5 pb-4 shadow-xs transition-[border-color,box-shadow]",
         active && editable && "border-foreground/20 shadow-sm",
         !editable && "bg-muted/20",
       )}

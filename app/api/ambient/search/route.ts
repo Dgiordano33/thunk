@@ -1,0 +1,58 @@
+import { listLiveSessions } from "@/lib/agent";
+import type { SearchResult } from "@/lib/ambient/types";
+import { handle, HttpError } from "@/lib/api/http";
+import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
+import { db } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+export const GET = handle(async (req: Request) => {
+  const query = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  if (query.length > 200) throw new HttpError(400, "Search is limited to 200 characters");
+  if (!query) return Response.json({ results: [] });
+  const results = new Map<string, SearchResult>();
+  const term = query.toLowerCase();
+  const client = db();
+  const live = listLiveSessions();
+  if (client) {
+    const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+    const [sessions, documents, messages] = await Promise.all([
+      client.from("sessions").select("id, title, workspace_id, cwd").ilike("title", pattern).order("updated_at", { ascending: false }).limit(30),
+      client.from("documents").select("id, session_id, current_markdown, kind, sessions(workspace_id)").ilike("current_markdown", pattern).order("created_at", { ascending: false }).limit(30),
+      client.from("messages").select("id, seq, session_id, markdown, sessions(workspace_id)").eq("type", "user_message").ilike("markdown", pattern).order("created_at", { ascending: false }).limit(30),
+    ]);
+    for (const response of [sessions, documents, messages]) if (response.error) throw response.error;
+    for (const s of sessions.data ?? []) results.set(s.id, { id: s.id, label: s.title || "Untitled session", detail: s.cwd, href: `/w/${s.workspace_id}/s/${s.id}`, kind: "Session" });
+    for (const d of documents.data ?? []) {
+      if (!d.sessions) continue;
+      results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.current_markdown, term), href: `/w/${d.sessions.workspace_id}/s/${d.session_id}#doc-${d.id}`, kind: "Document" });
+    }
+    for (const m of messages.data ?? []) {
+      if (!m.sessions) continue;
+      results.set(`${m.session_id}:${m.seq}`, { id: `${m.session_id}:${m.seq}`, label: "Session prompt", detail: excerpt(m.markdown ?? "", term), href: `/w/${m.sessions.workspace_id}/s/${m.session_id}`, kind: "Prompt" });
+    }
+  }
+  for (const s of live) {
+    const href = `/w/${s.meta.workspaceId}/s/${s.id}`;
+    if (s.meta.title?.toLowerCase().includes(term)) results.set(s.id, { id: s.id, label: s.meta.title, detail: s.meta.cwd, href, kind: "Session" });
+    for (const e of s.events) {
+      if (e.type === "user_message" && e.content.toLowerCase().includes(term)) {
+        const id = `${s.id}:${e.seq}`;
+        results.set(id, { id, label: s.meta.title || "Session prompt", detail: excerpt(e.content, term), href, kind: "Prompt" });
+      }
+    }
+  }
+  if (!client) {
+    for (const d of await listDocumentsForSessions(live.map((s) => s.id))) {
+      if (!d.markdown.toLowerCase().includes(term)) continue;
+      const s = live.find((s) => s.id === d.sessionId)!;
+      results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.markdown, term), href: `/w/${s.meta.workspaceId}/s/${s.id}#doc-${d.id}`, kind: "Document" });
+    }
+  }
+  return Response.json({ results: [...results.values()].slice(0, 60) });
+});
+
+function excerpt(text: string, term: string) {
+  const start = Math.max(0, text.toLowerCase().indexOf(term) - 50);
+  return `${start ? "…" : ""}${text.slice(start, start + 180)}`;
+}

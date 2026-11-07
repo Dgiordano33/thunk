@@ -1,5 +1,7 @@
 "use client";
 
+import type { PromptImage } from "@/lib/prompts/schema";
+
 import { create } from "zustand";
 import type { HarnessEvent, PermissionSuggestion, Question, SessionMeta, SessionState } from "@/lib/agent/types";
 import type { ConnectionState } from "@/lib/client/sse";
@@ -51,6 +53,8 @@ export type TimelineItem =
       kind: "user";
       id: string;
       content: string;
+      images?: PromptImage[];
+      queued?: boolean;
       revision?: { documentId: string; edits: number; comments: number };
     }
   | { kind: "turn"; id: string }
@@ -182,6 +186,9 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       return patch;
     }
 
+    case "message_dequeued":
+      return { items: s.items.map((item) => item.kind === "user" && item.id === e.messageId ? { ...item, queued: false } : item) };
+
     case "user_message":
       return {
         items: [
@@ -190,6 +197,8 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
             kind: "user",
             id: e.messageId,
             content: e.content,
+            images: e.images,
+            queued: e.queued,
             revision:
               e.kind === "revision" && e.documentId
                 ? { documentId: e.documentId, edits: e.stat?.edits ?? 0, comments: e.stat?.comments ?? 0 }

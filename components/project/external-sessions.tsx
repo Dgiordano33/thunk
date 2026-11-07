@@ -3,7 +3,7 @@
 import { ImportIcon, Loader2Icon, TerminalIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { relativeTime } from "@/components/session/labels";
+import { relativeTime, workspaceLabel } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import type { ExternalSession } from "@/lib/projects";
@@ -35,7 +35,8 @@ export function ExternalSessions({ sessions, workspaces }: { sessions: ExternalS
         resumeSdkSessionId: s.sdkSessionId,
         title: s.title.slice(0, 120),
       });
-      router.push(`/s/${id}`);
+      router.push(`/w/${ws.id}/s/${id}`);
+      router.refresh();
     } catch (err) {
       setError((err as Error).message);
       setBusy(null);
@@ -63,7 +64,7 @@ export function ExternalSessions({ sessions, workspaces }: { sessions: ExternalS
                   {s.gitBranch && <span className="font-mono">{s.gitBranch} · </span>}
                   {s.cwd && <span className="font-mono">{home(s.cwd)} · </span>}
                   {relativeTime(s.lastModified)}
-                  {ws && <span> · into {ws.name}</span>}
+                  {ws && <span> · into {workspaceLabel(ws)}</span>}
                 </p>
               </div>
               <Button

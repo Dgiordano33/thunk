@@ -1,14 +1,31 @@
+import type { PromptImage } from "@/lib/prompts/schema";
 // Shared between server and client. Keep free of server-only imports.
 
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;
 export type HarnessPermissionMode = (typeof PERMISSION_MODES)[number];
 
-export const MODELS = [
-  { id: "claude-opus-5-5", label: "Opus 5.5" },
-  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
-  { id: "claude-haiku-5-5", label: "Haiku 5.5" },
-  { id: "claude-fable-5-1", label: "Fable 5.1" },
-] as const;
+export type AgentProvider = "claude" | "codex";
+
+export const PROVIDER_LABELS: Record<AgentProvider, string> = { claude: "Claude", codex: "Codex" };
+
+export type ModelOption = { id: string; label: string; provider: AgentProvider; description?: string };
+
+export const CLAUDE_MODELS: ModelOption[] = [
+  { id: "claude-opus-5-5", label: "Opus 5.5", provider: "claude" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5", provider: "claude" },
+  { id: "claude-haiku-5-5", label: "Haiku 5.5", provider: "claude" },
+  { id: "claude-fable-5-1", label: "Fable 5.1", provider: "claude" },
+];
+
+/** Claude ids and aliases go to the Agent SDK; anything else is a Codex model (list comes from `codex app-server`). */
+export function providerOf(model: string | null | undefined): AgentProvider {
+  return !model || /^(claude|opus|sonnet|haiku|fable)\b/i.test(model) ? "claude" : "codex";
+}
+
+/** Plan mode is a Claude Agent SDK feature; Codex sessions only get modes that map onto its approval policies. */
+export function permissionModesFor(provider: AgentProvider): readonly HarnessPermissionMode[] {
+  return provider === "codex" ? PERMISSION_MODES.filter((m) => m !== "plan") : PERMISSION_MODES;
+}
 
 export type SessionState = "starting" | "idle" | "running" | "awaiting" | "closed" | "error";
 
@@ -35,10 +52,13 @@ export type HarnessEventBody =
       messageId: string;
       content: string;
       kind: "prompt" | "revision";
+      images?: PromptImage[];
+      queued?: boolean;
       /** For revisions: the document the user revised. */
       documentId?: string;
       stat?: { edits: number; comments: number };
     }
+  | { type: "message_dequeued"; messageId: string }
   | { type: "turn_start"; turnId: string }
   | { type: "text_delta"; turnId: string; text: string }
   | { type: "thinking_delta"; turnId: string; text: string }

@@ -1,26 +1,11 @@
 import "server-only";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { emit, releaseSession, setState, type LiveSession, type TurnState } from "./session-registry";
+import { emit, setState, type LiveSession, type TurnState } from "./session-registry";
 
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
-/** Pump SDK messages into harness events until the query ends. */
-export async function runSession(live: LiveSession) {
-  try {
-    for await (const msg of live.query) handleMessage(live, msg);
-    if (live.meta.status !== "closed") setState(live, "closed");
-  } catch (err) {
-    const tail = live.stderrTail.slice(-5).join("").trim();
-    const message = err instanceof Error ? err.message : String(err);
-    emit(live, { type: "error", message: tail ? `${message}\n${tail}` : message });
-    setState(live, "error");
-  } finally {
-    // Stays registered (history, status) until resumeSession replaces it.
-    releaseSession(live);
-  }
-}
-
-function handleMessage(live: LiveSession, msg: SDKMessage) {
+/** Translate one Claude Agent SDK message into harness events. */
+export function handleMessage(live: LiveSession, msg: SDKMessage) {
   switch (msg.type) {
     case "system": {
       if (msg.subtype !== "init") return;
@@ -121,7 +106,7 @@ function handleMessage(live: LiveSession, msg: SDKMessage) {
  * Get the current turn, starting one if needed. A queued follow-up marks the turn as `split`;
  * only honor that at the start of a new API message so an in-flight response isn't cut in two.
  */
-function ensureTurn(live: LiveSession, newMessage = false): TurnState {
+export function ensureTurn(live: LiveSession, newMessage = false): TurnState {
   if (newMessage && live.turn?.split) finishTurn(live, live.turn, false);
   if (live.turn) return live.turn;
   const turn: TurnState = {
@@ -137,7 +122,7 @@ function ensureTurn(live: LiveSession, newMessage = false): TurnState {
   return turn;
 }
 
-function appendText(live: LiveSession, turn: TurnState, text: string) {
+export function appendText(live: LiveSession, turn: TurnState, text: string) {
   if (!text) return;
   if (turn.lastPartWasTool) {
     turn.segmentText = "";
@@ -147,7 +132,7 @@ function appendText(live: LiveSession, turn: TurnState, text: string) {
   emit(live, { type: "text_delta", turnId: turn.id, text });
 }
 
-function finishTurn(live: LiveSession, turn: TurnState, final: boolean) {
+export function finishTurn(live: LiveSession, turn: TurnState, final: boolean) {
   live.turn = null;
   const markdown = turn.lastPartWasTool ? "" : turn.segmentText.trim();
   const documentId = final && markdown ? crypto.randomUUID() : null;
@@ -163,7 +148,7 @@ function finishTurn(live: LiveSession, turn: TurnState, final: boolean) {
   });
 }
 
-function stringifyToolResult(content: unknown): string {
+export function stringifyToolResult(content: unknown): string {
   let text: string;
   if (typeof content === "string") text = content;
   else if (Array.isArray(content))

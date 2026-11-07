@@ -1,10 +1,13 @@
+import { captureCheckpoint } from "@/lib/projects/checkpoints";
+import { withWorkspaceLock } from "@/lib/projects/runtime";
+import { expandCommand } from "@/lib/prompts/context";
+import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
-import { query, type PermissionResult, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { AsyncQueue } from "./async-queue";
-import { runSession } from "./event-bridge";
-import { buildOptions } from "./options";
+import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import { createClaudeDriver } from "./claude-driver";
+import { createCodexDriver } from "./codex/driver";
 import type { WorkspaceContext } from "@/lib/projects";
-import type { HarnessEvent, HarnessEventBody, SessionMeta, SessionState } from "./types";
+import { providerOf, type HarnessEvent, type HarnessEventBody, type SessionMeta, type SessionState } from "./types";
 
 export type PendingRequest = {
   kind: "permission" | "question" | "plan";
@@ -25,13 +28,28 @@ export type TurnState = {
   streamedMessageIds: Set<string>;
 };
 
+/**
+ * One agent runtime (Claude Agent SDK query, or a Codex app-server thread) behind a live session.
+ * Drivers translate their runtime's stream into harness events via `emit`.
+ */
+export type AgentDriver = {
+  /** Pump the runtime until it exits. Rejects if it crashes. */
+  run(): Promise<void>;
+  send(content: string, images?: PromptImage[]): void;
+  interrupt(): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setPermissionMode(mode: string): Promise<void>;
+  /** Stop accepting input and shut the runtime down. Idempotent. */
+  close(): void;
+  readonly isClosed: boolean;
+};
+
 export type LiveSession = {
   id: string;
   meta: Omit<SessionMeta, "live">;
   /** The project and workspace this session runs in (cwd, config root, memory). */
   ctx: WorkspaceContext;
-  query: Query;
-  input: AsyncQueue<SDKUserMessage>;
+  driver: AgentDriver;
   events: HarnessEvent[];
   seq: number;
   subscribers: Set<(e: HarnessEvent) => void>;
@@ -44,6 +62,7 @@ export type LiveSession = {
   pendingDelta: Extract<HarnessEventBody, { type: "text_delta" | "thinking_delta" }> | null;
   deltaTimer: ReturnType<typeof setTimeout> | null;
   stderrTail: string[];
+  queuedMessages: { id: string; content: string; images: PromptImage[] }[];
 };
 
 const MAX_EVENTS = 20_000;
@@ -86,7 +105,7 @@ export type CreateSessionInput = {
   permissionMode: string;
   title?: string | null;
   createdAt?: string;
-  /** SDK session id to resume. */
+  /** SDK session id (Claude) or thread id (Codex) to resume. */
   resume?: string;
   /** Continue numbering after persisted events. */
   seqStart?: number;
@@ -99,7 +118,6 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
   const existing = registry.get(id);
   if (existing) return existing;
 
-  const inputQueue = new AsyncQueue<SDKUserMessage>();
   const live = {
     id,
     ctx: input.ctx,
@@ -115,7 +133,6 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
       status: "starting" as SessionState,
       createdAt: input.createdAt ?? new Date().toISOString(),
     },
-    input: inputQueue,
     events: input.events ?? [],
     seq: input.seqStart ?? 0,
     subscribers: new Set(),
@@ -126,12 +143,28 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
     pendingDelta: null,
     deltaTimer: null,
     stderrTail: [],
+    queuedMessages: [],
   } as unknown as LiveSession;
 
-  // Options read project memory from disk.
-  const options = await buildOptions(live, { resume: input.resume });
-  if (registry.has(id)) return registry.get(id)!; // raced with a concurrent create
-  live.query = query({ prompt: inputQueue, options });
+  const dequeued = new Set(live.events.filter((e) => e.type === "message_dequeued").map((e) => e.messageId));
+  for (const event of live.events) {
+    if (event.type === "user_message" && event.queued && !dequeued.has(event.messageId)) {
+      live.queuedMessages.push({
+        id: event.messageId,
+        content: event.kind === "prompt" ? await expandCommand(event.content, input.ctx.project.root) : event.content,
+        images: event.images ?? [],
+      });
+    }
+  }
+
+  // Drivers read project memory from disk.
+  const createDriver = providerOf(input.model) === "codex" ? createCodexDriver : createClaudeDriver;
+  const driver = await createDriver(live, { resume: input.resume });
+  if (registry.has(id)) {
+    driver.close(); // raced with a concurrent create
+    return registry.get(id)!;
+  }
+  live.driver = driver;
   registry.set(id, live);
 
   for (const hook of g.__thunkSessionHooks!) hook(live);
@@ -139,6 +172,22 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
   setState(live, "idle", { resumed: Boolean(input.resume) });
   void runSession(live);
   return live;
+}
+
+/** Pump the driver until it ends, then park the session as closed or errored. */
+async function runSession(live: LiveSession) {
+  try {
+    await live.driver.run();
+    if (live.meta.status !== "closed") setState(live, "closed");
+  } catch (err) {
+    const tail = live.stderrTail.slice(-5).join("").trim();
+    const message = err instanceof Error ? err.message : String(err);
+    emit(live, { type: "error", message: tail ? `${message}\n${tail}` : message });
+    setState(live, "error");
+  } finally {
+    // Stays registered (history, status) until resumeSession replaces it.
+    releaseSession(live);
+  }
 }
 
 export function getSession(id: string) {
@@ -149,20 +198,19 @@ export function listLiveSessions() {
   return [...registry.values()];
 }
 
-/** The SDK query has exited or crashed; it can only be resumed by replacing the session. */
+/** The agent runtime has exited or crashed; it can only be resumed by replacing the session. */
 export function isTerminated(live: LiveSession) {
   return live.meta.status === "closed" || live.meta.status === "error";
 }
 
-/** Deny parked tool requests and shut the query's input and subprocess. Idempotent. */
+/** Deny parked tool requests and shut the runtime's input and subprocess. Idempotent. */
 export function releaseSession(live: LiveSession) {
   for (const [requestId, req] of live.pending) {
     req.resolve({ behavior: "deny", message: "Session closed." });
     live.pending.delete(requestId);
   }
-  live.input.close();
   try {
-    live.query.close();
+    live.driver.close();
   } catch {
     // already closed
   }
@@ -189,6 +237,13 @@ export function subscribe(live: LiveSession, fn: (e: HarnessEvent) => void) {
 }
 
 export function setState(live: LiveSession, state: SessionState, extra: { resumed?: boolean } = {}) {
+  if (state === "idle" && live.queuedMessages?.length) {
+    const next = live.queuedMessages.shift()!;
+    emit(live, { type: "message_dequeued", messageId: next.id });
+    live.meta.status = "running";
+    dispatchMessage(live, next.id, next.content, next.images);
+    state = "running";
+  }
   live.meta.status = state;
   emit(live, {
     type: "status",
@@ -240,10 +295,10 @@ function emitNow(live: LiveSession, body: HarnessEventBody) {
 export function pushUserMessage(
   live: LiveSession,
   content: string,
-  opts: { kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number } } = {},
+  opts: { kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number }; images?: PromptImage[]; expandedContent?: string } = {},
 ) {
-  if (live.input.isClosed) throw new Error("Session is closed");
-  if (live.turn) live.turn.split = true;
+  if (live.driver.isClosed) throw new Error("Session is closed");
+  const queued = live.meta.status === "running" || live.meta.status === "awaiting";
   if (!live.meta.title && opts.kind !== "revision") {
     live.meta.title = content.replace(/\s+/g, " ").trim().slice(0, 80);
   }
@@ -255,14 +310,36 @@ export function pushUserMessage(
     kind: opts.kind ?? "prompt",
     documentId: opts.documentId,
     stat: opts.stat,
+    images: opts.images,
+    queued,
   });
-  live.input.push({
-    type: "user",
-    message: { role: "user", content },
-    parent_tool_use_id: null,
-  });
-  setState(live, "running");
+  if (queued) {
+    (live.queuedMessages ??= []).push({ id: messageId, content: opts.expandedContent ?? content, images: opts.images ?? [] });
+  } else {
+    setState(live, "running");
+    dispatchMessage(live, messageId, opts.expandedContent ?? content, opts.images);
+  }
   return messageId;
+}
+
+function dispatchMessage(live: LiveSession, messageId: string, content: string, images?: PromptImage[]) {
+  void (async () => {
+    if (live.ctx.project.kind === "repo") {
+      // Queue behind other workspace operations (another session's checkpoint, a rewind) rather than failing the turn.
+      await withWorkspaceLock(live.ctx.workspace.id, async () => {
+        try {
+          await captureCheckpoint(live.ctx.workspace.cwd, live.ctx.workspace.id, live.id, messageId, content);
+        } catch (err) {
+          // A Git conflict must not prevent asking the agent to resolve it.
+          emit(live, { type: "error", message: `Checkpoint unavailable; this turn will run without rewind: ${(err as Error).message}` });
+        }
+      }, { wait: true });
+    }
+    if (!live.driver.isClosed && live.meta.status === "running") live.driver.send(content, images);
+  })().catch((err: Error) => {
+    emit(live, { type: "error", message: `Could not start turn: ${err.message}` });
+    setState(live, "error");
+  });
 }
 
 export function resolvePending(live: LiveSession, requestId: string, result: PermissionResult) {

@@ -6,6 +6,7 @@ import { CodeBlock } from "@/components/ai-elements/code-block";
 import { toolSummary } from "@/components/chat/tool-call";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PROVIDER_LABELS, providerOf } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,13 @@ function langFor(path: unknown) {
 
 function previewOf(toolName: string, input: Record<string, unknown>) {
   if (toolName === "Bash" && typeof input.command === "string") return { code: input.command, lang: "bash" };
+  if (toolName === "ApplyPatch" && Array.isArray(input.changes))
+    return {
+      code: (input.changes as { path: string; kind: string; diff: string }[])
+        .map((c) => (c.diff.startsWith("---") ? c.diff : `--- ${c.path} (${c.kind})\n${c.diff}`))
+        .join("\n"),
+      lang: "diff",
+    };
   if (toolName === "Write" && typeof input.content === "string")
     return { code: input.content, lang: langFor(input.file_path) };
   if (toolName === "Edit" && typeof input.new_string === "string")
@@ -33,6 +41,7 @@ function previewOf(toolName: string, input: Record<string, unknown>) {
 export function PermissionCard({ requestId }: { requestId: string }) {
   const req = useSession((s) => s.requests[requestId]);
   const sessionId = useSession((s) => s.sessionId!);
+  const agent = PROVIDER_LABELS[providerOf(useSession((s) => s.meta?.model))];
   const [denying, setDenying] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,7 +87,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
       <div className="mb-3 flex items-start gap-2">
         <ShieldAlertIcon className="mt-0.5 size-4 text-amber-600" />
         <div className="min-w-0">
-          <p className="text-sm font-medium">{req.title ?? `Claude wants to use ${req.toolName}`}</p>
+          <p className="text-sm font-medium">{req.title ?? `${agent} wants to use ${req.toolName}`}</p>
           {(req.description || req.decisionReason) && (
             <p className="text-muted-foreground mt-0.5 text-xs">{req.decisionReason ?? req.description}</p>
           )}
@@ -99,7 +108,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
             autoFocus
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Tell Claude what to do instead (optional)"
+            placeholder={`Tell ${agent} what to do instead (optional)`}
             className="h-8 text-sm"
           />
           <Button size="sm" variant="destructive" type="submit" disabled={busy}>

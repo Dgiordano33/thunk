@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "setup": "npm ci",
+    "run": "npm run dev -- --port $THUNK_PORT"
+  }
+}

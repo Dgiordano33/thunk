@@ -1,9 +1,9 @@
 "use client";
 
+import { PromptComposer } from "@/components/chat/prompt-composer";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  PromptInput,
-  PromptInputBody,
   PromptInputFooter,
   PromptInputSelect,
   PromptInputSelectContent,
@@ -11,15 +11,18 @@ import {
   PromptInputSelectTrigger,
   PromptInputSelectValue,
   PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import { ModelSelect } from "@/components/chat/model-select";
 import { MODE_LABELS } from "@/components/session/labels";
-import { MODELS, PERMISSION_MODES } from "@/lib/agent/types";
+import { permissionModesFor, providerOf } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
+import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
 
 export function PromptBox() {
+  const router = useRouter();
+  const models = useModels();
   const sessionId = useSession((s) => s.sessionId!);
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
@@ -28,53 +31,43 @@ export function PromptBox() {
 
   const live = Boolean(meta?.live);
   const running = status === "running" || status === "awaiting";
-  const models = MODELS.some((m) => m.id === meta?.model)
-    ? MODELS
-    : [...MODELS, { id: meta?.model ?? "", label: meta?.model ?? "" }];
+  const provider = providerOf(meta?.model);
 
   const control = (body: Parameters<typeof api.control>[1]) =>
     api.control(sessionId, body).catch((err: Error) => setError(err.message));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-5">
-      <PromptInput
-        onSubmit={async ({ text }) => {
-          if (!text.trim()) return;
+      <PromptComposer
+        workspaceId={meta?.workspaceId ?? ""}
+        disabled={!live || submitting}
+        placeholder={live ? (running ? "Queue a follow-up…" : "Ask the agent to do something…") : "Session is not live"}
+        onSubmit={async ({ text, files }) => {
+          if ((!text.trim() && !files.length) || submitting) throw new Error("Message unavailable");
           setError(null);
           setSubmitting(true);
           try {
-            await api.send(sessionId, text);
+            await api.send(sessionId, text, files);
           } catch (err) {
             setError((err as Error).message);
+            throw err;
           } finally {
             setSubmitting(false);
           }
         }}
       >
-        <PromptInputBody>
-          <PromptInputTextarea
-            disabled={!live}
-            placeholder={live ? (running ? "Queue a follow-up…" : "Ask Claude to do something…") : "Session is not live"}
-          />
-        </PromptInputBody>
         <PromptInputFooter>
           <PromptInputTools>
-            <PromptInputSelect
+            <ModelSelect
+              models={models}
               value={meta?.model}
-              onValueChange={(value) => control({ action: "setModel", value })}
+              onValueChange={(value) => {
+                // A session can't change runtimes: the other provider's models open a new chat here.
+                if (providerOf(value) === provider) void control({ action: "setModel", value });
+                else if (meta) router.push(`/w/${meta.workspaceId}/new?model=${encodeURIComponent(value)}`);
+              }}
               disabled={!live}
-            >
-              <PromptInputSelectTrigger className="h-7 text-xs">
-                <PromptInputSelectValue />
-              </PromptInputSelectTrigger>
-              <PromptInputSelectContent>
-                {models.map((m) => (
-                  <PromptInputSelectItem key={m.id} value={m.id}>
-                    {m.label}
-                  </PromptInputSelectItem>
-                ))}
-              </PromptInputSelectContent>
-            </PromptInputSelect>
+            />
             <PromptInputSelect
               value={meta?.permissionMode}
               onValueChange={(value) => control({ action: "setPermissionMode", value })}
@@ -84,7 +77,7 @@ export function PromptBox() {
                 <PromptInputSelectValue />
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>
-                {PERMISSION_MODES.map((m) => (
+                {permissionModesFor(provider).map((m) => (
                   <PromptInputSelectItem key={m} value={m}>
                     {MODE_LABELS[m]}
                   </PromptInputSelectItem>
@@ -93,13 +86,13 @@ export function PromptBox() {
             </PromptInputSelect>
             {error && <span className="text-destructive truncate text-xs">{error}</span>}
           </PromptInputTools>
+          {running && <button type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</button>}
           <PromptInputSubmit
-            disabled={!live}
-            status={submitting ? "submitted" : running ? "streaming" : "ready"}
-            onStop={() => control({ action: "interrupt" })}
+            disabled={!live || submitting}
+            status={submitting ? "submitted" : "ready"}
           />
         </PromptInputFooter>
-      </PromptInput>
+      </PromptComposer>
     </div>
   );
 }
