@@ -1,65 +1,61 @@
-import Image from "next/image";
+import Link from "next/link";
+import { NewSessionForm } from "@/components/home/new-session-form";
+import { relativeTime } from "@/components/session/labels";
+import { listSessions } from "@/lib/agent";
+import { env, hasSupabase } from "@/lib/env";
+import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const { cwd } = await searchParams;
+  const [workspaces, sessions] = await Promise.all([
+    listWorkspaces().catch(() => []),
+    listSessions({ limit: 12 }),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto flex min-h-full max-w-5xl flex-col gap-10 px-6 py-16 md:flex-row">
+      <section className="flex-1">
+        <h1 className="text-3xl font-semibold tracking-tight">Thunk</h1>
+        <p className="text-muted-foreground mt-2 mb-8 max-w-md text-sm leading-relaxed">
+          Claude Code where every response is a document. Edit it, comment on it, send your revisions back.
+        </p>
+        <NewSessionForm
+          defaultCwd={typeof cwd === "string" ? cwd : (workspaces[0]?.cwd ?? "")}
+          defaultModel={env.DEFAULT_MODEL}
+          recentCwds={workspaces.map((w) => w.cwd)}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+        {!hasSupabase && (
+          <p className="text-muted-foreground mt-6 text-xs">
+            Supabase isn&apos;t configured: sessions live in memory and won&apos;t survive a server restart.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        )}
+      </section>
+
+      <aside className="w-full md:w-80">
+        <h2 className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">Recent sessions</h2>
+        {sessions.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No sessions yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <Link href={`/s/${s.id}`} className="hover:bg-muted block rounded-md px-3 py-2 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className={`size-1.5 shrink-0 rounded-full ${s.live ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+                    <span className="truncate text-sm font-medium">{s.title || "Untitled session"}</span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5 flex justify-between gap-2 pl-3.5 text-xs">
+                    <span className="truncate font-mono">{s.cwd.split("/").slice(-2).join("/")}</span>
+                    <span className="shrink-0">{relativeTime(s.createdAt)}</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
+    </main>
   );
 }
