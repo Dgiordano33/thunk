@@ -39,7 +39,7 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
 
   const remove = async () => {
     const what = workspace.worktreePath
-      ? `Delete "${label}", its sessions, and the worktree at ${workspace.worktreePath}? Uncommitted work there is lost.`
+      ? `Delete "${label}", its sessions, and the worktree at ${workspace.worktreePath}? Deletion requires committed changes merged into the default branch.`
       : `Delete "${label}" and its sessions?`;
     if (!window.confirm(what)) return;
     try {

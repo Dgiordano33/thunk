@@ -4,8 +4,9 @@ import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { buildCanUseTool } from "./permissions";
 import type { LiveSession } from "./session-registry";
+import type { AgentProvider } from "./types";
 
-const CANVAS_PROMPT = `
+export const CANVAS_PROMPT = `
 # Thunk canvas
 You are running inside Thunk, a harness where your final prose in each turn is shown to the user as an editable document (a "canvas"), not a chat bubble. Write that final prose as a clean, well-structured markdown document. Avoid filler like "Let me know if...".
 
@@ -16,7 +17,7 @@ The user may edit the document directly and leave comments on highlighted spans,
 - End with a short "Notes" section only if you need to explain something that doesn't belong in the document.
 `.trim();
 
-function hierarchyPrompt(live: LiveSession, projectMemory: string) {
+export function hierarchyPrompt(live: LiveSession, projectMemory: string, provider: AgentProvider = "claude") {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.root);
   const wmDir = workspaceMemoryDir(project.root, workspace.slug);
@@ -24,12 +25,12 @@ function hierarchyPrompt(live: LiveSession, projectMemory: string) {
     "# Thunk hierarchy",
     `Project: **${project.name}** (${project.kind}) at \`${project.root}\`${project.remote ? ` · remote ${project.remote}` : ""}.`,
     workspace.worktreePath
-      ? `Workspace: **${workspace.name}** · git worktree at \`${workspace.worktreePath}\` on branch \`${workspace.branch}\` (branched from \`${workspace.baseRef}\`). Your cwd is the worktree; the project's CLAUDE.md and .claude/ config come from the main checkout. Do not switch branches or cd into the main checkout.`
+      ? `Workspace: **${workspace.name}** · git worktree at \`${workspace.worktreePath}\` on branch \`${workspace.branch}\` (branched from \`${workspace.baseRef}\`). Your cwd is the worktree${provider === "claude" ? "; the project's CLAUDE.md and .claude/ config come from the main checkout" : ""}. Do not switch branches or cd into the main checkout.`
       : `Workspace: **${workspace.name}** · works directly in the project root (no worktree).`,
     "",
     "Two memory scopes, both plain markdown files you may read and edit with your file tools:",
     `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.`,
-    `- Workspace memory (your auto-memory directory): \`${wmDir}\`. Shared by every session in this workspace: what the task is, what has been done, what's next, open questions. Other sessions in this workspace read it, so keep it current.`,
+    `- Workspace memory${provider === "claude" ? " (your auto-memory directory)" : ""}: \`${wmDir}\`${provider === "codex" ? " (keep it in MEMORY.md there)" : ""}. Shared by every session in this workspace: what the task is, what has been done, what's next, open questions. Other sessions in this workspace read it, so keep it current.`,
     "",
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];

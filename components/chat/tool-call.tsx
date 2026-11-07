@@ -11,6 +11,11 @@ export function toolSummary(name: string, input: unknown): string {
   switch (name) {
     case "Bash":
       return str("description") || str("command");
+    case "ApplyPatch": {
+      // Codex file edits: one patch can touch several files.
+      const paths = Array.isArray(i.changes) ? (i.changes as { path?: string }[]).map((c) => short(c.path ?? "")) : [];
+      return paths.length > 2 ? `${paths.slice(0, 2).join(", ")} +${paths.length - 2}` : paths.join(", ");
+    }
     case "Read":
     case "Write":
     case "Edit":

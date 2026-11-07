@@ -1,4 +1,4 @@
-import { MODELS } from "@/lib/agent/types";
+import { CLAUDE_MODELS, type ModelOption } from "@/lib/agent/types";
 import type { Workspace } from "@/lib/projects/types";
 
 export const MODE_LABELS: Record<string, string> = {
@@ -10,8 +10,8 @@ export const MODE_LABELS: Record<string, string> = {
   auto: "Auto",
 };
 
-export function modelLabel(id: string) {
-  return MODELS.find((m) => m.id === id)?.label ?? id;
+export function modelLabel(id: string, models: ModelOption[] = CLAUDE_MODELS) {
+  return models.find((m) => m.id === id)?.label ?? id;
 }
 
 export function relativeTime(iso: string) {

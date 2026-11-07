@@ -2,6 +2,7 @@ import { z } from "zod";
 import { closeSession, listLiveSessions } from "@/lib/agent";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { getWorkspaceContext, removeWorkspace } from "@/lib/projects";
+import { archiveWorkspaceProcesses, withWorkspaceLock } from "@/lib/projects/runtime";
 import { worktreeStatus } from "@/lib/projects/git";
 import { updateWorkspace } from "@/lib/supabase/repo/workspaces";
 
@@ -23,8 +24,15 @@ const PatchBody = z.object({
 export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/workspaces/[id]">) => {
   const { id } = await ctx.params;
   const body = await parseBody(req, PatchBody);
-  await updateWorkspace(id, body);
-  if (body.status === "archived") for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
+  const wctx = await getWorkspaceContext(id);
+  if (!wctx) throw new HttpError(404, "Workspace not found");
+  await withWorkspaceLock(id, async () => {
+    if (body.status === "archived" && wctx.workspace.status !== "archived") {
+      for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
+      await archiveWorkspaceProcesses(wctx);
+    }
+    await updateWorkspace(id, body);
+  });
   return Response.json({ ok: true });
 });
 

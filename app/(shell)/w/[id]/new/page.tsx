@@ -13,8 +13,10 @@ export async function generateMetadata({ params }: PageProps<"/w/[id]/new">) {
   return { title: ctx ? `${workspaceLabel(ctx.workspace)} · ${ctx.project.name} · Thunk` : "Thunk" };
 }
 
-export default async function NewChatPage({ params }: PageProps<"/w/[id]/new">) {
+export default async function NewChatPage({ params, searchParams }: PageProps<"/w/[id]/new">) {
   const { id } = await params;
+  // Set when switching providers from a running chat's model picker.
+  const { model } = await searchParams;
   const ctx = await getWorkspaceContext(id);
   if (!ctx) notFound();
   // Carry over the model and mode from the workspace's latest session.
@@ -22,9 +24,10 @@ export default async function NewChatPage({ params }: PageProps<"/w/[id]/new">) 
 
   return (
     <NewChat
+      key={typeof model === "string" ? model : undefined}
       workspaceId={id}
       workspaceLabel={workspaceLabel(ctx.workspace)}
-      defaultModel={latest?.model ?? env.DEFAULT_MODEL}
+      defaultModel={(typeof model === "string" && model) || latest?.model || env.DEFAULT_MODEL}
       defaultMode={latest?.permissionMode ?? "default"}
       disabled={ctx.workspace.status === "archived"}
     />

@@ -30,7 +30,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/sessions
 
   if (body.decision === "approve") {
     // Switch modes before releasing the tool call so the next edits don't prompt.
-    await live.query.setPermissionMode(body.nextMode);
+    await live.driver.setPermissionMode(body.nextMode);
     live.meta.permissionMode = body.nextMode;
     resolvePending(live, body.requestId, {
       behavior: "allow",

@@ -51,12 +51,25 @@ export type WorkspaceChanges = {
   deletions: number;
 };
 
+export type CheckState = "pass" | "fail" | "pending" | "skipped";
+
+export type PrCheck = { name: string; state: CheckState; url: string | null };
+
+export type PrReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+
 export type PullRequestInfo = {
   number: number;
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
   title: string;
   isDraft: boolean;
+  /** Latest run of each check and commit status on the head commit. */
+  checks: PrCheck[];
+  reviewDecision: PrReviewDecision;
+  /** GitHub computes this lazily; UNKNOWN right after a push. */
+  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
+  /** CLEAN, BEHIND, BLOCKED, DIRTY, DRAFT, UNSTABLE, HAS_HOOKS or UNKNOWN. */
+  mergeStateStatus: string;
 };
 
 export type WorkspacePrStatus = {

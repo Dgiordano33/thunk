@@ -1,11 +1,11 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
-import { maxSeq } from "@/lib/supabase/repo/messages";
+import { loadEvents, maxSeq } from "@/lib/supabase/repo/messages";
 import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import "./persist";
 import { createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
-import { PERMISSION_MODES, type SessionMeta } from "./types";
+import { permissionModesFor, providerOf, type SessionMeta } from "./types";
 
 export * from "./session-registry";
 
@@ -29,24 +29,25 @@ export async function startSession(input: StartSessionInput) {
       : null;
   if (!ctx) throw new Error(input.workspaceId ? "Workspace not found" : "workspaceId or cwd is required");
   if (ctx.workspace.status === "archived") throw new Error("Workspace is archived");
-  const permissionMode = PERMISSION_MODES.includes(input.permissionMode as never)
+  const model = input.model || env.DEFAULT_MODEL;
+  const permissionMode = permissionModesFor(providerOf(model)).includes(input.permissionMode as never)
     ? input.permissionMode!
     : "default";
   return createSession({
     ctx,
-    model: input.model || env.DEFAULT_MODEL,
+    model,
     permissionMode,
     resume: input.resumeSdkSessionId,
     title: input.title ?? null,
   });
 }
 
-/** Return the live session, recreating it from Supabase (SDK `resume`) if needed. */
+/** Return the live session, recreating it from Supabase (SDK `resume` / Codex `thread/resume`) if needed. */
 export async function resumeSession(id: string) {
   const live = getSession(id);
   if (live && !isTerminated(live)) return live;
   if (live) {
-    // The query exited or crashed: start a new one on the same SDK session, keeping history.
+    // The runtime exited or crashed: start a new one on the same SDK session / thread, keeping history.
     evictSession(live);
     return createSession({
       id,
@@ -73,6 +74,7 @@ export async function resumeSession(id: string) {
     createdAt: row.createdAt,
     resume: row.sdkSessionId ?? undefined,
     seqStart: await maxSeq(id),
+    events: await loadEvents(id),
   });
 }
 

@@ -4,6 +4,9 @@ import { ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { AmbientHub } from "@/components/ambient/ambient-hub";
+import { workspaceActivity } from "@/lib/ambient/summary";
+import { useAmbient } from "@/lib/store/ambient-store";
 import { Logo } from "@/components/logo";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
 import { isLocalWorkspace, workspaceDisplayName } from "@/components/session/labels";
@@ -16,6 +19,7 @@ import { cn } from "@/lib/utils";
 export type SidebarProject = ProjectSummary & { workspaces: WorkspaceSummary[] };
 
 export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
+  const sessions = useAmbient((s) => s.sessions);
   const pathname = usePathname();
   const [, section, activeId] = pathname.split("/");
   const activeProjectId = section === "p" ? activeId : undefined;
@@ -30,6 +34,8 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
           <Logo className="h-7 w-auto" />
         </Link>
       </div>
+
+      <AmbientHub projects={projects} />
 
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <h2 className="text-muted-foreground text-xs font-medium">Projects</h2>
@@ -77,7 +83,9 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
 
                 {open && (
                   <ul className="mt-0.5 flex flex-col gap-0.5">
-                    {p.workspaces.map((w) => (
+                    {p.workspaces.map((w) => {
+                      const activity = workspaceActivity(sessions, w.id);
+                      return (
                       <li key={w.id} className="group/ws relative">
                         <Link
                           href={`/w/${w.id}`}
@@ -97,6 +105,9 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                             <HouseIcon className="text-muted-foreground size-3.5 shrink-0" />
                           )}
                           <span className="truncate text-[13px]">{workspaceDisplayName(w)}</span>
+                          {activity && (
+                            <span className={cn("size-2 shrink-0 rounded-full", activity === "Running" ? "bg-sky-500" : "bg-amber-500")} role="img" aria-label={activity} title={activity} />
+                          )}
                           {w.sessionCount > 0 && (
                             <span
                               className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums group-hover/ws:invisible group-has-[[data-state=open]]/ws:invisible"
@@ -113,7 +124,8 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                           className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/ws:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                         />
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </li>

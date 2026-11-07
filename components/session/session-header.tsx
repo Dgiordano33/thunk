@@ -6,6 +6,8 @@ import { MODE_LABELS, modelLabel } from "@/components/session/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { providerOf } from "@/lib/agent/types";
+import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
+  const models = useModels();
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
   const connection = useSession((s) => s.connection);
@@ -58,7 +61,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
       <div className="text-muted-foreground ml-auto flex items-center gap-3 text-xs">
         <Popover>
           <PopoverTrigger className="hover:text-foreground hidden items-center gap-1.5 transition-colors lg:flex">
-            {modelLabel(meta.model)} · {MODE_LABELS[meta.permissionMode] ?? meta.permissionMode}
+            {modelLabel(meta.model, models)} · {MODE_LABELS[meta.permissionMode] ?? meta.permissionMode}
             <InfoIcon className="size-3" />
           </PopoverTrigger>
           <PopoverContent align="end" className="w-96 p-0">
@@ -116,6 +119,7 @@ function CommentsToggle() {
 }
 
 function SessionInfo() {
+  const models = useModels();
   const meta = useSession((s) => s.meta);
   const costUsd = useSession((s) => s.costUsd);
   const numTurns = useSession((s) => s.numTurns);
@@ -125,11 +129,12 @@ function SessionInfo() {
 
   const rows: [string, string][] = [
     ["Directory", meta.cwd],
-    ["Model", modelLabel(meta.model)],
+    ["Model", modelLabel(meta.model, models)],
     ["Mode", MODE_LABELS[meta.permissionMode] ?? meta.permissionMode],
     ["Status", meta.live ? meta.status : "not live"],
     ["Connection", connection],
-    ["Cost", `$${costUsd.toFixed(4)}`],
+    // Codex reports tokens, not dollars.
+    ["Cost", providerOf(meta.model) === "codex" ? "Not reported" : `$${costUsd.toFixed(4)}`],
     ["API turns", String(numTurns)],
     ["Documents", String(docCount)],
     ["SDK session", meta.sdkSessionId ?? "—"],

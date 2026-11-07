@@ -9,12 +9,12 @@ import type { ChangedFile, WorkspaceChanges } from "./types";
 
 const exec = promisify(execFile);
 
-async function git(cwd: string, args: string[]) {
+export async function git(cwd: string, args: string[]) {
   const { stdout } = await exec("git", args, { cwd, maxBuffer: 4 * 1024 * 1024 });
   return stdout.trim();
 }
 
-async function tryGit(cwd: string, args: string[]) {
+export async function tryGit(cwd: string, args: string[]) {
   return git(cwd, args).catch(() => null);
 }
 
@@ -85,7 +85,7 @@ export async function createWorktree(opts: { root: string; path: string; branch:
 }
 
 export async function removeWorktree(root: string, worktree: string) {
-  await git(root, ["worktree", "remove", "--force", worktree]).catch(async (err) => {
+  await git(root, ["worktree", "remove", worktree]).catch(async (err) => {
     // Already gone on disk: just drop the registration.
     if (!(await stat(worktree).catch(() => null))) return git(root, ["worktree", "prune"]);
     throw err;

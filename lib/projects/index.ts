@@ -13,6 +13,8 @@ import {
 import { createWorktree, detectProject, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
 import { ensureMemory } from "./memory";
 import { projectMemoryFile, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
+import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock } from "./runtime";
+import { assertWorkspaceCanRemove } from "./workspace-git";
 import type { Project, Workspace } from "./types";
 
 export type WorkspaceContext = { project: Project; workspace: Workspace };
@@ -81,6 +83,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     },
   );
   await ensureMemory(workspaceMemoryFile(project.root, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
+  if (useWorktree) void prepareWorkspace({ project, workspace: ws }).catch((err) => console.error("[thunk] workspace setup", err));
   return ws;
 }
 
@@ -108,8 +111,20 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
   if (!ws) return;
   if (ws.slug === "main") throw new Error("The main workspace can't be removed");
   const project = await getProject(ws.projectId);
-  if (ws.worktreePath && project && opts.removeWorktree) await removeWorktree(project.root, ws.worktreePath);
-  await deleteWorkspaceRow(id);
+  if (project) {
+    await withWorkspaceLock(id, async () => {
+      const ctx = { project, workspace: ws };
+      if (opts.removeWorktree) await assertWorkspaceCanRemove(ctx);
+      if (ws.status !== "archived") await archiveWorkspaceProcesses(ctx);
+      if (ws.worktreePath && opts.removeWorktree) {
+        await assertWorkspaceCanRemove(ctx);
+        await removeWorktree(project.root, ws.worktreePath);
+      }
+      await deleteWorkspaceRow(id);
+    });
+  } else {
+    await deleteWorkspaceRow(id);
+  }
   if (opts.removeMemory && project)
     await rm(path.dirname(workspaceMemoryDir(project.root, ws.slug)), { force: true, recursive: true }).catch(() => {});
 }
