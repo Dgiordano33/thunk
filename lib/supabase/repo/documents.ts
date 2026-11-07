@@ -3,6 +3,13 @@ import type { DocComment, DocumentKind, DocumentStatus, PersistedDocument } from
 import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
 
+// Memory-only mode (no Supabase): keep documents for the server's lifetime so
+// edits and comments survive a page reload. Pinned to globalThis for HMR.
+const g = globalThis as typeof globalThis & {
+  __thunkMemDocs?: Map<string, { sessionId: string; doc: PersistedDocument }>;
+};
+const memDocs = (g.__thunkMemDocs ??= new Map());
+
 export async function insertDocument(doc: {
   id: string;
   sessionId: string;
@@ -13,7 +20,25 @@ export async function insertDocument(doc: {
   markdown: string;
 }) {
   const client = db();
-  if (!client) return;
+  if (!client) {
+    if (!memDocs.has(doc.id))
+      memDocs.set(doc.id, {
+        sessionId: doc.sessionId,
+        doc: {
+          id: doc.id,
+          kind: doc.kind,
+          parentDocumentId: doc.parentDocumentId ?? null,
+          version: doc.version,
+          originalMarkdown: doc.markdown,
+          baselineMarkdown: null,
+          currentMarkdown: doc.markdown,
+          contentJson: null,
+          status: "draft",
+          comments: [],
+        },
+      });
+    return;
+  }
   const { error } = await client.from("documents").upsert(
     {
       id: doc.id,
@@ -35,7 +60,15 @@ export async function updateDocument(
   patch: { currentMarkdown?: string; baselineMarkdown?: string; contentJson?: unknown; status?: DocumentStatus },
 ) {
   const client = db();
-  if (!client) return;
+  if (!client) {
+    const d = memDocs.get(id)?.doc;
+    if (!d) return;
+    if (patch.currentMarkdown !== undefined) d.currentMarkdown = patch.currentMarkdown;
+    if (patch.baselineMarkdown !== undefined) d.baselineMarkdown = patch.baselineMarkdown;
+    if (patch.contentJson !== undefined) d.contentJson = patch.contentJson;
+    if (patch.status !== undefined) d.status = patch.status;
+    return;
+  }
   const update: TablesUpdate<"documents"> = {};
   if (patch.currentMarkdown !== undefined) update.current_markdown = patch.currentMarkdown;
   if (patch.baselineMarkdown !== undefined) update.baseline_markdown = patch.baselineMarkdown;
@@ -48,7 +81,11 @@ export async function updateDocument(
 /** Replace a document's comment set with the client's current list. */
 export async function syncComments(documentId: string, comments: DocComment[]) {
   const client = db();
-  if (!client) return;
+  if (!client) {
+    const d = memDocs.get(documentId)?.doc;
+    if (d) d.comments = structuredClone(comments);
+    return;
+  }
   const rows = comments.flatMap((c) => [
     {
       id: c.id,
@@ -96,7 +133,9 @@ export async function insertRevision(rev: { documentId: string; diff: string; pa
 
 export async function loadDocuments(sessionId: string): Promise<PersistedDocument[]> {
   const client = db();
-  if (!client) return [];
+  if (!client) {
+    return [...memDocs.values()].filter((m) => m.sessionId === sessionId).map((m) => structuredClone(m.doc));
+  }
   const { data: docs, error } = await client
     .from("documents")
     .select(

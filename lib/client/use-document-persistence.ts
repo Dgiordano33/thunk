@@ -7,9 +7,9 @@ import { api } from "./api";
 const DOC_DEBOUNCE_MS = 800;
 const COMMENT_DEBOUNCE_MS = 500;
 
-function saveDocument(id: string) {
-  const d = useSession.getState().documents[id];
-  if (!d) return;
+// Saves take the document captured at schedule time: by the time the debounce
+// fires the store may have hydrated another session and no longer hold it.
+function saveDocument(id: string, d: DocState) {
   api
     .patchDocument(id, {
       currentMarkdown: d.currentMarkdown,
@@ -19,9 +19,7 @@ function saveDocument(id: string) {
     .catch((err) => console.warn("[thunk] save document failed", err));
 }
 
-function saveComments(id: string) {
-  const d = useSession.getState().documents[id];
-  if (!d) return;
+function saveComments(id: string, d: DocState) {
   api
     .syncComments(
       id,
@@ -59,10 +57,10 @@ export function useDocumentPersistence() {
           doc.contentJson !== before.contentJson ||
           doc.baselineMarkdown !== before.baselineMarkdown
         ) {
-          schedule(`doc:${id}`, DOC_DEBOUNCE_MS, () => saveDocument(id));
+          schedule(`doc:${id}`, DOC_DEBOUNCE_MS, () => saveDocument(id, doc));
         }
         if (doc.comments !== before.comments) {
-          schedule(`comments:${id}`, COMMENT_DEBOUNCE_MS, () => saveComments(id));
+          schedule(`comments:${id}`, COMMENT_DEBOUNCE_MS, () => saveComments(id, doc));
         }
       }
     });

@@ -59,7 +59,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
         </span>
         {costUsd > 0 && <span className="font-mono">${costUsd.toFixed(3)}</span>}
         {error && <span className="text-destructive">{error}</span>}
-        {!live && (
+        {(!live || status === "error" || status === "closed") && (
           <Button
             size="sm"
             disabled={resuming}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PromptBox } from "@/components/chat/prompt-box";
 import { Timeline } from "@/components/chat/timeline";
 import { RightPanel } from "@/components/layout/right-panel";
@@ -28,6 +28,8 @@ export function SessionView({
   const ready = useSession((s) => s.sessionId === meta.id);
   const live = useSession((s) => s.sessionId === meta.id && Boolean(s.meta?.live));
   const connRef = useRef<ReturnType<typeof connectSession> | null>(null);
+  // Bumped on resume: a terminated session is replaced server-side, so the stream must reconnect.
+  const [connKey, setConnKey] = useState(0);
 
   useEffect(() => {
     useSession.getState().hydrate({ meta, events, documents });
@@ -53,11 +55,12 @@ export function SessionView({
       conn.close();
       connRef.current = null;
     };
-  }, [ready, live, meta.id]);
+  }, [ready, live, meta.id, connKey]);
 
   const resume = useCallback(async () => {
     await api.resume(meta.id);
     useSession.getState().setMeta({ live: true });
+    setConnKey((k) => k + 1);
   }, [meta.id]);
 
   // Esc interrupts a running turn (unless a dialog/menu or the editor wants it).

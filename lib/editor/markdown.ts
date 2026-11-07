@@ -8,13 +8,27 @@ function getManager() {
   return manager;
 }
 
-/** Collapse serializer noise (blank-line runs, trailing space) so diffs show only real edits. */
+/**
+ * Collapse serializer noise (blank-line runs, trailing space) so diffs show only
+ * real edits. Fenced code blocks are left byte-for-byte: whitespace there is content.
+ */
 export function tidyMarkdown(md: string) {
-  return md
-    .replace(/[ \t]+$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .concat("\n");
+  const out: string[] = [];
+  let fence: string | null = null;
+  let blankRun = 0;
+  for (const line of md.split("\n")) {
+    if (fence) {
+      out.push(line);
+      if (line.trim().startsWith(fence) && /^\s*([`~])\1{2,}\s*$/.test(line)) fence = null;
+      continue;
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (open) fence = open[1];
+    const tidy = line.replace(/[ \t]+$/, "");
+    blankRun = tidy ? 0 : blankRun + 1;
+    if (blankRun < 2) out.push(tidy);
+  }
+  return out.join("\n").replace(/^\n+/, "").trimEnd().concat("\n");
 }
 
 /**

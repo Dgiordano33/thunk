@@ -1,6 +1,6 @@
 import "server-only";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { emit, setState, type LiveSession, type TurnState } from "./session-registry";
+import { emit, releaseSession, setState, type LiveSession, type TurnState } from "./session-registry";
 
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
@@ -14,6 +14,9 @@ export async function runSession(live: LiveSession) {
     const message = err instanceof Error ? err.message : String(err);
     emit(live, { type: "error", message: tail ? `${message}\n${tail}` : message });
     setState(live, "error");
+  } finally {
+    // Stays registered (history, status) until resumeSession replaces it.
+    releaseSession(live);
   }
 }
 

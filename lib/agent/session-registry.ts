@@ -87,6 +87,8 @@ export type CreateSessionInput = {
   resume?: string;
   /** Continue numbering after persisted events. */
   seqStart?: number;
+  /** In-memory history to carry over when replacing a terminated session. */
+  events?: HarnessEvent[];
 };
 
 export function createSession(input: CreateSessionInput): LiveSession {
@@ -108,7 +110,7 @@ export function createSession(input: CreateSessionInput): LiveSession {
       createdAt: input.createdAt ?? new Date().toISOString(),
     },
     input: inputQueue,
-    events: [],
+    events: input.events ?? [],
     seq: input.seqStart ?? 0,
     subscribers: new Set(),
     pending: new Map(),
@@ -138,9 +140,13 @@ export function listLiveSessions() {
   return [...registry.values()];
 }
 
-export function closeSession(id: string) {
-  const live = registry.get(id);
-  if (!live) return;
+/** The SDK query has exited or crashed; it can only be resumed by replacing the session. */
+export function isTerminated(live: LiveSession) {
+  return live.meta.status === "closed" || live.meta.status === "error";
+}
+
+/** Deny parked tool requests and shut the query's input and subprocess. Idempotent. */
+export function releaseSession(live: LiveSession) {
   for (const [requestId, req] of live.pending) {
     req.resolve({ behavior: "deny", message: "Session closed." });
     live.pending.delete(requestId);
@@ -151,6 +157,18 @@ export function closeSession(id: string) {
   } catch {
     // already closed
   }
+  flushDelta(live);
+}
+
+/** Drop a terminated session from the registry so a fresh one can take its id. */
+export function evictSession(live: LiveSession) {
+  if (registry.get(live.id) === live) registry.delete(live.id);
+}
+
+export function closeSession(id: string) {
+  const live = registry.get(id);
+  if (!live) return;
+  releaseSession(live);
   setState(live, "closed");
   flushDelta(live);
   registry.delete(id);

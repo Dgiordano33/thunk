@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
 import { maxSeq } from "@/lib/supabase/repo/messages";
 import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import "./persist";
-import { createSession, getSession, listLiveSessions } from "./session-registry";
+import { createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
 import { PERMISSION_MODES, type SessionMeta } from "./types";
 
 export * from "./session-registry";
@@ -30,7 +30,22 @@ export async function startSession(input: { cwd: string; model?: string; permiss
 /** Return the live session, recreating it from Supabase (SDK `resume`) if needed. */
 export async function resumeSession(id: string) {
   const live = getSession(id);
-  if (live) return live;
+  if (live && !isTerminated(live)) return live;
+  if (live) {
+    // The query exited or crashed: start a new one on the same SDK session, keeping history.
+    evictSession(live);
+    return createSession({
+      id,
+      cwd: live.meta.cwd,
+      model: live.meta.model,
+      permissionMode: live.meta.permissionMode,
+      title: live.meta.title,
+      createdAt: live.meta.createdAt,
+      resume: live.meta.sdkSessionId ?? undefined,
+      seqStart: live.seq,
+      events: live.events,
+    });
+  }
   const row = await getSessionRow(id);
   if (!row) return null;
   return createSession({

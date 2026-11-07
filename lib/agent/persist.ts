@@ -17,7 +17,7 @@ const FLUSH_MS = 300;
  * the messages table stays small but still replays through the client reducer.
  */
 function persistSession(live: LiveSession) {
-  if (!hasSupabase) return;
+  if (!hasSupabase) return trackMemoryDocuments(live);
 
   let queue: HarnessEvent[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -137,6 +137,35 @@ function persistSession(live: LiveSession) {
       e.type === "turn_complete" || e.type === "plan_proposed" || e.type === "result" || e.type === "status";
     if (urgent) flush();
     else timer ??= setTimeout(flush, FLUSH_MS);
+  });
+}
+
+/** Memory-only mode: register documents with the in-process store so edits can be saved and reloaded. */
+function trackMemoryDocuments(live: LiveSession) {
+  subscribe(live, (e) => {
+    const write =
+      e.type === "turn_complete" && e.documentId
+        ? insertDocument({
+            id: e.documentId,
+            sessionId: live.id,
+            kind: "response",
+            parentDocumentId: e.parentDocumentId,
+            version: e.version,
+            markdown: e.markdown,
+          })
+        : e.type === "plan_proposed"
+          ? insertDocument({
+              id: e.documentId,
+              sessionId: live.id,
+              kind: "plan",
+              parentDocumentId: e.parentDocumentId,
+              version: e.version,
+              markdown: e.plan,
+            })
+          : e.type === "user_message" && e.kind === "revision" && e.documentId
+            ? updateDocument(e.documentId, { status: "sent" })
+            : null;
+    write?.catch((err) => console.error("[thunk] track document failed", err));
   });
 }
 
