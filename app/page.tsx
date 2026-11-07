@@ -1,4 +1,4 @@
-import { FolderGitIcon, FolderIcon } from "lucide-react";
+import { FolderGitIcon, FolderIcon, FolderPlusIcon } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { AddProjectForm } from "@/components/home/add-project-form";
@@ -25,7 +25,7 @@ export default async function Home() {
           Projects are repos or folders. Workspaces are tasks inside a project, each with its own worktree and shared memory.
           Sessions are the chats inside a workspace.
         </p>
-        <AddProjectForm />
+        {projects.length > 0 && <AddProjectForm />}
         {!hasSupabase && (
           <p className="text-muted-foreground mt-4 text-xs">
             Supabase isn&apos;t configured: projects and sessions live in memory and won&apos;t survive a server restart.
@@ -36,12 +36,25 @@ export default async function Home() {
 
       <section>
         <h2 className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">Projects</h2>
-        <p className="text-muted-foreground mb-3 text-sm">
-          Folders registered with Thunk by adding a project or starting a session with a folder path.
-          {hasSupabase ? " This list is saved in the configured database and persists across restarts." : " This list is kept in memory until the server restarts."}
-        </p>
         {projects.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No projects yet. Add a repo or folder above.</p>
+          <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-14 text-center">
+            <div className="relative mb-5 flex h-12 w-28 items-center justify-center">
+              <span className="bg-muted absolute left-0 flex size-10 -rotate-12 items-center justify-center rounded-lg border">
+                <FolderIcon className="text-muted-foreground size-4" />
+              </span>
+              <span className="bg-muted absolute right-0 flex size-10 rotate-12 items-center justify-center rounded-lg border">
+                <FolderPlusIcon className="text-muted-foreground size-4" />
+              </span>
+              <span className="bg-background relative flex size-12 items-center justify-center rounded-lg border shadow-sm">
+                <FolderGitIcon className="size-5" />
+              </span>
+            </div>
+            <h3 className="text-sm font-medium">No projects yet</h3>
+            <p className="text-muted-foreground mt-1 mb-5 max-w-xs text-sm">
+              Clone a repo from GitHub, open a folder on this machine, or start something new.
+            </p>
+            <AddProjectForm />
+          </div>
         ) : (
           <ul className="flex flex-col gap-1">
             {projects.map((p) => (

@@ -108,3 +108,37 @@ export async function worktreeStatus(dir: string): Promise<WorktreeStatus | null
   const lastCommit = await tryGit(dir, ["log", "-1", "--format=%s"]);
   return { branch, dirty, ahead, behind, lastCommit };
 }
+
+function expandHome(input: string) {
+  return path.resolve(input.trim().replace(/^~(?=$|\/)/, os.homedir()));
+}
+
+/** Repo name from a GitHub URL or `owner/repo` shorthand. */
+export function repoNameFromUrl(url: string) {
+  const name = url.trim().replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop();
+  if (!name) throw new Error(`Can't read a repo name from ${url}`);
+  return name;
+}
+
+/** Clone `url` into `<parent>/<repo>` and return the new checkout path. `owner/repo` expands to GitHub. */
+export async function cloneRepo(url: string, parent: string): Promise<string> {
+  const source = /^[\w.-]+\/[\w.-]+$/.test(url.trim()) ? `https://github.com/${url.trim()}.git` : url.trim();
+  const parentDir = expandHome(parent);
+  await mkdir(parentDir, { recursive: true });
+  const dest = path.join(parentDir, repoNameFromUrl(source));
+  if (await stat(dest).catch(() => null)) throw new Error(`Already exists: ${dest}`);
+  await exec("git", ["clone", source, dest], { maxBuffer: 4 * 1024 * 1024 }).catch((err: { stderr?: string }) => {
+    throw new Error(err.stderr?.trim().split("\n").pop() || `git clone failed for ${source}`);
+  });
+  return dest;
+}
+
+/** Create `<parent>/<name>` (must not exist), optionally as a fresh git repo. */
+export async function createFolder(parent: string, name: string, opts: { git?: boolean } = {}): Promise<string> {
+  if (!name.trim() || /[/\\]/.test(name) || name === "." || name === "..") throw new Error("Folder name must be a single path segment");
+  const dest = path.join(expandHome(parent), name.trim());
+  if (await stat(dest).catch(() => null)) throw new Error(`Already exists: ${dest}`);
+  await mkdir(dest, { recursive: true });
+  if (opts.git) await git(dest, ["init"]);
+  return dest;
+}

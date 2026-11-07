@@ -19,7 +19,14 @@ const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", j
 export const api = {
   // Projects
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
-  addProject: (path: string) => post<{ project: Project; workspace: Workspace }>("/api/projects", { path }),
+  addProject: (
+    body:
+      | { source: "folder"; path: string }
+      | { source: "github"; url: string; parent: string }
+      | { source: "new"; parent: string; name: string; git?: boolean },
+  ) => post<{ project: Project; workspace: Workspace }>("/api/projects", body),
+  pickFolder: (body: { prompt?: string; defaultPath?: string } = {}) =>
+    post<{ path: string | null }>("/api/fs/pick-folder", body),
   renameProject: (id: string, name: string) => call(`/api/projects/${id}`, { method: "PATCH", json: { name } }),
   deleteProject: (id: string) => call(`/api/projects/${id}`, { method: "DELETE" }),
   // Workspaces
