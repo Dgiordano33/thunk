@@ -11,7 +11,7 @@ npm run dev
 ```
 
 - **Auth:** set `ANTHROPIC_API_KEY`, or leave it empty to use your local `claude` login.
-- **Persistence:** with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, sessions, documents, and comments survive restarts and can be resumed (SDK `resume`). Without them, sessions live in memory. Schema: `supabase/migrations/0001_init.sql`.
+- **Persistence:** with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, sessions, documents, and comments survive restarts and can be resumed (SDK `resume`). Without them, sessions live in memory. Schema: `supabase/migrations/`.
 
 ## How it works
 
