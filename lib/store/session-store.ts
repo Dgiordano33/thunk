@@ -299,11 +299,14 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         }),
         documents: {
           ...s.documents,
-          [e.documentId]: newDoc(e.documentId, "plan", e.plan, {
-            parentDocumentId: e.parentDocumentId,
-            version: e.version,
-            requestId: e.requestId,
-          }),
+          // Keep a hydrated doc (with the user's edits) when SSE replays this event.
+          [e.documentId]:
+            s.documents[e.documentId] ??
+            newDoc(e.documentId, "plan", e.plan, {
+              parentDocumentId: e.parentDocumentId,
+              version: e.version,
+              requestId: e.requestId,
+            }),
         },
         activeDocumentId: e.documentId,
       };
@@ -328,11 +331,14 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       if (e.documentId) {
         patch.documents = {
           ...s.documents,
-          [e.documentId]: newDoc(e.documentId, "response", e.markdown, {
-            parentDocumentId: e.parentDocumentId,
-            version: e.version,
-            turnId: t.id,
-          }),
+          // Keep a hydrated doc (with the user's edits) when SSE replays this event.
+          [e.documentId]:
+            s.documents[e.documentId] ??
+            newDoc(e.documentId, "response", e.markdown, {
+              parentDocumentId: e.parentDocumentId,
+              version: e.version,
+              turnId: t.id,
+            }),
         };
         patch.activeDocumentId = e.documentId;
       }

@@ -49,7 +49,7 @@ function handleMessage(live: LiveSession, msg: SDKMessage) {
       if (msg.parent_tool_use_id) return;
       const ev = msg.event;
       if (ev.type === "message_start") {
-        const turn = ensureTurn(live);
+        const turn = ensureTurn(live, true);
         turn.streamedMessageIds.add(ev.message.id);
       } else if (ev.type === "content_block_start" && ev.content_block.type === "text") {
         const turn = ensureTurn(live);
@@ -65,8 +65,8 @@ function handleMessage(live: LiveSession, msg: SDKMessage) {
 
     case "assistant": {
       if (msg.parent_tool_use_id) return;
-      const turn = ensureTurn(live);
-      const streamed = turn.streamedMessageIds.has(msg.message.id);
+      const streamed = live.turn?.streamedMessageIds.has(msg.message.id) ?? false;
+      const turn = ensureTurn(live, !streamed);
       for (const block of msg.message.content) {
         if (block.type === "text" && !streamed) {
           if (turn.segmentText && !turn.lastPartWasTool) appendText(live, turn, "\n\n");
@@ -117,8 +117,12 @@ function handleMessage(live: LiveSession, msg: SDKMessage) {
   }
 }
 
-function ensureTurn(live: LiveSession): TurnState {
-  if (live.turn?.split) finishTurn(live, live.turn, false);
+/**
+ * Get the current turn, starting one if needed. A queued follow-up marks the turn as `split`;
+ * only honor that at the start of a new API message so an in-flight response isn't cut in two.
+ */
+function ensureTurn(live: LiveSession, newMessage = false): TurnState {
+  if (newMessage && live.turn?.split) finishTurn(live, live.turn, false);
   if (live.turn) return live.turn;
   const turn: TurnState = {
     id: crypto.randomUUID(),

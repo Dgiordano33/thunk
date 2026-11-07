@@ -28,8 +28,12 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/sessions
     resolvePending(live, body.requestId, {
       behavior: "allow",
       updatedInput: body.updatedInput ?? pending.input,
+      // "Allow for this session": scope every suggestion to the session so nothing is written
+      // to the user's or workspace's settings files.
       updatedPermissions:
-        body.decision === "allow_always" ? (pending.suggestions as PermissionUpdate[] | undefined) : undefined,
+        body.decision === "allow_always"
+          ? (pending.suggestions as PermissionUpdate[] | undefined)?.map((s) => ({ ...s, destination: "session" }))
+          : undefined,
     });
   }
   emit(live, {
