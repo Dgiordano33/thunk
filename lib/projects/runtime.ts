@@ -133,6 +133,12 @@ function kill(proc: WorkspaceProcess) {
   try { process.kill(-proc.pty.pid, "SIGKILL"); } catch { try { proc.pty.kill("SIGKILL"); } catch { /* Already exited. */ } }
 }
 
+export function forgetWorkspaceRuntime(id: string) {
+  const state = runtimes.get(id);
+  if (state?.busy || [...(state?.processes.values() ?? [])].some((proc) => proc.running)) throw new Error("Stop workspace processes before cleanup");
+  runtimes.delete(id);
+}
+
 export async function stopWorkspaceProcesses(id: string, kind?: ProcessKind) {
   const processes = [...runtime(id).processes.values()].filter((proc) => !kind || proc.kind === kind);
   for (const proc of processes) kill(proc);
@@ -177,5 +183,8 @@ export async function runtimeSnapshot(ctx: WorkspaceContext, includeOutput = tru
 
 if (!globalRuntime.__thunkRuntimeExit) {
   globalRuntime.__thunkRuntimeExit = true;
-  process.once("exit", () => { for (const state of runtimes.values()) for (const proc of state.processes.values()) kill(proc); });
+  const shutdown = () => { for (const state of runtimes.values()) for (const proc of state.processes.values()) kill(proc); };
+  process.once("exit", shutdown);
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }

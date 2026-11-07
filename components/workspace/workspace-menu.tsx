@@ -1,6 +1,6 @@
 "use client";
 
-import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, GitMergeIcon, Trash2Icon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,14 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
     }
   };
 
+  const mergeAndDelete = async () => {
+    if (!window.confirm(`Merge committed changes from "${label}" into the local default branch, run the archive hook, and delete its worktree and sessions?`)) return;
+    try {
+      await api.workspaceGitAction(workspace.id, "merge", true);
+      done();
+    } catch (err) { window.alert((err as Error).message); }
+  };
+
   const remove = async () => {
     const what = workspace.worktreePath
       ? `Delete "${label}", its sessions, and the worktree at ${workspace.worktreePath}? Deletion requires committed changes merged into the default branch.`
@@ -57,7 +65,7 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
           <EllipsisIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-40">
+      <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuItem onSelect={toggleArchive}>
           {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
           {archived ? "Unarchive" : "Archive"}
@@ -65,6 +73,9 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
         {!isMain && (
           <>
             <DropdownMenuSeparator />
+            {workspace.worktreePath && <DropdownMenuItem onSelect={mergeAndDelete}>
+              <GitMergeIcon /> Merge and delete…
+            </DropdownMenuItem>}
             <DropdownMenuItem variant="destructive" onSelect={remove}>
               <Trash2Icon />
               Delete

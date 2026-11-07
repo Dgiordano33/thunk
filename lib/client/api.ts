@@ -1,3 +1,4 @@
+import type { Checkpoint } from "@/lib/projects/checkpoints";
 import type { RuntimeSnapshot, ProcessKind } from "@/lib/projects/runtime-types";
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
 import type { PromptImage } from "@/lib/prompts/schema";
@@ -57,6 +58,8 @@ export const api = {
   workspaceGit: (id: string) => call<{ git: Awaited<ReturnType<typeof workspaceGitState>> }>(`/api/workspaces/${id}/git`),
   workspaceGitAction: (id: string, action: string, deleteAfter = false) =>
     post<{ ok: boolean; deleted: boolean }>(`/api/workspaces/${id}/git`, { action, deleteAfter }),
+  checkpoints: (id: string) => call<{ checkpoints: Checkpoint[] }>(`/api/workspaces/${id}/checkpoints`),
+  rewind: (id: string, checkpointId: string) => post<{ recovery: Checkpoint }>(`/api/workspaces/${id}/checkpoints`, { checkpointId }),
   workspaceChanges: (id: string) => call<{ changes: WorkspaceChanges | null }>(`/api/workspaces/${id}/changes`),
   workspaceFileDiff: (id: string, path: string) =>
     call<{ diff: string }>(`/api/workspaces/${id}/changes?path=${encodeURIComponent(path)}`),

@@ -1,3 +1,5 @@
+import { captureCheckpoint } from "@/lib/projects/checkpoints";
+import { withWorkspaceLock } from "@/lib/projects/runtime";
 import { expandCommand } from "@/lib/prompts/context";
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
@@ -238,7 +240,8 @@ export function setState(live: LiveSession, state: SessionState, extra: { resume
   if (state === "idle" && live.queuedMessages?.length) {
     const next = live.queuedMessages.shift()!;
     emit(live, { type: "message_dequeued", messageId: next.id });
-    live.driver.send(next.content, next.images);
+    live.meta.status = "running";
+    dispatchMessage(live, next.id, next.content, next.images);
     state = "running";
   }
   live.meta.status = state;
@@ -313,10 +316,29 @@ export function pushUserMessage(
   if (queued) {
     (live.queuedMessages ??= []).push({ id: messageId, content: opts.expandedContent ?? content, images: opts.images ?? [] });
   } else {
-    live.driver.send(opts.expandedContent ?? content, opts.images);
     setState(live, "running");
+    dispatchMessage(live, messageId, opts.expandedContent ?? content, opts.images);
   }
   return messageId;
+}
+
+function dispatchMessage(live: LiveSession, messageId: string, content: string, images?: PromptImage[]) {
+  void (async () => {
+    if (live.ctx.project.kind === "repo") {
+      await withWorkspaceLock(live.ctx.workspace.id, async () => {
+        try {
+          await captureCheckpoint(live.ctx.workspace.cwd, live.ctx.workspace.id, live.id, messageId, content);
+        } catch (err) {
+          // A Git conflict must not prevent asking the agent to resolve it.
+          emit(live, { type: "error", message: `Checkpoint unavailable; this turn will run without rewind: ${(err as Error).message}` });
+        }
+      });
+    }
+    if (!live.driver.isClosed && live.meta.status === "running") live.driver.send(content, images);
+  })().catch((err: Error) => {
+    emit(live, { type: "error", message: `Could not start turn: ${err.message}` });
+    setState(live, "error");
+  });
 }
 
 export function resolvePending(live: LiveSession, requestId: string, result: PermissionResult) {

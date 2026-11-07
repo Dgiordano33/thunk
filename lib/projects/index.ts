@@ -13,7 +13,7 @@ import {
 import { createWorktree, detectProject, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
 import { ensureMemory } from "./memory";
 import { projectMemoryFile, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
-import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock } from "./runtime";
+import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock, forgetWorkspaceRuntime, stopWorkspaceProcesses } from "./runtime";
 import { assertWorkspaceCanRemove } from "./workspace-git";
 import type { Project, Workspace } from "./types";
 
@@ -123,8 +123,10 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
       await deleteWorkspaceRow(id);
     });
   } else {
+    await stopWorkspaceProcesses(id);
     await deleteWorkspaceRow(id);
   }
+  forgetWorkspaceRuntime(id);
   if (opts.removeMemory && project)
     await rm(path.dirname(workspaceMemoryDir(project.root, ws.slug)), { force: true, recursive: true }).catch(() => {});
 }

@@ -185,3 +185,115 @@ test("workspace lock rejects overlapping operations", async () => {
   release(); await first;
   await runtime.withWorkspaceLock(id, async () => {});
 });
+
+test("terminal SSE replays deltas, resets truncated output, isolates IDs and cancels cleanly", async () => {
+  const source = await fs.readFile(path.join(__dirname, "../app/api/workspaces/[id]/terminal/route.ts"), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const processId = crypto.randomUUID();
+  let snapshot = { output: "hello", offset: 0, running: false };
+  class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
+  const dependencies = {
+    zod: require("zod"),
+    "@/lib/api/http": { handle: (handler) => handler, HttpError },
+    "@/lib/projects": { getWorkspaceContext: async () => ({}) },
+    "@/lib/projects/runtime": { terminalSnapshot: (id, pid) => id === "workspace" && pid === processId ? snapshot : null },
+  };
+  const exports = {};
+  new Function("require", "exports", compiled)((name) => dependencies[name], exports);
+  const ctx = { params: Promise.resolve({ id: "workspace" }) };
+  const url = `http://localhost/api/workspaces/workspace/terminal?processId=${processId}`;
+  const replay = await exports.GET(new Request(url, { headers: { "last-event-id": "2" } }), ctx);
+  assert.match(await replay.text(), /"output":"llo","reset":false,"done":true/);
+  snapshot = { output: "tail", offset: 100, running: false };
+  assert.match(await (await exports.GET(new Request(url), ctx)).text(), /"output":"tail","reset":true/);
+  await assert.rejects(exports.GET(new Request(url), { params: Promise.resolve({ id: "another-workspace" }) }), { status: 404 });
+  snapshot = { output: "live", offset: 0, running: true };
+  const controller = new AbortController();
+  const stream = await exports.GET(new Request(url, { signal: controller.signal }), ctx);
+  const reader = stream.body.getReader();
+  assert.match(new TextDecoder().decode((await reader.read()).value), /"output":"live"/);
+  controller.abort();
+  assert.equal((await reader.read()).done, true);
+  const cancelled = await exports.GET(new Request(url), ctx);
+  await cancelled.body.cancel();
+});
+
+const { captureCheckpoint, restoreCheckpoint, listCheckpoints } = require("../lib/projects/checkpoints.ts");
+
+test("checkpoints restore tracked, binary, symlink and untracked files, preserve index and ignored files, and retain recovery", async (t) => {
+  const { cwd, ctx } = await repo(t);
+  const wid = ctx.workspace.id;
+  await fs.writeFile(path.join(cwd, ".gitignore"), "ignored\n");
+  await fs.writeFile(path.join(cwd, "ignored"), "private");
+  await fs.writeFile(path.join(cwd, "file"), "staged\n"); git(cwd, "add", "file");
+  const index = git(cwd, "diff", "--cached");
+  await fs.writeFile(path.join(cwd, "file"), "before turn\n");
+  await fs.writeFile(path.join(cwd, "binary"), Buffer.from([0, 1, 2, 255]));
+  await fs.symlink("file", path.join(cwd, "link"));
+  const head = git(cwd, "rev-parse", "HEAD");
+  const cp = await captureCheckpoint(cwd, wid, "session", "message", "Do a thing");
+  assert.equal(git(cwd, "diff", "--cached"), index);
+  assert.equal((await listCheckpoints(cwd, wid))[0].messageId, "message");
+  assert.deepEqual(await listCheckpoints(cwd, crypto.randomUUID()), []);
+  await fs.writeFile(path.join(cwd, "file"), "after turn\n");
+  await fs.unlink(path.join(cwd, "binary")); await fs.unlink(path.join(cwd, "link"));
+  await fs.mkdir(path.join(cwd, "new-dir")); await fs.writeFile(path.join(cwd, "new-dir", "new"), "new");
+  await fs.writeFile(path.join(cwd, "ignored"), "still private");
+  const recovery = await restoreCheckpoint(cwd, wid, cp.id);
+  assert.equal(await fs.readFile(path.join(cwd, "file"), "utf8"), "before turn\n");
+  assert.deepEqual(await fs.readFile(path.join(cwd, "binary")), Buffer.from([0, 1, 2, 255]));
+  assert.equal(await fs.readlink(path.join(cwd, "link")), "file");
+  await assert.rejects(fs.stat(path.join(cwd, "new-dir", "new")), /ENOENT/);
+  assert.equal(await fs.readFile(path.join(cwd, "ignored"), "utf8"), "still private");
+  assert.equal(git(cwd, "diff", "--cached"), index);
+  assert.equal(git(cwd, "rev-parse", "HEAD"), head);
+  await restoreCheckpoint(cwd, wid, recovery.id);
+  assert.equal(await fs.readFile(path.join(cwd, "file"), "utf8"), "after turn\n");
+  assert.equal(await fs.readFile(path.join(cwd, "new-dir", "new"), "utf8"), "new");
+  await assert.rejects(restoreCheckpoint(cwd, wid, crypto.randomUUID()), /not found/);
+  await commit(cwd, "commit\n");
+  await assert.rejects(restoreCheckpoint(cwd, wid, cp.id), /HEAD changed/);
+});
+
+test("rewind refuses ignored file collisions and leaves original contents intact", async (t) => {
+  const { cwd, ctx } = await repo(t);
+  await fs.writeFile(path.join(cwd, "collision"), "snapshot");
+  const cp = await captureCheckpoint(cwd, ctx.workspace.id, "s", "m", "before");
+  await fs.writeFile(path.join(cwd, ".gitignore"), "collision\n");
+  await fs.writeFile(path.join(cwd, "collision"), "private ignored contents");
+  await assert.rejects(restoreCheckpoint(cwd, ctx.workspace.id, cp.id));
+  assert.equal(await fs.readFile(path.join(cwd, "collision"), "utf8"), "private ignored contents");
+});
+
+test("checkpoints work before a repository's first commit", async (t) => {
+  const { cwd } = await fixture(t);
+  git(cwd, "init", "-b", "main");
+  await fs.writeFile(path.join(cwd, "first"), "before");
+  const wid = crypto.randomUUID();
+  const cp = await captureCheckpoint(cwd, wid, "s", "m", "first turn");
+  await fs.writeFile(path.join(cwd, "first"), "after");
+  await restoreCheckpoint(cwd, wid, cp.id);
+  assert.equal(await fs.readFile(path.join(cwd, "first"), "utf8"), "before");
+  assert.equal(git(cwd, "ls-files"), "");
+});
+
+test("snapshots include newly staged ignored files without changing staging", async (t) => {
+  const { cwd, ctx } = await repo(t);
+  await fs.writeFile(path.join(cwd, ".gitignore"), "forced\n");
+  await fs.writeFile(path.join(cwd, "forced"), "staged content");
+  git(cwd, "add", "-f", "forced");
+  await fs.writeFile(path.join(cwd, "forced"), "working content");
+  const cp = await captureCheckpoint(cwd, ctx.workspace.id, "s", "m", "forced file");
+  await fs.writeFile(path.join(cwd, "forced"), "later");
+  await restoreCheckpoint(cwd, ctx.workspace.id, cp.id);
+  assert.equal(await fs.readFile(path.join(cwd, "forced"), "utf8"), "working content");
+  assert.equal(git(cwd, "show", ":forced"), "staged content");
+});
+
+test("checkpoints refuse index flags that could hide working-tree edits", async (t) => {
+  const { cwd, ctx } = await repo(t);
+  git(cwd, "update-index", "--assume-unchanged", "file");
+  await fs.writeFile(path.join(cwd, "file"), "hidden edits");
+  await assert.rejects(captureCheckpoint(cwd, ctx.workspace.id, "s", "m", "flags"), /assume-unchanged/);
+  assert.equal(await fs.readFile(path.join(cwd, "file"), "utf8"), "hidden edits");
+});

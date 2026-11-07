@@ -8,10 +8,13 @@ import { MemoryEditor } from "@/components/memory/memory-editor";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/client/api";
+import type { DiffComment } from "@/lib/review/diff";
 import type { Artifact } from "@/lib/documents/types";
 import type { ChangedFile, WorkspaceChanges } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
+import { ReviewDiff, SendReview, useDiffComments } from "./diff-review";
+import { Checkpoints } from "./checkpoints";
 
 const CHANGES_POLL_MS = 5000;
 
@@ -47,6 +50,7 @@ export function WorkspacePanel({ workspaceId }: { workspaceId: string }) {
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>
           <TabsTrigger value="memory">Memory</TabsTrigger>
+          <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="artifacts" className="min-h-0 flex-1">
@@ -60,6 +64,7 @@ export function WorkspacePanel({ workspaceId }: { workspaceId: string }) {
           <Changes workspaceId={workspaceId} changes={changes} />
         </div>
       </TabsContent>
+      <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>
       <TabsContent value="memory" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto p-4">
           <MemoryEditor
@@ -144,11 +149,15 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
 }
 
 function Changes({ workspaceId, changes }: { workspaceId: string; changes: WorkspaceChanges | null | undefined }) {
+  const { comments, setComments, storageError } = useDiffComments(workspaceId);
+  const remove = (ids: string[]) => setComments((all) => all.filter((c) => !ids.includes(c.id)));
   if (changes === undefined) return <Loading />;
   if (changes === null) return <Empty text="Not a git repository." />;
 
   return (
     <div className="flex flex-col">
+      {storageError && <p role="alert" className="p-3 text-xs text-destructive">{storageError}</p>}
+      <SendReview workspaceId={workspaceId} comments={comments} onSent={remove} />
       <div className="flex items-baseline gap-2 px-4 pt-3 pb-2">
         <span className="text-sm font-medium">
           {changes.files.length} file{changes.files.length === 1 ? "" : "s"} changed
@@ -164,7 +173,7 @@ function Changes({ workspaceId, changes }: { workspaceId: string; changes: Works
       ) : (
         <ul className="flex flex-col pb-2">
           {changes.files.map((f) => (
-            <ChangedFileRow key={f.path} workspaceId={workspaceId} file={f} />
+            <ChangedFileRow key={f.path} workspaceId={workspaceId} file={f} comments={comments} onAdd={(c) => setComments((all) => [...all, c])} onRemove={(id) => remove([id])} />
           ))}
         </ul>
       )}
@@ -179,7 +188,7 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   D: { label: "Deleted", className: "text-red-600 dark:text-red-400" },
 };
 
-function ChangedFileRow({ workspaceId, file }: { workspaceId: string; file: ChangedFile }) {
+function ChangedFileRow({ workspaceId, file, comments, onAdd, onRemove }: { workspaceId: string; file: ChangedFile; comments: DiffComment[]; onAdd: (c: DiffComment) => void; onRemove: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [diff, setDiff] = useState<string | null>(null);
   const slash = file.path.lastIndexOf("/");
@@ -187,14 +196,16 @@ function ChangedFileRow({ workspaceId, file }: { workspaceId: string; file: Chan
   const name = file.path.slice(slash + 1);
   const st = STATUS_STYLE[file.status] ?? { label: file.status, className: "text-muted-foreground" };
 
-  // Re-fetch the diff whenever the file's stats move while it's expanded.
+  // Refresh even when edits leave the addition/deletion counts unchanged.
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     api
       .workspaceFileDiff(workspaceId, file.path)
-      .then((r) => setDiff(r.diff))
-      .catch((err: Error) => setDiff(`Couldn't load diff: ${err.message}`));
-  }, [open, workspaceId, file.path, file.additions, file.deletions]);
+      .then((r) => { if (!cancelled) setDiff(r.diff); })
+      .catch((err: Error) => { if (!cancelled) setDiff(`Couldn't load diff: ${err.message}`); });
+    return () => { cancelled = true; };
+  }, [open, workspaceId, file]);
 
   return (
     <li>
@@ -220,35 +231,10 @@ function ChangedFileRow({ workspaceId, file }: { workspaceId: string; file: Chan
       </button>
       {open && (
         <div className="bg-background mx-2 mb-2 overflow-x-auto rounded-md border">
-          {diff === null ? <Loading /> : <UnifiedDiff diff={diff} />}
+          {diff === null ? <Loading /> : <ReviewDiff diff={diff} path={file.path} comments={comments} onAdd={onAdd} onRemove={onRemove} />}
         </div>
       )}
     </li>
-  );
-}
-
-function UnifiedDiff({ diff }: { diff: string }) {
-  // Drop the file headers; hunks carry the useful part.
-  const lines = diff.split("\n");
-  const start = lines.findIndex((l) => l.startsWith("@@"));
-  const body = start >= 0 ? lines.slice(start) : lines;
-  if (!body.some(Boolean)) return <p className="text-muted-foreground p-3 text-xs">No text changes (binary or mode only).</p>;
-  return (
-    <pre className="w-max min-w-full py-1 font-mono text-[11px] leading-[1.6]">
-      {body.map((l, i) => (
-        <div
-          key={i}
-          className={cn(
-            "px-3",
-            l.startsWith("+") && "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
-            l.startsWith("-") && "bg-red-500/10 text-red-800 dark:text-red-300",
-            l.startsWith("@@") && "text-muted-foreground bg-muted/60",
-          )}
-        >
-          {l || " "}
-        </div>
-      ))}
-    </pre>
   );
 }
 
