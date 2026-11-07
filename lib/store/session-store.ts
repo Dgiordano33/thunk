@@ -299,10 +299,11 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         }),
         documents: {
           ...s.documents,
-          // Keep a hydrated doc (with the user's edits) when SSE replays this event.
-          [e.documentId]:
-            s.documents[e.documentId] ??
-            newDoc(e.documentId, "plan", e.plan, {
+          // Keep a hydrated doc (with the user's edits) when SSE replays this event, but restore
+          // its request linkage — persisted docs don't carry it.
+          [e.documentId]: s.documents[e.documentId]
+            ? { ...s.documents[e.documentId], requestId: e.requestId }
+            : newDoc(e.documentId, "plan", e.plan, {
               parentDocumentId: e.parentDocumentId,
               version: e.version,
               requestId: e.requestId,
@@ -331,10 +332,11 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       if (e.documentId) {
         patch.documents = {
           ...s.documents,
-          // Keep a hydrated doc (with the user's edits) when SSE replays this event.
-          [e.documentId]:
-            s.documents[e.documentId] ??
-            newDoc(e.documentId, "response", e.markdown, {
+          // Keep a hydrated doc (with the user's edits) when SSE replays this event, but restore
+          // its turn linkage — persisted docs don't carry it.
+          [e.documentId]: s.documents[e.documentId]
+            ? { ...s.documents[e.documentId], turnId: t.id }
+            : newDoc(e.documentId, "response", e.markdown, {
               parentDocumentId: e.parentDocumentId,
               version: e.version,
               turnId: t.id,
