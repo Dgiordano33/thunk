@@ -1,7 +1,14 @@
 import type { RevisionComment, RevisionStat } from "@/lib/revisions/build-payload";
 import type { SessionMeta } from "@/lib/agent/types";
-import type { DocComment } from "@/lib/documents/types";
-import type { Project, ProjectSummary, Workspace, WorkspaceSummary } from "@/lib/projects/types";
+import type { Artifact, DocComment } from "@/lib/documents/types";
+import type {
+  Project,
+  ProjectSummary,
+  Workspace,
+  WorkspaceChanges,
+  WorkspacePrStatus,
+  WorkspaceSummary,
+} from "@/lib/projects/types";
 
 async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const res = await fetch(url, {
@@ -32,12 +39,17 @@ export const api = {
   // Workspaces
   listWorkspaces: (projectId: string) =>
     call<{ workspaces: WorkspaceSummary[] }>(`/api/workspaces?projectId=${encodeURIComponent(projectId)}`),
-  createWorkspace: (body: { projectId: string; name: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
+  createWorkspace: (body: { projectId: string; name?: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
   deleteWorkspace: (id: string, opts: { worktree?: boolean; memory?: boolean } = {}) =>
     call(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}&memory=${opts.memory ? 1 : 0}`, { method: "DELETE" }),
+  workspaceChanges: (id: string) => call<{ changes: WorkspaceChanges | null }>(`/api/workspaces/${id}/changes`),
+  workspaceFileDiff: (id: string, path: string) =>
+    call<{ diff: string }>(`/api/workspaces/${id}/changes?path=${encodeURIComponent(path)}`),
+  workspacePr: (id: string) => call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`),
+  workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),

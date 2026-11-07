@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import type { ChangedFile, WorkspaceChanges } from "./types";
+
 const exec = promisify(execFile);
 
 async function git(cwd: string, args: string[]) {
@@ -141,4 +143,73 @@ export async function createFolder(parent: string, name: string, opts: { git?: b
   await mkdir(dest, { recursive: true });
   if (opts.git) await git(dest, ["init"]);
   return dest;
+}
+
+async function changesBase(dir: string, baseRef: string | null) {
+  if (baseRef) {
+    const mb = await tryGit(dir, ["merge-base", baseRef, "HEAD"]);
+    if (mb) return { base: mb, baseLabel: baseRef };
+  }
+  const head = await tryGit(dir, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  return { base: head, baseLabel: "HEAD" };
+}
+
+async function countLines(file: string) {
+  const s = await stat(file).catch(() => null);
+  if (!s?.isFile() || s.size > 1024 * 1024) return 0;
+  const text = await readFile(file, "utf8").catch(() => "");
+  if (text.includes("\0")) return 0;
+  return text ? text.split("\n").length - (text.endsWith("\n") ? 1 : 0) : 0;
+}
+
+/** Everything that differs from the base: committed on the branch plus uncommitted, plus untracked files. */
+export async function workspaceChanges(dir: string, baseRef: string | null): Promise<WorkspaceChanges | null> {
+  if (!(await tryGit(dir, ["rev-parse", "--is-inside-work-tree"]))) return null;
+  const { base, baseLabel } = await changesBase(dir, baseRef);
+  const files = new Map<string, ChangedFile>();
+
+  if (base) {
+    const nameStatus = (await tryGit(dir, ["diff", "--name-status", "-z", "--no-renames", base])) ?? "";
+    const ns = nameStatus.split("\0").filter(Boolean);
+    for (let i = 0; i + 1 < ns.length; i += 2) files.set(ns[i + 1], { path: ns[i + 1], status: ns[i][0], additions: 0, deletions: 0 });
+    const numstat = (await tryGit(dir, ["diff", "--numstat", "--no-renames", base])) ?? "";
+    for (const line of numstat.split("\n").filter(Boolean)) {
+      const [add, del, ...rest] = line.split("\t");
+      const f = files.get(rest.join("\t"));
+      if (f) Object.assign(f, { additions: Number(add) || 0, deletions: Number(del) || 0 });
+    }
+  }
+
+  const untracked = (await tryGit(dir, ["ls-files", "--others", "--exclude-standard", "-z"])) ?? "";
+  await Promise.all(
+    untracked
+      .split("\0")
+      .filter(Boolean)
+      .slice(0, 500)
+      .map(async (p) => {
+        files.set(p, { path: p, status: "U", additions: await countLines(path.join(dir, p)), deletions: 0 });
+      }),
+  );
+
+  const list = [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    base,
+    baseLabel,
+    files: list,
+    additions: list.reduce((n, f) => n + f.additions, 0),
+    deletions: list.reduce((n, f) => n + f.deletions, 0),
+  };
+}
+
+/** Unified diff of one changed file against the workspace base. `file` must come from workspaceChanges. */
+export async function workspaceFileDiff(dir: string, baseRef: string | null, file: ChangedFile): Promise<string> {
+  if (file.status === "U") {
+    // --no-index exits 1 when files differ; the diff is still on stdout.
+    return exec("git", ["diff", "--no-index", "--", "/dev/null", file.path], { cwd: dir, maxBuffer: 4 * 1024 * 1024 })
+      .then((r) => r.stdout)
+      .catch((err: { stdout?: string }) => err.stdout ?? "");
+  }
+  const { base } = await changesBase(dir, baseRef);
+  if (!base) return "";
+  return (await tryGit(dir, ["diff", "--no-renames", base, "--", file.path])) ?? "";
 }

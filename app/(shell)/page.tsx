@@ -15,7 +15,7 @@ export default async function Home() {
   const projects = await listProjects().catch(() => []);
 
   return (
-    <main className="mx-auto flex min-h-full max-w-3xl flex-col gap-10 px-6 py-16">
+    <main className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-16">
       <section>
         <h1>
           <span className="sr-only">Thunk</span>

@@ -193,3 +193,58 @@ export async function loadDocuments(sessionId: string): Promise<PersistedDocumen
     comments: byDoc.get(d.id) ?? [],
   }));
 }
+
+export type ArtifactRow = {
+  id: string;
+  sessionId: string;
+  kind: DocumentKind;
+  parentDocumentId: string | null;
+  version: number;
+  status: DocumentStatus;
+  markdown: string;
+  openComments: number;
+  createdAt: string;
+};
+
+/** Every document across the given sessions, newest first. Comment counts only, no threads. */
+export async function listDocumentsForSessions(sessionIds: string[]): Promise<ArtifactRow[]> {
+  if (!sessionIds.length) return [];
+  const client = db();
+  if (!client) {
+    const ids = new Set(sessionIds);
+    return [...memDocs.values()]
+      .filter((m) => ids.has(m.sessionId))
+      .map((m) => ({
+        id: m.doc.id,
+        sessionId: m.sessionId,
+        kind: m.doc.kind,
+        parentDocumentId: m.doc.parentDocumentId,
+        version: m.doc.version,
+        status: m.doc.status,
+        markdown: m.doc.currentMarkdown,
+        openComments: m.doc.comments.filter((c: DocComment) => c.status === "open").length,
+        createdAt: "",
+      }))
+      .reverse();
+  }
+  const { data, error } = await client
+    .from("documents")
+    .select("id, session_id, kind, parent_document_id, version, status, current_markdown, created_at, comments(id, thread_id, status)")
+    .in("session_id", sessionIds)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data.map((d) => ({
+    id: d.id,
+    sessionId: d.session_id,
+    kind: d.kind as DocumentKind,
+    parentDocumentId: d.parent_document_id,
+    version: d.version,
+    status: d.status as DocumentStatus,
+    markdown: d.current_markdown,
+    openComments: ((d.comments ?? []) as { id: string; thread_id: string; status: string }[]).filter(
+      (c) => c.id === c.thread_id && c.status === "open",
+    ).length,
+    createdAt: d.created_at,
+  }));
+}

@@ -3,32 +3,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PromptBox } from "@/components/chat/prompt-box";
 import { Timeline } from "@/components/chat/timeline";
-import { RightPanel } from "@/components/layout/right-panel";
-import { Sidebar } from "@/components/layout/sidebar";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
 import { connectSession } from "@/lib/client/sse";
 import { useDocumentPersistence } from "@/lib/client/use-document-persistence";
 import type { PersistedDocument } from "@/lib/documents/types";
-import type { Project, Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
+import { useUi } from "@/lib/store/ui-store";
 import { SessionHeader } from "./session-header";
 
 export function SessionView({
   meta,
   events,
   documents,
-  sessions,
-  project,
-  workspace,
 }: {
   meta: SessionMeta;
   events: HarnessEvent[];
   documents: PersistedDocument[];
-  sessions: SessionMeta[];
-  project: Project | null;
-  workspace: Workspace | null;
 }) {
   const ready = useSession((s) => s.sessionId === meta.id);
   const live = useSession((s) => s.sessionId === meta.id && Boolean(s.meta?.live));
@@ -62,6 +53,22 @@ export function SessionView({
     };
   }, [ready, live, meta.id, connKey]);
 
+  // Deep link from the workspace Artifacts list: /w/…/s/…#doc-<id>.
+  useEffect(() => {
+    if (!ready) return;
+    const id = window.location.hash.match(/^#doc-(.+)$/)?.[1];
+    if (!id) return;
+    useSession.getState().setActiveDocument(id);
+    requestAnimationFrame(() => document.getElementById(`doc-${id}`)?.scrollIntoView({ block: "start" }));
+  }, [ready]);
+
+  // Starting or selecting a comment brings the comments panel up.
+  const composing = useSession((s) => s.composingCommentId);
+  const activeComment = useSession((s) => s.activeCommentId);
+  useEffect(() => {
+    if (composing || activeComment) useUi.getState().setCommentsOpen(true);
+  }, [composing, activeComment]);
+
   const resume = useCallback(async () => {
     await api.resume(meta.id);
     useSession.getState().setMeta({ live: true });
@@ -83,26 +90,14 @@ export function SessionView({
   }, [meta.id]);
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-dvh">
-      <ResizablePanel defaultSize="17" minSize="12" maxSize="30">
-        {ready && <Sidebar sessions={sessions} project={project} workspace={workspace} />}
-      </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel defaultSize="57" minSize="35">
-        <div className="flex h-full flex-col">
-          {ready && (
-            <>
-              <SessionHeader onResume={resume} />
-              <Timeline />
-              <PromptBox />
-            </>
-          )}
-        </div>
-      </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel defaultSize="26" minSize="18" maxSize="40">
-        <div className="bg-sidebar/40 h-full">{ready && <RightPanel />}</div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+    <div className="flex h-full flex-col">
+      {ready && (
+        <>
+          <SessionHeader onResume={resume} />
+          <Timeline />
+          <PromptBox />
+        </>
+      )}
+    </div>
   );
 }

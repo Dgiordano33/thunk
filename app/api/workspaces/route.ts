@@ -13,7 +13,7 @@ export const GET = handle(async (req: Request) => {
 
 const CreateBody = z.object({
   projectId: z.string().min(1),
-  name: z.string().min(1, "name is required").max(80),
+  name: z.string().max(80).optional(),
   worktree: z.boolean().optional(),
   branch: z.string().max(200).optional(),
   baseRef: z.string().max(200).optional(),

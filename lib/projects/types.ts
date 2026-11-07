@@ -33,3 +33,38 @@ export type Workspace = {
 
 export type WorkspaceSummary = Workspace & { sessionCount: number; lastSessionAt: string | null };
 export type ProjectSummary = Project & { workspaceCount: number; lastActivityAt: string | null };
+
+export type ChangedFile = {
+  path: string;
+  /** git name-status letter: A, M, D, R…; "U" for untracked. */
+  status: string;
+  additions: number;
+  deletions: number;
+};
+
+export type WorkspaceChanges = {
+  /** What the changes are measured against: the merge-base with the workspace's base ref, else HEAD. */
+  base: string | null;
+  baseLabel: string;
+  files: ChangedFile[];
+  additions: number;
+  deletions: number;
+};
+
+export type PullRequestInfo = {
+  number: number;
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  title: string;
+  isDraft: boolean;
+};
+
+export type WorkspacePrStatus = {
+  branch: string | null;
+  /** Branch the PR targets. */
+  base: string;
+  pr: PullRequestInfo | null;
+  canCreate: boolean;
+  /** Why a PR can't be created, when it can't. */
+  reason: string | null;
+};
