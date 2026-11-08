@@ -53,3 +53,13 @@ export function workspaceMemoryFile(root: string, slug: string) {
 export function worktreePath(root: string, slug: string) {
   return path.join(root, ".claude", "worktrees", slug);
 }
+
+/** Project notes: one markdown file per note, shared by every workspace in the project. */
+export function projectNotesDir(root: string) {
+  return path.join(projectDir(root), "notes");
+}
+
+/** Workspace notes: sit beside the workspace's memory dir. */
+export function workspaceNotesDir(root: string, slug: string) {
+  return path.join(projectDir(root), "workspaces", slug, "notes");
+}

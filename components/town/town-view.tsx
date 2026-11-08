@@ -48,7 +48,7 @@ export type TownFarm = {
   row: number;
 };
 
-export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop" };
+export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop"; note?: string };
 
 type Live = { status: ActivitySession["status"]; pending: number } | undefined;
 
@@ -126,9 +126,9 @@ export function TownView({
             selected={selected.building === "library"}
             size={LIBRARY_SIZE}
             ground={29}
-            blurb="Notes for this project will be kept here. Under construction."
+            blurb="This project's notebook: notes every session can read and edit."
           >
-            <LibrarySprite building />
+            <LibrarySprite building={false} />
           </Building>
           <Building
             cell={workshop}

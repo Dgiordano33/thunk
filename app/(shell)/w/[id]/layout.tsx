@@ -18,6 +18,7 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   return (
     <WorkspaceShell
       workspaceId={id}
+      projectId={ctx.project.id}
       sessions={ordered}
       tabs={
         <WorkspaceTabs

@@ -3,6 +3,7 @@ import "server-only";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { loadSessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
@@ -141,18 +142,19 @@ function toolResult(item: Item): { content: string; isError: boolean } {
  */
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, workspaceMemory] = await Promise.all([
+  const [projectMemory, workspaceMemory, notes] = await Promise.all([
     readMemory(projectMemoryFile(project.root)),
     readMemory(workspaceMemoryFile(project.root, workspace.slug)),
+    loadSessionNotes(project, workspace),
   ]);
-  const memoryDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug)];
-  await Promise.all(memoryDirs.map((d) => mkdir(d, { recursive: true })));
+  const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir];
+  await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
   // A worktree's git metadata lives in the main checkout; commits need to write there.
-  const writableRoots = workspace.worktreePath ? [...memoryDirs, path.join(project.root, ".git")] : memoryDirs;
+  const writableRoots = workspace.worktreePath ? [...dataDirs, path.join(project.root, ".git")] : dataDirs;
 
   const developerInstructions = [
     CANVAS_PROMPT,
-    hierarchyPrompt(live, projectMemory, "codex"),
+    hierarchyPrompt(live, projectMemory, "codex", notes),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
   ].join("\n\n");
 

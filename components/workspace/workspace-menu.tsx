@@ -1,6 +1,6 @@
 "use client";
 
-import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, GitMergeIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, GitMergeIcon, NotebookPenIcon, Trash2Icon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import { api } from "@/lib/client/api";
 import type { Workspace } from "@/lib/projects/types";
 import { cn } from "@/lib/utils";
 
-/** Archive / delete for a sidebar workspace row. */
+/** New note / archive / delete for a sidebar workspace row. */
 export function WorkspaceMenu({ workspace, label, className }: { workspace: Workspace; label: string; className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -45,10 +45,19 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
     } catch (err) { window.alert((err as Error).message); }
   };
 
+  const newNote = async () => {
+    try {
+      const { note } = await api.createNote("workspaces", workspace.id, { title: "Untitled" });
+      router.push(`/notes?scope=w:${workspace.id}&note=${note.id}`);
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
+  };
+
   const remove = async () => {
     const what = workspace.worktreePath
-      ? `Delete "${label}", its sessions, and the worktree at ${workspace.worktreePath}? Deletion requires committed changes merged into the default branch.`
-      : `Delete "${label}" and its sessions?`;
+      ? `Delete "${label}", its sessions, its notes, and the worktree at ${workspace.worktreePath}? Deletion requires committed changes merged into the default branch.`
+      : `Delete "${label}", its sessions, and its notes?`;
     if (!window.confirm(what)) return;
     try {
       await api.deleteWorkspace(workspace.id, { worktree: true, memory: true });
@@ -66,6 +75,10 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem onSelect={newNote}>
+          <NotebookPenIcon /> New note
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={toggleArchive}>
           {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
           {archived ? "Unarchive" : "Archive"}

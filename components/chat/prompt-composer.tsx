@@ -29,7 +29,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
 }) {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [context, setContext] = useState<{ files: string[]; commands: string[] }>({ files: [], commands: [] });
+  const [context, setContext] = useState<{ files: string[]; commands: string[]; notes: { title: string; path: string }[] }>({ files: [], commands: [], notes: [] });
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -45,10 +45,17 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
   }, [workspaceId]);
 
   const token = dismissed ? null : completionAt(text, cursor);
-  const choices = token ? (token.kind === "@" ? context.files : context.commands)
+  // Notes show as "note:<title>" under @ and insert their file path.
+  const notePaths = new Map<string, string>();
+  for (const n of context.notes) {
+    const label = `note:${n.title}`;
+    notePaths.set(notePaths.has(label) ? `${label} · ${n.path.split("/").pop()}` : label, n.path);
+  }
+  const choices = token ? (token.kind === "@" ? [...notePaths.keys(), ...context.files] : context.commands)
     .filter((value) => fuzzyMatch(value, token.query)).sort((a, b) => Number(!a.toLowerCase().includes(token.query.toLowerCase())) - Number(!b.toLowerCase().includes(token.query.toLowerCase())) || a.localeCompare(b)).slice(0, 8) : [];
-  const choose = (value: string) => {
+  const choose = (choice: string) => {
     if (!token) return;
+    const value = (token.kind === "@" && notePaths.get(choice)) || choice;
     const insertion = token.kind === "@" && /\s/.test(value) ? `@"${value}" ` : `${token.kind}${value} `;
     setText(text.slice(0, token.start) + insertion + text.slice(token.end));
     setDismissed(true);
@@ -68,7 +75,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
     }}>
     <PromptInputBody>
       <Images disabled={disabled} />
-      {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">
+      {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files and notes" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">
         {choices.map((choice, i) => <button key={choice} id={`prompt-choice-${i}`} type="button" role="option" aria-selected={i === selected} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(choice)} className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${i === selected ? "bg-accent" : ""}`}>{token?.kind}{choice}</button>)}
       </div>}
       <PromptInputTextarea ref={textarea} autoFocus={autoFocus} disabled={disabled} placeholder={placeholder} value={text}
@@ -91,7 +98,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
             setDismissed(true);
           }
         }} />
-      <p className="text-muted-foreground px-3 pb-1 text-[10px]">@ files · / commands · ↑ prompt history · paste or drop images</p>
+      <p className="text-muted-foreground px-3 pb-1 text-[10px]">@ files and notes · / commands · ↑ prompt history · paste or drop images</p>
       {error && <p role="alert" className="text-destructive px-3 text-xs">{error}</p>}
     </PromptInputBody>
     {children}

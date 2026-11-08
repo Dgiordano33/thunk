@@ -98,11 +98,11 @@ The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and pl
 
 The HUD and map controls use `z-20`; the command menu and town panels use `z-30`. World objects use their own depth order inside the map stage. Overlay containers allow pointer events through empty space and enable them on actual controls. Keep future overlays from blocking map interaction outside their bounds.
 
-Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a bronze-tinted background and bronze outline; unavailable sections retain explicit “Soon” labels.
+Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a bronze-tinted background and bronze outline; unavailable sections retain explicit “Soon” labels. Notes shows its note count.
 
 ## Town styling
 
-[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library and workshop currently show scaffolding and “Under construction” content.
+[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop still shows scaffolding and “Under construction” content.
 
 Town navigation replaces the homepage title with a “World” back link and project name. Selecting an object opens a panel through a query parameter, retaining the surrounding map context and camera position.
 
@@ -117,6 +117,16 @@ Town navigation replaces the homepage title with a “World” back link and pro
 - Content scrolls inside the frame with `min-h-0` and `overflow-y-auto`.
 
 Escape normally closes a town panel, but yields to input fields and nested dialogs or menus. Chat can opt out with `escapable={false}` because Escape interrupts a turn. Preserve that distinction when adding panels.
+
+## Notes
+
+Notes follow Apple Notes' shape: notebooks → list → editor. The `/notes` Library is one full-height `CivPanel` under the HUD with three panes; the town Library is a `wide` `TownPanel` with list + editor and a notebook switcher; the workspace Notes tab lists notes and opens them in a wide right `Sheet`.
+
+- Pane headers use small `.pixel` uppercase eyebrows. Note titles and bodies stay in Geist: the title is a 24px bold input, the body uses `.doc-prose` (including `- [ ]` checklists).
+- List rows match `SessionsList`: `bg-background rounded-lg border`, a 13px title, an 11px time and excerpt line, and lucide badges for pinned, injected (brain), memory (lock) and open tasks (`tabular-nums`).
+- Selected notebooks reuse the toolbar's active treatment (bronze tint and outline). Parchment and the `quill` pixel icon appear only in the empty editor state.
+- Flags (Pin, Inject into sessions, Actionable) are pressed-state toggle chips; the note's file path sits below them in 10px mono, like the old memory editor.
+- Saving is automatic (800ms) with a footer status. An agent edit while the note is dirty shows an amber banner with "Load their version" / "Keep mine" instead of overwriting.
 
 ## Map artwork and states
 

@@ -1,7 +1,6 @@
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
 import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, SproutIcon } from "lucide-react";
 import Link from "next/link";
-import { MemoryEditor } from "@/components/memory/memory-editor";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
 import { SessionView } from "@/components/session/session-view";
@@ -15,6 +14,7 @@ import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { LEVEL_NAMES, type CityLevel } from "@/lib/world/cities";
 import { CROP_NAMES } from "@/lib/world/town";
 import { ProjectSettings } from "./project-settings";
+import { TownNotes } from "./town-notes";
 import { TownPanel } from "./town-panel";
 import type { TownFarm } from "./town-view";
 
@@ -136,19 +136,14 @@ export function TownCenterPanel({
         )}
       </Section>
 
-      <Section title="Workspace memory">
-        <MemoryEditor scope="workspaces" id={workspace.id} title="Workspace memory" hint="Notes every session in this workspace sees and can edit." />
+      <Section title={capital ? "Workspace notes" : "Notes"}>
+        <TownNotes projectId={project.id} scope={{ kind: "workspaces", id: workspace.id }} />
       </Section>
 
       {capital && (
         <>
-          <Section title="Project memory">
-            <MemoryEditor
-              scope="projects"
-              id={project.id}
-              title="Project memory"
-              hint="Durable facts about the whole repo or folder. Every session in every workspace sees this in its system prompt and can edit it."
-            />
+          <Section title="Project notes">
+            <TownNotes projectId={project.id} scope={{ kind: "projects", id: project.id }} />
           </Section>
           {archived.length > 0 && (
             <Section title="Ruins (archived workspaces)">
@@ -213,11 +208,6 @@ export function FieldPanel({
 }
 
 const BUILDINGS = {
-  library: {
-    title: "Library",
-    href: "/notes",
-    body: "Scribes are still laying the foundations. Once built, the library will keep this project's notes: what you've learned, decisions made, and links worth keeping, shared with every session in town.",
-  },
   workshop: {
     title: "Workshop",
     href: "/routines",
@@ -232,7 +222,7 @@ export function BuildingPanel({ building, closeHref }: { building: keyof typeof 
       <div className="px-4 py-6">
         <p className="text-sm leading-relaxed">{b.body}</p>
         <Link href={b.href} className="pixel mt-4 inline-block text-sm underline underline-offset-4">
-          See {b.title === "Library" ? "Notes" : "Routines"} →
+          See Routines →
         </Link>
       </div>
     </TownPanel>

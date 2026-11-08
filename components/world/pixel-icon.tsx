@@ -35,6 +35,22 @@ const ICONS = {
       ".aaaaaaaaa..",
     ],
   },
+  quill: {
+    palette: { a: "var(--w-bronze-dark)", b: "var(--w-snow)", c: "var(--w-parchment-ink)", d: "var(--w-bronze-light)" },
+    rows: [
+      ".........bb",
+      "........bbb",
+      ".......bbb.",
+      "......bbb..",
+      ".....bbb...",
+      "....bbb....",
+      "...dbb.....",
+      "..dd.......",
+      ".ad........",
+      "aaa..cc....",
+      ".a..cccc...",
+    ],
+  },
   hourglass: {
     palette: { a: "var(--w-bronze-dark)", b: "var(--w-snow)", c: "var(--w-plains)" },
     rows: [
