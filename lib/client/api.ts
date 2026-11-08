@@ -12,6 +12,7 @@ import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
 import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind } from "@/lib/notes/types";
 import type {
   Project,
+  ProjectRepo,
   ProjectSummary,
   Workspace,
   WorkspaceChanges,
@@ -45,10 +46,25 @@ export const api = {
     post<{ path: string | null }>("/api/fs/pick-folder", body),
   renameProject: (id: string, name: string) => call(`/api/projects/${id}`, { method: "PATCH", json: { name } }),
   deleteProject: (id: string) => call(`/api/projects/${id}`, { method: "DELETE" }),
+  // Extra repos of a multi-repo project
+  listProjectRepos: (id: string) => call<{ repos: ProjectRepo[] }>(`/api/projects/${id}/repos`),
+  addProjectRepo: (
+    id: string,
+    body: { source?: "folder"; path: string; name?: string } | { source: "github"; url: string; parent: string; name?: string },
+  ) => post<{ repo: ProjectRepo }>(`/api/projects/${id}/repos`, body),
+  removeProjectRepo: (id: string, repoId: string) => call(`/api/projects/${id}/repos/${repoId}`, { method: "DELETE" }),
   // Workspaces
   listWorkspaces: (projectId: string) =>
     call<{ workspaces: WorkspaceSummary[] }>(`/api/workspaces?projectId=${encodeURIComponent(projectId)}`),
-  createWorkspace: (body: { projectId: string; name?: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
+  createWorkspace: (body: {
+    projectId: string;
+    name?: string;
+    worktree?: boolean;
+    branch?: string;
+    baseRef?: string;
+    /** Extra repos to include; all of the project's when omitted. */
+    repoIds?: string[];
+  }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),

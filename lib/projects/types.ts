@@ -10,8 +10,34 @@ export type Project = {
   kind: ProjectKind;
   remote: string | null;
   defaultBranch: string | null;
+  /** Repos the project spans besides its primary root, in the order they were added. */
+  extraRepos: ProjectRepo[];
   createdAt: string;
   updatedAt: string;
+};
+
+/** An additional git repo in a multi-repo project. The primary repo is the project's own root. */
+export type ProjectRepo = {
+  id: string;
+  projectId: string;
+  /** Short label, unique within the project; defaults to the checkout's folder name. */
+  name: string;
+  /** Absolute path of the repo's main checkout (its git toplevel). */
+  path: string;
+  remote: string | null;
+  defaultBranch: string | null;
+  createdAt: string;
+};
+
+/** Where a workspace works on one of the project's additional repos. */
+export type WorkspaceRepo = {
+  repoId: string;
+  name: string;
+  /** The worktree when one exists, else the repo's main checkout (in place). */
+  cwd: string;
+  branch: string | null;
+  worktreePath: string | null;
+  baseRef: string | null;
 };
 
 export type WorkspaceStatus = "active" | "archived";
@@ -26,6 +52,8 @@ export type Workspace = {
   branch: string | null;
   worktreePath: string | null;
   baseRef: string | null;
+  /** The additional repos this workspace covers (a subset of the project's), each with its own checkout. */
+  extraRepos: WorkspaceRepo[];
   status: WorkspaceStatus;
   createdAt: string;
   updatedAt: string;

@@ -42,18 +42,32 @@ async function assertClean(cwd: string) {
   if (await git(cwd, ["status", "--porcelain"])) throw new Error(`Commit or stash changes in ${cwd} first`);
 }
 
-export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
+/** Every worktree a workspace would delete: the primary repo's and each extra repo's. */
+function workspaceWorktrees(ctx: WorkspaceContext) {
   const { workspace: ws, project } = ctx;
-  if (!ws.worktreePath) return;
-  await assertClean(ws.cwd);
-  if (!project.defaultBranch) throw new Error("Set a default branch before deleting a worktree");
-  // A squash has different commit IDs, and the target may have moved on since. The work is merged
-  // when merging HEAD into the target would change nothing.
-  const target = `refs/heads/${project.defaultBranch}`;
-  const ancestor = await tryGit(ws.cwd, ["merge-base", "--is-ancestor", "HEAD", target]);
-  const merged = ancestor !== null || await tryGit(ws.cwd, ["merge-tree", "--write-tree", target, "HEAD"]) === await git(ws.cwd, ["rev-parse", `${target}^{tree}`]);
-  if (!merged) {
-    throw new Error("Workspace contains unmerged commits. Merge back before deleting it; Archive keeps the worktree.");
+  const list: { label: string | null; cwd: string; defaultBranch: string | null }[] = [];
+  if (ws.worktreePath) list.push({ label: null, cwd: ws.cwd, defaultBranch: project.defaultBranch });
+  for (const checkout of ws.extraRepos ?? []) {
+    if (!checkout.worktreePath) continue;
+    const repo = project.extraRepos?.find((r) => r.id === checkout.repoId);
+    list.push({ label: checkout.name, cwd: checkout.cwd, defaultBranch: repo?.defaultBranch ?? null });
+  }
+  return list;
+}
+
+export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
+  for (const wt of workspaceWorktrees(ctx)) {
+    const where = wt.label ? ` in ${wt.label}` : "";
+    await assertClean(wt.cwd);
+    if (!wt.defaultBranch) throw new Error(`Set a default branch${where} before deleting a worktree`);
+    // A squash has different commit IDs, and the target may have moved on since. The work is merged
+    // when merging HEAD into the target would change nothing.
+    const target = `refs/heads/${wt.defaultBranch}`;
+    const ancestor = await tryGit(wt.cwd, ["merge-base", "--is-ancestor", "HEAD", target]);
+    const merged = ancestor !== null || await tryGit(wt.cwd, ["merge-tree", "--write-tree", target, "HEAD"]) === await git(wt.cwd, ["rev-parse", `${target}^{tree}`]);
+    if (!merged) {
+      throw new Error(`Workspace contains unmerged commits${where}. Merge back before deleting it; Archive keeps the worktree.`);
+    }
   }
 }
 

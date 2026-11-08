@@ -541,6 +541,47 @@ export type Database = {
           },
         ]
       }
+      project_repos: {
+        Row: {
+          created_at: string
+          default_branch: string | null
+          id: string
+          name: string
+          path: string
+          project_id: string
+          remote: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_branch?: string | null
+          id?: string
+          name: string
+          path: string
+          project_id: string
+          remote?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_branch?: string | null
+          id?: string
+          name?: string
+          path?: string
+          project_id?: string
+          remote?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_repos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -573,6 +614,51 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      workspace_repos: {
+        Row: {
+          base_ref: string | null
+          branch: string | null
+          created_at: string
+          cwd: string
+          repo_id: string
+          workspace_id: string
+          worktree_path: string | null
+        }
+        Insert: {
+          base_ref?: string | null
+          branch?: string | null
+          created_at?: string
+          cwd: string
+          repo_id: string
+          workspace_id: string
+          worktree_path?: string | null
+        }
+        Update: {
+          base_ref?: string | null
+          branch?: string | null
+          created_at?: string
+          cwd?: string
+          repo_id?: string
+          workspace_id?: string
+          worktree_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_repos_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_repos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspaces: {
         Row: {

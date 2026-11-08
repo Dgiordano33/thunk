@@ -12,6 +12,7 @@ import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemor
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
 import { CANVAS_PROMPT, hierarchyPrompt } from "../options";
+import { extraRepoDirectories } from "@/lib/projects/repos-prompt";
 import { emit, setState, type AgentDriver, type LiveSession, type PendingRequest } from "../session-registry";
 import { CodexRpc, type RpcId } from "./rpc";
 
@@ -155,7 +156,13 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
   const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
   // A worktree's git metadata lives in the main checkout; commits need to write there.
-  const writableRoots = workspace.worktreePath ? [...dataDirs, path.join(project.root, ".git")] : dataDirs;
+  const writableRoots = workspace.worktreePath ? [...dataDirs, path.join(project.root, ".git")] : [...dataDirs];
+  // Extra repos are writable, plus each one's .git when it's a worktree (its metadata lives in the main checkout).
+  writableRoots.push(...extraRepoDirectories(workspace));
+  for (const checkout of workspace.extraRepos ?? []) {
+    const repo = project.extraRepos?.find((r) => r.id === checkout.repoId);
+    if (checkout.worktreePath && repo) writableRoots.push(path.join(repo.path, ".git"));
+  }
 
   const developerInstructions = [
     CANVAS_PROMPT,
