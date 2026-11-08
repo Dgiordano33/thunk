@@ -1,3 +1,4 @@
+import { notificationTools } from "@/lib/notifications/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
@@ -83,6 +84,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
+        ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],

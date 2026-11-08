@@ -14,6 +14,17 @@ export type Database = {
   }
   public: {
     Tables: {
+      notifications: {
+        Row: { id: string; kind: string; urgency: string; project_id: string; workspace_id: string | null; session_id: string | null; run_id: string | null; subject_key: string; title: string; detail: string | null; href: string; actions: Json; status: string; read_at: string | null; resolved_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; kind: string; urgency: string; project_id: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; subject_key: string; title: string; detail?: string | null; href: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; kind?: string; urgency?: string; project_id?: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; subject_key?: string; title?: string; detail?: string | null; href?: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "notifications_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "notifications_workspace_id_fkey"; columns: ["workspace_id"]; isOneToOne: false; referencedRelation: "workspaces"; referencedColumns: ["id"] },
+          { foreignKeyName: "notifications_run_id_fkey"; columns: ["run_id"]; isOneToOne: false; referencedRelation: "routine_runs"; referencedColumns: ["id"] }
+        ]
+      }
+
       project_repo_folders: {
         Row: { id: string; project_id: string; repo_id: string | null; path: string; label: string; created_at: string; updated_at: string }
         Insert: { id?: string; project_id: string; repo_id?: string | null; path: string; label: string; created_at?: string; updated_at?: string }

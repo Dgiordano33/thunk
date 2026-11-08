@@ -7,7 +7,7 @@ import { describeCron } from "@/lib/routines/cron";
 import { EVENT_LABELS, RUN_STATUS_LABELS, type Routine, type RoutineRun, type RoutineSummary, type RunStatus } from "@/lib/routines/types";
 import { cn } from "@/lib/utils";
 
-const STATUS_STYLE: Record<RunStatus, { badge: string; dot: string }> = {
+export const STATUS_STYLE: Record<RunStatus, { badge: string; dot: string }> = {
   queued: { badge: "text-muted-foreground", dot: "bg-muted-foreground/60" },
   running: { badge: "border-amber-500/40 text-amber-700 dark:text-amber-400", dot: "animate-pulse bg-amber-500" },
   needs_attention: { badge: "border-amber-500/50 text-amber-700 dark:text-amber-400", dot: "bg-amber-500" },

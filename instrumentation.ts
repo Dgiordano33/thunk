@@ -1,5 +1,9 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { ensureNotificationProducers } = await import("./lib/notifications/producers");
+    ensureNotificationProducers();
+    const { ensureDeliveryPolling } = await import("./lib/projects/delivery");
+    ensureDeliveryPolling();
     const { ensureScheduler } = await import("./lib/routines/scheduler");
     ensureScheduler();
     const { recoverVaultQueue } = await import("./lib/vault/service");

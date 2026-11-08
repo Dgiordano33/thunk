@@ -12,7 +12,7 @@ import type { Question } from "./types";
  */
 export function buildCanUseTool(live: LiveSession): CanUseTool {
   return (toolName, input, opts) => {
-    if ([...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES].some((name) => toolName === `mcp__thunk__${name}`))
+    if ([...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
 
     const requestId = crypto.randomUUID();

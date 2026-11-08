@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { useNotifications } from "@/lib/store/notifications-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
 import { CivPanel } from "./civ-panel";
@@ -23,7 +24,8 @@ function Mark({ className }: { className?: string }) {
 }
 
 /** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes, Routines and the Vault. */
-export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount }: { cityCount: number; noteCount: number; routineCount: number; vaultCount: number }) {
+export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount, notificationCount }: { cityCount: number; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
+  const count = useNotifications((s) => s.loaded ? s.counts.action : notificationCount);
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
   const pathname = usePathname();
@@ -33,7 +35,7 @@ export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount }: {
   }, []);
 
   useEffect(() => {
-    if (pathname === "/notes" || pathname === "/vault") setExpanded(false);
+    if (pathname === "/notes" || pathname === "/vault" || pathname === "/inbox") setExpanded(false);
   }, [pathname, setExpanded]);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount }: {
 
   const slots: { href: string; label: string; icon: PixelIconName; detail: string }[] = [
     { href: "/", label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
+    { href: "/inbox", label: "Inbox", icon: "bell", detail: `${count} waiting` },
     { href: "/notes", label: "Notes", icon: "scroll", detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
     { href: "/routines", label: "Routines", icon: "hourglass", detail: `${routineCount} active` },
     { href: "/vault", label: "Vault", icon: "chest", detail: `${vaultCount} ${vaultCount === 1 ? "item" : "items"}` },

@@ -12,12 +12,15 @@ import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUi } from "@/lib/store/ui-store";
 import type { Theme } from "@/lib/theme";
+import { NOTIFICATION_KINDS, NOTIFICATION_LABELS } from "@/lib/notifications/types";
+import { setMuted, useNotifications } from "@/lib/store/notifications-store";
 import { cn } from "@/lib/utils";
 
 const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cost);
 
 /** Sidebar footer: app-wide settings. */
 export function SettingsMenu({ projects, className }: { projects: SidebarProject[]; className?: string }) {
+  const muted = useNotifications((s) => s.muted);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
   const notifications = useAmbient((s) => s.notifications);
@@ -90,6 +93,7 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs" aria-pressed={notifications} onClick={toggleNotifications}>
             <BellIcon /> Desktop alerts <span className="text-muted-foreground ml-auto">{notifications ? "On" : "Off"}</span>
           </Button>
+          <details className="px-2 py-1 text-xs"><summary className="cursor-pointer">Alert kinds</summary><div className="mt-2 max-h-64 space-y-2 overflow-y-auto">{NOTIFICATION_KINDS.map((kind) => <label key={kind} className="flex items-center gap-2"><input type="checkbox" checked={!muted.includes(kind)} onChange={(e) => setMuted(e.target.checked ? muted.filter((k) => k !== kind) : [...muted, kind])} />{NOTIFICATION_LABELS[kind]}</label>)}</div></details>
           {notificationMessage && <p role="status" className="text-muted-foreground px-2 py-1 text-xs">{notificationMessage}</p>}
         </PopoverContent>
       </Popover>

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
 import { api } from "@/lib/client/api";
 import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
+import { useNotifications } from "@/lib/store/notifications-store";
 import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { SettingsMenu } from "@/components/ambient/settings-menu";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 export type SidebarProject = ProjectSummary & { workspaces: WorkspaceSummary[] };
 
 export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
+  const notificationCounts = useNotifications((s) => s.counts.byProject);
   const taskCounts = useTaskCounts();
   const sessions = useAmbient((s) => s.sessions);
   const pathname = usePathname();
@@ -116,6 +118,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                       {noteCounts.get(p.id)}
                     </Link>
                   )}
+                  {(notificationCounts[p.id] ?? 0) > 0 && <Link href={`/inbox?projectId=${p.id}`} aria-label={`${notificationCounts[p.id]} notifications need attention`} className="px-1 text-xs text-amber-600">! {notificationCounts[p.id]}</Link>}
                   {openTasks > 0 && <Link href={`/p/${p.id}?building=tasks`} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
                   <NewWorkspaceButton
                     compact

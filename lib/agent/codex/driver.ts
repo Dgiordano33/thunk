@@ -1,3 +1,4 @@
+import { notificationTools } from "@/lib/notifications/tools";
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
@@ -175,7 +176,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;
