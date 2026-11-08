@@ -4,6 +4,10 @@ import { TasksPanel } from "@/components/town/tasks-panel";
 import { LibraryPanel } from "@/components/town/library-panel";
 import { FieldPanel, TownCenterPanel } from "@/components/town/panels";
 import { WorkshopPanel } from "@/components/town/workshop-panel";
+import { VaultPanel } from "@/components/vault/vault-panel";
+import { vaultDirOf } from "@/lib/vault/dir";
+import { listItems } from "@/lib/vault/store";
+import { isBusy } from "@/lib/vault/types";
 import { TownView, type TownFarm, type TownSelection, type TownWorkspace } from "@/components/town/town-view";
 import { workspaceLabel } from "@/components/session/labels";
 import { listSessions, liveMeta } from "@/lib/agent";
@@ -27,6 +31,7 @@ export async function generateMetadata({ params }: PageProps<"/p/[id]">) {
 }
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+const BUILDINGS = ["library", "workshop", "tasks", "vault"] as const;
 
 // A project up close: workspaces are town centers, sessions are the fields around them.
 // `?ws=`, `?session=` and `?building=` open the matching panel without moving the camera.
@@ -37,10 +42,11 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
   if (!project) notFound();
   await ensureMainWorkspace(project);
 
-  const [workspaces, sessions, rows] = await Promise.all([
+  const [workspaces, sessions, rows, vaultItems] = await Promise.all([
     listWorkspaces(id),
     listSessions({ projectId: id, limit: 500 }),
     listSessionRows({ projectId: id, limit: 500 }).catch(() => []),
+    listItems(vaultDirOf(project)).catch(() => []),
   ]);
   const active = workspaces.filter((w) => w.status === "active");
   const archived = workspaces.filter((w) => w.status === "archived");
@@ -73,7 +79,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
   const selected: TownSelection = {
     session: one(query.session),
     ws: one(query.ws),
-    building: one(query.building) === "library" ? "library" : one(query.building) === "workshop" ? "workshop" : one(query.building) === "tasks" ? "tasks" : undefined,
+    building: BUILDINGS.find((b) => b === one(query.building)),
     note: one(query.note),
   };
   const closeHref = `/p/${id}`;
@@ -129,6 +135,12 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
     panel = <TasksPanel project={project} workspaces={workspaces} closeHref={closeHref} />;
   } else if (selected.building === "workshop") {
     panel = <WorkshopPanel project={project} workspaces={workspaces} closeHref={closeHref} />;
+  } else if (selected.building === "vault") {
+    panel = (
+      <Suspense>
+        <VaultPanel projectId={id} closeHref={closeHref} />
+      </Suspense>
+    );
   }
 
   return (
@@ -141,6 +153,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
       farms={farms}
       library={layout.library}
       workshop={layout.workshop}
+      vault={{ ...layout.vault, busy: vaultItems.some(isBusy), failed: vaultItems.some((i) => i.status === "failed") }}
       selected={selected}
     >
       {panel}

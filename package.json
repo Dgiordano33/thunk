@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test:tasks": "node --conditions=react-server --test tests/tasks.test.cjs tests/task-tools.test.cjs && node --test components/tasks/ui.test.cjs",
     "test:notes": "node --conditions=react-server --test tests/notes.test.cjs",
-    "test:routines": "node --conditions=react-server --test tests/routines.test.cjs"
+    "test:routines": "node --conditions=react-server --test tests/routines.test.cjs",
+    "test:vault": "node --conditions=react-server --test tests/vault.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",

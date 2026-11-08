@@ -70,6 +70,21 @@ const ICONS = {
       "aaaaaaaaaa",
     ],
   },
+  chest: {
+    palette: { a: "var(--w-bronze-dark)", b: "var(--w-bronze)", c: "var(--w-bronze-light)", d: "oklch(0.83 0.15 85)" },
+    rows: [
+      "..aaaaaaaa..",
+      ".abbbbbbbba.",
+      "abccccccccba",
+      "abbbbbbbbbba",
+      "aaaaaddaaaaa",
+      "abbbbddbbbba",
+      "abbbbbbbbbba",
+      "abccccccccba",
+      "abbbbbbbbbba",
+      "aaaaaaaaaaaa",
+    ],
+  },
 } satisfies Record<string, { palette: Record<string, string>; rows: string[] }>;
 
 export type PixelIconName = keyof typeof ICONS;

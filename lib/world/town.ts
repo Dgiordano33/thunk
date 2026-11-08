@@ -1,7 +1,7 @@
 // A project seen up close: an Age of Empires-style town. Pure; shared by server and client, runnable under `node --test`.
 //
 // Project = the town. Each active workspace = a town center (main is the capital, in the middle).
-// Each session = a farm around its workspace's town center. The library (notes) and workshop (routines) flank the capital.
+// Each session = a farm around its workspace's town center. The library (notes), workshop (routines) and vault (uploads) flank the capital.
 import { chebyshev, hash32, mulberry32, valueNoise, type Cell, type Grid, type TerrainKind, type Tile } from "./terrain.ts";
 
 /** Tiles between neighbouring town centers. Farms fill rings 2–3 around each, leaving a lane between towns. */
@@ -27,6 +27,7 @@ export type TownLayout = {
   centers: { workspaceId: string; cell: Cell; capital: boolean }[];
   library: Cell;
   workshop: Cell;
+  vault: Cell;
   /** Farm per session id. Sessions that don't fit (oldest first) are counted in `overflow`. */
   farms: Record<string, Cell>;
   overflow: Record<string, number>;
@@ -78,9 +79,11 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
   // Either side of the capital, clear of its sprite.
   const library = { col: capital.col - 2, row: capital.row + 1 };
   const workshop = { col: capital.col + 1, row: capital.row - 2 };
+  // Behind the capital, far enough back that its nameplate clears the capital's banner.
+  const vault = { col: capital.col - 4, row: capital.row - 3 };
 
   const key = (c: Cell) => `${c.col},${c.row}`;
-  const reserved = new Set([key(library), key(workshop)]);
+  const reserved = new Set([key(library), key(workshop), key(vault)]);
   for (const { cell } of centers) for (const d of [{ col: 0, row: 0 }, ...ring(1)]) reserved.add(key({ col: cell.col + d.col, row: cell.row + d.row }));
   const roads = new Set<string>();
   for (const { cell } of centers.slice(1)) for (const c of line(cell, capital)) if (!reserved.has(key(c))) roads.add(key(c));
@@ -128,10 +131,10 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
       tile.kind = "plains";
     });
   }
-  for (const c of [...centers.map((x) => x.cell), library, workshop]) {
+  for (const c of [...centers.map((x) => x.cell), library, workshop, vault]) {
     const tile = tiles[c.row]?.[c.col];
     if (tile) tile.kind = "grass";
   }
 
-  return { grid, tiles, centers, library, workshop, farms, overflow };
+  return { grid, tiles, centers, library, workshop, vault, farms, overflow };
 }

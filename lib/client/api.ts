@@ -9,6 +9,7 @@ import type { ModelOption, SessionMeta } from "@/lib/agent/types";
 import type { Artifact, DocComment } from "@/lib/documents/types";
 import type { RoutineInput, RoutinePatch } from "@/lib/routines/schema";
 import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
+import type { VaultItem } from "@/lib/vault/types";
 import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind } from "@/lib/notes/types";
 import type {
   Project,
@@ -33,6 +34,22 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
 const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", json });
 
 export const api = {
+  // Vault
+  listVault: (projectId: string) => call<{ items: VaultItem[]; dir: string }>(`/api/projects/${projectId}/vault`),
+  listAllVault: () => call<{ items: (VaultItem & { projectName: string })[] }>("/api/vault"),
+  /** One request per call; send files one at a time so each stays under the proxy body limit. */
+  uploadVault: (projectId: string, input: { file?: File; text?: string; title?: string }) => {
+    const form = new FormData();
+    if (input.file) form.append("file", input.file);
+    if (input.text) form.append("text", input.text);
+    if (input.title) form.append("title", input.title);
+    return call<{ items: VaultItem[] }>(`/api/projects/${projectId}/vault`, { method: "POST", body: form });
+  },
+  patchVaultItem: (projectId: string, id: string, patch: { title?: string; reextract?: true }) =>
+    call<{ item: VaultItem }>(`/api/projects/${projectId}/vault/${id}`, { method: "PATCH", json: patch }),
+  deleteVaultItem: (projectId: string, id: string) => call(`/api/projects/${projectId}/vault/${id}`, { method: "DELETE" }),
+  promoteVaultIdea: (projectId: string, id: string, ideaId: string, to: "note" | "task") =>
+    post<{ item: VaultItem; noteId?: string; taskId?: string }>(`/api/projects/${projectId}/vault/${id}/promote`, { ideaId, to }),
   // Projects
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
   addProject: (

@@ -137,6 +137,40 @@ export function WorkshopSprite({ building }: { building: boolean }) {
   );
 }
 
+const IRON = "oklch(0.36 0.02 250)";
+const IRON_LIGHT = "oklch(0.5 0.02 250)";
+
+export const VAULT_SIZE = { w: 32, h: 32 } as const;
+
+/** Squat stone strongroom: heavy blocks, stepped slate roof, an iron-banded door with a gold lock, and a pennant. Lamps glow while it's reading. */
+export function VaultSprite({ busy = false }: { busy?: boolean }) {
+  const { w, h } = VAULT_SIZE;
+  return (
+    <Pixels w={w} h={h}>
+      <ellipse cx={16} cy={29.5} rx={14} ry={2.5} fill="oklch(0 0 0 / 0.2)" />
+      {/* Plinth and block walls */}
+      {r(2, 27, 28, 3, STONE_DARK)}
+      {r(4, 14, 24, 13, STONE)}
+      {[17, 21, 25].map((y) => r(4, y, 24, 1, STONE_DARK, `vr${y}`))}
+      {[[8, 14], [16, 14], [24, 14], [6, 18], [12, 18], [20, 18], [26, 18], [9, 22], [23, 22]].map(([x, y]) => r(x, y, 1, 3, STONE_DARK, `vj${x},${y}`))}
+      {r(27, 14, 1, 13, STONE_DARK)}
+      {/* Cornice and stepped slate roof */}
+      {r(3, 12, 26, 2, STONE_DARK)}
+      {roof(16, 11, 26, 6, SLATE_LIGHT, SLATE)}
+      {r(14, 4, 4, 2, STONE)}
+      {flag(16, 4, GOLD)}
+      {/* Iron-banded door with a gold lock */}
+      {r(12, 18, 8, 9, IRON)}
+      {r(13, 17, 6, 1, IRON)}
+      {r(12, 20, 8, 1, IRON_LIGHT)}
+      {r(12, 24, 8, 1, IRON_LIGHT)}
+      {r(15, 21, 2, 2, GOLD)}
+      {/* Barred lamps either side of the door */}
+      {[6, 23].map((x) => [r(x, 19, 3, 3, busy ? WINDOW : DOOR, `vl${x}`), r(x + 1, 19, 1, 3, IRON, `vb${x}`)])}
+    </Pixels>
+  );
+}
+
 const CROP_COLORS: Record<CropStage, string[]> = {
   0: [],
   1: ["oklch(0.7 0.17 140)"],
