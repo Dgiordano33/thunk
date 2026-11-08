@@ -324,7 +324,7 @@ export function RoutineForm({
           <ChevronRightIcon className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> Limits and catch-up
         </CollapsibleTrigger>
         <CollapsibleContent className="grid gap-3 pt-3 sm:grid-cols-3">
-          <Field label="Max runs per day" hint="Automatic runs only.">
+          <Field label="Max runs per day" hint="Run now still works past it.">
             <Input type="number" min={1} max={200} value={maxRuns} onChange={(e) => setMaxRuns(e.target.value)} className="h-7 text-xs" />
           </Field>
           <Field label="Time limit (min)" hint="Interrupts the agent.">

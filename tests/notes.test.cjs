@@ -91,3 +91,77 @@ test("store creates, lists, patches and deletes notes; memory is a virtual pinne
   assert.equal(store.isNoteId("../etc"), false);
   await assert.rejects(store.readNote(d, "../etc"), /Invalid note id/);
 });
+
+test("task patches preserve agent edits and reject a displaced task", async (t) => {
+  const d = await dirs(t);
+  const note = await store.createNote(d, { markdown: "- [ ] do it\n", actionable: true });
+  const file = path.join(d.notesDir, note.id + ".md");
+  await fs.appendFile(file, "\nAgent addition\n");
+  const updated = await store.writeNote(d, note.id, { task: { line: 0, text: "do it", done: true } });
+  assert.equal(updated.markdown, "- [x] do it\n\nAgent addition\n");
+  await store.writeNote(d, note.id, { markdown: "New heading\n- [ ] do it\n" });
+  const before = await fs.readFile(file, "utf8");
+  await assert.rejects(store.writeNote(d, note.id, { task: { line: 0, text: "do it", done: true } }), store.NoteConflictError);
+  assert.equal(await fs.readFile(file, "utf8"), before);
+});
+
+test("counts match listings without reading note bodies or double counting memory", async (t) => {
+  const d = await dirs(t);
+  assert.equal(await store.countNotes([d]), 1);
+  await store.createNote(d, { title: "One" });
+  await fs.writeFile(path.join(d.notesDir, "memory.md"), "ignored");
+  await fs.writeFile(path.join(d.notesDir, "bad name.md"), "ignored");
+  await fs.writeFile(path.join(d.notesDir, "scratch.tmp"), "ignored");
+  assert.equal(await store.countNotes([d]), (await store.listNotes(d)).length);
+});
+
+test("watcher retries with backoff for existing subscribers and cancels on unsubscribe", () => {
+  const { EventEmitter } = require("node:events");
+  const timers = new Map();
+  let timerId = 0;
+  let attempts = 0;
+  let watcher;
+  const fakeFs = {
+    existsSync: () => true,
+    mkdirSync: () => {},
+    watch: () => {
+      attempts++;
+      if (attempts === 2) throw new Error("temporarily unavailable");
+      watcher = new EventEmitter();
+      watcher.close = () => {};
+      return watcher;
+    },
+  };
+  const source = require("node:fs").readFileSync(path.join(__dirname, "../lib/notes/watch.ts"), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  const sandboxModule = { exports: {} };
+  const load = (id) => {
+    if (id === "server-only") return {};
+    if (id === "node:fs") return fakeFs;
+    if (id === "@/lib/projects/paths") return { DATA_DIR: "/tmp/watch-test", projectSlug: (s) => s };
+    if (id === "@/lib/supabase/repo/projects") return { listProjects: async () => [] };
+    if (id === "@/lib/supabase/repo/workspaces") return { listAllWorkspaces: async () => [] };
+    if (id === "./types") return { MEMORY_NOTE_ID: "memory" };
+    return require(id);
+  };
+  const fakeTimeout = (fn, delay) => { timers.set(++timerId, { fn, delay }); return timerId; };
+  new Function("require", "module", "exports", "globalThis", "setTimeout", "clearTimeout", "console", compiled)(
+    load, sandboxModule, sandboxModule.exports, {}, fakeTimeout, (id) => timers.delete(id), { error: () => {} },
+  );
+  const runRetry = (delay) => {
+    const [id, timer] = [...timers].find(([, t]) => t.delay === delay);
+    timers.delete(id);
+    timer.fn();
+  };
+  const unsubscribe = sandboxModule.exports.subscribeNotes(() => {});
+  assert.equal(attempts, 1);
+  watcher.emit("error", new Error("watch failed"));
+  runRetry(1000);
+  assert.equal(attempts, 2);
+  runRetry(2000);
+  assert.equal(attempts, 3);
+  watcher.emit("error", new Error("watch failed again"));
+  assert.ok([...timers.values()].some((t) => t.delay === 4000));
+  unsubscribe();
+  assert.equal(timers.size, 0);
+});

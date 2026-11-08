@@ -129,6 +129,7 @@ export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): P
   if (raw === null) return null;
   const parsed = parseNote(raw);
   let markdown = patch.markdown ?? parsed.body;
+  // shortcut: external writers can race this read/write; use coordinated file locking if strict concurrency is needed.
   if (patch.task) {
     const task = extractTasks(parsed.body).find((t) => t.line === patch.task!.line);
     if (!task || task.text !== patch.task.text)

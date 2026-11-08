@@ -10,6 +10,9 @@ type Listener = (e: NoteEvent) => void;
 
 type Watch = {
   watcher: FSWatcher | null;
+  retry?: ReturnType<typeof setTimeout>;
+  retryDelay?: number;
+  healthy?: ReturnType<typeof setTimeout>;
   listeners: Set<Listener>;
   pending: Map<string, ReturnType<typeof setTimeout>>;
   /** project slug → id, and `${projectSlug}/${workspaceSlug}` → workspace id. */
@@ -68,35 +71,55 @@ function emit(rel: string) {
   });
 }
 
+function retry() {
+  if (!state.listeners.size || state.retry) return;
+  const delay = state.retryDelay ?? 1000;
+  state.retryDelay = Math.min(delay * 2, 30_000);
+  state.retry = setTimeout(() => {
+    state.retry = undefined;
+    start();
+  }, delay);
+}
+
 function start() {
-  if (state.watcher) return;
-  mkdirSync(ROOT, { recursive: true });
+  if (state.watcher || state.retry) return;
   void refreshSlugs();
   try {
+    mkdirSync(ROOT, { recursive: true });
     state.watcher = watch(ROOT, { recursive: true }, (_event, filename) => {
       if (!filename || !filename.endsWith(".md")) return;
       const rel = filename.toString();
       clearTimeout(state.pending.get(rel));
       state.pending.set(rel, setTimeout(() => { state.pending.delete(rel); emit(rel); }, DEBOUNCE_MS));
     });
+    state.healthy = setTimeout(() => { state.retryDelay = 1000; }, 30_000);
     state.watcher.on("error", (err) => {
       console.error("[thunk] notes watcher", err);
       state.watcher?.close();
       state.watcher = null;
+      clearTimeout(state.healthy);
+      retry();
     });
   } catch (err) {
     console.error("[thunk] notes watcher unavailable", err);
+    retry();
   }
 }
 
 /** Subscribe to note file changes, including agents editing files directly. */
 export function subscribeNotes(listener: Listener) {
-  start();
   state.listeners.add(listener);
+  start();
   return () => {
     state.listeners.delete(listener);
-    if (state.listeners.size === 0 && state.watcher) {
-      state.watcher.close();
+    if (state.listeners.size === 0) {
+      clearTimeout(state.retry);
+      clearTimeout(state.healthy);
+      state.retry = undefined;
+      state.retryDelay = 1000;
+      for (const timer of state.pending.values()) clearTimeout(timer);
+      state.pending.clear();
+      state.watcher?.close();
       state.watcher = null;
     }
   };
