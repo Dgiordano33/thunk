@@ -10,7 +10,7 @@ import { CivToolbar } from "./civ-toolbar";
 import { HudTitle } from "./hud-title";
 
 /** Chrome over the world map: title, actions, and the bottom-left command menu. */
-export function WorldHud({ projects, noteCount, routineCount, vaultCount }: { projects: SidebarProject[]; noteCount: number; routineCount: number; vaultCount: number }) {
+export function WorldHud({ projects, noteCount, routineCount, vaultCount, notificationCount }: { projects: SidebarProject[]; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
   const home = usePathname() === "/";
   return (
     <>
@@ -24,7 +24,7 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount }: { pr
           {home && <AddProjectForm />}
         </CivPanel>
       </div>
-      <CivToolbar cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} vaultCount={vaultCount} />
+      <CivToolbar cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} vaultCount={vaultCount} notificationCount={notificationCount} />
     </>
   );
 }

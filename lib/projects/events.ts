@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 
 export type RunFailedEvent = { projectId: string; workspaceId: string; exitCode: number; tail: string };
 
-type ProjectEventMap = { run_failed: [RunFailedEvent] };
+type ProjectEventMap = { run_failed: [RunFailedEvent]; setup_failed: [RunFailedEvent] };
 
 const g = globalThis as typeof globalThis & { __thunkProjectEvents?: EventEmitter<ProjectEventMap> };
 

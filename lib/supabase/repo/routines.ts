@@ -350,11 +350,15 @@ export async function updateRun(id: string, patch: Partial<RoutineRun>): Promise
     if (!run) return null;
     const next = { ...run, ...patch, id, updatedAt: new Date().toISOString() };
     memRuns.set(id, next);
+    if (patch.status && patch.status !== run.status) await publishRunNotification(next);
     return next;
   }
+  const previous = patch.status ? await getRun(id) : null;
   const { data, error } = await client.from("routine_runs").update(runToRow(patch)).eq("id", id).select(RUN_COLUMNS).maybeSingle();
   if (error) throw error;
-  return data ? toRun(data as RunRow) : null;
+  const next = data ? toRun(data as RunRow) : null;
+  if (next && patch.status && previous?.status !== patch.status) await publishRunNotification(next);
+  return next;
 }
 
 export async function getRun(id: string): Promise<RoutineRun | null> {
@@ -418,4 +422,9 @@ export async function countRunsSince(routineId: string, since: Date): Promise<nu
     .or("error.is.null,error.not.like.Skipped*");
   if (error) throw error;
   return count ?? 0;
+}
+
+async function publishRunNotification(run: RoutineRun) {
+  try { const { runNotification } = await import("@/lib/notifications/routines"); await runNotification(run); }
+  catch (err) { console.error("[thunk] routine notification failed", err); }
 }

@@ -1,9 +1,8 @@
+import { deliveryNotifications } from "@/lib/notifications/delivery";
 import "server-only";
 import { advanceDeliveryHistory, readDeliveryHistory, writeDeliveryHistory, type DeliveryHistory, type DeliverySnapshot } from "./delivery-history";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { listEnabledRoutines } from "../supabase/repo/routines";
-import { DELIVERY_ROUTINE_EVENTS } from "../routines/types";
 import { listProjects } from "../supabase/repo/projects";
 import { listAllWorkspaces } from "../supabase/repo/workspaces";
 import { toCheck, type RollupEntry } from "./github";
@@ -113,6 +112,7 @@ async function projectDelivery(project: Project) {
       if (JSON.stringify(history) !== JSON.stringify(previous)) await writeDeliveryHistory(project.root, history);
       // Persist even an empty first baseline so its epoch survives restart.
       else if (!cached.history) await writeDeliveryHistory(project.root, history);
+      await deliveryNotifications(project.id, previous, history, snapshots).catch((err) => console.error("[thunk] delivery notification failed", err));
       cached.history = history;
     }
     cached.branches = branches;
@@ -157,13 +157,9 @@ async function tick() {
     const viewed = Date.now() < (state.viewedUntil ?? 0);
     if (!viewed && Date.now() < (state.backgroundAt ?? 0)) return;
     state.backgroundAt = Date.now() + 30_000;
-    const routines = viewed ? [] : await listEnabledRoutines();
-    const subscribed = new Set(routines.filter((r) => r.events.some((e) => DELIVERY_ROUTINE_EVENTS.includes(e as never))).map((r) => r.projectId));
-    if (!viewed && !subscribed.size) return;
     const [projects, workspaces] = await Promise.all([listProjects(), listAllWorkspaces()]);
     const deliveries: WorkspaceDelivery[] = [];
     for (const project of projects) {
-      if (!viewed && !subscribed.has(project.id)) continue;
       const active = workspaces.filter((w) => w.projectId === project.id && w.status === "active");
       if (!active.length) continue;
       const cached = await projectDelivery(project);

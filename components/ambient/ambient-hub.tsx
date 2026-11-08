@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ActivityResponse, SearchResult } from "@/lib/ambient/types";
-import { RUN_STATUS_LABELS, OPEN_RUN_STATUSES, type RoutineRunActivity } from "@/lib/routines/types";
-import { DELIVERY_EVENT_LABELS } from "@/lib/projects/delivery-types";
+import { RUN_STATUS_LABELS, type RoutineRunActivity } from "@/lib/routines/types";
+import { useNotifications, useNotificationsEvents } from "@/lib/store/notifications-store";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
@@ -26,17 +26,18 @@ function runHref(run: RoutineRunActivity) {
   return run.sessionId && run.workspaceId ? `/w/${run.workspaceId}/s/${run.sessionId}` : `/p/${run.projectId}?building=workshop&routine=${run.routineId}`;
 }
 
-/** Activity polling, desktop alerts and ⌘K search. `hud` renders only a compact search button, for the world map. */
+/** Activity polling and ⌘K search. `hud` renders only a compact search button, for the world map. */
 export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" }) {
   const router = useRouter();
-  const sessions = useAmbient((s) => s.sessions);
+  useNotificationsEvents();
+  const notices = useNotifications((s) => s.items);
+  const notificationError = useNotifications((s) => s.error);
   const activityError = useAmbient((s) => s.error);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const notifications = useAmbient((s) => s.notifications);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -53,56 +54,11 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
-    const seen = new Map<string, number>();
-    const deliveryStartedAt = Date.now();
-    const deliverySeen = new Set<string>();
-    const deliveryBaseline = new Set<string>();
-    const runStatus = new Map<string, string>();
-    let initialized = false;
-    const alert = (title: string, body: string, tag: string, href: string) => {
-      if (!notifications || !("Notification" in window) || Notification.permission !== "granted") return;
-      if (document.visibilityState === "visible" && document.hasFocus() && window.location.pathname === href) return;
-      const notification = new Notification(title, { body, tag });
-      notification.onclick = () => { window.focus(); router.push(href); notification.close(); };
-    };
-    // shortcut: poll while the app is open; use push delivery if notifications must survive closing it.
     const poll = async () => {
       try {
         const data = await get<ActivityResponse>("/api/ambient/activity", controller.signal);
         if (stopped) return;
         useAmbient.setState({ sessions: data.sessions, runs: data.runs ?? [], deliveries: data.deliveries ?? [], error: null });
-        for (const session of data.sessions) {
-          const notice = session.notice;
-          // Routine sessions report through their run below, except when they need a person.
-          const routineTurnEnd = session.origin?.kind === "routine" && /finished|failed/i.test(notice?.message ?? "");
-          if (initialized && notice && notice.seq > (seen.get(session.id) ?? 0) && !routineTurnEnd) {
-            const label = session.origin?.kind === "routine" ? `Routine · ${session.origin.routineName}` : session.projectName;
-            alert(`${label} · ${notice.message}`, session.title || session.workspaceName, `thunk-${session.id}`, `/w/${session.workspaceId}/s/${session.id}`);
-          }
-          seen.set(session.id, notice?.seq ?? 0);
-        }
-        for (const run of data.runs ?? []) {
-          const before = runStatus.get(run.id);
-          const finished = !OPEN_RUN_STATUSES.includes(run.status);
-          // Only runs seen open (or new since the first poll) and not scheduler skip rows.
-          if (initialized && finished && before !== run.status && (before === undefined || OPEN_RUN_STATUSES.includes(before as never)) && !run.error?.startsWith("Skipped")) {
-            alert(`Routine · ${run.routineName} · ${RUN_STATUS_LABELS[run.status]}`, run.summary?.split("\n")[0] || run.error || run.projectName, `thunk-run-${run.id}`, runHref(run));
-          }
-          runStatus.set(run.id, run.status);
-        }
-        for (const delivery of data.deliveries ?? []) {
-          for (const event of [...(delivery.activity ?? [])].reverse()) {
-            if (deliveryBaseline.has(delivery.workspaceId) && !deliverySeen.has(event.id) && Date.parse(event.at) >= deliveryStartedAt) {
-              alert(DELIVERY_EVENT_LABELS[event.type], `#${event.pr.number} · ${event.pr.title}`, `thunk-delivery-${event.id}`, `/p/${delivery.projectId}?ws=${delivery.workspaceId}`);
-            }
-            deliverySeen.add(event.id);
-          }
-          deliveryBaseline.add(delivery.workspaceId);
-        }
-        // Keep deduplication bounded to the activity still included in the feed.
-        const retained = new Set((data.deliveries ?? []).flatMap((d) => (d.activity ?? []).map((e) => e.id)));
-        for (const id of deliverySeen) if (!retained.has(id)) deliverySeen.delete(id);
-        initialized = true;
       } catch (error) {
         if (!stopped) useAmbient.setState({ error: error instanceof Error ? error.message : "Activity unavailable" });
       } finally {
@@ -111,7 +67,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     };
     void poll();
     return () => { stopped = true; controller.abort(); clearTimeout(timer); };
-  }, [notifications, router]);
+  }, []);
 
   useEffect(() => {
     if (!searchOpen || !query.trim()) return;
@@ -137,7 +93,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     if (docId && useSession.getState().documents[docId]) useSession.getState().setActiveDocument(docId);
     router.push(href);
   };
-  const attention = sessions.filter((s) => s.pending > 0 || s.status === "awaiting" || s.status === "error");
+  const attention = notices.filter((n) => n.status === "open" && n.urgency === "action");
   const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
   const navigation: SearchResult[] = projects.flatMap((p) => [
     { id: p.id, label: p.name, detail: p.root, href: `/p/${p.id}`, kind: "Project" },
@@ -182,14 +138,16 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     <div>
       <div className="border-b px-4 pb-3">
         <h2 className="text-muted-foreground text-xs font-medium">Needs attention <span className="tabular-nums">{attention.length || ""}</span></h2>
-        {activityError ? <p role="status" className="text-destructive mt-1 text-xs">Activity unavailable. Retrying…</p> : attention.length === 0 ? <p className="text-muted-foreground mt-1 text-xs">All clear</p> : (
+        {notificationError ? <p role="status" className="text-destructive mt-1 text-xs">Inbox unavailable. Retrying…</p> : attention.length === 0 ? <p className="text-muted-foreground mt-1 text-xs">All clear</p> : (
           <ul className="mt-1 max-h-40 overflow-y-auto">
-            {attention.map((s) => <li key={s.id}><Link href={`/w/${s.workspaceId}/s/${s.id}`} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
-              <span className="block truncate font-medium">{s.origin?.kind === "routine" ? `Routine · ${s.origin.routineName}` : s.title || s.workspaceName}</span>
-              <span className="text-muted-foreground block truncate">{s.projectName} · {s.status === "error" ? "Session error" : `${s.pending || 1} pending request${s.pending > 1 ? "s" : ""}`}</span>
+            {attention.slice(0, 3).map((n) => <li key={n.id}><Link href={n.href} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
+              <span className="block truncate font-medium">{n.title}</span>
+              <span className="text-muted-foreground block truncate">{projects.find((p) => p.id === n.projectId)?.name}</span>
             </Link></li>)}
           </ul>
         )}
+        <Link href="/inbox" className="mt-2 block text-xs hover:underline">Open inbox</Link>
+        {activityError && <p role="status" className="text-destructive mt-1 text-xs">Activity unavailable. Retrying…</p>}
       </div>
       {runs.length > 0 && (
         <div className="border-b px-4 py-3">
