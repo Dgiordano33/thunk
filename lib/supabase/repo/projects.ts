@@ -2,6 +2,7 @@ import "server-only";
 import type { Project, ProjectSummary } from "@/lib/projects/types";
 import { db } from "../server";
 import { deleteTask, listTasks } from "./tasks";
+import { emitTask } from "@/lib/tasks/events";
 
 type Row = {
   id: string;
@@ -97,8 +98,10 @@ export async function deleteProject(id: string): Promise<void> {
     mem.delete(id);
     return;
   }
+  const tasks = await listTasks({ projectId: id });
   const { error } = await client.from("projects").delete().eq("id", id);
   if (error) throw error;
+  for (const task of tasks) emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind: "removed" });
 }
 
 export async function listProjects(): Promise<ProjectSummary[]> {

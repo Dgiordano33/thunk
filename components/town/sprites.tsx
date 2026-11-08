@@ -44,7 +44,7 @@ const scaffold = (x: number, y: number, w: number, h: number) => [
 export const TOWN_CENTER_SIZE = { w: 48, h: 44 } as const;
 
 /** Age of Empires-style town center: stone footing, timber hall, tall roof, banner. The capital gets corner towers. */
-export function TownCenterSprite({ hue, capital }: { hue: number; capital: boolean }) {
+export function TownCenterSprite({ hue, capital, running = false }: { hue: number; capital: boolean; running?: boolean }) {
   const { w, h } = TOWN_CENTER_SIZE;
   const roofColor = `oklch(0.52 0.15 ${hue})`;
   const roofShade = `oklch(0.42 0.13 ${hue})`;
@@ -61,7 +61,7 @@ export function TownCenterSprite({ hue, capital }: { hue: number; capital: boole
       {r(9, 22, 30, 10, WALL)}
       {[9, 16, 23, 31, 38].map((x) => r(x, 22, 1, 10, TIMBER, `tb${x}`))}
       {r(9, 26, 30, 1, TIMBER)}
-      {[12, 19, 27, 34].map((x) => r(x, 28, 2, 2, WINDOW, `wn${x}`))}
+      {[12, 19, 27, 34].map((x) => r(x, 28, 2, 2, running ? WINDOW : DOOR, `wn${x}`))}
       {/* Roof and lookout */}
       {roof(24, 21, 36, 12, roofColor, roofShade)}
       {r(21, 4, 6, 6, WALL)}

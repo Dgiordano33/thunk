@@ -10,6 +10,7 @@ import { IsoViewport } from "@/components/world/iso-viewport";
 import { TerrainLayer } from "@/components/world/terrain-layer";
 import { LegendButton } from "@/components/world/world-map";
 import type { ActivitySession } from "@/lib/ambient/types";
+import { deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 import { TILE_H, TILE_W, mapSize, toIso, type Cell, type Grid, type Tile } from "@/lib/world/terrain";
@@ -290,6 +291,11 @@ function Villager() {
 function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace; grid: Grid; selected: boolean; href: string; attention: boolean }) {
   const { x, y } = toIso(ws.col, ws.row, grid);
   const banner = `oklch(0.66 0.2 ${ws.hue})`;
+  const delivery = useAmbient((s) => s.deliveries.find((d) => d.workspaceId === ws.id));
+  const pr = delivery?.status.pr;
+  const cue = delivery?.error ? { label: "Delivery status unavailable", symbol: "?", color: "#737373", kind: "unknown" } : deliveryCue(pr ?? null);
+  const preview = delivery?.deployedPreviewUrl || delivery?.localPreviewUrl;
+  const reduced = useReducedMotion();
   return (
     <HoverCard openDelay={150} closeDelay={60}>
       <HoverCardTrigger asChild>
@@ -297,13 +303,20 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
           href={href}
           scroll={false}
           draggable={false}
-          aria-label={`${ws.capital ? "Capital town center" : "Town center"}: ${ws.label}`}
+          aria-label={`${ws.capital ? "Capital town center" : "Town center"}: ${ws.label}${cue ? `, ${cue.label}` : ""}${delivery?.running ? ", dev server running" : ""}`}
           aria-current={selected ? "page" : undefined}
           className="group absolute flex flex-col items-center outline-none"
           style={{ left: x, top: y + 10, transform: `translate(-50%, -${41 * SPRITE_SCALE}px)`, zIndex: ws.col + ws.row + 2 }}
         >
           <span className={cn("relative block transition-transform duration-150 group-hover:-translate-y-0.5", selected && "drop-shadow-[0_0_6px_white]")}>
-            <TownCenterSprite hue={ws.hue} capital={ws.capital} />
+            <TownCenterSprite hue={ws.hue} capital={ws.capital} running={delivery?.running} />
+            {cue && <motion.span
+              aria-hidden="true"
+              className={cn("pixel absolute -right-1 top-0 border-l-2 border-white px-1.5 text-sm text-white shadow-sm", cue.kind === "draft" && "border border-dashed")}
+              style={{ background: cue.color }}
+              animate={!reduced && cue.kind === "pending" ? { rotate: [-5, 5, -5] } : { rotate: 0 }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >{cue.symbol}</motion.span>}
             {attention && (
               <motion.span
                 className={cn(ALERT, "-top-3 bg-[oklch(0.86_0.17_90)] text-[oklch(0.25_0.05_60)]")}
@@ -318,13 +331,23 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
             <Plate badge={ws.sessionCount} color={banner}>
               {ws.capital ? "★ " : ""}
               {ws.label}
+              {cue && <span className="ml-1.5 border-l border-white/40 pl-1.5" title={cue.label}>{pr ? `#${pr.number} ` : ""}{cue.symbol}</span>}
             </Plate>
           </span>
         </Link>
       </HoverCardTrigger>
       <Card>
         <p className="pixel text-sm">{ws.capital ? "Capital · " : ""}{ws.label}</p>
-        {ws.branch && <p className="truncate font-mono text-[11px] opacity-70">{ws.branch}</p>}
+        {(delivery?.status.branch || ws.branch) && <p className="truncate font-mono text-[11px] opacity-70">{delivery?.status.branch || ws.branch}</p>}
+        {delivery && <div className="mt-2 space-y-1">
+          {delivery.git && <p>↑{delivery.git.ahead ?? "?"} ahead · ↓{delivery.git.behind ?? "?"} behind{delivery.git.dirty ? " · uncommitted" : ""}</p>}
+          {delivery.error ? <p role="status">{delivery.error}</p> : pr ? <>
+            <a href={pr.url} target="_blank" rel="noreferrer" className="underline">#{pr.number} · {cue?.label}</a>
+            <p>{pr.reviewDecision === "APPROVED" ? "Review approved" : pr.reviewDecision === "CHANGES_REQUESTED" ? "Review changes requested" : pr.reviewDecision === "REVIEW_REQUIRED" ? "Review required" : "No review decision"}</p>
+          </> : <p>{delivery.status.reason || "No open pull request"}</p>}
+          {delivery.running && <p>☀ Dev server running</p>}
+          {preview && <a href={preview} target="_blank" rel="noreferrer" className="block underline">{delivery.deployedPreviewUrl ? "Deployed preview" : "Local preview"} →</a>}
+        </div>}
         <p className="mt-2">
           {ws.sessionCount} {ws.sessionCount === 1 ? "field" : "fields"}
           {ws.overflow > 0 && <span className="opacity-70"> ({ws.overflow} older not shown)</span>}
@@ -417,6 +440,9 @@ function TownLegend() {
         ))}
       </ul>
       <ul className="mt-2 grid gap-0.5 border-t pt-1.5">
+        <li>Pennants: – draft · … checks running</li>
+        <li>✓ checks passed · × failure/conflict · ? unknown</li>
+        <li>Lit windows: dev server running</li>
         <li>Farmer in the field: session running</li>
         <li className="flex items-center gap-2"><span className="pixel flex size-3 items-center justify-center bg-[oklch(0.86_0.17_90)] text-[9px] text-black">!</span> Needs attention</li>
       </ul>

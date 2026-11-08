@@ -13,6 +13,7 @@ import type { ExternalSession } from "@/lib/projects";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { LEVEL_NAMES, type CityLevel } from "@/lib/world/cities";
 import { CROP_NAMES } from "@/lib/world/town";
+import { DeliveryPanel } from "./delivery-panel";
 import { ProjectSettings } from "./project-settings";
 import { TownNotes } from "./town-notes";
 import { TownPanel } from "./town-panel";
@@ -117,6 +118,10 @@ export function TownCenterPanel({
             <Link href={`/w/${workspace.id}`}><ExternalLinkIcon /> Open workspace</Link>
           </Button>
         </div>
+      </Section>
+
+      <Section title="Delivery">
+        <DeliveryPanel key={workspace.id} workspaceId={workspace.id} />
       </Section>
 
       <Section title={`Fields (${farms.length})`}>

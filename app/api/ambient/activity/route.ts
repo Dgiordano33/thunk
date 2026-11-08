@@ -1,3 +1,4 @@
+import { workspaceDeliveries } from "@/lib/projects/delivery";
 import { listLiveSessions } from "@/lib/agent";
 import { noticeFor } from "@/lib/ambient/summary";
 import type { ActivitySession } from "@/lib/ambient/types";
@@ -42,5 +43,5 @@ export const GET = handle(async () => {
     console.error("[thunk] recent routine runs failed", err);
     return [];
   });
-  return Response.json({ sessions, runs }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ sessions, runs, deliveries: workspaceDeliveries() }, { headers: { "Cache-Control": "no-store" } });
 });

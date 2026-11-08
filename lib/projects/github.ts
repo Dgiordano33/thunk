@@ -12,13 +12,13 @@ async function run(cmd: string, args: string[], cwd: string) {
 
 const PR_FIELDS = "number,url,state,title,isDraft,statusCheckRollup,reviewDecision,mergeable,mergeStateStatus";
 
-type RollupEntry =
+export type RollupEntry =
   | { __typename: "CheckRun"; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
   | { __typename: "StatusContext"; context: string; state: string; targetUrl: string | null };
 
 const FAILED = new Set(["FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE", "ERROR"]);
 
-function toCheck(e: RollupEntry): PrCheck {
+export function toCheck(e: RollupEntry): PrCheck {
   if (e.__typename === "StatusContext") {
     const state: CheckState = e.state === "SUCCESS" ? "pass" : FAILED.has(e.state) ? "fail" : "pending";
     return { name: e.context, state, url: e.targetUrl };

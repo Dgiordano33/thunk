@@ -66,7 +66,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
       try {
         const data = await get<ActivityResponse>("/api/ambient/activity", controller.signal);
         if (stopped) return;
-        useAmbient.setState({ sessions: data.sessions, runs: data.runs ?? [], error: null });
+        useAmbient.setState({ sessions: data.sessions, runs: data.runs ?? [], deliveries: data.deliveries ?? [], error: null });
         for (const session of data.sessions) {
           const notice = session.notice;
           // Routine sessions report through their run below, except when they need a person.
