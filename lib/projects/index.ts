@@ -52,6 +52,11 @@ export type CreateWorkspaceInput = {
   worktree?: boolean;
   branch?: string;
   baseRef?: string;
+  /**
+   * Run the setup script in the background (default), wait for it (setup failure throws, the workspace is kept),
+   * or skip it. Only applies to worktrees.
+   */
+  setup?: "background" | "await" | "skip";
 };
 
 export async function createWorkspace(input: CreateWorkspaceInput): Promise<Workspace> {
@@ -83,7 +88,10 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     },
   );
   await ensureMemory(workspaceMemoryFile(project.root, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
-  if (useWorktree) void prepareWorkspace({ project, workspace: ws }).catch((err) => console.error("[thunk] workspace setup", err));
+  const setup = input.setup ?? "background";
+  if (useWorktree && setup === "await") await prepareWorkspace({ project, workspace: ws });
+  else if (useWorktree && setup === "background")
+    void prepareWorkspace({ project, workspace: ws }).catch((err) => console.error("[thunk] workspace setup", err));
   return ws;
 }
 

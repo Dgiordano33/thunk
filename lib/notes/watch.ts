@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
 import path from "node:path";
 import { DATA_DIR, projectSlug } from "@/lib/projects/paths";
 import { listProjects } from "@/lib/supabase/repo/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { MEMORY_NOTE_ID, type NoteEvent, type NoteScope } from "./types";
 
 type Listener = (e: NoteEvent) => void;
@@ -25,12 +25,12 @@ const ROOT = path.join(DATA_DIR, "projects");
 const DEBOUNCE_MS = 150;
 
 async function refreshSlugs() {
-  const projects = await listProjects().catch(() => []);
+  const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
   state.projects = new Map(projects.map((p) => [projectSlug(p.root), p.id]));
-  const pairs = await Promise.all(
-    projects.map(async (p) => (await listWorkspaces(p.id).catch(() => [])).map((w) => [`${projectSlug(p.root)}/${w.slug}`, w.id] as const)),
+  const roots = new Map(projects.map((p) => [p.id, p.root]));
+  state.workspaces = new Map(
+    workspaces.flatMap((w) => (roots.has(w.projectId) ? [[`${projectSlug(roots.get(w.projectId)!)}/${w.slug}`, w.id] as const] : [])),
   );
-  state.workspaces = new Map(pairs.flat());
 }
 
 /** Map a changed file under DATA_DIR/projects to the note it backs. */

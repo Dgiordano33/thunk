@@ -3,6 +3,7 @@ import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
+import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { buildCanUseTool } from "./permissions";
 import type { LiveSession } from "./session-registry";
 import type { AgentProvider } from "./types";
@@ -72,7 +73,11 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: `${CANVAS_PROMPT}\n\n${hierarchyPrompt(live, projectMemory, "claude", notes)}`,
+      append: [
+        CANVAS_PROMPT,
+        hierarchyPrompt(live, projectMemory, "claude", notes),
+        ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
+      ].join("\n\n"),
     },
     // `env` replaces process.env entirely, so always spread it.
     env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "thunk/0.1.0" },

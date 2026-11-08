@@ -108,13 +108,13 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   }
   const { data, error } = await client
     .from("projects")
-    .select(`${COLUMNS}, workspaces(id, updated_at, sessions(id))`)
+    .select(`${COLUMNS}, workspaces(id, updated_at, sessions(count))`)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return data.map((r) => {
-    const ws = (r.workspaces ?? []) as { id: string; updated_at: string; sessions: { id: string }[] | null }[];
+    const ws = (r.workspaces ?? []) as unknown as { id: string; updated_at: string; sessions: { count: number }[] }[];
     const last = ws.map((w) => w.updated_at).sort().at(-1) ?? null;
-    const sessionCount = ws.reduce((n, w) => n + (w.sessions?.length ?? 0), 0);
+    const sessionCount = ws.reduce((n, w) => n + (w.sessions[0]?.count ?? 0), 0);
     return { ...toProject(r), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
   });
 }

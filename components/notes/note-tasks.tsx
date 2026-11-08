@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { SessionMeta } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
-import { setTaskDone } from "@/lib/notes/frontmatter";
 import { scopeKey, type NoteScope, type NoteTask } from "@/lib/notes/types";
 import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
 
@@ -66,8 +65,7 @@ export function NoteTasks({ scopes, workspaceId }: { scopes: NoteScope[]; worksp
   const tick = async (t: ScopedTask) => {
     setBusy(`${t.noteId}:${t.line}`);
     try {
-      const { note } = await api.getNote(t.scope.kind, t.scope.id, t.noteId);
-      await api.patchNote(t.scope.kind, t.scope.id, t.noteId, { markdown: setTaskDone(note.markdown, t.line, true) });
+      await api.patchNote(t.scope.kind, t.scope.id, t.noteId, { task: { line: t.line, text: t.text, done: true } });
       setTasks((all) => all?.filter((x) => x !== t) ?? null);
       useNotesFeed.getState().touch(t.scope);
     } catch (err) {

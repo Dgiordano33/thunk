@@ -3,9 +3,10 @@
 import { ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
-import { useAllNotes } from "@/components/notes/notes-library";
+import { api } from "@/lib/client/api";
+import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { workspaceActivity } from "@/lib/ambient/summary";
@@ -28,10 +29,15 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   const activeProjectId = section === "p" ? activeId : undefined;
   const activeWorkspaceId = section === "w" ? activeId : undefined;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const folders = useAllNotes();
-  const noteCounts = new Map(
-    (folders ?? []).map((f) => [f.project.id, f.notes.length + f.workspaces.reduce((n, w) => n + w.notes.length, 0)]),
-  );
+  useNotesEvents();
+  const rev = useNotesFeed((s) => s.rev);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.noteCounts().then((r) => !cancelled && setCounts(r.counts)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [rev]);
+  const noteCounts = new Map(Object.entries(counts ?? {}));
   const totalNotes = [...noteCounts.values()].reduce((a, b) => a + b, 0);
 
   return (
@@ -55,7 +61,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
         >
           <PixelIcon name="scroll" className="size-4 shrink-0" />
           Library
-          {folders && <span className="text-muted-foreground ml-auto text-[11px] tabular-nums">{totalNotes}</span>}
+          {counts && <span className="text-muted-foreground ml-auto text-[11px] tabular-nums">{totalNotes}</span>}
         </Link>
       </div>
 

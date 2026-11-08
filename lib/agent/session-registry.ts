@@ -7,6 +7,7 @@ import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { createClaudeDriver } from "./claude-driver";
 import { createCodexDriver } from "./codex/driver";
 import type { WorkspaceContext } from "@/lib/projects";
+import type { SessionOrigin } from "@/lib/routines/types";
 import { providerOf, type HarnessEvent, type HarnessEventBody, type SessionMeta, type SessionState } from "./types";
 
 export type PendingRequest = {
@@ -111,6 +112,7 @@ export type CreateSessionInput = {
   seqStart?: number;
   /** In-memory history to carry over when replacing a terminated session. */
   events?: HarnessEvent[];
+  origin?: SessionOrigin | null;
 };
 
 export async function createSession(input: CreateSessionInput): Promise<LiveSession> {
@@ -132,6 +134,7 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
       title: input.title ?? null,
       status: "starting" as SessionState,
       createdAt: input.createdAt ?? new Date().toISOString(),
+      origin: input.origin ?? null,
     },
     events: input.events ?? [],
     seq: input.seqStart ?? 0,

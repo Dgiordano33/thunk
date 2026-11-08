@@ -188,7 +188,7 @@ export function FieldPanel({
 }) {
   return (
     <TownPanel
-      eyebrow={`Field · ${workspaceName}`}
+      eyebrow={`Field · ${workspaceName}${meta.origin?.kind === "routine" ? " · Routine" : ""}`}
       title={meta.title || "Untitled session"}
       closeHref={closeHref}
       wide
@@ -202,28 +202,6 @@ export function FieldPanel({
       {/* SessionView manages its own scroll; give it the panel's full height. */}
       <div className="h-full">
         <SessionView key={meta.id} meta={meta} events={events} documents={documents} />
-      </div>
-    </TownPanel>
-  );
-}
-
-const BUILDINGS = {
-  workshop: {
-    title: "Workshop",
-    href: "/routines",
-    body: "The forge isn't lit yet. Once built, the workshop will run this project's routines: recurring sessions on a schedule that report back to the capital.",
-  },
-} as const;
-
-export function BuildingPanel({ building, closeHref }: { building: keyof typeof BUILDINGS; closeHref: string }) {
-  const b = BUILDINGS[building];
-  return (
-    <TownPanel eyebrow="Under construction" title={b.title} closeHref={closeHref} compact>
-      <div className="px-4 py-6">
-        <p className="text-sm leading-relaxed">{b.body}</p>
-        <Link href={b.href} className="pixel mt-4 inline-block text-sm underline underline-offset-4">
-          See Routines →
-        </Link>
       </div>
     </TownPanel>
   );

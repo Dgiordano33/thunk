@@ -23,7 +23,7 @@ function Mark({ className }: { className?: string }) {
 }
 
 /** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes and Routines. */
-export function CivToolbar({ cityCount, noteCount }: { cityCount: number; noteCount: number }) {
+export function CivToolbar({ cityCount, noteCount, routineCount }: { cityCount: number; noteCount: number; routineCount: number }) {
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
   const pathname = usePathname();
@@ -31,6 +31,10 @@ export function CivToolbar({ cityCount, noteCount }: { cityCount: number; noteCo
   useEffect(() => {
     try { useUi.setState({ hudExpanded: localStorage.getItem("thunk.hud.expanded") === "on" }); } catch { /* Storage is optional. */ }
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/notes") setExpanded(false);
+  }, [pathname, setExpanded]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -41,10 +45,10 @@ export function CivToolbar({ cityCount, noteCount }: { cityCount: number; noteCo
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded, setExpanded]);
 
-  const slots: { href: string; label: string; icon: PixelIconName; detail: string; soon?: boolean }[] = [
+  const slots: { href: string; label: string; icon: PixelIconName; detail: string }[] = [
     { href: "/", label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
     { href: "/notes", label: "Notes", icon: "scroll", detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
-    { href: "/routines", label: "Routines", icon: "hourglass", detail: "Soon", soon: true },
+    { href: "/routines", label: "Routines", icon: "hourglass", detail: `${routineCount} active` },
   ];
 
   return (
@@ -78,14 +82,7 @@ export function CivToolbar({ cityCount, noteCount }: { cityCount: number; noteCo
                       <PixelIcon name={slot.icon} className="size-7 transition-transform group-hover:scale-110" />
                     </span>
                     <span className="pixel flex-1 text-base">{slot.label}</span>
-                    <span
-                      className={cn(
-                        "pixel px-1.5 text-[11px]",
-                        slot.soon ? "text-muted-foreground border border-dashed" : "bg-foreground text-background tabular-nums",
-                      )}
-                    >
-                      {slot.detail}
-                    </span>
+                    <span className="pixel bg-foreground text-background px-1.5 text-[11px] tabular-nums">{slot.detail}</span>
                   </Link>
                 );
               })}

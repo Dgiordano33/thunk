@@ -236,9 +236,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-10">
-        {memory ? (
-          <h2 className="mb-3 text-2xl font-bold tracking-tight">{note.title}</h2>
-        ) : (
+        {!memory && (
           <input
             value={title}
             onChange={(e) => {

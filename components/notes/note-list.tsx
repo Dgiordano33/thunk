@@ -16,6 +16,7 @@ export function NoteList({
   selectedId,
   onSelect,
   onCreate,
+  createControl,
   onDelete,
   compact,
   emptyText = "No notes yet.",
@@ -26,6 +27,8 @@ export function NoteList({
   selectedId?: string | null;
   onSelect: (id: string) => void;
   onCreate?: () => void;
+  /** Replaces the default "New note" button, e.g. with a notebook picker. */
+  createControl?: React.ReactNode;
   onDelete?: (note: NoteMeta) => void;
   /** Drop the search box (for short embedded lists). */
   compact?: boolean;
@@ -89,11 +92,12 @@ export function NoteList({
               className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-xs outline-none"
             />
           </label>
-          {onCreate && (
-            <Button size="icon-sm" variant="outline" onClick={onCreate} aria-label="New note" title="New note (⌘N)">
-              <PlusIcon />
-            </Button>
-          )}
+          {createControl ??
+            (onCreate && (
+              <Button size="icon-sm" variant="outline" onClick={onCreate} aria-label="New note" title="New note (⌘N)">
+                <PlusIcon />
+              </Button>
+            ))}
         </div>
       )}
       {shown === null ? (

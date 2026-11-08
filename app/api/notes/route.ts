@@ -7,7 +7,7 @@ import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 
-/** Every project's notes and its active workspaces' notes, for the Library and sidebar counts. */
+/** Every project's notes and its active workspaces' notes, for the Library. */
 export const GET = handle(async () => {
   const projects = await listProjects();
   const folders: NoteFolder[] = await Promise.all(

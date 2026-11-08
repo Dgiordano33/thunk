@@ -32,6 +32,8 @@ export type NoteMeta = NoteFlags & {
 
 export type Note = NoteMeta & { markdown: string };
 
+export type NoteTaskPatch = { line: number; text: string; done: boolean };
+
 export type NoteTask = {
   noteId: string;
   noteTitle: string;

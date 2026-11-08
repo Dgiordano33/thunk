@@ -1,9 +1,12 @@
 "use client";
 
-import { Loader2Icon, MessageSquareIcon, PlayIcon } from "lucide-react";
-import { useState } from "react";
+import { HourglassIcon, Loader2Icon, MessageSquareIcon, PlayIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { SessionMeta } from "@/lib/agent/types";
+import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/store/session-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <h1 className="min-w-0 truncate text-sm font-medium">{meta.title || "Untitled session"}</h1>
+      {meta.origin?.kind === "routine" && <RoutineBadge meta={meta} origin={meta.origin} />}
       {live ? (
         <Badge
           variant="outline"
@@ -99,5 +103,33 @@ function CommentsToggle() {
       <MessageSquareIcon />
       {count > 0 && <span className="tabular-nums">{count}</span>}
     </Button>
+  );
+}
+
+/** "Routine · <name>", linking to the routine in its town's Workshop (or marked deleted). */
+function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: NonNullable<SessionMeta["origin"]> }) {
+  const [deleted, setDeleted] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api.getRoutine(origin.routineId).then(
+      () => alive && setDeleted(false),
+      (err: Error) => alive && setDeleted(/not found|404/i.test(err.message)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [origin.routineId]);
+  if (deleted)
+    return (
+      <Badge variant="outline" className="text-muted-foreground h-5 gap-1 text-[11px]">
+        <HourglassIcon /> Routine (deleted)
+      </Badge>
+    );
+  return (
+    <Badge variant="outline" className="h-5 max-w-48 gap-1 text-[11px]" asChild>
+      <Link href={`/p/${meta.projectId}?building=workshop&routine=${origin.routineId}`} title="Started by a routine">
+        <HourglassIcon /> <span className="truncate">Routine · {origin.routineName}</span>
+      </Link>
+    </Badge>
   );
 }

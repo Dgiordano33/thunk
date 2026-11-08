@@ -1,6 +1,7 @@
 import "server-only";
 import type { SessionMeta, SessionState } from "@/lib/agent/types";
-import type { TablesUpdate } from "../types";
+import type { SessionOrigin } from "@/lib/routines/types";
+import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
 
 export type SessionRow = Omit<SessionMeta, "live"> & { totalCostUsd: number; updatedAt: string };
@@ -16,12 +17,13 @@ type Row = {
   permission_mode: string;
   status: string;
   total_cost_usd: number;
+  origin: Json | null;
   created_at: string;
   updated_at: string;
 };
 
 const COLUMNS =
-  "id, workspace_id, sdk_session_id, title, cwd, model, permission_mode, status, total_cost_usd, created_at, updated_at, workspaces(project_id)";
+  "id, workspace_id, sdk_session_id, title, cwd, model, permission_mode, status, total_cost_usd, origin, created_at, updated_at, workspaces(project_id)";
 
 function toSession(r: Row): SessionRow {
   return {
@@ -35,6 +37,7 @@ function toSession(r: Row): SessionRow {
     permissionMode: r.permission_mode,
     status: r.status as SessionState,
     totalCostUsd: Number(r.total_cost_usd),
+    origin: (r.origin as SessionOrigin | null) ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -53,6 +56,7 @@ export async function upsertSession(meta: Omit<SessionMeta, "live">) {
       model: meta.model,
       permission_mode: meta.permissionMode,
       status: meta.status,
+      origin: (meta.origin ?? null) as Json,
       created_at: meta.createdAt,
     },
     { onConflict: "id" },
@@ -98,4 +102,11 @@ export async function listSessionRows(opts: { workspaceId?: string; projectId?: 
   const { data, error } = await q;
   if (error) throw error;
   return (data as unknown as Row[]).map(toSession);
+}
+
+export async function deleteSessionRow(id: string): Promise<void> {
+  const client = db();
+  if (!client) return;
+  const { error } = await client.from("sessions").delete().eq("id", id);
+  if (error) throw error;
 }

@@ -31,7 +31,7 @@ export type Workspace = {
   updatedAt: string;
 };
 
-export type WorkspaceSummary = Workspace & { sessionCount: number; lastSessionAt: string | null };
+export type WorkspaceSummary = Workspace & { sessionCount: number };
 export type ProjectSummary = Project & { workspaceCount: number; sessionCount: number; lastActivityAt: string | null };
 
 export type ChangedFile = {

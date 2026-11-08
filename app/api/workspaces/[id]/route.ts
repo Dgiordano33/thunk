@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { closeSession, listLiveSessions } from "@/lib/agent";
+import { allSessions, closeSession, deleteTranscripts, listLiveSessions } from "@/lib/agent";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { getWorkspaceContext, removeWorkspace } from "@/lib/projects";
-import { archiveWorkspaceProcesses, withWorkspaceLock } from "@/lib/projects/runtime";
+import { archiveWorkspace } from "@/lib/projects/archive";
+import { withWorkspaceLock } from "@/lib/projects/runtime";
 import { worktreeStatus } from "@/lib/projects/git";
 import { updateWorkspace } from "@/lib/supabase/repo/workspaces";
 
@@ -26,20 +27,19 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/workspa
   const body = await parseBody(req, PatchBody);
   const wctx = await getWorkspaceContext(id);
   if (!wctx) throw new HttpError(404, "Workspace not found");
-  await withWorkspaceLock(id, async () => {
-    if (body.status === "archived" && wctx.workspace.status !== "archived") {
-      for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
-      await archiveWorkspaceProcesses(wctx);
-    }
-    await updateWorkspace(id, body);
-  });
+  if (body.status === "archived") await archiveWorkspace(id, { name: body.name });
+  else await withWorkspaceLock(id, () => updateWorkspace(id, body));
   return Response.json({ ok: true });
 });
 
-/** Delete the workspace and its sessions. `?worktree=1` also removes the git worktree; `?memory=1` its memory dir. */
+/**
+ * Delete the workspace, its sessions and their SDK transcripts. `?worktree=1` also removes the git worktree;
+ * `?memory=1` its memory dir.
+ */
 export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/workspaces/[id]">) => {
   const { id } = await ctx.params;
   const params = new URL(req.url).searchParams;
+  const sessions = await allSessions({ workspaceId: id });
   for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
   await removeWorkspace(id, {
     removeWorktree: params.get("worktree") === "1",
@@ -47,5 +47,6 @@ export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/worksp
   }).catch((err: Error) => {
     throw new HttpError(400, err.message);
   });
+  await deleteTranscripts(sessions);
   return Response.json({ ok: true });
 });

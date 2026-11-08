@@ -21,6 +21,16 @@ export function HudTitle({ projects, noteCount }: { projects: { id: string; name
       </>
     );
   }
+  if (section === "routines") {
+    return (
+      <>
+        <Link href="/" className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
+          <ArrowLeftIcon className="size-4" /> World
+        </Link>
+        <h1 className="pixel border-l pl-3 text-base">Routines</h1>
+      </>
+    );
+  }
   if (section === "notes") {
     return (
       <>

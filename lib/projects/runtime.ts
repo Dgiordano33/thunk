@@ -1,11 +1,12 @@
 import "server-only";
 import { spawn, type IPty } from "node-pty";
 import { createServer, createConnection } from "node:net";
+import { projectEvents } from "./events";
 import { copyWorkspaceFiles, readLifecycleConfig } from "./lifecycle-config";
 import type { WorkspaceContext } from "./index";
 import type { ProcessKind, ProcessSnapshot, RuntimeSnapshot } from "./runtime-types";
 
-type WorkspaceProcess = ProcessSnapshot & { pty: IPty; done: Promise<number> };
+type WorkspaceProcess = ProcessSnapshot & { pty: IPty; done: Promise<number>; stopped?: boolean };
 type Runtime = { port: number; processes: Map<ProcessKind, WorkspaceProcess>; setupError: string | null; busy: boolean; released: Promise<void> };
 const globalRuntime = globalThis as typeof globalThis & { __thunkRuntime?: Map<string, Runtime>; __thunkRuntimeExit?: boolean };
 const runtimes = (globalRuntime.__thunkRuntime ??= new Map());
@@ -83,7 +84,17 @@ async function launch(ctx: WorkspaceContext, kind: ProcessKind, command: string)
       proc.offset += removed;
     }
   });
-  pty.onExit(({ exitCode }) => { proc.running = false; proc.exitCode = exitCode; finish(exitCode); });
+  pty.onExit(({ exitCode }) => {
+    proc.running = false;
+    proc.exitCode = exitCode;
+    finish(exitCode);
+    // A Run script that dies on its own (not via Stop/archive) is something routines can react to.
+    if (kind === "run" && exitCode !== 0 && !proc.stopped) {
+      projectEvents().emit("run_failed", {
+        projectId: ctx.project.id, workspaceId: ctx.workspace.id, exitCode, tail: proc.output.slice(-4000),
+      });
+    }
+  });
   return proc;
 }
 
@@ -132,6 +143,7 @@ export function terminalInput(id: string, processId: string, data?: string, cols
 
 function kill(proc: WorkspaceProcess) {
   if (!proc.running) return;
+  proc.stopped = true;
   try { process.kill(-proc.pty.pid, "SIGKILL"); } catch { try { proc.pty.kill("SIGKILL"); } catch { /* Already exited. */ } }
 }
 

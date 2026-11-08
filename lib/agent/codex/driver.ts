@@ -6,6 +6,7 @@ import path from "node:path";
 import { loadSessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
+import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
 import { CANVAS_PROMPT, hierarchyPrompt } from "../options";
 import { emit, setState, type AgentDriver, type LiveSession, type PendingRequest } from "../session-registry";
@@ -156,6 +157,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     CANVAS_PROMPT,
     hierarchyPrompt(live, projectMemory, "codex", notes),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
+    ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
   let closed = false;

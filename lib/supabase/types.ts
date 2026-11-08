@@ -207,12 +207,182 @@ export type Database = {
           },
         ]
       }
+      routine_runs: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          diff_stat: Json | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          note_id: string | null
+          pr_url: string | null
+          routine_id: string
+          session_id: string | null
+          started_at: string | null
+          status: string
+          summary: string | null
+          trigger_payload: Json | null
+          trigger_source: string
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          cost_usd?: number
+          created_at?: string
+          diff_stat?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          note_id?: string | null
+          pr_url?: string | null
+          routine_id: string
+          session_id?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: string | null
+          trigger_payload?: Json | null
+          trigger_source: string
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          diff_stat?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          note_id?: string | null
+          pr_url?: string | null
+          routine_id?: string
+          session_id?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: string | null
+          trigger_payload?: Json | null
+          trigger_source?: string
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_runs_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_runs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routine_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routines: {
+        Row: {
+          catch_up: string
+          created_at: string
+          enabled: boolean
+          events: string[]
+          id: string
+          last_run_at: string | null
+          max_run_minutes: number
+          max_runs_per_day: number
+          model: string
+          name: string
+          next_run_at: string | null
+          permission_mode: string
+          project_id: string
+          prompt: string
+          schedule_cron: string | null
+          schedule_tz: string | null
+          target_kind: string
+          target_workspace_id: string | null
+          trigger_state: Json
+          updated_at: string
+          webhook_token: string | null
+        }
+        Insert: {
+          catch_up?: string
+          created_at?: string
+          enabled?: boolean
+          events?: string[]
+          id?: string
+          last_run_at?: string | null
+          max_run_minutes?: number
+          max_runs_per_day?: number
+          model: string
+          name: string
+          next_run_at?: string | null
+          permission_mode?: string
+          project_id: string
+          prompt: string
+          schedule_cron?: string | null
+          schedule_tz?: string | null
+          target_kind?: string
+          target_workspace_id?: string | null
+          trigger_state?: Json
+          updated_at?: string
+          webhook_token?: string | null
+        }
+        Update: {
+          catch_up?: string
+          created_at?: string
+          enabled?: boolean
+          events?: string[]
+          id?: string
+          last_run_at?: string | null
+          max_run_minutes?: number
+          max_runs_per_day?: number
+          model?: string
+          name?: string
+          next_run_at?: string | null
+          permission_mode?: string
+          project_id?: string
+          prompt?: string
+          schedule_cron?: string | null
+          schedule_tz?: string | null
+          target_kind?: string
+          target_workspace_id?: string | null
+          trigger_state?: Json
+          updated_at?: string
+          webhook_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routines_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routines_target_workspace_id_fkey"
+            columns: ["target_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessions: {
         Row: {
           created_at: string
           cwd: string
           id: string
           model: string
+          origin: Json | null
           permission_mode: string
           sdk_session_id: string | null
           status: string
@@ -226,6 +396,7 @@ export type Database = {
           cwd: string
           id: string
           model: string
+          origin?: Json | null
           permission_mode: string
           sdk_session_id?: string | null
           status?: string
@@ -239,6 +410,7 @@ export type Database = {
           cwd?: string
           id?: string
           model?: string
+          origin?: Json | null
           permission_mode?: string
           sdk_session_id?: string | null
           status?: string
