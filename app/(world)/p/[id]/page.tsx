@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { LibraryPanel } from "@/components/town/library-panel";
-import { BuildingPanel, FieldPanel, TownCenterPanel } from "@/components/town/panels";
+import { FieldPanel, TownCenterPanel } from "@/components/town/panels";
+import { WorkshopPanel } from "@/components/town/workshop-panel";
 import { TownView, type TownFarm, type TownSelection, type TownWorkspace } from "@/components/town/town-view";
 import { workspaceLabel } from "@/components/session/labels";
 import { listSessions, liveMeta } from "@/lib/agent";
@@ -123,8 +124,8 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
         <LibraryPanel projectId={id} workspaces={active.map((w) => ({ id: w.id, label: workspaceLabel(w) }))} closeHref={closeHref} />
       </Suspense>
     );
-  } else if (selected.building) {
-    panel = <BuildingPanel building={selected.building} closeHref={closeHref} />;
+  } else if (selected.building === "workshop") {
+    panel = <WorkshopPanel project={project} workspaces={workspaces} closeHref={closeHref} />;
   }
 
   return (

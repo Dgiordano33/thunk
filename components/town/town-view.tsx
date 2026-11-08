@@ -80,6 +80,8 @@ export function TownView({
   children?: React.ReactNode;
 }) {
   const sessions = useAmbient((s) => s.sessions);
+  const runs = useAmbient((s) => s.runs);
+  const workshopAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
   const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending }]));
   const base = `/p/${projectId}`;
   const { w, h } = mapSize(grid);
@@ -138,9 +140,10 @@ export function TownView({
             selected={selected.building === "workshop"}
             size={WORKSHOP_SIZE}
             ground={31}
-            blurb="Routines (scheduled agent runs) will be built here. Under construction."
+            blurb="Standing orders: agent sessions that run on a schedule or on events."
+            attention={workshopAttention}
           >
-            <WorkshopSprite building />
+            <WorkshopSprite building={false} />
           </Building>
         </>
       }
@@ -333,6 +336,7 @@ function Building({
   size,
   ground,
   blurb,
+  attention,
   children,
 }: {
   cell: Cell;
@@ -344,6 +348,8 @@ function Building({
   /** Sprite row the building stands on. */
   ground: number;
   blurb: string;
+  /** Amber `!` over the building, e.g. a routine run waiting on approval. */
+  attention?: boolean;
   children: React.ReactNode;
 }) {
   const { x, y } = toIso(cell.col, cell.row, grid);
@@ -354,13 +360,22 @@ function Building({
           href={href}
           scroll={false}
           draggable={false}
-          aria-label={`${name} (under construction)`}
+          aria-label={attention ? `${name}, needs attention` : name}
           aria-current={selected ? "page" : undefined}
           className="group absolute flex flex-col items-center outline-none"
           style={{ left: x, top: y + 8, transform: `translate(-50%, -${ground * SPRITE_SCALE}px)`, zIndex: cell.col + cell.row + 2, width: size.w * SPRITE_SCALE }}
         >
-          <span className={cn("block transition-transform duration-150 group-hover:-translate-y-0.5", selected && "drop-shadow-[0_0_6px_white]")}>
+          <span className={cn("relative block transition-transform duration-150 group-hover:-translate-y-0.5", selected && "drop-shadow-[0_0_6px_white]")}>
             {children}
+            {attention && (
+              <motion.span
+                className={cn(ALERT, "-top-3 bg-[oklch(0.86_0.17_90)] text-[oklch(0.25_0.05_60)]")}
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 0.9, repeat: Infinity }}
+              >
+                !
+              </motion.span>
+            )}
           </span>
           <span className="-mt-1">
             <Plate>{name}</Plate>

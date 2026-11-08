@@ -2,8 +2,8 @@ import "server-only";
 import { customAlphabet } from "nanoid";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { extractTasks, noteExcerpt, noteTitle, parseNote, serializeNote, type NoteFrontmatter } from "./frontmatter";
-import { MEMORY_NOTE_ID, sortNotes, type Note, type NoteFlags, type NoteMeta, type NoteScope, type NoteTask } from "./types";
+import { extractTasks, noteExcerpt, noteTitle, parseNote, serializeNote, setTaskDone, type NoteFrontmatter } from "./frontmatter";
+import { MEMORY_NOTE_ID, sortNotes, type Note, type NoteFlags, type NoteMeta, type NoteScope, type NoteTaskPatch, type NoteTask } from "./types";
 
 /** Where one scope's notes live on disk. */
 export type NoteDirs = { scope: NoteScope; notesDir: string; memoryFile: string; memoryTitle: string };
@@ -98,7 +98,9 @@ export function metaOf(note: Note): NoteMeta {
   return meta;
 }
 
-export type NotePatch = Partial<NoteFlags> & { title?: string; markdown?: string };
+export type NotePatch = Partial<NoteFlags> & { title?: string; markdown?: string; task?: NoteTaskPatch };
+
+export class NoteConflictError extends Error {}
 
 export async function createNote(dirs: NoteDirs, input: { title?: string; markdown?: string } & Partial<NoteFlags> = {}) {
   const id = newNoteId();
@@ -126,6 +128,14 @@ export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): P
   const raw = await readFile(file, "utf8").catch(() => null);
   if (raw === null) return null;
   const parsed = parseNote(raw);
+  let markdown = patch.markdown ?? parsed.body;
+  // shortcut: external writers can race this read/write; use coordinated file locking if strict concurrency is needed.
+  if (patch.task) {
+    const task = extractTasks(parsed.body).find((t) => t.line === patch.task!.line);
+    if (!task || task.text !== patch.task.text)
+      throw new NoteConflictError("Task changed on disk. Refresh the task list and try again.");
+    markdown = setTaskDone(parsed.body, task.line, patch.task.done);
+  }
   const fm: NoteFrontmatter = {
     ...parsed.frontmatter,
     title: patch.title !== undefined ? patch.title.trim() || "Untitled" : noteTitle(parsed, id),
@@ -135,7 +145,7 @@ export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): P
     tags: patch.tags ?? parsed.frontmatter.tags,
     updated: new Date().toISOString(),
   };
-  await atomicWrite(file, serializeNote(fm, patch.markdown ?? parsed.body));
+  await atomicWrite(file, serializeNote(fm, markdown));
   return readNote(dirs, id);
 }
 
@@ -158,7 +168,7 @@ export function tasksOf(notes: Note[], { includeDone = false } = {}): NoteTask[]
 /** How many notes (memory included) live in these scopes, without reading the files. */
 export async function countNotes(all: NoteDirs[]) {
   const counts = await Promise.all(
-    all.map(async (d) => 1 + (await readdir(d.notesDir).catch(() => [] as string[])).filter((f) => f.endsWith(".md") && ID.test(f.slice(0, -3))).length),
+    all.map(async (d) => 1 + (await readdir(d.notesDir).catch(() => [] as string[])).filter((f) => f.endsWith(".md") && f !== "memory.md" && ID.test(f.slice(0, -3))).length),
   );
   return counts.reduce((a, b) => a + b, 0);
 }

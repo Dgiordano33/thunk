@@ -5,7 +5,7 @@ import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
 import { scopeKey } from "@/lib/notes/types";
 import { listProjects } from "@/lib/supabase/repo/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
 import { db } from "@/lib/supabase/server";
 
@@ -60,15 +60,13 @@ export const GET = handle(async (req: Request) => {
 
 /** Note titles and bodies across every project and active workspace. */
 async function searchNotes(term: string): Promise<SearchResult[]> {
-  const projects = await listProjects().catch(() => []);
-  const scopes = await Promise.all(
-    projects.map(async (p) => [
-      { dirs: projectNoteDirs(p), where: p.name },
-      ...(await listWorkspaces(p.id).catch(() => []))
-        .filter((w) => w.status === "active")
-        .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
-    ]),
-  );
+  const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
+  const scopes = projects.map((p) => [
+    { dirs: projectNoteDirs(p), where: p.name },
+    ...workspaces
+      .filter((w) => w.projectId === p.id && w.status === "active")
+      .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
+  ]);
   const hits = await Promise.all(
     scopes.flat().map(async ({ dirs, where }) =>
       (await listNotes(dirs).catch(() => []))

@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
 import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { AddProjectForm } from "@/components/home/add-project-form";
@@ -7,7 +10,8 @@ import { CivToolbar } from "./civ-toolbar";
 import { HudTitle } from "./hud-title";
 
 /** Chrome over the world map: title, actions, and the bottom-left command menu. */
-export function WorldHud({ projects, noteCount }: { projects: SidebarProject[]; noteCount: number }) {
+export function WorldHud({ projects, noteCount, routineCount }: { projects: SidebarProject[]; noteCount: number; routineCount: number }) {
+  const home = usePathname() === "/";
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
@@ -17,10 +21,10 @@ export function WorldHud({ projects, noteCount }: { projects: SidebarProject[]; 
         <CivPanel className="pointer-events-auto" bodyClassName="flex items-center gap-1 p-1">
           <AmbientHub projects={projects} variant="hud" />
           <SettingsMenu projects={projects} className="border-0 p-0" />
-          <AddProjectForm />
+          {home && <AddProjectForm />}
         </CivPanel>
       </div>
-      <CivToolbar cityCount={projects.length} noteCount={noteCount} />
+      <CivToolbar cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} />
     </>
   );
 }

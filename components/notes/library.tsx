@@ -6,6 +6,7 @@ import { api } from "@/lib/client/api";
 import type { NoteMeta, NoteScope } from "@/lib/notes/types";
 import { useNotesFeed, useScopeNotes } from "@/lib/store/notes-store";
 import { cn } from "@/lib/utils";
+import { CollapsiblePane } from "./collapsible-pane";
 import { NoteEditor } from "./note-editor";
 import { NoteList } from "./note-list";
 
@@ -35,24 +36,34 @@ export function ScopeNotes({
   selectedId,
   onSelect,
   listHeader,
+  listTitle,
   className,
 }: {
   scope: NoteScope;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   listHeader?: React.ReactNode;
+  /** Render the list as a collapsible pane with this title (replaces listHeader). */
+  listTitle?: string;
   className?: string;
 }) {
   const { notes } = useScopeNotes(scope);
   const { create, remove } = useNoteActions(scope, onSelect);
   const selected = selectedId;
+  const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />;
 
   return (
     <div className={cn("flex min-h-0 flex-1", className)}>
-      <div className="flex w-64 shrink-0 flex-col border-r">
-        {listHeader}
-        <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />
-      </div>
+      {listTitle ? (
+        <CollapsiblePane title={listTitle} className="w-64">
+          {list}
+        </CollapsiblePane>
+      ) : (
+        <div className="flex w-64 shrink-0 flex-col border-r">
+          {listHeader}
+          {list}
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         {selected ? (
           <NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} />

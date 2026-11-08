@@ -2,12 +2,15 @@ import "server-only";
 import { env } from "@/lib/env";
 import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
 import { loadEvents, maxSeq } from "@/lib/supabase/repo/messages";
-import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
+import { deleteSessionRow, getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import "./persist";
-import { createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
+import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
+import { deleteTranscripts } from "./transcripts";
+import type { SessionOrigin } from "@/lib/routines/types";
 import { permissionModesFor, providerOf, type SessionMeta } from "./types";
 
 export * from "./session-registry";
+export { deleteTranscripts } from "./transcripts";
 
 export type StartSessionInput = {
   /** Start inside an existing workspace... */
@@ -19,6 +22,7 @@ export type StartSessionInput = {
   /** Continue an existing Claude Code transcript (e.g. one started from the terminal). */
   resumeSdkSessionId?: string;
   title?: string;
+  origin?: SessionOrigin | null;
 };
 
 export async function startSession(input: StartSessionInput) {
@@ -39,6 +43,7 @@ export async function startSession(input: StartSessionInput) {
     permissionMode,
     resume: input.resumeSdkSessionId,
     title: input.title ?? null,
+    origin: input.origin ?? null,
   });
 }
 
@@ -59,6 +64,7 @@ export async function resumeSession(id: string) {
       resume: live.meta.sdkSessionId ?? undefined,
       seqStart: live.seq,
       events: live.events,
+      origin: live.meta.origin,
     });
   }
   const row = await getSessionRow(id);
@@ -75,6 +81,7 @@ export async function resumeSession(id: string) {
     resume: row.sdkSessionId ?? undefined,
     seqStart: await maxSeq(id),
     events: await loadEvents(id),
+    origin: row.origin,
   });
 }
 
@@ -99,4 +106,20 @@ export async function listSessions(
     byId.set(live.id, { ...live.meta, live: true });
   }
   return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, opts.limit ?? 50);
+}
+
+/** Every session (live or persisted) in a workspace or project, so callers can clean up after deleting it. */
+export function allSessions(opts: { workspaceId?: string; projectId?: string }) {
+  return listSessions({ ...opts, limit: 10_000 });
+}
+
+/** Stop a session, drop its history and delete its SDK transcript. */
+export async function deleteSession(id: string): Promise<boolean> {
+  const live = getSession(id);
+  const meta = live?.meta ?? (await getSessionRow(id));
+  if (!meta) return false;
+  closeSession(id);
+  await deleteSessionRow(id);
+  await deleteTranscripts([meta]);
+  return true;
 }

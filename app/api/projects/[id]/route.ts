@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { closeSession, listLiveSessions, listSessions } from "@/lib/agent";
+import { allSessions, closeSession, deleteTranscripts, listLiveSessions, listSessions } from "@/lib/agent";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { forgetWorkspaceRuntime, stopWorkspaceProcesses } from "@/lib/projects/runtime";
 import { listExternalSessions } from "@/lib/projects";
@@ -26,14 +26,16 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/project
   return Response.json({ ok: true });
 });
 
-/** Forget the project. Worktrees and memory files on disk are left alone. */
+/** Forget the project and delete its sessions' SDK transcripts. Worktrees and memory files on disk are left alone. */
 export const DELETE = handle(async (_req: Request, ctx: RouteContext<"/api/projects/[id]">) => {
   const { id } = await ctx.params;
+  const sessions = await allSessions({ projectId: id });
   for (const live of listLiveSessions()) if (live.meta.projectId === id) closeSession(live.id);
   await Promise.all((await listWorkspaces(id)).map(async (workspace) => {
     await stopWorkspaceProcesses(workspace.id);
     forgetWorkspaceRuntime(workspace.id);
   }));
   await deleteProject(id);
+  await deleteTranscripts(sessions);
   return Response.json({ ok: true });
 });

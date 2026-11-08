@@ -22,7 +22,11 @@ npm run dev
 
 - **Notes** = a notebook per project (`~/.thunk/projects/<slug>/notes/<id>.md`) and per workspace (`…/workspaces/<slug>/notes/<id>.md`). Each note is markdown with frontmatter (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). MEMORY.md shows up as the pinned first note of each scope. Every session gets both notes dirs as readable/writable directories and a `# Thunk notes` block in its system prompt: an index of notes plus the full text of `inject: true` notes (capped at 24k chars). Unchecked `- [ ]` items in `actionable: true` notes appear as tasks you can send to a session. A file watcher streams changes (including agent edits) to the UI over SSE.
 
-Pages: `/` projects · `/p/[id]` project (workspaces, notes in the Library building, other Claude Code transcripts on disk for this repo that you can import) · `/w/[id]` workspace (sessions, git status, Notes tab with tasks) · `/s/[id]` session · `/notes` the Library (every notebook; `?scope=p:<id>|w:<id>&note=<id>`).
+- **Routines** = standing orders for agents: a prompt, model and permission mode that start a session on a cron schedule, on **Run now**, or on events (a new GitHub PR, polled every ~2 min via `gh`; a workspace's Run script exiting non-zero; a local webhook `POST /api/routines/[id]/webhook?token=…`). Each run gets a fresh worktree by default (removed when nothing changed, archived otherwise) or runs in a chosen workspace. Prompts, questions and plans park the run as *Needs you*. When a run ends, its summary, diff stat, PR link and cost are recorded and a report note is written to the project's notebook. Guardrails: one run per routine, max runs/day (default 24), a per-run time limit (default 60 min), and at most 3 routine runs at once. **Routines fire only while the Thunk server is running**; runs open at shutdown are marked interrupted on the next start, and a missed schedule runs once on start if the routine asks to catch up.
+
+Pages: `/` projects · `/p/[id]` project (workspaces, notes in the Library building, other Claude Code transcripts on disk for this repo that you can import) · `/w/[id]` workspace (sessions, git status, Notes tab with tasks) · `/s/[id]` session · `/notes` the Library (every notebook; `?scope=p:<id>|w:<id>&note=<id>`) · `/routines` every routine (each town's Workshop holds its own: `/p/[id]?building=workshop`).
+
+Routines API: `GET/POST /api/routines` (`?projectId=`), `GET/PATCH/DELETE /api/routines/[id]`, `POST …/run`, `GET …/runs`, `DELETE …/runs/[runId]` (cancel), `POST …/webhook`.
 
 Notes API: `GET/POST /api/{projects|workspaces}/[id]/notes`, `GET/PATCH/DELETE …/notes/[noteId]` (`memory` is the MEMORY.md note: markdown edits only, not deletable), `GET …/notes/tasks`, `GET /api/notes` (all notebooks), `GET /api/notes/events` (SSE).
 
@@ -30,6 +34,7 @@ Retune's visual editor is available in development. Press `⌥D` (Alt+D) to togg
 
 ## How it works
 
+- `lib/routines/`: types, zod schema, cron helpers and prompt templating (client-safe), the scheduler (`scheduler.ts`, started from `instrumentation.ts`), runner, report, PR poller and event triggers.
 - `lib/notes/`: note frontmatter parsing (`frontmatter.ts`, client-safe), file store (`store.ts`), scope → dirs (`resolve.ts`), the system-prompt block (`prompt.ts`), and the `fs.watch` feed (`watch.ts`).
 - `lib/projects/`: project detection (`git.ts`), worktree create/remove/status, memory file paths (`paths.ts`), and the project/workspace service (`index.ts`) incl. importing external SDK sessions via `listSessions({ dir, includeWorktrees })`.
 - `lib/agent/`: one long-lived `query()` per session (streaming input via `AsyncQueue`), pinned to `globalThis` so HMR doesn't orphan subprocesses. `event-bridge.ts` turns SDK messages into `HarnessEvent`s; `permissions.ts` parks `canUseTool` calls (tool approvals, `AskUserQuestion`, `ExitPlanMode`) until the UI answers. Sessions load the workspace's CLAUDE.md and `.claude/settings*.json`, but not `~/.claude`.

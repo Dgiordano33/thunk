@@ -1,4 +1,5 @@
 import type { PromptImage } from "@/lib/prompts/schema";
+import type { SessionOrigin } from "@/lib/routines/types";
 // Shared between server and client. Keep free of server-only imports.
 
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;
@@ -139,4 +140,6 @@ export type SessionMeta = {
   status: SessionState;
   createdAt: string;
   live: boolean;
+  /** What started the session when it wasn't a person, e.g. a routine. */
+  origin?: SessionOrigin | null;
 };

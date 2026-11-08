@@ -124,25 +124,29 @@ export async function deleteWorkspace(id: string): Promise<void> {
 }
 
 export async function listWorkspaces(projectId: string): Promise<WorkspaceSummary[]> {
+  return queryWorkspaces(projectId);
+}
+
+/** Every workspace across all projects in one query, for views that list the whole tree. */
+export async function listAllWorkspaces(): Promise<WorkspaceSummary[]> {
+  return queryWorkspaces(null);
+}
+
+async function queryWorkspaces(projectId: string | null): Promise<WorkspaceSummary[]> {
   const client = db();
   if (!client) {
     return [...mem.values()]
-      .filter((w) => w.projectId === projectId)
+      .filter((w) => projectId === null || w.projectId === projectId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((w) => ({ ...w, sessionCount: 0, lastSessionAt: null }));
+      .map((w) => ({ ...w, sessionCount: 0 }));
   }
-  const { data, error } = await client
-    .from("workspaces")
-    .select(`${COLUMNS}, sessions(id, updated_at)`)
-    .eq("project_id", projectId)
-    .order("updated_at", { ascending: false });
+  // sessions(count) aggregates in Postgres instead of shipping every session row.
+  let q = client.from("workspaces").select(`${COLUMNS}, sessions(count)`).order("updated_at", { ascending: false });
+  if (projectId !== null) q = q.eq("project_id", projectId);
+  const { data, error } = await q;
   if (error) throw error;
-  return data.map((r) => {
-    const sessions = (r.sessions ?? []) as { id: string; updated_at: string }[];
-    return {
-      ...toWorkspace(r),
-      sessionCount: sessions.length,
-      lastSessionAt: sessions.map((s) => s.updated_at).sort().at(-1) ?? null,
-    };
-  });
+  return data.map((r) => ({
+    ...toWorkspace(r),
+    sessionCount: (r.sessions as unknown as { count: number }[])[0]?.count ?? 0,
+  }));
 }

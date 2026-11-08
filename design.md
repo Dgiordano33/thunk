@@ -98,11 +98,11 @@ The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and pl
 
 The HUD and map controls use `z-20`; the command menu and town panels use `z-30`. World objects use their own depth order inside the map stage. Overlay containers allow pointer events through empty space and enable them on actual controls. Keep future overlays from blocking map interaction outside their bounds.
 
-Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a bronze-tinted background and bronze outline; unavailable sections retain explicit “Soon” labels. Notes shows its note count.
+Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a bronze-tinted background and bronze outline; Notes shows its note count; Routines shows how many are enabled. Any future unavailable section should carry an explicit “Soon” label.
 
 ## Town styling
 
-[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop still shows scaffolding and “Under construction” content.
+[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop opens the project's routines (standing orders) and shows the amber `!` when a routine run waits on approval.
 
 Town navigation replaces the homepage title with a “World” back link and project name. Selecting an object opens a panel through a query parameter, retaining the surrounding map context and camera position.
 
@@ -112,7 +112,7 @@ Town navigation replaces the homepage title with a “World” back link and pro
 - Default width: `min(460px, calc(100vw - 2rem))`.
 - `wide` width: `min(720px, calc(100vw - 2rem))`.
 - Default height fills the available space down to the bottom inset.
-- `compact` sizes the panel to its content; the building placeholders use this mode.
+- `compact` sizes the panel to its content, for short informational panels.
 - Header: 16px horizontal and 10px vertical padding, bottom border, optional eyebrow and actions, close control.
 - Content scrolls inside the frame with `min-h-0` and `overflow-y-auto`.
 
@@ -127,6 +127,14 @@ Notes follow Apple Notes' shape: notebooks → list → editor. The `/notes` Lib
 - Selected notebooks reuse the toolbar's active treatment (bronze tint and outline). Parchment and the `quill` pixel icon appear only in the empty editor state.
 - Flags (Pin, Inject into sessions, Actionable) are pressed-state toggle chips; the note's file path sits below them in 10px mono, like the old memory editor.
 - Saving is automatic (800ms) with a footer status. An agent edit while the note is dirty shows an amber banner with "Load their version" / "Keep mine" instead of overwriting.
+
+## Routines
+
+Routines reuse the existing surfaces rather than adding new ones. The town Workshop is a `wide` `TownPanel` (list → `?routine=new|<id>` form plus run history); `/routines` is one centered `CivPanel` table under the HUD, with a parchment empty state like the undiscovered sections.
+
+- Forms and tables use `components/ui/*`; trigger and flag toggles are the same pressed-state chips as note flags. `.pixel` stays on headings and eyebrows.
+- Run status badges use the session header's palette: amber pulse for running, amber for “Needs you”, emerald for succeeded, red for failed, muted for cancelled and skipped.
+- Sessions started by a routine show a “Routine · <name>” badge in the session header, the hourglass pixel icon in session lists, and “· Routine” in the field panel eyebrow.
 
 ## Map artwork and states
 

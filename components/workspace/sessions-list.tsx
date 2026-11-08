@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { MODE_LABELS, modelLabel, relativeTime } from "@/components/session/labels";
 import { providerOf, type SessionMeta } from "@/lib/agent/types";
+import { PixelIcon } from "@/components/world/pixel-icon";
 import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,14 @@ export function SessionsList({ workspaceId, sessions }: { workspaceId: string; s
                 )}
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium">{session.title || "Untitled session"}</span>
+                <span className="flex items-center gap-1">
+                  {s.origin?.kind === "routine" && (
+                    <span title={`Started by the routine ${s.origin.routineName}`} className="shrink-0">
+                      <PixelIcon name="hourglass" className="size-3.5" />
+                    </span>
+                  )}
+                  <span className="block truncate text-[13px] font-medium">{session.title || "Untitled session"}</span>
+                </span>
                 <span className="text-muted-foreground block truncate text-[11px]">
                   {modelLabel(session.model, models)} · {MODE_LABELS[session.permissionMode] ?? session.permissionMode}
                   {s.createdAt && ` · ${relativeTime(s.createdAt)}`}

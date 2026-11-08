@@ -5,6 +5,8 @@ import type { PromptImage } from "@/lib/prompts/schema";
 import type { RevisionComment, RevisionStat } from "@/lib/revisions/build-payload";
 import type { ModelOption, SessionMeta } from "@/lib/agent/types";
 import type { Artifact, DocComment } from "@/lib/documents/types";
+import type { RoutineInput, RoutinePatch } from "@/lib/routines/schema";
+import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
 import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind, NoteTask } from "@/lib/notes/types";
 import type {
   Project,
@@ -73,16 +75,27 @@ export const api = {
     call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content } }),
   // Notes (project or workspace scope). Memory is the note with id "memory".
   listNotes: (scope: NoteScopeKind, id: string) => call<{ notes: NoteMeta[]; dir: string }>(`/api/${scope}/${id}/notes`),
+  noteCounts: () => call<{ counts: Record<string, number> }>("/api/notes/counts"),
   listAllNotes: () => call<{ projects: NoteFolder[] }>("/api/notes"),
   getNote: (scope: NoteScopeKind, id: string, noteId: string) =>
     call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`),
   createNote: (scope: NoteScopeKind, id: string, body: { title?: string; markdown?: string } & Partial<NoteFlags> = {}) =>
     post<{ note: Note }>(`/api/${scope}/${id}/notes`, body),
-  patchNote: (scope: NoteScopeKind, id: string, noteId: string, body: { title?: string; markdown?: string } & Partial<NoteFlags>) =>
+  patchNote: (scope: NoteScopeKind, id: string, noteId: string, body: { title?: string; markdown?: string; task?: { line: number; text: string; done: boolean } } & Partial<NoteFlags>) =>
     call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`, { method: "PATCH", json: body }),
   deleteNote: (scope: NoteScopeKind, id: string, noteId: string) =>
     call(`/api/${scope}/${id}/notes/${noteId}`, { method: "DELETE" }),
   noteTasks: (scope: NoteScopeKind, id: string) => call<{ tasks: NoteTask[] }>(`/api/${scope}/${id}/notes/tasks`),
+  // Routines
+  listRoutines: (projectId?: string) =>
+    call<{ routines: RoutineSummary[] }>(`/api/routines${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`),
+  createRoutine: (body: RoutineInput) => post<{ routine: Routine }>("/api/routines", body),
+  getRoutine: (id: string) => call<{ routine: Routine; runs: RoutineRun[] }>(`/api/routines/${id}`),
+  updateRoutine: (id: string, body: RoutinePatch) => call<{ routine: Routine }>(`/api/routines/${id}`, { method: "PATCH", json: body }),
+  deleteRoutine: (id: string) => call(`/api/routines/${id}`, { method: "DELETE" }),
+  runRoutine: (id: string) => post<{ run: RoutineRun }>(`/api/routines/${id}/run`, {}),
+  listRoutineRuns: (id: string, limit = 20) => call<{ runs: RoutineRun[] }>(`/api/routines/${id}/runs?limit=${limit}`),
+  cancelRoutineRun: (id: string, runId: string) => call(`/api/routines/${id}/runs/${runId}`, { method: "DELETE" }),
   listModels: () => call<{ models: ModelOption[]; codexError: string | null }>("/api/models"),
   // Sessions
   createSession: (body: {
@@ -96,6 +109,7 @@ export const api = {
     title?: string;
   }) => post<{ id: string; workspaceId: string }>("/api/sessions", body),
   getSession: (id: string) => call<{ session: SessionMeta }>(`/api/sessions/${id}`),
+  deleteSession: (id: string) => call(`/api/sessions/${id}`, { method: "DELETE" }),
   listSessions: (opts: { workspaceId?: string; projectId?: string } = {}) =>
     call<{ sessions: SessionMeta[] }>(
       `/api/sessions?${new URLSearchParams(Object.entries(opts).filter(([, v]) => v) as [string, string][])}`,
