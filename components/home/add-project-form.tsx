@@ -135,7 +135,7 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
           Add project
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="grid-cols-1 sm:max-w-md">
         {!option ? (
           <>
             <DialogHeader>
