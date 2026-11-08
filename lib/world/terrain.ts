@@ -4,13 +4,17 @@ export const COLS = 22;
 export const ROWS = 16;
 export const TILE_W = 64;
 export const TILE_H = 32;
-/** Pixel size of the whole map in screen space (before zoom). */
-export const MAP_W = ((COLS + ROWS) * TILE_W) / 2;
-export const MAP_H = ((COLS + ROWS) * TILE_H) / 2;
+/** A map's tile dimensions. The world is one size; towns grow with their workspaces. */
+export type Grid = { cols: number; rows: number };
+export const WORLD: Grid = { cols: COLS, rows: ROWS };
+/** Pixel size of a whole map in screen space (before zoom). */
+export const mapSize = (g: Grid) => ({ w: ((g.cols + g.rows) * TILE_W) / 2, h: ((g.cols + g.rows) * TILE_H) / 2 });
+export const MAP_W = mapSize(WORLD).w;
+export const MAP_H = mapSize(WORLD).h;
 /** Fixed so the world never reshapes itself under the user. */
 export const WORLD_SEED = "thunk";
 
-export type TerrainKind = "ocean" | "shallows" | "grass" | "plains" | "forest" | "hills" | "mountain";
+export type TerrainKind = "ocean" | "shallows" | "grass" | "plains" | "forest" | "hills" | "mountain" | "road";
 export type Tile = { col: number; row: number; kind: TerrainKind; height: number; moisture: number; variant: number };
 export type Cell = { col: number; row: number };
 
@@ -43,9 +47,9 @@ export function mulberry32(seed: number): () => number {
 }
 
 /** 2D value noise on a lattice of `cell`-sized squares, smoothstep-interpolated. */
-function valueNoise(seed: number, cell: number) {
-  const w = Math.ceil(COLS / cell) + 2;
-  const h = Math.ceil(ROWS / cell) + 2;
+export function valueNoise(seed: number, cell: number, g: Grid = WORLD) {
+  const w = Math.ceil(g.cols / cell) + 2;
+  const h = Math.ceil(g.rows / cell) + 2;
   const rand = mulberry32(seed);
   const lattice = Array.from({ length: w * h }, rand);
   const at = (x: number, y: number) => lattice[y * w + x];
@@ -95,17 +99,17 @@ export function generateTerrain(seed: string = WORLD_SEED): Tile[][] {
 }
 
 /** Centre of a tile in map pixel space. */
-export function toIso(col: number, row: number): { x: number; y: number } {
-  return { x: ((col - row) * TILE_W) / 2 + (ROWS * TILE_W) / 2, y: ((col + row) * TILE_H) / 2 + TILE_H / 2 };
+export function toIso(col: number, row: number, g: Grid = WORLD): { x: number; y: number } {
+  return { x: ((col - row) * TILE_W) / 2 + (g.rows * TILE_W) / 2, y: ((col + row) * TILE_H) / 2 + TILE_H / 2 };
 }
 
 /** The tile's diamond as an SVG `points` string: top, right, bottom, left. */
-export function isoPolygon(col: number, row: number): string {
-  const { x, y } = toIso(col, row);
+export function isoPolygon(col: number, row: number, g: Grid = WORLD): string {
+  const { x, y } = toIso(col, row, g);
   return `${x},${y - TILE_H / 2} ${x + TILE_W / 2},${y} ${x},${y + TILE_H / 2} ${x - TILE_W / 2},${y}`;
 }
 
-const chebyshev = (a: Cell, b: Cell) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+export const chebyshev = (a: Cell, b: Cell) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
 
 /**
  * Found one city per project. Projects are settled oldest first, each from its own id-seeded walk, so positions are
