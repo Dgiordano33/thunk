@@ -186,3 +186,28 @@ export function FarmField({ stage, hue, selected }: { stage: CropStage; hue: num
     </svg>
   );
 }
+
+
+export const TOWN_HALL_SIZE = { w: 40, h: 36 } as const;
+
+/** Stone civic hall with columns, a clock tower and a notice board. */
+export function TownHallSprite() {
+  return <Pixels w={TOWN_HALL_SIZE.w} h={TOWN_HALL_SIZE.h}>
+    <ellipse cx={20} cy={33} rx={19} ry={3} fill="oklch(0 0 0 / 0.2)" />
+    {r(3, 29, 34, 4, STONE_DARK)}
+    {r(5, 17, 30, 12, WALL)}
+    {r(17, 21, 6, 10, DOOR)}
+    {[7, 13, 25, 31].map((x) => r(x, 19, 2, 10, STONE, `column${x}`))}
+    {roof(20, 17, 36, 8, SLATE_LIGHT, SLATE)}
+    {r(16, 4, 8, 10, WALL)}
+    {r(18, 6, 4, 4, GOLD)}
+    {r(20, 6, 1, 3, DOOR)}
+    {r(19, 8, 2, 1, DOOR)}
+    {roof(20, 3, 12, 4, SLATE_LIGHT, SLATE)}
+    {r(28, 24, 7, 6, WOOD)}
+    {r(29, 25, 5, 4, WALL)}
+    {r(30, 26, 3, 1, DOOR)}
+    {r(30, 28, 2, 1, DOOR)}
+    {r(11, 31, 18, 1, STONE)}
+  </Pixels>;
+}

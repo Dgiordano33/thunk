@@ -16,6 +16,8 @@ import { TILE_H, TILE_W, mapSize, toIso, type Cell, type Grid, type Tile } from 
 import { CROP_NAMES, CROP_THRESHOLDS, type CropStage } from "@/lib/world/town";
 import {
   FarmField,
+  TOWN_HALL_SIZE,
+  TownHallSprite,
   LIBRARY_SIZE,
   LibrarySprite,
   SPRITE_SCALE,
@@ -48,11 +50,13 @@ export type TownFarm = {
   row: number;
 };
 
-export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop"; note?: string };
+export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop" | "tasks"; note?: string };
 
 type Live = { status: ActivitySession["status"]; pending: number } | undefined;
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
+// Ring four is clear of farms (rings two/three) and neighbouring workspace centers.
+const TOWN_HALL_OFFSET = { col: 4, row: 1 };
 const ALERT = "pixel absolute left-1/2 flex size-5 -translate-x-1/2 items-center justify-center text-sm font-bold shadow-[2px_2px_0_#0005]";
 
 export function TownView({
@@ -86,6 +90,7 @@ export function TownView({
   const base = `/p/${projectId}`;
   const { w, h } = mapSize(grid);
   const capital = workspaces.find((ws) => ws.capital) ?? workspaces[0];
+  const townHall = { col: (capital?.col ?? library.col + 2) + TOWN_HALL_OFFSET.col, row: (capital?.row ?? library.row - 1) + TOWN_HALL_OFFSET.row };
   const focus = capital ? { ...toIso(capital.col, capital.row, grid), z: 1.1 } : undefined;
   const hueOf = new Map(workspaces.map((ws) => [ws.id, ws.hue]));
 
@@ -144,6 +149,9 @@ export function TownView({
             attention={workshopAttention}
           >
             <WorkshopSprite building={false} />
+          </Building>
+          <Building cell={townHall} grid={grid} name="Town hall" href={`${base}?building=tasks`} selected={selected.building === "tasks"} size={TOWN_HALL_SIZE} ground={33} blurb="This project's task list: what's open, who's on it.">
+            <TownHallSprite />
           </Building>
         </>
       }
@@ -397,7 +405,7 @@ function TownLegend() {
       <ul className="mt-1 grid gap-0.5">
         <li>Town center = workspace (★ capital = main)</li>
         <li>Field = session, fenced in its workspace&apos;s colour</li>
-        <li>Library = notes · Workshop = routines</li>
+        <li>Library = notes · Workshop = routines · Town hall = tasks</li>
       </ul>
       <p className="text-muted-foreground mt-2 mb-1 text-[11px]">Crops ripen with session spend</p>
       <ul className="grid gap-0.5">

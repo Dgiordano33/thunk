@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { TasksPanel } from "@/components/town/tasks-panel";
 import { LibraryPanel } from "@/components/town/library-panel";
 import { FieldPanel, TownCenterPanel } from "@/components/town/panels";
 import { WorkshopPanel } from "@/components/town/workshop-panel";
@@ -72,7 +73,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
   const selected: TownSelection = {
     session: one(query.session),
     ws: one(query.ws),
-    building: one(query.building) === "library" ? "library" : one(query.building) === "workshop" ? "workshop" : undefined,
+    building: one(query.building) === "library" ? "library" : one(query.building) === "workshop" ? "workshop" : one(query.building) === "tasks" ? "tasks" : undefined,
     note: one(query.note),
   };
   const closeHref = `/p/${id}`;
@@ -124,6 +125,8 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
         <LibraryPanel projectId={id} workspaces={active.map((w) => ({ id: w.id, label: workspaceLabel(w) }))} closeHref={closeHref} />
       </Suspense>
     );
+  } else if (selected.building === "tasks") {
+    panel = <TasksPanel project={project} workspaces={workspaces} closeHref={closeHref} />;
   } else if (selected.building === "workshop") {
     panel = <WorkshopPanel project={project} workspaces={workspaces} closeHref={closeHref} />;
   }

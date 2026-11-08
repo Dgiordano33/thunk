@@ -1,6 +1,7 @@
 import "server-only";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { emit, setState, type LiveSession, type PendingRequest } from "./session-registry";
+import { TASK_TOOL_NAMES } from "@/lib/tasks/tools";
 import type { Question } from "./types";
 
 /**
@@ -10,6 +11,9 @@ import type { Question } from "./types";
  */
 export function buildCanUseTool(live: LiveSession): CanUseTool {
   return (toolName, input, opts) => {
+    if (TASK_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
+      return Promise.resolve({ behavior: "allow", updatedInput: input });
+
     const requestId = crypto.randomUUID();
     const toolUseId = opts.toolUseID;
     let kind: PendingRequest["kind"] = "permission";

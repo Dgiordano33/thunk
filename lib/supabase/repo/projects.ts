@@ -1,6 +1,7 @@
 import "server-only";
 import type { Project, ProjectSummary } from "@/lib/projects/types";
 import { db } from "../server";
+import { deleteTask, listTasks } from "./tasks";
 
 type Row = {
   id: string;
@@ -92,6 +93,7 @@ export async function updateProject(id: string, patch: { name?: string }): Promi
 export async function deleteProject(id: string): Promise<void> {
   const client = db();
   if (!client) {
+    for (const task of await listTasks({ projectId: id })) await deleteTask(task.id);
     mem.delete(id);
     return;
   }

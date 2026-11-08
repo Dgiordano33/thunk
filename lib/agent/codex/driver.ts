@@ -1,6 +1,9 @@
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import { z } from "zod";
+import { tasksTools } from "@/lib/tasks/tools";
+import { tasksForWorkspace } from "@/lib/tasks/service";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadSessionNotes } from "@/lib/notes/prompt";
@@ -143,10 +146,11 @@ function toolResult(item: Item): { content: string; isError: boolean } {
  */
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, workspaceMemory, notes] = await Promise.all([
+  const [projectMemory, workspaceMemory, notes, tasks] = await Promise.all([
     readMemory(projectMemoryFile(project.root)),
     readMemory(workspaceMemoryFile(project.root, workspace.slug)),
     loadSessionNotes(project, workspace),
+    tasksForWorkspace(workspace.id),
   ]);
   const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
@@ -155,11 +159,12 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
 
   const developerInstructions = [
     CANVAS_PROMPT,
-    hierarchyPrompt(live, projectMemory, "codex", notes),
+    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project]),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
+  const taskTools = tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id });
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;
@@ -332,6 +337,13 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
 
   async function handleRequest(method: string, p: Fields, id: RpcId): Promise<unknown> {
     switch (method) {
+      case "item/tool/call": {
+        const taskTool = taskTools.find((t) => t.name === p.tool);
+        if (p.threadId !== threadId || p.namespace != null || !taskTool)
+          return { contentItems: [{ type: "inputText", text: "Unknown task tool or thread." }], success: false };
+        const result = await taskTool.handler(p.arguments);
+        return { contentItems: result.content.map(({ text }) => ({ type: "inputText", text })), success: !result.isError };
+      }
       case "item/commandExecution/requestApproval": {
         const known = toolInputs.get(p.itemId)?.input;
         const command = p.command ? unwrapShell(p.command) : known?.command;
@@ -367,7 +379,12 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
   const textInput = (text: string) => ({ type: "text", text, text_elements: [] });
 
   const ready = (async () => {
-    await rpc.initialize();
+    // Dynamic tools are experimental in the installed app-server protocol.
+    await rpc.request("initialize", {
+      clientInfo: { name: "thunk", title: "Thunk", version: "0.1.0" },
+      capabilities: { experimentalApi: true, requestAttestation: false },
+    });
+    rpc.notify("initialized");
     const params = {
       model: live.meta.model,
       cwd: workspace.cwd,
@@ -377,7 +394,15 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     };
     const res = await rpc.request<{ thread: { id: string }; model: string; cwd: string }>(
       resume ? "thread/resume" : "thread/start",
-      resume ? { ...params, threadId: resume, excludeTurns: true } : params,
+      // Resume restores persisted tools; its protocol has no dynamicTools field.
+      // shortcut: pre-task threads lack tools, start a new session to register them.
+      resume ? { ...params, threadId: resume, excludeTurns: true } : {
+        ...params,
+        dynamicTools: taskTools.map((t) => ({
+          type: "function", name: t.name, description: t.description,
+          inputSchema: z.toJSONSchema(z.strictObject(t.schema)), deferLoading: false,
+        })),
+      },
     );
     threadId = res.thread.id;
     const changed =

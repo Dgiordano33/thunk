@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
 import { api } from "@/lib/client/api";
 import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
+import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { workspaceActivity } from "@/lib/ambient/summary";
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 export type SidebarProject = ProjectSummary & { workspaces: WorkspaceSummary[] };
 
 export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
+  const taskCounts = useTaskCounts();
   const sessions = useAmbient((s) => s.sessions);
   const pathname = usePathname();
   const [, section, activeId] = pathname.split("/");
@@ -79,6 +81,8 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
           {projects.length === 0 && <li className="text-muted-foreground px-2 py-1.5 text-xs">No projects yet.</li>}
           {projects.map((p) => {
             const open = !collapsed[p.id];
+            const tasks = taskCounts[p.id];
+            const openTasks = (tasks?.project ?? 0) + Object.values(tasks?.byWorkspace ?? {}).reduce((sum, count) => sum + count, 0);
             const ProjectIcon = p.kind === "repo" ? FolderGitIcon : FolderIcon;
             return (
               <li key={p.id}>
@@ -112,6 +116,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                       {noteCounts.get(p.id)}
                     </Link>
                   )}
+                  {openTasks > 0 && <Link href={`/p/${p.id}?building=tasks`} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
                   <NewWorkspaceButton
                     compact
                     projectId={p.id}
@@ -125,7 +130,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     {p.workspaces.map((w) => {
                       const activity = workspaceActivity(sessions, w.id);
                       return (
-                      <li key={w.id} className="group/ws relative">
+                      <li key={w.id} className="group/ws relative flex items-center pr-8">
                         <Link
                           href={`/w/${w.id}`}
                           title={
@@ -134,7 +139,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                               : `${w.name}\n${w.cwd}`
                           }
                           className={cn(
-                            "hover:bg-sidebar-accent flex items-center gap-2 rounded-md py-1.5 pr-8 pl-8 transition-colors",
+                            "hover:bg-sidebar-accent flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-1 pl-8 transition-colors",
                             w.id === activeWorkspaceId && "bg-sidebar-accent",
                           )}
                         >
@@ -147,6 +152,8 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                           {activity && (
                             <span className={cn("size-2 shrink-0 rounded-full", activity === "Running" ? "bg-sky-500" : "bg-amber-500")} role="img" aria-label={activity} title={activity} />
                           )}
+                        </Link>
+                        {(tasks?.byWorkspace[w.id] ?? 0) > 0 && <Link href={`/w/${w.id}?tab=tasks`} aria-label={`${workspaceDisplayName(w)} open tasks (${tasks?.byWorkspace[w.id]})`} title="Open tasks" className="text-muted-foreground hover:text-foreground mr-2 flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{tasks?.byWorkspace[w.id]}</Link>}
                           {w.sessionCount > 0 && (
                             <span
                               className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums group-hover/ws:invisible group-has-[[data-state=open]]/ws:invisible"
@@ -156,7 +163,6 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                               {w.sessionCount}
                             </span>
                           )}
-                        </Link>
                         <WorkspaceMenu
                           workspace={w}
                           label={workspaceDisplayName(w)}

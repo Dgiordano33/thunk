@@ -5,13 +5,12 @@ import { useState } from "react";
 import { useNoteActions } from "@/components/notes/library";
 import { NoteEditor } from "@/components/notes/note-editor";
 import { NoteList } from "@/components/notes/note-list";
-import { NoteTasks } from "@/components/notes/note-tasks";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import type { NoteScope } from "@/lib/notes/types";
 import { useScopeNotes } from "@/lib/store/notes-store";
 import { cn } from "@/lib/utils";
 
-/** The workspace Notes tab: workspace notes, project notes, and open tasks. Notes open in a wide sheet. */
+/** The workspace Notes tab: workspace notes and project notes. Notes open in a wide sheet. */
 export function WorkspaceNotes({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
   const wScope: NoteScope = { kind: "workspaces", id: workspaceId };
   const pScope: NoteScope = { kind: "projects", id: projectId };
@@ -52,11 +51,6 @@ export function WorkspaceNotes({ workspaceId, projectId }: { workspaceId: string
             onDelete={(n) => void pActions.remove(n)}
           />
         )}
-      </section>
-
-      <section className="border-t px-3 pt-3">
-        <h3 className="mb-2 text-xs font-medium">Tasks</h3>
-        <NoteTasks scopes={[wScope, pScope]} workspaceId={workspaceId} />
       </section>
 
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>

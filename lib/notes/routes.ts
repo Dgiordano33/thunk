@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { dirsForScope } from "./resolve";
-import { NoteConflictError, createNote, deleteNote, isNoteId, listNotes, metaOf, readNote, tasksOf, writeNote } from "./store";
+import { NoteConflictError, createNote, deleteNote, isNoteId, listNotes, metaOf, readNote, writeNote } from "./store";
 import { MEMORY_NOTE_ID, type NoteScopeKind } from "./types";
 
 // Route handlers shared by /api/projects/[id]/notes and /api/workspaces/[id]/notes.
@@ -70,16 +70,6 @@ export function noteItem(kind: NoteScopeKind) {
       if (id === MEMORY_NOTE_ID) throw new HttpError(400, "Memory can't be deleted");
       await deleteNote(await dirsForScope({ kind, id: p.id }), id);
       return Response.json({ ok: true });
-    }),
-  };
-}
-
-export function noteTasks(kind: NoteScopeKind) {
-  return {
-    GET: handle(async (req: Request, ctx: Ctx<{ id: string }>) => {
-      const dirs = await dirsForScope({ kind, id: (await ctx.params).id });
-      const includeDone = new URL(req.url).searchParams.get("done") === "1";
-      return Response.json({ tasks: tasksOf(await listNotes(dirs), { includeDone }) });
     }),
   };
 }
