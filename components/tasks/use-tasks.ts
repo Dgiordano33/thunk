@@ -3,11 +3,18 @@
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { api } from "@/lib/client/api";
-import type { TaskCounts, TaskTree } from "@/lib/tasks/types";
+import type { TaskCounts, TaskEvent, TaskTree } from "@/lib/tasks/types";
 
-const useTasksFeed = create<{ rev: number; touch: () => void }>((set) => ({
+// `rev` moves on every change, `all` on refreshes with no project, `projects` per project.
+const useTasksFeed = create<{ rev: number; all: number; projects: Record<string, number>; touch: (projectId?: string) => void }>((set) => ({
   rev: 0,
-  touch: () => set((s) => ({ rev: s.rev + 1 })),
+  all: 0,
+  projects: {},
+  touch: (projectId) => set((s) => ({
+    rev: s.rev + 1,
+    all: projectId ? s.all : s.all + 1,
+    projects: projectId ? { ...s.projects, [projectId]: (s.projects[projectId] ?? 0) + 1 } : s.projects,
+  })),
 }));
 export const refreshTasks = () => useTasksFeed.getState().touch();
 let source: EventSource | null = null;
@@ -18,7 +25,7 @@ export function useTasksEvents() {
     refs++;
     if (!source) {
       source = new EventSource("/api/tasks/events");
-      source.onmessage = refreshTasks;
+      source.onmessage = (e) => useTasksFeed.getState().touch((JSON.parse(e.data) as TaskEvent).projectId);
       // Reconnects may have missed writes while the connection was down.
       source.onopen = refreshTasks;
     }
@@ -30,7 +37,7 @@ export function useTasksEvents() {
 
 export function useScopeTasks({ projectId, workspaceId }: { projectId: string; workspaceId?: string }) {
   useTasksEvents();
-  const rev = useTasksFeed((s) => s.rev);
+  const rev = useTasksFeed((s) => s.all + (s.projects[projectId] ?? 0));
   const [state, setState] = useState<{ projectId: string; tree: TaskTree | null; error: string | null } | null>(null);
   useEffect(() => {
     let cancelled = false;

@@ -14,3 +14,4 @@ export type Task = {
 export type TaskTree = { project: { id: string; name: string }; tasks: Task[]; workspaces: { workspace: { id: string; name: string; slug: string }; tasks: Task[] }[] };
 export type TaskCounts = Record<string, { project: number; byWorkspace: Record<string, number> }>;
 export type TaskEvent = { projectId: string; workspaceId: string | null; taskId: string; kind: "changed" | "removed" };
+export type NoteImportScope = { workspaceId: string } | { projectId: string };

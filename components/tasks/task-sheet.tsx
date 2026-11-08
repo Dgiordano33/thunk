@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import type { SessionMeta } from "@/lib/agent/types";
 import { TASK_STATUSES, TASK_STATUS_LABELS, type Task, type TaskPriority, type TaskStatus } from "@/lib/tasks/types";
-import { scopeKey } from "@/lib/notes/types";
+import { scopeKey, type NoteMeta } from "@/lib/notes/types";
 import { api } from "@/lib/client/api";
 
 export type TaskDraft = Parameters<typeof api.createTask>[0];
@@ -29,12 +29,20 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
   const [dueAt, setDueAt] = useState(task?.dueAt?.slice(0, 10) ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const available = sessions.filter((s) => scope === "project" || s.workspaceId === scope);
+  const [loadedNotes, setLoadedNotes] = useState<{ scope: string; notes: NoteMeta[] } | null>(null);
+  const available = sessions.filter((s) => (s.live || s.id === sessionId) && (scope === "project" || s.workspaceId === scope));
+  const notes = loadedNotes?.scope === scope ? loadedNotes.notes : [];
+  useEffect(() => {
+    let cancelled = false;
+    const request = scope === "project" ? api.listNotes("projects", projectId) : api.listNotes("workspaces", scope);
+    request.then((r) => !cancelled && setLoadedNotes({ scope, notes: r.notes })).catch((err: Error) => !cancelled && setError(err.message));
+    return () => { cancelled = true; };
+  }, [projectId, scope]);
   const save = async () => {
     if (busy || !title.trim()) return;
     setBusy(true); setError(null);
     try {
-      await onSave({ projectId, title: title.trim(), body: body || null, status, priority, workspaceId: scope === "project" ? null : scope, sessionId: sessionId === "none" ? null : sessionId, noteId: noteId.trim() || null, dueAt: dueAt === task?.dueAt?.slice(0, 10) ? task.dueAt : dueAt ? new Date(`${dueAt}T00:00:00Z`).toISOString() : null });
+      await onSave({ projectId, title: title.trim(), body: body || null, status, priority, workspaceId: scope === "project" ? null : scope, sessionId: sessionId === "none" ? null : sessionId, noteId: noteId || null, dueAt: dueAt === task?.dueAt?.slice(0, 10) ? task.dueAt : dueAt ? new Date(`${dueAt}T00:00:00Z`).toISOString() : null });
       onClose();
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
@@ -53,8 +61,8 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
           </div>
           <div className="space-y-1.5 text-xs">Scope<Select value={scope} onValueChange={(v) => { setScope(v); setSessionId("none"); setNoteId(""); }}><SelectTrigger aria-label="Task scope" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="project">Project</SelectItem>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>Workspace · {w.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5 text-xs">Owner<Select value={sessionId} onValueChange={setSessionId}><SelectTrigger aria-label="Owner session" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Unassigned</SelectItem>{sessionId !== "none" && !available.some((s) => s.id === sessionId) && <SelectItem value={sessionId}>Assigned session</SelectItem>}{available.map((s) => <SelectItem key={s.id} value={s.id}>{s.title || "Untitled session"}</SelectItem>)}</SelectContent></Select></div>
-          <label className="grid gap-1.5 text-xs">Linked note ID<Input value={noteId} onChange={(e) => setNoteId(e.target.value)} placeholder="Optional note ID" /></label>
-          {noteId.trim() && <Link className="text-xs underline" href={`/notes?${new URLSearchParams({ scope: scopeKey({ kind: scope === "project" ? "projects" : "workspaces", id: scope === "project" ? projectId : scope }), note: noteId.trim() })}`}>Open linked note</Link>}
+          <div className="space-y-1.5 text-xs">Linked note<Select value={noteId || "none"} onValueChange={(v) => setNoteId(v === "none" ? "" : v)}><SelectTrigger aria-label="Linked note" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{noteId && !notes.some((n) => n.id === noteId) && <SelectItem value={noteId}>Linked note</SelectItem>}{notes.map((n) => <SelectItem key={n.id} value={n.id}>{n.title || "Untitled note"}</SelectItem>)}</SelectContent></Select></div>
+          {noteId && <Link className="text-xs underline" href={`/notes?${new URLSearchParams({ scope: scopeKey({ kind: scope === "project" ? "projects" : "workspaces", id: scope === "project" ? projectId : scope }), note: noteId })}`}>Open linked note</Link>}
           <label className="grid gap-1.5 text-xs">Due date<Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
         </fieldset>
         {error && <p role="alert" className="text-destructive text-xs">{error}</p>}

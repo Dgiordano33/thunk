@@ -43,18 +43,28 @@ function taskToRow(p: Partial<Task>): TablesUpdate<"tasks"> {
   if (p.updatedAt !== undefined) row.updated_at = p.updatedAt;
   return row;
 }
-const g = globalThis as typeof globalThis & { __thunkMemTasks?: Map<string, Task> };
+const g = globalThis as typeof globalThis & { __thunkMemTasks?: Map<string, Task>; __thunkTaskInserts?: Map<string, Promise<unknown>> };
 const mem = (g.__thunkMemTasks ??= new Map());
 export type NewTask = Pick<Task, "projectId" | "title"> & Partial<Omit<Task, "projectId" | "title" | "createdAt" | "updatedAt" | "completedAt" | "position">>;
 const closed = (status: TaskStatus) => status === "done" || status === "cancelled";
 function changed(task: Task, kind: "changed" | "removed" = "changed") {
   emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind });
 }
-export async function insertTask(input: NewTask): Promise<Task> {
+const insertQueues = (g.__thunkTaskInserts ??= new Map());
+// Position is max + 1, so inserts in one scope run in turn. Thunk is a single server process.
+function queueInsert(scope: string, work: () => Promise<Task>): Promise<Task> {
+  const result = (insertQueues.get(scope) ?? Promise.resolve()).then(work);
+  const tail = result.catch(() => {}).finally(() => { if (insertQueues.get(scope) === tail) insertQueues.delete(scope); });
+  insertQueues.set(scope, tail);
+  return result;
+}
+export function insertTask(input: NewTask): Promise<Task> {
+  return queueInsert(`${input.projectId}:${input.workspaceId ?? ""}`, () => insertTaskNow(input));
+}
+async function insertTaskNow(input: NewTask): Promise<Task> {
   const client = db();
   const now = new Date().toISOString();
   const peers = await listTasks({ projectId: input.projectId, workspaceId: input.workspaceId ?? null });
-  // shortcut: concurrent creates can share a position; use a DB scope lock if strict ordering is required.
   const task: Task = {
     id: input.id ?? crypto.randomUUID(), projectId: input.projectId, title: input.title,
     workspaceId: input.workspaceId ?? null, body: input.body ?? null,
@@ -139,10 +149,22 @@ export async function listTasks(opts: TaskFilter = {}): Promise<Task[]> {
 }
 export async function countOpenTasks(): Promise<TaskCounts> {
   const counts: TaskCounts = {};
-  for (const task of await listTasks({ status: "open" })) {
-    const c = (counts[task.projectId] ??= { project: 0, byWorkspace: {} });
-    if (task.workspaceId) c.byWorkspace[task.workspaceId] = (c.byWorkspace[task.workspaceId] ?? 0) + 1;
+  const add = (projectId: string, workspaceId: string | null) => {
+    const c = (counts[projectId] ??= { project: 0, byWorkspace: {} });
+    if (workspaceId) c.byWorkspace[workspaceId] = (c.byWorkspace[workspaceId] ?? 0) + 1;
     else c.project++;
+  };
+  const client = db();
+  if (!client) {
+    for (const task of await listTasks({ status: "open" })) add(task.projectId, task.workspaceId);
+    return counts;
   }
-  return counts;
+  // Runs on every task event for the sidebar badges, so leave task bodies behind.
+  const q = client.from("tasks").select("project_id, workspace_id").in("status", [...OPEN_TASK_STATUSES]).order("id");
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await q.range(offset, offset + 999);
+    if (error) throw error;
+    for (const row of data) add(row.project_id, row.workspace_id);
+    if (data.length < 1000) return counts;
+  }
 }

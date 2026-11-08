@@ -39,6 +39,26 @@ test("lists every status in order, sorts positions, and collapses completed task
   assert.match(renderToStaticMarkup(React.createElement(TaskList, { tasks: [], emptyText: "Nothing here", sessions: [] })), /Nothing here/);
 });
 
+test("send menu offers live sessions in scope while the owner label still resolves past sessions", () => {
+  let offered;
+  const { TaskRow } = load("task-row.tsx", {
+    "next/link": { __esModule: true, default: ({ children }) => React.createElement("a", null, children) },
+    "lucide-react": { Trash2Icon: () => null },
+    "@/components/ui/button": { Button: () => null },
+    "@/lib/tasks/types": types,
+    "./send-menu": { SendMenu: ({ sessions }) => { offered = sessions.map((s) => s.id); return null; } },
+  });
+  const sessions = [
+    { id: "live-here", workspaceId: "w1", live: true, title: "Live" },
+    { id: "live-elsewhere", workspaceId: "w2", live: true, title: "Other" },
+    { id: "past-owner", workspaceId: "w1", live: false, title: "Finished owner" },
+  ];
+  const task = { id: "t", title: "Task", status: "open", priority: 0, workspaceId: "w1", sessionId: "past-owner" };
+  const html = renderToStaticMarkup(React.createElement(TaskRow, { task, sessions }));
+  assert.deepEqual(offered, ["live-here"]);
+  assert.match(html, /Finished owner/);
+});
+
 test("SSE is shared, refreshes on reconnect, and closes only after the last consumer", (t) => {
   const cleanups = [];
   const sources = [];
@@ -62,8 +82,11 @@ test("SSE is shared, refreshes on reconnect, and closes only after the last cons
   hooks.useTasksEvents(); hooks.useTasksEvents();
   assert.equal(sources.length, 1);
   assert.equal(sources[0].url, "/api/tasks/events");
-  sources[0].onmessage(); sources[0].onopen();
+  sources[0].onmessage({ data: JSON.stringify({ projectId: "p1" }) }); sources[0].onopen();
   assert.equal(store.rev, 2);
+  // Only project p1 refetches for its event; a reconnect refetches everyone.
+  assert.deepEqual(store.projects, { p1: 1 });
+  assert.equal(store.all, 1);
   cleanups[0](); assert.equal(sources[0].closed, false);
   cleanups[1](); assert.equal(sources[0].closed, true);
   hooks.useTasksEvents(); assert.equal(sources.length, 2);

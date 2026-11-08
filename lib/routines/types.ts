@@ -84,7 +84,8 @@ export type RoutineSummary = Routine & {
 /** A finished or open run with enough context to show in ambient lists. */
 export type RoutineRunActivity = RoutineRun & { routineName: string; projectId: string; projectName: string };
 
-export type SessionOrigin = { kind: "routine"; routineId: string; runId: string; routineName: string };
+/** `trigger` is absent on sessions persisted before it was recorded. */
+export type SessionOrigin = { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger };
 
 export const ROUTINE_SCHEDULE_PRESETS = [
   { id: "none", label: "No schedule", cron: null },

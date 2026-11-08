@@ -211,16 +211,18 @@ export async function deleteRoutine(id: string): Promise<void> {
   if (error) throw error;
 }
 
-async function listRoutineRows(opts: { projectId?: string } = {}): Promise<(Routine & { projectName: string })[]> {
+/** Routines with their project name, in one query. */
+export async function listRoutineRows(opts: { projectId?: string; ids?: string[] } = {}): Promise<(Routine & { projectName: string })[]> {
   const client = db();
   if (!client) {
-    const rows = [...mem.values()].filter((r) => !opts.projectId || r.projectId === opts.projectId);
+    const rows = [...mem.values()].filter((r) => (!opts.projectId || r.projectId === opts.projectId) && (!opts.ids || opts.ids.includes(r.id)));
     const names = new Map<string, string>();
     for (const r of rows) if (!names.has(r.projectId)) names.set(r.projectId, (await getProject(r.projectId))?.name ?? "");
     return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((r) => ({ ...r, projectName: names.get(r.projectId) ?? "" }));
   }
   let q = client.from("routines").select(`${COLUMNS}, projects(name)`).order("created_at", { ascending: true });
   if (opts.projectId) q = q.eq("project_id", opts.projectId);
+  if (opts.ids) q = q.in("id", opts.ids);
   const { data, error } = await q;
   if (error) throw error;
   return (data as unknown as (Row & { projects: { name: string } | null })[]).map((r) => ({
@@ -252,13 +254,16 @@ export async function listRoutines(opts: { projectId?: string } = {}): Promise<R
     for (const run of runs) if (run.createdAt >= since && !run.error?.startsWith("Skipped")) today.set(run.routineId, (today.get(run.routineId) ?? 0) + 1);
   } else {
     // The latest few per routine is enough for the summary; today's count needs everything since midnight.
-    const [recent, todays] = await Promise.all([
+    // Open runs are read separately because skip rows can push one out of the recent window.
+    const [recent, open, todays] = await Promise.all([
       client.from("routine_runs").select(RUN_COLUMNS).in("routine_id", ids).order("created_at", { ascending: false }).limit(Math.max(50, ids.length * 5)),
+      client.from("routine_runs").select(RUN_COLUMNS).in("routine_id", ids).in("status", [...OPEN_RUN_STATUSES]),
       client.from("routine_runs").select("routine_id, error").in("routine_id", ids).gte("created_at", since),
     ]);
     if (recent.error) throw recent.error;
+    if (open.error) throw open.error;
     if (todays.error) throw todays.error;
-    runs = (recent.data as RunRow[]).map(toRun);
+    runs = [...new Map([...(recent.data as RunRow[]), ...(open.data as RunRow[])].map((row) => [row.id, toRun(row)])).values()];
     for (const t of todays.data) if (!t.error?.startsWith("Skipped")) today.set(t.routine_id, (today.get(t.routine_id) ?? 0) + 1);
   }
   return routines.map((r) => {

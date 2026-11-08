@@ -5,24 +5,19 @@ import type { ActivitySession } from "@/lib/ambient/types";
 import { handle } from "@/lib/api/http";
 import { ensureScheduler } from "@/lib/routines/scheduler";
 import type { RoutineRunActivity } from "@/lib/routines/types";
-import { getProject } from "@/lib/supabase/repo/projects";
-import { getRoutine, listRecentRuns } from "@/lib/supabase/repo/routines";
+import { listRecentRuns, listRoutineRows } from "@/lib/supabase/repo/routines";
 
 export const dynamic = "force-dynamic";
 
 /** Routine runs still open or finished in the last 10 minutes, with their routine and project names. */
 async function recentRuns(): Promise<RoutineRunActivity[]> {
   const runs = await listRecentRuns(new Date(Date.now() - 10 * 60_000));
-  const routines = new Map(await Promise.all([...new Set(runs.map((r) => r.routineId))].map(async (id) => [id, await getRoutine(id)] as const)));
-  const projects = new Map(
-    await Promise.all(
-      [...new Set([...routines.values()].flatMap((r) => (r ? [r.projectId] : [])))].map(async (id) => [id, await getProject(id)] as const),
-    ),
-  );
+  if (!runs.length) return [];
+  const routines = new Map((await listRoutineRows({ ids: [...new Set(runs.map((r) => r.routineId))] })).map((r) => [r.id, r]));
   return runs.flatMap((run) => {
     const routine = routines.get(run.routineId);
     if (!routine) return [];
-    return [{ ...run, routineName: routine.name, projectId: routine.projectId, projectName: projects.get(routine.projectId)?.name ?? "" }];
+    return [{ ...run, routineName: routine.name, projectId: routine.projectId, projectName: routine.projectName }];
   });
 }
 

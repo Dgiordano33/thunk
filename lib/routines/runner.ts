@@ -113,7 +113,7 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
     await updateRun(run.id, { workspaceId: workspace.id, status: "running", startedAt: new Date().toISOString() });
     run = { ...run, workspaceId: workspace.id, status: "running", startedAt: new Date().toISOString() };
 
-    const origin: SessionOrigin = { kind: "routine", routineId: routine.id, runId: run.id, routineName: routine.name };
+    const origin: SessionOrigin = { kind: "routine", routineId: routine.id, runId: run.id, routineName: routine.name, trigger };
     live = await startSession({ workspaceId: workspace.id, model: routine.model, permissionMode: routine.permissionMode, title: routine.name, origin });
     slot.sessionId = live.id;
     // The run row references the session; make sure it exists before linking (persistence upserts it again).
@@ -219,12 +219,12 @@ async function finalize(input: FinalizeInput) {
     const report = project ? await collectReport({ project, workspace, markdown: input.markdown }) : null;
     if (report?.outcome === "blocked" && status === "succeeded") report.summary = `Blocked: ${report.summary}`;
 
-    // A fresh worktree that produced nothing is removed; anything else is kept (archived) for review.
+    // A fresh worktree whose successful run produced nothing is removed; anything else, failures included, is kept (archived) for review.
     const ephemeral = routine.targetKind === "ephemeral" && workspace && workspace.slug !== "main";
     const nothing = report && (report.diffStat?.files ?? 0) === 0 && !report.prUrl;
     let workspaceKept = true;
-    if (ephemeral && status === "succeeded") {
-      if (nothing) {
+    if (ephemeral) {
+      if (status === "succeeded" && nothing) {
         if (input.sessionId) closeSession(input.sessionId);
         workspaceKept = !(await removeWorkspace(workspace.id, { removeWorktree: true, removeMemory: true }).then(
           () => true,

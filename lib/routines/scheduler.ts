@@ -1,12 +1,13 @@
 import "server-only";
 import { ensureDeliveryPolling } from "@/lib/projects/delivery";
 import { getSession, isTerminated } from "@/lib/agent";
+import { archiveWorkspace } from "@/lib/projects/archive";
 import { projectEvents } from "@/lib/projects/events";
-import { listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
+import { getRoutine, listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
 import { computeNextRun } from "./cron";
 import { pollDeliveryRoutines } from "./delivery-poll";
 import { pollPullRequests } from "./pr-poll";
-import { fire, isRunActive, startRun } from "./runner";
+import { fire, isRunActive } from "./runner";
 import { routinesState as state } from "./state";
 import { onRunFailed } from "./triggers";
 import type { Routine } from "./types";
@@ -40,8 +41,8 @@ async function tick() {
 
 /**
  * After a restart: runs that were open belong to sessions that died with the old process, so mark them
- * interrupted. Missed cron slots fire once when the routine asks to catch up; every schedule is
- * recomputed from now.
+ * interrupted and archive their per-run worktrees. Missed cron slots fire once when the routine asks to
+ * catch up, under the same guardrails as any other firing; every schedule is recomputed from now.
  */
 async function reconcile() {
   for (const run of await listOpenRuns()) {
@@ -49,12 +50,14 @@ async function reconcile() {
     const live = run.sessionId ? getSession(run.sessionId) : null;
     if (live && !isTerminated(live)) continue;
     await updateRun(run.id, { status: "failed", finishedAt: new Date().toISOString(), error: "Interrupted: Thunk server restarted" });
+    if (run.workspaceId && (await getRoutine(run.routineId))?.targetKind === "ephemeral")
+      await archiveWorkspace(run.workspaceId).catch((err) => console.error("[thunk] routine archive failed", err));
   }
   const now = new Date();
   for (const routine of await listDueRoutines(now)) {
     await updateRoutine(routine.id, { nextRunAt: nextRunIso(routine, now) });
     if (routine.catchUp === "once") {
-      await startRun(routine, "cron", { catchUp: true, missedAt: routine.nextRunAt }).catch((err) =>
+      await fire(routine, "cron", { catchUp: true, missedAt: routine.nextRunAt }).catch((err) =>
         console.error(`[thunk] routine "${routine.name}" catch-up failed`, err),
       );
     }
