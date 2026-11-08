@@ -22,8 +22,8 @@ function Mark({ className }: { className?: string }) {
   );
 }
 
-/** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes and Routines. */
-export function CivToolbar({ cityCount, noteCount, routineCount }: { cityCount: number; noteCount: number; routineCount: number }) {
+/** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes, Routines and the Vault. */
+export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount }: { cityCount: number; noteCount: number; routineCount: number; vaultCount: number }) {
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
   const pathname = usePathname();
@@ -33,7 +33,7 @@ export function CivToolbar({ cityCount, noteCount, routineCount }: { cityCount: 
   }, []);
 
   useEffect(() => {
-    if (pathname === "/notes") setExpanded(false);
+    if (pathname === "/notes" || pathname === "/vault") setExpanded(false);
   }, [pathname, setExpanded]);
 
   useEffect(() => {
@@ -49,6 +49,7 @@ export function CivToolbar({ cityCount, noteCount, routineCount }: { cityCount: 
     { href: "/", label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
     { href: "/notes", label: "Notes", icon: "scroll", detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
     { href: "/routines", label: "Routines", icon: "hourglass", detail: `${routineCount} active` },
+    { href: "/vault", label: "Vault", icon: "chest", detail: `${vaultCount} ${vaultCount === 1 ? "item" : "items"}` },
   ];
 
   return (

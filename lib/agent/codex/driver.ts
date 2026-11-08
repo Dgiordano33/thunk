@@ -3,6 +3,9 @@ import "server-only";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { tasksTools } from "@/lib/tasks/tools";
+import { vaultDirOf } from "@/lib/vault/dir";
+import { listItems } from "@/lib/vault/store";
+import { vaultTools } from "@/lib/vault/tools";
 import { tasksForWorkspace } from "@/lib/tasks/service";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -147,11 +150,12 @@ function toolResult(item: Item): { content: string; isError: boolean } {
  */
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, workspaceMemory, notes, tasks] = await Promise.all([
+  const [projectMemory, workspaceMemory, notes, tasks, vaultItems] = await Promise.all([
     readMemory(projectMemoryFile(project.root)),
     readMemory(workspaceMemoryFile(project.root, workspace.slug)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
+    listItems(vaultDirOf(project)).catch(() => []),
   ]);
   const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
@@ -166,12 +170,12 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
 
   const developerInstructions = [
     CANVAS_PROMPT,
-    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project]),
+    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id });
+  const taskTools = [...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;

@@ -102,7 +102,7 @@ Bottom controls use `bottom-18` during development to clear development tooling 
 
 ## Town styling
 
-[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop opens the project's routines (standing orders) and shows the amber `!` when a routine run waits on approval.
+[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. Town centers represent workspaces; fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop opens the project's routines (standing orders) and shows the amber `!` when a routine run waits on approval; the vault opens the project's uploads, lights its lamps while Claude is reading, and shows the amber `!` when an upload failed.
 
 Town navigation replaces the homepage title with a “World” back link and project name. Selecting an object opens a panel through a query parameter, retaining the surrounding map context and camera position.
 
@@ -135,6 +135,15 @@ Routines reuse the existing surfaces rather than adding new ones. The town Works
 - Forms and tables use `components/ui/*`; trigger and flag toggles are the same pressed-state chips as note flags. `.pixel` stays on headings and eyebrows.
 - Run status badges use the session header's palette: amber pulse for running, amber for “Needs you”, emerald for succeeded, red for failed, muted for cancelled and skipped.
 - Sessions started by a routine show a “Routine · <name>” badge in the session header, the hourglass pixel icon in session lists, and “· Routine” in the field panel eyebrow.
+
+## Vault
+
+The Vault reuses the Notes shapes. The town Vault is a `wide` `TownPanel` titled “Holdings”: a narrow left pane (dashed drop zone with **Paste text**, search, item rows) and a detail pane; `/vault` is the same two-pane body inside one `CivPanel` under the HUD, with a project picker that also sets the upload target. The selected item is in `?item=` (`<projectId>/<itemId>` on `/vault` when browsing all projects).
+
+- Item rows match note rows: a lucide kind icon, a 13px title, an 11px “time · size · file name” line, and either an idea count (lightbulb, `tabular-nums`) or a status badge.
+- Status badges use the routine palette: muted for queued, amber pulse for “Reading”, emerald for ready, red for failed.
+- The detail title is a 20px bold auto-growing field; the summary renders as `.doc-prose` markdown; tags are secondary badges. Ideas are bordered cards with an outline kind badge (bronze idea, sky insight, violet question, emerald action) and **→ Note** / **→ Task** buttons that turn into ghost links once used.
+- The empty detail state is the only parchment surface, with the `chest` pixel icon.
 
 ## Map artwork and states
 
