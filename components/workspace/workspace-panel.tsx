@@ -10,7 +10,7 @@ import { api } from "@/lib/client/api";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { DiffComment } from "@/lib/review/diff";
 import type { Artifact } from "@/lib/documents/types";
-import type { ChangedFile, WorkspaceChanges } from "@/lib/projects/types";
+import type { ChangedFile, RepoChanges, WorkspaceChanges } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 import { ReviewDiff, SendReview, useDiffComments } from "./diff-review";
@@ -35,6 +35,8 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
   const counts = useTaskCounts()[projectId];
   const openCount = (counts?.project ?? 0) + (counts?.byWorkspace[workspaceId] ?? 0);
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
+  // Every repo of a multi-repo workspace (primary first); empty for single-repo workspaces.
+  const [repos, setRepos] = useState<RepoChanges[]>([]);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
   const status = useSession((s) => s.status);
@@ -42,8 +44,8 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
     () =>
       api
         .workspaceChanges(workspaceId)
-        .then((r) => setChanges(r.changes))
-        .catch(() => setChanges(null)),
+        .then((r) => { setChanges(r.changes); setRepos(r.repos ?? []); })
+        .catch(() => { setChanges(null); setRepos([]); }),
     [workspaceId],
   );
   useEffect(() => {
@@ -52,7 +54,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
     return () => clearInterval(t);
   }, [loadChanges, status]);
 
-  const fileCount = changes?.files.length ?? 0;
+  const fileCount = repos.length ? repos.reduce((n, r) => n + (r.changes?.files.length ?? 0), 0) : (changes?.files.length ?? 0);
 
   return (
     <Tabs value={["sessions", "artifacts", "changes", "tasks", "notes", "checkpoints"].includes(tab) ? tab : "sessions"} onValueChange={(value) => {
@@ -86,7 +88,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
       <TabsContent value="changes" className="min-h-0 flex-1">
         {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
         <div className="h-full overflow-y-auto">
-          <Changes workspaceId={workspaceId} changes={changes} />
+          <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
         </div>
       </TabsContent>
       <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>
@@ -169,18 +171,40 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-function Changes({ workspaceId, changes }: { workspaceId: string; changes: WorkspaceChanges | null | undefined }) {
+function Changes({ workspaceId, changes, repos }: { workspaceId: string; changes: WorkspaceChanges | null | undefined; repos: RepoChanges[] }) {
   const { comments, setComments, storageError } = useDiffComments(workspaceId);
   const remove = (ids: string[]) => setComments((all) => all.filter((c) => !ids.includes(c.id)));
+  const add = (c: DiffComment) => setComments((all) => [...all, c]);
   if (changes === undefined) return <Loading />;
-  if (changes === null) return <Empty text="Not a git repository." />;
+  const multi = repos.length > 0;
+  if (!multi && changes === null) return <Empty text="Not a git repository." />;
+  const sections: RepoChanges[] = multi ? repos.filter((r) => r.changes) : [{ id: "primary", name: "", cwd: "", changes }];
 
   return (
     <div className="flex flex-col">
       {storageError && <p role="alert" className="p-3 text-xs text-destructive">{storageError}</p>}
       <SendReview workspaceId={workspaceId} comments={comments} onSent={remove} />
+      {sections.map((repo) => (
+        <RepoChangesSection key={repo.id} workspaceId={workspaceId} repo={repo} multi={multi} comments={comments} onAdd={add} onRemove={(id) => remove([id])} />
+      ))}
+    </div>
+  );
+}
+
+function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemove }: {
+  workspaceId: string;
+  repo: RepoChanges;
+  multi: boolean;
+  comments: DiffComment[];
+  onAdd: (c: DiffComment) => void;
+  onRemove: (id: string) => void;
+}) {
+  const changes = repo.changes!;
+  return (
+    <section className={cn(multi && "border-b last:border-b-0")} aria-label={multi ? `Changes in ${repo.name}` : undefined}>
       <div className="flex items-baseline gap-2 px-4 pt-3 pb-2">
-        <span className="text-sm font-medium">
+        {multi && <span className="truncate text-sm font-semibold" title={repo.cwd}>{repo.name}</span>}
+        <span className={cn("shrink-0 text-sm", multi ? "text-muted-foreground" : "font-medium")}>
           {changes.files.length} file{changes.files.length === 1 ? "" : "s"} changed
         </span>
         <span className="text-muted-foreground truncate text-xs">vs {changes.baseLabel}</span>
@@ -194,11 +218,21 @@ function Changes({ workspaceId, changes }: { workspaceId: string; changes: Works
       ) : (
         <ul className="flex flex-col pb-2">
           {changes.files.map((f) => (
-            <ChangedFileRow key={f.path} workspaceId={workspaceId} file={f} comments={comments} onAdd={(c) => setComments((all) => [...all, c])} onRemove={(id) => remove([id])} />
+            <ChangedFileRow
+              key={f.path}
+              workspaceId={workspaceId}
+              repoId={multi ? repo.id : undefined}
+              // In a multi-repo review, comments name the repo so the agent knows where the file is.
+              label={multi ? `${repo.name}: ${f.path}` : f.path}
+              file={f}
+              comments={comments}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -209,7 +243,7 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   D: { label: "Deleted", className: "text-red-600 dark:text-red-400" },
 };
 
-function ChangedFileRow({ workspaceId, file, comments, onAdd, onRemove }: { workspaceId: string; file: ChangedFile; comments: DiffComment[]; onAdd: (c: DiffComment) => void; onRemove: (id: string) => void }) {
+function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onRemove }: { workspaceId: string; repoId?: string; label: string; file: ChangedFile; comments: DiffComment[]; onAdd: (c: DiffComment) => void; onRemove: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [diff, setDiff] = useState<string | null>(null);
   const slash = file.path.lastIndexOf("/");
@@ -222,11 +256,11 @@ function ChangedFileRow({ workspaceId, file, comments, onAdd, onRemove }: { work
     if (!open) return;
     let cancelled = false;
     api
-      .workspaceFileDiff(workspaceId, file.path)
+      .workspaceFileDiff(workspaceId, file.path, repoId)
       .then((r) => { if (!cancelled) setDiff(r.diff); })
       .catch((err: Error) => { if (!cancelled) setDiff(`Couldn't load diff: ${err.message}`); });
     return () => { cancelled = true; };
-  }, [open, workspaceId, file]);
+  }, [open, workspaceId, file, repoId]);
 
   return (
     <li>
@@ -252,7 +286,7 @@ function ChangedFileRow({ workspaceId, file, comments, onAdd, onRemove }: { work
       </button>
       {open && (
         <div className="bg-background mx-2 mb-2 overflow-x-auto rounded-md border">
-          {diff === null ? <Loading /> : <ReviewDiff diff={diff} path={file.path} comments={comments} onAdd={onAdd} onRemove={onRemove} />}
+          {diff === null ? <Loading /> : <ReviewDiff diff={diff} path={label} comments={comments} onAdd={onAdd} onRemove={onRemove} />}
         </div>
       )}
     </li>

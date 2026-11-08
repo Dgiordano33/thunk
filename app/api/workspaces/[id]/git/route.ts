@@ -12,19 +12,20 @@ export const GET = handle(async (_req: Request, ctx: Context) => {
   if (!wctx) throw new HttpError(404, "Workspace not found");
   return Response.json({ git: await workspaceGitState(wctx) });
 });
-const Body = z.object({ action: z.enum(["sync", "rebase", "merge", "squash", "merge-abort", "rebase-abort", "rebase-continue"]), deleteAfter: z.boolean().default(false) });
+const Body = z.object({ action: z.enum(["sync", "rebase", "merge", "squash", "merge-abort", "rebase-abort", "rebase-continue"]), deleteAfter: z.boolean().default(false), repoId: z.string().min(1).optional() });
 export const POST = handle(async (req: Request, ctx: Context) => {
   const { id } = await ctx.params;
   const wctx = await getWorkspaceContext(id);
   if (!wctx) throw new HttpError(404, "Workspace not found");
   const body = await parseBody(req, Body);
   if (body.deleteAfter && body.action !== "merge" && body.action !== "squash") throw new HttpError(400, "Cleanup requires merge or squash");
+  if (body.deleteAfter && body.repoId) throw new HttpError(400, "Cleanup merges every repo; leave out repoId");
   if (listLiveSessions().some((live) => live.meta.projectId === wctx.project.id && ["starting", "running", "awaiting"].includes(live.meta.status))) {
     throw new HttpError(409, "Stop active agents in this project before changing Git history");
   }
   try {
     await withWorkspaceLock(`project:${wctx.project.id}`, async () => {
-      await withWorkspaceLock(id, () => workspaceGitAction(wctx, body.action));
+      await withWorkspaceLock(id, () => workspaceGitAction(wctx, body.action, body.repoId));
       if (body.deleteAfter) {
         await removeWorkspace(id, { removeWorktree: true, removeMemory: true });
         for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);

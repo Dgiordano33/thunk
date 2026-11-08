@@ -121,6 +121,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     compact
                     projectId={p.id}
                     projectName={p.name}
+                    repos={p.extraRepos}
                     className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-100"
                   />
                 </div>

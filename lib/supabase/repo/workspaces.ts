@@ -1,6 +1,7 @@
 import "server-only";
 import type { Workspace, WorkspaceSummary } from "@/lib/projects/types";
 import { db } from "../server";
+import { memForgetWorkspace, memWorkspaceRepos, toWorkspaceRepos, WORKSPACE_REPO_COLUMNS, type WorkspaceRepoRow } from "./project-repos";
 import { deleteTask, listTasks } from "./tasks";
 import { emitTask } from "@/lib/tasks/events";
 
@@ -16,9 +17,10 @@ type Row = {
   status: string;
   created_at: string;
   updated_at: string;
+  workspace_repos?: WorkspaceRepoRow[] | null;
 };
 
-const COLUMNS = "id, project_id, name, slug, cwd, branch, worktree_path, base_ref, status, created_at, updated_at";
+const COLUMNS = `id, project_id, name, slug, cwd, branch, worktree_path, base_ref, status, created_at, updated_at, workspace_repos(${WORKSPACE_REPO_COLUMNS})`;
 
 function toWorkspace(r: Row): Workspace {
   return {
@@ -30,6 +32,7 @@ function toWorkspace(r: Row): Workspace {
     branch: r.branch,
     worktreePath: r.worktree_path,
     baseRef: r.base_ref,
+    extraRepos: toWorkspaceRepos(r.workspace_repos),
     status: r.status as Workspace["status"],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -37,18 +40,21 @@ function toWorkspace(r: Row): Workspace {
 }
 
 // Memory-only mode (no Supabase): workspaces live for the server's lifetime. Pinned to globalThis for HMR.
+// Stored without extraRepos; `withRepos` attaches the current list on every read.
 const g = globalThis as typeof globalThis & { __thunkMemWorkspaces?: Map<string, Workspace> };
 const mem = (g.__thunkMemWorkspaces ??= new Map());
+const withRepos = (w: Workspace): Workspace => ({ ...w, extraRepos: memWorkspaceRepos(w.id) });
 
+/** Insert the workspace row. Its extra repo checkouts are added separately with insertWorkspaceRepos. */
 export async function insertWorkspace(
-  input: Omit<Workspace, "id" | "createdAt" | "updatedAt" | "status"> & { id?: string },
+  input: Omit<Workspace, "id" | "createdAt" | "updatedAt" | "status" | "extraRepos"> & { id?: string },
 ): Promise<Workspace> {
   const client = db();
   const now = new Date().toISOString();
   if (!client) {
-    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, status: "active", createdAt: now, updatedAt: now };
+    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, extraRepos: [], status: "active", createdAt: now, updatedAt: now };
     mem.set(ws.id, ws);
-    return ws;
+    return withRepos(ws);
   }
   const { data, error } = await client
     .from("workspaces")
@@ -70,7 +76,10 @@ export async function insertWorkspace(
 
 export async function getWorkspace(id: string): Promise<Workspace | null> {
   const client = db();
-  if (!client) return mem.get(id) ?? null;
+  if (!client) {
+    const w = mem.get(id);
+    return w ? withRepos(w) : null;
+  }
   const { data, error } = await client.from("workspaces").select(COLUMNS).eq("id", id).maybeSingle();
   if (error) throw error;
   return data ? toWorkspace(data) : null;
@@ -79,11 +88,10 @@ export async function getWorkspace(id: string): Promise<Workspace | null> {
 export async function findWorkspace(projectId: string, by: { slug?: string; cwd?: string }): Promise<Workspace | null> {
   const client = db();
   if (!client) {
-    return (
-      [...mem.values()].find(
-        (w) => w.projectId === projectId && (by.slug ? w.slug === by.slug : true) && (by.cwd ? w.cwd === by.cwd : true),
-      ) ?? null
+    const found = [...mem.values()].find(
+      (w) => w.projectId === projectId && (by.slug ? w.slug === by.slug : true) && (by.cwd ? w.cwd === by.cwd : true),
     );
+    return found ? withRepos(found) : null;
   }
   let q = client.from("workspaces").select(COLUMNS).eq("project_id", projectId);
   if (by.slug) q = q.eq("slug", by.slug);
@@ -119,6 +127,7 @@ export async function deleteWorkspace(id: string): Promise<void> {
   const client = db();
   if (!client) {
     for (const task of await listTasks({ workspaceId: id })) await deleteTask(task.id);
+    memForgetWorkspace(id);
     mem.delete(id);
     return;
   }
@@ -143,7 +152,7 @@ async function queryWorkspaces(projectId: string | null): Promise<WorkspaceSumma
     return [...mem.values()]
       .filter((w) => projectId === null || w.projectId === projectId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((w) => ({ ...w, sessionCount: 0 }));
+      .map((w) => ({ ...withRepos(w), sessionCount: 0 }));
   }
   // sessions(count) aggregates in Postgres instead of shipping every session row.
   let q = client.from("workspaces").select(`${COLUMNS}, sessions(count)`).order("updated_at", { ascending: false });
@@ -151,7 +160,7 @@ async function queryWorkspaces(projectId: string | null): Promise<WorkspaceSumma
   const { data, error } = await q;
   if (error) throw error;
   return data.map((r) => ({
-    ...toWorkspace(r),
+    ...toWorkspace(r as unknown as Row),
     sessionCount: (r.sessions as unknown as { count: number }[])[0]?.count ?? 0,
   }));
 }

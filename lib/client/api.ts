@@ -12,6 +12,8 @@ import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
 import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind } from "@/lib/notes/types";
 import type {
   Project,
+  ProjectRepo,
+  RepoChanges,
   ProjectSummary,
   Workspace,
   WorkspaceChanges,
@@ -45,10 +47,25 @@ export const api = {
     post<{ path: string | null }>("/api/fs/pick-folder", body),
   renameProject: (id: string, name: string) => call(`/api/projects/${id}`, { method: "PATCH", json: { name } }),
   deleteProject: (id: string) => call(`/api/projects/${id}`, { method: "DELETE" }),
+  // Extra repos of a multi-repo project
+  listProjectRepos: (id: string) => call<{ repos: ProjectRepo[] }>(`/api/projects/${id}/repos`),
+  addProjectRepo: (
+    id: string,
+    body: { source?: "folder"; path: string; name?: string } | { source: "github"; url: string; parent: string; name?: string },
+  ) => post<{ repo: ProjectRepo }>(`/api/projects/${id}/repos`, body),
+  removeProjectRepo: (id: string, repoId: string) => call(`/api/projects/${id}/repos/${repoId}`, { method: "DELETE" }),
   // Workspaces
   listWorkspaces: (projectId: string) =>
     call<{ workspaces: WorkspaceSummary[] }>(`/api/workspaces?projectId=${encodeURIComponent(projectId)}`),
-  createWorkspace: (body: { projectId: string; name?: string; worktree?: boolean; branch?: string; baseRef?: string }) =>
+  createWorkspace: (body: {
+    projectId: string;
+    name?: string;
+    worktree?: boolean;
+    branch?: string;
+    baseRef?: string;
+    /** Extra repos to include; all of the project's when omitted. */
+    repoIds?: string[];
+  }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
@@ -61,14 +78,20 @@ export const api = {
     | { action: "input"; processId: string; data?: string; cols?: number; rows?: number }
   ) => post(`/api/workspaces/${id}/runtime`, body),
   workspaceGit: (id: string) => call<{ git: Awaited<ReturnType<typeof workspaceGitState>> }>(`/api/workspaces/${id}/git`),
-  workspaceGitAction: (id: string, action: string, deleteAfter = false) =>
-    post<{ ok: boolean; deleted: boolean }>(`/api/workspaces/${id}/git`, { action, deleteAfter }),
+  /** Without `repoId` the action covers every repo in the workspace. */
+  workspaceGitAction: (id: string, action: string, deleteAfter = false, repoId?: string) =>
+    post<{ ok: boolean; deleted: boolean }>(`/api/workspaces/${id}/git`, { action, deleteAfter, ...(repoId ? { repoId } : {}) }),
   checkpoints: (id: string) => call<{ checkpoints: Checkpoint[] }>(`/api/workspaces/${id}/checkpoints`),
   rewind: (id: string, checkpointId: string) => post<{ recovery: Checkpoint }>(`/api/workspaces/${id}/checkpoints`, { checkpointId }),
-  workspaceChanges: (id: string) => call<{ changes: WorkspaceChanges | null }>(`/api/workspaces/${id}/changes`),
-  workspaceFileDiff: (id: string, path: string) =>
-    call<{ diff: string }>(`/api/workspaces/${id}/changes?path=${encodeURIComponent(path)}`),
-  workspacePr: (id: string) => call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`),
+  /** `repos` lists every repo of a multi-repo workspace (primary first); empty for single-repo ones. */
+  workspaceChanges: (id: string) =>
+    call<{ changes: WorkspaceChanges | null; repos: RepoChanges[] }>(`/api/workspaces/${id}/changes`),
+  workspaceFileDiff: (id: string, path: string, repoId?: string) =>
+    call<{ diff: string }>(
+      `/api/workspaces/${id}/changes?path=${encodeURIComponent(path)}${repoId ? `&repo=${encodeURIComponent(repoId)}` : ""}`,
+    ),
+  workspacePr: (id: string, repoId?: string) =>
+    call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr${repoId ? `?repo=${encodeURIComponent(repoId)}` : ""}`),
   workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>

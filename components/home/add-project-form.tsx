@@ -262,7 +262,7 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
 const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
 /** A folder chosen via the native picker: shows the path, click to choose another. */
-function FolderPicker({ value, picking, onPick }: { value: string; picking: boolean; onPick: () => void }) {
+export function FolderPicker({ value, picking, onPick }: { value: string; picking: boolean; onPick: () => void }) {
   return (
     <button
       type="button"
@@ -283,7 +283,7 @@ function FolderPicker({ value, picking, onPick }: { value: string; picking: bool
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-xs font-medium">{label}</span>

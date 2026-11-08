@@ -2,6 +2,7 @@ import "server-only";
 import { stat } from "node:fs/promises";
 import { git, tryGit } from "./git";
 import type { WorkspaceContext } from "./index";
+import { workspaceRepoTargets, type RepoTarget } from "./repo-targets";
 
 export type GitAction = "sync" | "rebase" | "merge" | "squash" | "merge-abort" | "rebase-abort" | "rebase-continue";
 
@@ -16,24 +17,38 @@ async function operation(cwd: string) {
   return null;
 }
 
-export async function workspaceGitState(ctx: WorkspaceContext) {
-  if (ctx.project.kind !== "repo") return null;
-  const { workspace: ws, project } = ctx;
-  const base = await baseRef(ctx);
-  const counts = (await tryGit(ws.cwd, ["rev-list", "--left-right", "--count", `${base}...HEAD`]))?.split(/\s+/).map(Number);
+const canManage = (t: RepoTarget) => Boolean(t.worktreePath && t.branch && t.defaultBranch);
+
+async function repoGitState(t: RepoTarget) {
+  const base = t.defaultBranch ? await baseRef(t) : null;
+  const counts = base ? (await tryGit(t.cwd, ["rev-list", "--left-right", "--count", `${base}...HEAD`]))?.split(/\s+/).map(Number) : null;
   return {
-    base, target: project.defaultBranch, canManage: Boolean(ws.worktreePath && ws.branch && project.defaultBranch),
+    id: t.id, name: t.name, primary: t.primary,
+    base, target: t.defaultBranch, canManage: canManage(t),
     ahead: counts?.[1] ?? 0, behind: counts?.[0] ?? 0,
-    operation: await operation(ws.cwd), rootOperation: await operation(project.root),
-    conflicts: (await git(ws.cwd, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean),
-    rootConflicts: (await git(project.root, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean),
+    operation: await operation(t.cwd), rootOperation: await operation(t.root),
+    conflicts: (await git(t.cwd, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean),
+    rootConflicts: (await git(t.root, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean),
   };
 }
 
-async function baseRef(ctx: WorkspaceContext) {
-  const branch = ctx.project.defaultBranch;
-  if (!branch) throw new Error("Project has no default branch");
-  return await tryGit(ctx.workspace.cwd, ["rev-parse", "--verify", `refs/remotes/origin/${branch}`])
+export type RepoGitState = Awaited<ReturnType<typeof repoGitState>>;
+
+/**
+ * Git state of every repo in the workspace (`repos`). The top-level fields repeat the first repo's
+ * (the primary repo when the project root is one), for single-repo callers.
+ */
+export async function workspaceGitState(ctx: WorkspaceContext) {
+  const targets = workspaceRepoTargets(ctx);
+  if (!targets.length) return null;
+  const repos = await Promise.all(targets.map(repoGitState));
+  return { ...repos[0], repos };
+}
+
+async function baseRef(t: RepoTarget) {
+  const branch = t.defaultBranch;
+  if (!branch) throw new Error(`${t.name ?? "Project"} has no default branch`);
+  return await tryGit(t.cwd, ["rev-parse", "--verify", `refs/remotes/origin/${branch}`])
     ? `refs/remotes/origin/${branch}` : `refs/heads/${branch}`;
 }
 
@@ -43,59 +58,101 @@ async function assertClean(cwd: string) {
 }
 
 export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
-  const { workspace: ws, project } = ctx;
-  if (!ws.worktreePath) return;
-  await assertClean(ws.cwd);
-  if (!project.defaultBranch) throw new Error("Set a default branch before deleting a worktree");
-  // A squash has different commit IDs, and the target may have moved on since. The work is merged
-  // when merging HEAD into the target would change nothing.
-  const target = `refs/heads/${project.defaultBranch}`;
-  const ancestor = await tryGit(ws.cwd, ["merge-base", "--is-ancestor", "HEAD", target]);
-  const merged = ancestor !== null || await tryGit(ws.cwd, ["merge-tree", "--write-tree", target, "HEAD"]) === await git(ws.cwd, ["rev-parse", `${target}^{tree}`]);
-  if (!merged) {
-    throw new Error("Workspace contains unmerged commits. Merge back before deleting it; Archive keeps the worktree.");
+  for (const t of workspaceRepoTargets(ctx)) {
+    if (!t.worktreePath) continue;
+    const where = t.primary ? "" : ` in ${t.name}`;
+    await assertClean(t.cwd);
+    if (!t.defaultBranch) throw new Error(`Set a default branch${where} before deleting a worktree`);
+    // A squash has different commit IDs, and the target may have moved on since. The work is merged
+    // when merging HEAD into the target would change nothing.
+    const target = `refs/heads/${t.defaultBranch}`;
+    const ancestor = await tryGit(t.cwd, ["merge-base", "--is-ancestor", "HEAD", target]);
+    const merged = ancestor !== null || await tryGit(t.cwd, ["merge-tree", "--write-tree", target, "HEAD"]) === await git(t.cwd, ["rev-parse", `${target}^{tree}`]);
+    if (!merged) {
+      throw new Error(`Workspace contains unmerged commits${where}. Merge back before deleting it; Archive keeps the worktree.`);
+    }
   }
 }
 
-export async function workspaceGitAction(ctx: WorkspaceContext, action: GitAction) {
-  const { workspace: ws, project } = ctx;
-  if (!ws.worktreePath || !ws.branch || !project.defaultBranch) throw new Error("This action requires a branch workspace with a default branch");
+/** Checks one repo can take a sync/rebase/merge/squash, without changing anything. */
+async function assertReady(t: RepoTarget, action: GitAction) {
+  const where = t.primary ? "" : ` (${t.name})`;
+  if (await git(t.cwd, ["branch", "--show-current"]) !== t.branch) throw new Error(`Workspace branch changed${where}; restore its original branch first`);
+  await assertClean(t.cwd);
+  if (action === "merge" || action === "squash") {
+    await assertClean(t.root);
+    if (await git(t.root, ["branch", "--show-current"]) !== t.defaultBranch) {
+      throw new Error(`Check out ${t.defaultBranch} in ${t.primary ? "the project root" : t.root} before merging back`);
+    }
+  }
+}
+
+async function applyToRepo(t: RepoTarget, action: GitAction, label: string) {
+  const defaultBranch = t.defaultBranch!;
+  const branch = t.branch!;
   if (action === "merge-abort") {
-    const cwd = await operation(project.root) === "merge" ? project.root : ws.cwd;
+    const cwd = await operation(t.root) === "merge" ? t.root : t.cwd;
     await git(cwd, ["merge", "--abort"]);
     return;
   }
   if (action === "rebase-abort" || action === "rebase-continue") {
     // Avoid opening an editor in the HTTP request.
-    await git(ws.cwd, ["-c", "core.editor=true", "rebase", action === "rebase-abort" ? "--abort" : "--continue"]);
+    await git(t.cwd, ["-c", "core.editor=true", "rebase", action === "rebase-abort" ? "--abort" : "--continue"]);
     return;
   }
-  if (await git(ws.cwd, ["branch", "--show-current"]) !== ws.branch) throw new Error("Workspace branch changed; restore its original branch first");
-  await assertClean(ws.cwd);
   if (action === "sync" || action === "rebase") {
-    if (await tryGit(project.root, ["remote", "get-url", "origin"])) {
-      await git(project.root, ["fetch", "origin", project.defaultBranch]);
+    if (await tryGit(t.root, ["remote", "get-url", "origin"])) {
+      await git(t.root, ["fetch", "origin", defaultBranch]);
     }
-    const base = await baseRef(ctx);
-    await git(ws.cwd, action === "sync" ? ["merge", "--no-edit", base] : ["rebase", base]);
+    const base = await baseRef(t);
+    await git(t.cwd, action === "sync" ? ["merge", "--no-edit", base] : ["rebase", base]);
     return;
-  }
-  await assertClean(project.root);
-  if (await git(project.root, ["branch", "--show-current"]) !== project.defaultBranch) {
-    throw new Error(`Check out ${project.defaultBranch} in the project root before merging back`);
   }
   if (action === "merge") {
-    await git(project.root, ["merge", "--no-edit", "--", ws.branch]);
+    await git(t.root, ["merge", "--no-edit", "--", branch]);
   } else {
     try {
-      await git(project.root, ["merge", "--squash", "--", ws.branch]);
-      if (await git(project.root, ["diff", "--cached", "--name-only"])) {
-        await git(project.root, ["commit", "-m", `Merge workspace ${ws.name}`]);
+      await git(t.root, ["merge", "--squash", "--", branch]);
+      if (await git(t.root, ["diff", "--cached", "--name-only"])) {
+        await git(t.root, ["commit", "-m", `Merge workspace ${label}`]);
       }
     } catch (err) {
       // The target was clean: restore it if squashing or its commit hook fails; source commits stay intact.
-      await git(project.root, ["reset", "--merge", "HEAD"]);
+      await git(t.root, ["reset", "--merge", "HEAD"]);
       throw err;
+    }
+  }
+}
+
+/**
+ * Run a git action across the workspace's repos. With `repoId`, only that repo. Otherwise
+ * sync/rebase/merge/squash apply to every branch repo (all are checked first, so a dirty repo stops
+ * the action before anything changes), and abort/continue apply to each repo with that operation open.
+ */
+export async function workspaceGitAction(ctx: WorkspaceContext, action: GitAction, repoId?: string | null) {
+  const all = workspaceRepoTargets(ctx).filter(canManage);
+  const targets = repoId ? all.filter((t) => t.id === repoId) : all;
+  if (!targets.length) throw new Error("This action requires a branch workspace with a default branch");
+
+  if (action === "merge-abort" || action === "rebase-abort" || action === "rebase-continue") {
+    const want = action === "merge-abort" ? "merge" : "rebase";
+    const open = [];
+    for (const t of targets) {
+      const ops = [await operation(t.cwd), ...(want === "merge" ? [await operation(t.root)] : [])];
+      if (ops.includes(want)) open.push(t);
+    }
+    // Single-repo callers may ask without an operation open; let git report what's wrong.
+    for (const t of open.length ? open : targets.slice(0, 1)) await applyToRepo(t, action, ctx.workspace.name);
+    return;
+  }
+
+  for (const t of targets) await assertReady(t, action);
+  for (const t of targets) {
+    try {
+      await applyToRepo(t, action, ctx.workspace.name);
+    } catch (err) {
+      if (targets.length === 1) throw err;
+      throw new Error(`${t.name}: ${(err as Error).message}`);
     }
   }
 }
