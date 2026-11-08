@@ -17,6 +17,8 @@ import { TILE_H, TILE_W, mapSize, toIso, type Cell, type Grid, type Tile } from 
 import { CROP_NAMES, CROP_THRESHOLDS, type CropStage } from "@/lib/world/town";
 import {
   FarmField,
+  FarmhouseSprite,
+  TOWN_CENTER_SIZE,
   TOWN_HALL_SIZE,
   TownHallSprite,
   VAULT_SIZE,
@@ -29,19 +31,19 @@ import {
   WorkshopSprite,
 } from "./sprites";
 
-export type TownWorkspace = {
+export type TownFarmhouse = {
   id: string;
   label: string;
   branch: string | null;
-  capital: boolean;
   hue: number;
   sessionCount: number;
+  lastActivityAt: string;
   overflow: number;
   col: number;
   row: number;
 };
 
-export type TownFarm = {
+export type TownField = {
   id: string;
   workspaceId: string;
   title: string | null;
@@ -49,11 +51,12 @@ export type TownFarm = {
   createdAt: string;
   costUsd: number;
   stage: CropStage;
+  fallow: boolean;
   col: number;
   row: number;
 };
 
-export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop" | "tasks" | "vault"; note?: string };
+export type TownSelection = { session?: string; ws?: string; building?: "center" | "library" | "workshop" | "tasks" | "vault"; note?: string };
 
 /** The Vault building: where it stands and whether anything is being read or failed. */
 export type TownVault = Cell & { busy: boolean; failed: boolean };
@@ -61,8 +64,6 @@ export type TownVault = Cell & { busy: boolean; failed: boolean };
 type Live = { status: ActivitySession["status"]; pending: number } | undefined;
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
-// Ring four is clear of farms (rings two/three) and neighbouring workspace centers.
-const TOWN_HALL_OFFSET = { col: 4, row: 1 };
 const ALERT = "pixel absolute left-1/2 flex size-5 -translate-x-1/2 items-center justify-center text-sm font-bold shadow-[2px_2px_0_#0005]";
 
 export function TownView({
@@ -70,8 +71,10 @@ export function TownView({
   projectName,
   grid,
   tiles,
-  workspaces,
   farms,
+  fields,
+  center,
+  townHall,
   library,
   workshop,
   vault,
@@ -82,8 +85,10 @@ export function TownView({
   projectName: string;
   grid: Grid;
   tiles: Tile[][];
-  workspaces: TownWorkspace[];
-  farms: TownFarm[];
+  farms: TownFarmhouse[];
+  fields: TownField[];
+  center: Cell;
+  townHall: Cell;
   library: Cell;
   workshop: Cell;
   vault: TownVault;
@@ -97,10 +102,8 @@ export function TownView({
   const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending }]));
   const base = `/p/${projectId}`;
   const { w, h } = mapSize(grid);
-  const capital = workspaces.find((ws) => ws.capital) ?? workspaces[0];
-  const townHall = { col: (capital?.col ?? library.col + 2) + TOWN_HALL_OFFSET.col, row: (capital?.row ?? library.row - 1) + TOWN_HALL_OFFSET.row };
-  const focus = capital ? { ...toIso(capital.col, capital.row, grid), z: 1.1 } : undefined;
-  const hueOf = new Map(workspaces.map((ws) => [ws.id, ws.hue]));
+  const focus = { ...toIso(center.col, center.row, grid), z: 1.1 };
+  const hueOf = new Map(farms.map((ws) => [ws.id, ws.hue]));
 
   return (
     <IsoViewport
@@ -111,28 +114,32 @@ export function TownView({
       stage={
         <>
           <TerrainLayer tiles={tiles} grid={grid} />
-          {farms.map((farm) => (
+          {fields.map((farm) => (
             <Farm
               key={farm.id}
               farm={farm}
               grid={grid}
               hue={hueOf.get(farm.workspaceId) ?? 0}
-              workspace={workspaces.find((ws) => ws.id === farm.workspaceId)?.label ?? ""}
+              workspace={farms.find((ws) => ws.id === farm.workspaceId)?.label ?? ""}
               live={live.get(farm.id)}
               selected={selected.session === farm.id}
               href={`${base}?session=${farm.id}`}
             />
           ))}
-          {workspaces.map((ws) => (
-            <TownCenter
+          {farms.map((ws) => (
+            <Farmhouse
               key={ws.id}
               ws={ws}
+              running={sessions.some(s => s.workspaceId === ws.id && (s.status === "running" || s.status === "starting"))}
               grid={grid}
               selected={selected.ws === ws.id}
               href={`${base}?ws=${ws.id}`}
               attention={sessions.some((s) => s.workspaceId === ws.id && (s.pending > 0 || s.status === "awaiting" || s.status === "error"))}
             />
           ))}
+          <Building cell={center} grid={grid} name="Town center" href={`${base}?building=center`} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || s.status === "awaiting" || s.status === "error"))}>
+            <TownCenterSprite />
+          </Building>
           <Building
             cell={library}
             grid={grid}
@@ -219,7 +226,7 @@ const Farm = memo(function Farm({
   selected,
   href,
 }: {
-  farm: TownFarm;
+  farm: TownField;
   grid: Grid;
   hue: number;
   workspace: string;
@@ -229,9 +236,10 @@ const Farm = memo(function Farm({
 }) {
   const reduced = useReducedMotion();
   const { x, y } = toIso(farm.col, farm.row, grid);
-  const running = live?.status === "running" || live?.status === "starting";
-  const alert = live && (live.pending > 0 || live.status === "awaiting" || live.status === "error");
-  const status = alert ? (live.status === "error" ? "Session error" : "Needs you") : running ? "Working" : live ? "Idle" : "Resting";
+  const fallow = live ? live.status === "closed" || live.status === "error" : farm.fallow;
+  const running = !fallow && (live?.status === "running" || live?.status === "starting");
+  const alert = !fallow && live && (live.pending > 0 || live.status === "awaiting" || live.status === "error");
+  const status = fallow ? "Fallow · session closed" : alert ? (live.status === "error" ? "Session error" : "Needs you") : running ? "Working" : live ? "Idle" : "Resting";
   return (
     <HoverCard openDelay={150} closeDelay={60}>
       <HoverCardTrigger asChild>
@@ -245,7 +253,7 @@ const Farm = memo(function Farm({
           style={{ left: x - TILE_W / 2, top: y - TILE_H / 2, width: TILE_W, height: TILE_H, zIndex: farm.col + farm.row }}
         >
           <span className="block transition-[filter] group-hover:brightness-115">
-            <FarmField stage={farm.stage} hue={hue} selected={selected} />
+            <FarmField fallow={fallow} stage={farm.stage} hue={hue} selected={selected} />
           </span>
         </Link>
       </HoverCardTrigger>
@@ -280,7 +288,7 @@ const Farm = memo(function Farm({
           <dt className="opacity-70">Status</dt>
           <dd className="text-right">{status}</dd>
           <dt className="opacity-70">Crop</dt>
-          <dd className="text-right">{CROP_NAMES[farm.stage]}</dd>
+          <dd className="text-right">{fallow ? "Fallow · session closed" : CROP_NAMES[farm.stage]}</dd>
           <dt className="opacity-70">Spend</dt>
           <dd className="text-right tabular-nums">{usd(farm.costUsd)}</dd>
           <dt className="opacity-70">Model</dt>
@@ -308,7 +316,7 @@ function Villager() {
   );
 }
 
-function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace; grid: Grid; selected: boolean; href: string; attention: boolean }) {
+function Farmhouse({ ws, grid, selected, href, attention, running }: { ws: TownFarmhouse; grid: Grid; selected: boolean; href: string; attention: boolean; running: boolean }) {
   const { x, y } = toIso(ws.col, ws.row, grid);
   const banner = `oklch(0.66 0.2 ${ws.hue})`;
   const delivery = useAmbient((s) => s.deliveries.find((d) => d.workspaceId === ws.id));
@@ -323,13 +331,13 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
           href={href}
           scroll={false}
           draggable={false}
-          aria-label={`${ws.capital ? "Capital town center" : "Town center"}: ${ws.label}${cue ? `, ${cue.label}` : ""}${delivery?.running ? ", dev server running" : ""}`}
+          aria-label={`Farmhouse: ${ws.label}${cue ? `, ${cue.label}` : ""}${delivery?.running ? ", dev server running" : ""}`}
           aria-current={selected ? "page" : undefined}
           className="group absolute flex flex-col items-center outline-none"
-          style={{ left: x, top: y + 10, transform: `translate(-50%, -${41 * SPRITE_SCALE}px)`, zIndex: ws.col + ws.row + 2 }}
+          style={{ left: x, top: y + 10, transform: `translate(-50%, -${26 * SPRITE_SCALE}px)`, zIndex: ws.col + ws.row + 2 }}
         >
           <span className={cn("relative block transition-transform duration-150 group-hover:-translate-y-0.5", selected && "drop-shadow-[0_0_6px_white]")}>
-            <TownCenterSprite hue={ws.hue} capital={ws.capital} running={delivery?.running} />
+            <FarmhouseSprite hue={ws.hue} running={running || delivery?.running} />
             {cue && <motion.span
               aria-hidden="true"
               className={cn("pixel absolute -right-1 top-0 border-l-2 border-white px-1.5 text-sm text-white shadow-sm", cue.kind === "draft" && "border border-dashed")}
@@ -349,15 +357,14 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
           </span>
           <span className="-mt-1">
             <Plate badge={ws.sessionCount} color={banner}>
-              {ws.capital ? "★ " : ""}
-              {ws.label}
+              {ws.label}{ws.branch && <span className="ml-1 opacity-70">· {ws.branch}</span>}
               {cue && <span className="ml-1.5 border-l border-white/40 pl-1.5" title={cue.label}>{pr ? `#${pr.number} ` : ""}{cue.symbol}</span>}
             </Plate>
           </span>
         </Link>
       </HoverCardTrigger>
       <Card>
-        <p className="pixel text-sm">{ws.capital ? "Capital · " : ""}{ws.label}</p>
+        <p className="pixel text-sm">{ws.label}</p>
         {(delivery?.status.branch || ws.branch) && <p className="truncate font-mono text-[11px] opacity-70">{delivery?.status.branch || ws.branch}</p>}
         {delivery && <div className="mt-2 space-y-1">
           {delivery.git && <p>↑{delivery.git.ahead ?? "?"} ahead · ↓{delivery.git.behind ?? "?"} behind{delivery.git.dirty ? " · uncommitted" : ""}</p>}
@@ -373,7 +380,8 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
           {ws.sessionCount} {ws.sessionCount === 1 ? "field" : "fields"}
           {ws.overflow > 0 && <span className="opacity-70"> ({ws.overflow} older not shown)</span>}
         </p>
-        <p className="pixel mt-2 text-right">{ws.capital ? "Project & workspace →" : "Workspace →"}</p>
+        <p className="mt-1 opacity-70">Last activity · {relativeTime(ws.lastActivityAt)}</p>
+        <p className="pixel mt-2 text-right">Workspace →</p>
       </Card>
     </HoverCard>
   );
@@ -447,7 +455,10 @@ function TownLegend() {
     <CivPanel className="w-56" bodyClassName="px-3 py-2 text-xs">
       <p className="pixel text-sm">Legend</p>
       <ul className="mt-1 grid gap-0.5">
-        <li>Town center = workspace (★ capital = main)</li>
+        <li>Town center = project</li>
+        <li>Farmhouse = workspace</li>
+        <li>Fallow field = closed session</li>
+        <li>Harvest: keep what this farm learned.</li>
         <li>Field = session, fenced in its workspace&apos;s colour</li>
         <li>Library = notes · Workshop = routines · Town hall = tasks · Vault = uploads</li>
       </ul>

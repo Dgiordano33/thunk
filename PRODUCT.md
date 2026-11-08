@@ -24,6 +24,8 @@ Thunk treats the context around agents as the product. Plans, tasks, notes, sour
 
 ## Operating Context
 
+Project memory is also Claude’s auto-memory, so what agents learn on their own is durable. Workspace memory is the task log. Harvest moves what a workspace learned into the project before the workspace goes. Deletion preserves remaining memory and notes in the project granary.
+
 - **Hierarchy:** a project is a git repo or folder, a workspace is a task inside a project (in place or in its own git worktree), and a session is one chat in a workspace.
 - **Context artifacts:** notes and notebooks (including repo notebooks whose files stay the source of truth), project and workspace memory, tasks, and the Vault of uploaded source material. Agents can read this context, and can write to notes, memory, and tasks.
 - **Document turns:** an assistant's final prose becomes an editable document. The person edits it or comments on it and sends revisions, and plans from plan mode follow the same flow.
@@ -49,7 +51,7 @@ Thunk treats the context around agents as the product. Plans, tasks, notes, sour
 
 - **Notifications / Inbox:** server-created records of requests and outcomes across projects. Action notifications resolve when their cause clears; informational updates resolve when read or dismissed.
 
-Use Project, Workspace, Session, Notes, Tasks, Routines, Vault, and Library. Within the map, projects appear as cities and towns, workspaces as town centers, and sessions as fields. The Library building holds notes, the Workshop holds routines, the Town hall holds tasks, and the Vault building holds uploads.
+Use Project, Workspace, Session, Notes, Tasks, Routines, Vault, and Library. Within the map, projects appear as cities on the world map and as a town center up close, workspaces as farms, and sessions as fields. Closed sessions are fallow fields; archived workspaces are listed in the Town center. The Library building holds notes, the Workshop holds routines, the Town hall holds tasks, and the Vault building holds uploads.
 
 **Undecided**
 

@@ -44,7 +44,8 @@ const scaffold = (x: number, y: number, w: number, h: number) => [
 export const TOWN_CENTER_SIZE = { w: 48, h: 44 } as const;
 
 /** Age of Empires-style town center: stone footing, timber hall, tall roof, banner. The capital gets corner towers. */
-export function TownCenterSprite({ hue, capital, running = false }: { hue: number; capital: boolean; running?: boolean }) {
+export function TownCenterSprite({ running = false }: { running?: boolean }) {
+  const hue = 250;
   const { w, h } = TOWN_CENTER_SIZE;
   const roofColor = `oklch(0.52 0.15 ${hue})`;
   const roofShade = `oklch(0.42 0.13 ${hue})`;
@@ -52,7 +53,7 @@ export function TownCenterSprite({ hue, capital, running = false }: { hue: numbe
   return (
     <Pixels w={w} h={h}>
       <ellipse cx={24} cy={41} rx={22} ry={3} fill="oklch(0 0 0 / 0.2)" />
-      {capital && [...tower(2, 40, roofColor), ...tower(39, 40, roofColor)]}
+      {[...tower(2, 40, roofColor), ...tower(39, 40, roofColor)]}
       {/* Stone footing */}
       {r(6, 32, 36, 9, STONE)}
       {r(6, 39, 36, 2, STONE_DARK)}
@@ -181,11 +182,11 @@ const CROP_COLORS: Record<CropStage, string[]> = {
 const CROP_HEIGHT: Record<CropStage, number> = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4 };
 
 /** A tilled field the size of one tile: soil, furrows, crops by stage, and a fence in the workspace's colour. */
-export function FarmField({ stage, hue, selected }: { stage: CropStage; hue: number; selected: boolean }) {
+export function FarmField({ stage, hue, selected, fallow }: { stage: CropStage; hue: number; selected: boolean; fallow: boolean }) {
   const W = TILE_W, H = TILE_H;
   const diamond = `${W / 2},1 ${W - 1},${H / 2} ${W / 2},${H - 1} 1,${H / 2}`;
   const rows = [0.18, 0.34, 0.5, 0.66, 0.82];
-  const colors = CROP_COLORS[stage];
+  const colors = CROP_COLORS[fallow ? 0 : stage];
   const height = CROP_HEIGHT[stage];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} shapeRendering="crispEdges" className="pixel overflow-visible" aria-hidden="true">
@@ -243,5 +244,20 @@ export function TownHallSprite() {
     {r(30, 26, 3, 1, DOOR)}
     {r(30, 28, 2, 1, DOOR)}
     {r(11, 31, 18, 1, STONE)}
+  </Pixels>;
+}
+
+export const FARMHOUSE_SIZE = { w: 28, h: 28 } as const;
+
+export function FarmhouseSprite({ hue, running = false }: { hue: number; running?: boolean }) {
+  return <Pixels w={28} h={28}>
+    <ellipse cx={14} cy={26} rx={13} ry={2} fill="oklch(0 0 0 / 0.2)" />
+    {r(4, 14, 20, 12, WALL)}
+    {r(4, 24, 20, 2, STONE_DARK)}
+    {r(20, 5, 3, 10, BRICK)}
+    {roof(14, 14, 26, 10, `oklch(0.52 0.15 ${hue})`, `oklch(0.42 0.13 ${hue})`)}
+    {r(12, 19, 5, 7, DOOR)}
+    {r(6, 17, 3, 4, running ? WINDOW : DOOR)}
+    {running && <g className="motion-safe:animate-pulse">{r(20, 1, 3, 2, STONE)}{r(22, -2, 4, 2, STONE)}</g>}
   </Pixels>;
 }

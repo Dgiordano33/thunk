@@ -198,3 +198,8 @@ async function refreshRepoWatches() {
     for (const listener of state.listeners) listener({ scope: { kind: "repos", id }, noteId: "*", kind: "removed" });
   }
 }
+
+/** Explicit changes from actions need not wait for the filesystem debounce. */
+export function emitNote(event: NoteEvent) {
+  for (const listener of state.listeners) listener(event);
+}

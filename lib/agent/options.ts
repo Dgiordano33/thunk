@@ -50,12 +50,12 @@ export function hierarchyPrompt(
     ...extraReposPrompt(workspace),
     "",
     "Two memory scopes, both plain markdown files you may read and edit with your file tools:",
-    `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.`,
-    `- Workspace memory${provider === "claude" ? " (your auto-memory directory)" : ""}: \`${wmDir}\`${provider === "codex" ? " (keep it in MEMORY.md there)" : ""}. Shared by every session in this workspace: what the task is, what has been done, what's next, open questions. Other sessions in this workspace read it, so keep it current.`,
+    `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.${provider === "claude" ? " This is also your auto-memory directory, so what you save on your own lands here." : ""}`,
+    `- Workspace task log: \`${wmDir}\`${provider === "codex" ? " (keep it in MEMORY.md there)" : ""}. Shared by every session in this workspace: what the task is, what has been done, what's next, open questions. Read MEMORY.md here at the start of a task and update it as you go.`,
     "",
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];
-  if (projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
+  if (provider === "codex" && projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
   if (notes) lines.push("", notesPrompt(notes));
   lines.push("", tasksPrompt(tasks));
   if (vault) lines.push("", vaultPrompt(vault.items, vault.dir));
@@ -80,7 +80,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // Extra repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
+    additionalDirectories: [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
@@ -97,10 +97,10 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // Load the project's CLAUDE.md + .claude/settings(.local).json like Claude Code does in a repo,
     // but not ~/.claude (global plugins/hooks). Our permissionMode still wins over defaultMode.
     settingSources: ["project", "local"],
-    // Auto-memory is per workspace, so every session in it shares one MEMORY.md.
+    // Auto-memory is durable project knowledge shared across workspaces.
     settings: {
       autoMemoryEnabled: true,
-      autoMemoryDirectory: workspaceMemoryDir(project.root, workspace.slug),
+      autoMemoryDirectory: projectMemoryDir(project.root),
       permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`] },
     },
     // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.

@@ -27,7 +27,7 @@ export const POST = handle(async (req: Request, ctx: Context) => {
     await withWorkspaceLock(`project:${wctx.project.id}`, async () => {
       await withWorkspaceLock(id, () => workspaceGitAction(wctx, body.action, body.repoId));
       if (body.deleteAfter) {
-        await removeWorkspace(id, { removeWorktree: true, removeMemory: true });
+        await removeWorkspace(id, { removeWorktree: true });
         for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
       }
     });

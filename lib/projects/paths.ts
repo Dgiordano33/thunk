@@ -40,7 +40,7 @@ export function projectMemoryFile(root: string) {
   return path.join(projectMemoryDir(root), "MEMORY.md");
 }
 
-/** Workspace memory: Claude Code's auto-memory directory, pointed here so all sessions in the workspace share it. */
+/** Workspace memory: the shared task log, explicitly maintained by sessions. */
 export function workspaceMemoryDir(root: string, slug: string) {
   return path.join(projectDir(root), "workspaces", slug, "memory");
 }
@@ -67,4 +67,12 @@ export function workspaceNotesDir(root: string, slug: string) {
 /** Vault: one folder per uploaded item (original bytes + item.json), shared by every workspace in the project. */
 export function projectVaultDir(root: string) {
   return path.join(projectDir(root), "vault");
+}
+
+export function projectGranaryDir(root: string) {
+  return path.join(projectDir(root), "granary");
+}
+
+export function granaryEntryDir(root: string, slug: string, when: Date) {
+  return path.join(projectGranaryDir(root), `${slug}-${when.toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID()}`);
 }
