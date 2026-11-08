@@ -1,6 +1,7 @@
 import "server-only";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
 import { stat } from "node:fs/promises";
+import { reconcileDeclaredFolders } from "./folders";
 import { repoNoteDirs } from "./resolve";
 import path from "node:path";
 import { DATA_DIR, projectSlug } from "@/lib/projects/paths";
@@ -31,6 +32,10 @@ const state: Watch = (g.__thunkNotesWatch ??= { watcher: null, listeners: new Se
 
 const ROOT = path.join(DATA_DIR, "projects");
 const DEBOUNCE_MS = 150;
+/** Safety-net rescan for folders that appear later or are replaced without a `rename` reaching the watcher. */
+const FOLDER_RESCAN_MS = 60_000;
+/** Git replaces directories on checkout; re-watch soon after a watcher sees its own directory go. */
+const FOLDER_REPLACED_MS = 1000;
 
 async function refreshSlugs() {
   const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
@@ -135,21 +140,25 @@ export function subscribeNotes(listener: Listener) {
   };
 }
 
-/** Reconcile watches after registration and when git replaces a watched directory. */
+/** Reconcile watches after registration, on a slow tick, and soon after git replaces a watched directory. */
 export function refreshFolders(): Promise<void> {
   if (!state.listeners.size) return Promise.resolve();
   if (state.refreshing) return state.refreshing;
   state.refreshing = refreshRepoWatches().catch((err) => console.error("[thunk] repo notes watcher", err)).finally(() => {
     state.refreshing = undefined;
-    clearTimeout(state.folderRetry);
-    if (state.listeners.size) state.folderRetry = setTimeout(() => { void refreshFolders(); }, 5000);
+    scheduleFolderRefresh(FOLDER_RESCAN_MS);
   });
   return state.refreshing;
 }
 
+function scheduleFolderRefresh(delay: number) {
+  clearTimeout(state.folderRetry);
+  if (state.listeners.size) state.folderRetry = setTimeout(() => { void refreshFolders(); }, delay);
+}
+
 async function refreshRepoWatches() {
   const folders = (state.folders ??= new Map());
-  const projects = await listProjects();
+  const projects = await Promise.all((await listProjects()).map((p) => reconcileDeclaredFolders(p)));
   const wanted = new Set<string>();
   for (const project of projects) for (const folder of project.repoFolders) {
     if (!state.listeners.size) return;
@@ -165,8 +174,11 @@ async function refreshRepoWatches() {
       const emitFolder = () => {
         for (const listener of state.listeners) listener({ scope: dirs.scope, noteId: "*", kind: "changed" });
       };
-      const watcher = watch(dirs.notesDir, (_event, filename) => {
-        if (filename && !filename.toString().endsWith(".md") && existsSync(dirs.notesDir)) return;
+      const watcher = watch(dirs.notesDir, (event, filename) => {
+        const gone = !existsSync(dirs.notesDir);
+        // The directory itself was renamed or removed: this inode is stale, so re-watch whatever replaces it.
+        if (gone || (event === "rename" && filename === path.basename(dirs.notesDir))) scheduleFolderRefresh(FOLDER_REPLACED_MS);
+        if (filename && !filename.toString().endsWith(".md") && !gone) return;
         clearTimeout(state.pending.get(key));
         state.pending.set(key, setTimeout(() => { state.pending.delete(key); emitFolder(); }, 300));
       });
@@ -174,6 +186,7 @@ async function refreshRepoWatches() {
         console.error("[thunk] repo notebook watcher", err);
         watcher.close();
         folders.delete(folder.id);
+        scheduleFolderRefresh(FOLDER_REPLACED_MS);
       });
       folders.set(folder.id, { watcher, inode: info.ino, path: dirs.notesDir });
       emitFolder();

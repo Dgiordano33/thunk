@@ -95,7 +95,12 @@ export function NoteMetaBar({
           )}
         </div>
       )}
-      {note.source === "repo" && <p className="text-muted-foreground text-[11px]">{note.id}.md · Edits save to the file in the repo.</p>}
+      {note.source === "repo" && (
+        <p className="text-muted-foreground text-[11px]">
+          {note.id}.md · Edits save to the file in the repo.
+          {note.titleInFile === false && <> Renaming adds a <code className="font-mono">title:</code> line to its frontmatter.</>}
+        </p>
+      )}
       <p className="text-muted-foreground truncate font-mono text-[10px]" title={note.path}>
         {tildify(note.path)}
       </p>

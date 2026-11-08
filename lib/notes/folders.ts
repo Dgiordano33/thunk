@@ -4,7 +4,7 @@ import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
 import { readLifecycleConfig } from "@/lib/projects/lifecycle-config";
 import type { Project, RepoFolder } from "@/lib/projects/types";
-import { insertRepoFolder, listRepoFolders } from "@/lib/supabase/repo/repo-folders";
+import { insertRepoFolder } from "@/lib/supabase/repo/repo-folders";
 
 export function validateFolderPath(value: string) {
   if (path.isAbsolute(value) || value.includes("\\") || value.includes("\0") || value.split("/").some((p) => !p || p === "." || p === ".." || p === ".git"))
@@ -26,8 +26,13 @@ export async function resolveRepoFolder(project: Project, folder: Pick<RepoFolde
   return { checkoutRoot, notesDir: path.join(checkoutRoot, folder.path) };
 }
 
-export async function withRepoFolders<T extends Project>(project: T): Promise<T> {
-  const folders = (await listRepoFolders(project.id)).filter((f) => f.repoId === null || project.extraRepos.some((r) => r.id === f.repoId));
+/**
+ * Register notebooks a checkout declares in thunk.json. This reads a file per checkout and may insert rows,
+ * so it runs only at project load, folder registration, and the watcher's tick; project getters stay pure.
+ */
+export async function reconcileDeclaredFolders<T extends Project>(project: T): Promise<T> {
+  const folders = [...project.repoFolders];
+  let added = false;
   for (const repo of [{ id: null, path: project.root }, ...project.extraRepos]) {
     const config = await readLifecycleConfig(repo.path).catch((err) => { console.error("[thunk] notebook config", err); return null; });
     for (const folderPath of config?.notebooks ?? []) {
@@ -35,10 +40,11 @@ export async function withRepoFolders<T extends Project>(project: T): Promise<T>
       try {
         await resolveRepoFolder(project, { repoId: repo.id, path: folderPath });
         folders.push(await insertRepoFolder({ projectId: project.id, repoId: repo.id, path: folderPath, label: folderPath }));
+        added = true;
       } catch (err) { console.error("[thunk] register declared notebook", err); }
     }
   }
-  return { ...project, repoFolders: folders };
+  return added ? { ...project, repoFolders: folders } : project;
 }
 
 export async function suggestRepoFolders(project: Project) {

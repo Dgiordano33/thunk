@@ -71,6 +71,7 @@ function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Da
     scope: dirs.scope,
     source: dirs.scope.kind === "repos" ? "repo" : "thunk",
     title,
+    ...(dirs.scope.kind === "repos" ? { titleInFile: fm.title !== null } : {}),
     path: file,
     pinned: fm.pinned,
     inject: fm.inject,

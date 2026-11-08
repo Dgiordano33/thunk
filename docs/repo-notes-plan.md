@@ -2,6 +2,8 @@
 
 Status: proposal · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-08
 
+> **Where the implementation landed.** The first implementation of this plan shipped in commit `d6a33da`, squash-merged under the unrelated title "Style shared buttons with bronze and parchment colors (#17)". Its second squashed commit, "Add repo notebooks with live editing and task write-back", is the repo-notebooks work. Search for that commit, not for "repo notebooks", when reading the history. The follow-up described under "Post-ship review fixes" below came in a later commit.
+
 ## Goal
 
 Many repos already carry their own agent planning material: plans in `.claude/plans/` or `docs/`, and a task board in `.claude/tasks/`. Today Thunk's Notes and Tasks live beside the repo under `~/.thunk`, so that material is invisible to the Library, to the brief composer in the orchestration plan, and to the Tasks tab, even though agents read and edit it constantly.
@@ -157,3 +159,14 @@ Total: roughly a week of focused work, mergeable after each step.
 - Should registering a folder be per project (shared across every workspace, as drafted) or should a workspace be able to add its own? Drafted: project only.
 - When a repo note is selected for an orchestration brief, should the brief snapshot its content or reference the live file? Drafted: reference, consistent with `~/.thunk` notes.
 - Should `thunk.json` `notebooks` be the only registration path, so the setup is committed and portable, with the UI writing to that file? Drafted: table plus file, file wins for additions.
+
+## Post-ship review fixes
+
+A review of the first implementation turned up these issues, now fixed:
+
+- **Project getters had side effects.** `getProject`, `getProjectByRoot`, and `listProjects` read `thunk.json` from every checkout and could insert folder rows on every call. They are now pure: one query for the project and one for its folders (`listProjects` fetches every project's folders in a single query). Declared notebooks are reconciled by `reconcileDeclaredFolders` in `lib/notes/folders.ts`, which runs at project load (`addProject`), when a repo is added (`addProjectRepo`), when a folder is registered, and on the watcher's tick.
+- **The repo watcher polled every 5 seconds.** The rescan in `lib/notes/watch.ts` now runs every 60 seconds as a safety net. A folder watcher that sees its own directory renamed or removed, which is what git does on checkout, triggers a re-watch about a second later.
+- **Repo scope lookups scanned every project.** `dirsForScope({ kind: "repos" })` now loads the folder with `getRepoFolder(id)` and then its one project.
+- **Title edits added frontmatter silently.** For a repo note with no `title:` key, the meta bar now says that renaming adds one.
+- `noteImportCandidates` no longer fetches the project twice.
+
