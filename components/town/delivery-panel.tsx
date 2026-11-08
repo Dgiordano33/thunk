@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { relativeTime } from "@/components/session/labels";
+import { DELIVERY_EVENT_LABELS } from "@/lib/projects/delivery-types";
 import { Button } from "@/components/ui/button";
 import { PrButton } from "@/components/workspace/pr-button";
 import { api } from "@/lib/client/api";
@@ -50,6 +52,15 @@ export function DeliveryPanel({ workspaceId }: { workspaceId: string }) {
     </div>
     {runtime && !runtime.scripts.run && <p className="text-muted-foreground">Configure a run script in thunk.json to start a local preview.</p>}
     {running && !runtime?.previewUrl && <p className="text-muted-foreground">Dev server running; waiting for its preview port.</p>}
+    {Boolean(delivery?.activity?.length) && <div className="border-t pt-3">
+      <h4 className="mb-2 font-medium">Recent delivery activity</h4>
+      <ol className="space-y-2">
+        {delivery!.activity.map((event) => <li key={event.id} className="flex items-start justify-between gap-2">
+          <a href={event.previewUrl || event.pr.url} target="_blank" rel="noreferrer" className="hover:underline">{DELIVERY_EVENT_LABELS[event.type]} · #{event.pr.number}</a>
+          <time dateTime={event.at} title={new Date(event.at).toLocaleString()} className="text-muted-foreground shrink-0">{relativeTime(event.at)}</time>
+        </li>)}
+      </ol>
+    </div>}
     {(error || runtime?.setupError) && <p role="alert" className="text-destructive">{error || runtime?.setupError}</p>}
   </div>;
 }

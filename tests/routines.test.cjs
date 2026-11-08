@@ -76,3 +76,11 @@ test("routine schema defaults and cross-field checks", () => {
   assert.match(messages, /workspace/);
   assert.equal(RoutinePatchSchema.safeParse({ enabled: false }).success, true);
 });
+
+
+test("delivery trigger schema and prompt payloads", () => {
+  const events = ["ci_failed", "review_requested", "deploy_ready"];
+  assert.deepEqual(RoutinePatchSchema.parse({ events }).events, events);
+  assert.equal(RoutinePatchSchema.safeParse({ events: ["unknown_delivery_event"] }).success, false);
+  assert.equal(prompt.renderPrompt("Check {{event.previewUrl}} for {{event.pr.branch}}", "deploy_ready", { previewUrl: "https://preview.example/", pr: { branch: "topic" } }), "Check https://preview.example/ for topic");
+});

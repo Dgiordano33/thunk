@@ -10,7 +10,7 @@ import { IsoViewport } from "@/components/world/iso-viewport";
 import { TerrainLayer } from "@/components/world/terrain-layer";
 import { LegendButton } from "@/components/world/world-map";
 import type { ActivitySession } from "@/lib/ambient/types";
-import { deliveryCue } from "@/lib/projects/delivery-types";
+import { DELIVERY_EVENT_LABELS, deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 import { TILE_H, TILE_W, mapSize, toIso, type Cell, type Grid, type Tile } from "@/lib/world/terrain";
@@ -345,6 +345,7 @@ function TownCenter({ ws, grid, selected, href, attention }: { ws: TownWorkspace
             <a href={pr.url} target="_blank" rel="noreferrer" className="underline">#{pr.number} · {cue?.label}</a>
             <p>{pr.reviewDecision === "APPROVED" ? "Review approved" : pr.reviewDecision === "CHANGES_REQUESTED" ? "Review changes requested" : pr.reviewDecision === "REVIEW_REQUIRED" ? "Review required" : "No review decision"}</p>
           </> : <p>{delivery.status.reason || "No open pull request"}</p>}
+          {delivery.activity?.[0] && <p>{DELIVERY_EVENT_LABELS[delivery.activity[0].type]} · {relativeTime(delivery.activity[0].at)}</p>}
           {delivery.running && <p>☀ Dev server running</p>}
           {preview && <a href={preview} target="_blank" rel="noreferrer" className="block underline">{delivery.deployedPreviewUrl ? "Deployed preview" : "Local preview"} →</a>}
         </div>}
