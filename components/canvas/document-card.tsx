@@ -127,7 +127,7 @@ function PlanActions({
             : "Plan proposal was cancelled.";
     return (
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-        {decision === "approve" && <CheckIcon className="size-3.5 text-emerald-600" />}
+        {decision === "approve" && <CheckIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
         {text}
       </p>
     );
