@@ -13,7 +13,7 @@ export type HarvestAction = "harvest" | "delete" | "merge";
 export function HarvestDialog({ workspaceId, label, data, action, onClose, onComplete }: {
   workspaceId: string; label: string; data: HarvestData; action: HarvestAction; onClose: () => void; onComplete: () => void;
 }) {
-  const [memory, setMemory] = useState(data.empty ? "" : data.memory);
+  const [memory, setMemory] = useState(data.suggested);
   const [noteIds, setNoteIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

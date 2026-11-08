@@ -82,9 +82,9 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
   const library = { col: center.col - 2, row: center.row + 1 };
   const workshop = { col: center.col + 1, row: center.row - 2 };
   // Behind the center, far enough back that its nameplate clears the center's banner.
-  const vault = { col: center.col - 2, row: center.row - 2 };
-
-  const townHall = { col: center.col + 2, row: center.row + 1 };
+  const vault = { col: center.col - 4, row: center.row - 3 };
+  // Off to the front-right, so it doesn't cover the center's nameplate.
+  const townHall = { col: center.col + 4, row: center.row + 1 };
 
   const key = (c: Cell) => `${c.col},${c.row}`;
   const reserved = new Set([key(library), key(workshop), key(vault), key(townHall)]);

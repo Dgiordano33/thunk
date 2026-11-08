@@ -30,6 +30,11 @@ The user may edit the document directly and leave comments on highlighted spans,
 - End with a short "Notes" section only if you need to explain something that doesn't belong in the document.
 `.trim();
 
+// Claude's auto-memory only loads this much of MEMORY.md, so a longer file is injected to keep its tail.
+const AUTO_MEMORY_MAX_LINES = 200;
+const AUTO_MEMORY_MAX_BYTES = 25_000;
+const exceedsAutoMemory = (memory: string) => memory.split("\n").length > AUTO_MEMORY_MAX_LINES || Buffer.byteLength(memory) > AUTO_MEMORY_MAX_BYTES;
+
 export function hierarchyPrompt(
   live: LiveSession,
   projectMemory: string,
@@ -55,7 +60,8 @@ export function hierarchyPrompt(
     "",
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];
-  if (provider === "codex" && projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
+  const memory = projectMemory.trim();
+  if (memory && (provider === "codex" || exceedsAutoMemory(memory))) lines.push("", "## Project memory (current contents)", memory);
   if (notes) lines.push("", notesPrompt(notes));
   lines.push("", tasksPrompt(tasks));
   if (vault) lines.push("", vaultPrompt(vault.items, vault.dir));
