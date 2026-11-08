@@ -1,6 +1,6 @@
 "use client";
 
-import { BellIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { BellIcon, ChartNoAxesColumnIcon, SettingsIcon, SunMoonIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { UsageSummary } from "@/lib/ambient/types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUi } from "@/lib/store/ui-store";
+import type { Theme } from "@/lib/theme";
 
 const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cost);
 
-/** Sidebar footer: app-wide settings (usage, desktop alerts). */
+/** Sidebar footer: app-wide settings. */
 export function SettingsMenu({ projects }: { projects: SidebarProject[] }) {
+  const theme = useUi((s) => s.theme);
+  const setTheme = useUi((s) => s.setTheme);
   const notifications = useAmbient((s) => s.notifications);
   const usageOpen = useAmbient((s) => s.usageOpen);
   const setUsageOpen = (open: boolean) => useAmbient.setState({ usageOpen: open });
@@ -67,6 +72,17 @@ export function SettingsMenu({ projects }: { projects: SidebarProject[] }) {
           </Button>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-64 p-1">
+          <div className="flex items-center gap-2 px-2 py-1 text-xs">
+            <SunMoonIcon className="size-4" /><span id="appearance-label">Appearance</span>
+            <Select value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+              <SelectTrigger size="sm" className="ml-auto w-24 text-xs" aria-labelledby="appearance-label"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => setUsageOpen(true)}>
             <ChartNoAxesColumnIcon /> Usage
           </Button>

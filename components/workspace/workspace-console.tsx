@@ -13,6 +13,13 @@ import "@xterm/xterm/css/xterm.css";
 
 type GitState = Awaited<ReturnType<typeof workspaceGitState>>;
 const KINDS: ProcessKind[] = ["shell", "setup", "run", "archive"];
+const LABELS: Record<ProcessKind, string> = { shell: "Terminal", setup: "Setup", run: "Run", archive: "Archive" };
+const EMPTY: Record<ProcessKind, string> = {
+  shell: "No shell running. Click New shell to open one.",
+  setup: "Setup hasn't run yet. Click Run setup to run the setup script.",
+  run: "Dev server isn't running. Click Start server to launch it.",
+  archive: "The archive hook hasn't run.",
+};
 
 export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
@@ -50,11 +57,15 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
     catch (err) { setError((err as Error).message); setOpen(true); }
     finally { setBusy(false); await refresh(); }
   };
-  const start = (kind: "setup" | "run" | "shell") => {
+  const start = (kind: Exclude<ProcessKind, "archive">) => {
     setTab(kind); setOpen(true);
     void act(() => api.workspaceProcess(workspaceId, { action: kind }));
   };
-  const run = state?.processes.find((p) => p.kind === "run");
+  const selectTab = (kind: ProcessKind | "preview") => {
+    if (open && tab === kind) { setOpen(false); return; }
+    setTab(kind); setOpen(true);
+    if (kind === "shell" && !state?.processes.some((p) => p.kind === "shell") && !state?.archived && !state?.busy) start("shell");
+  };
   const selected = state?.processes.find((p) => p.kind === tab);
   const blocked = busy || state?.busy || state?.archived;
   const conflicts = [...new Set([...(git?.conflicts ?? []), ...(git?.rootConflicts ?? [])])];
@@ -70,40 +81,34 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
 
   return (
     <section className="bg-background shrink-0 border-t" aria-label="Workspace tools" onKeyDown={(event) => event.stopPropagation()}>
-      <div className="flex min-h-10 flex-wrap items-center gap-2 px-3 py-1">
-        <Button size="sm" variant="ghost" onClick={() => { if (!open && tab === "shell" && !state?.processes.some((p) => p.kind === "shell") && !state?.archived && !state?.busy) start("shell"); else setOpen(!open); }} aria-expanded={open}>
-          <TerminalIcon className="size-3.5" /> Terminal {open ? <ChevronDownIcon /> : <ChevronUpIcon />}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => start("setup")} disabled={blocked}>
-          {state?.processes.find((p) => p.kind === "setup")?.running ? "Setting up…" : "Setup"}
-        </Button>
-        <Button size="sm" variant="ghost" disabled={blocked || !state?.scripts.run} onClick={() => run?.running
-          ? void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: "run" })) : start("run")}>
-          {run?.running ? <SquareIcon className="size-3" /> : <PlayIcon className="size-3" />} {run?.running ? "Stop server" : "Run"}
-        </Button>
-        {state?.port ? <span className="text-muted-foreground text-xs">:{state.port}</span> : null}
-        {state?.previewUrl && <>
-          <Button size="sm" variant="ghost" onClick={() => { setTab("preview"); setOpen(true); }}>Preview</Button>
-          <a href={state.previewUrl} target="_blank" rel="noreferrer" aria-label="Open dev server" className="text-muted-foreground"><ExternalLinkIcon className="size-3.5" /></a>
-        </>}
+      <div className="flex min-h-10 flex-wrap items-center gap-1 px-2 py-1">
+        {KINDS.map((kind) => {
+          const proc = state?.processes.find((p) => p.kind === kind);
+          if (kind === "archive" && !proc) return null;
+          return <Button key={kind} size="sm" variant={open && tab === kind ? "secondary" : "ghost"} onClick={() => selectTab(kind)} aria-pressed={open && tab === kind}>
+            {kind === "shell" && <TerminalIcon className="size-3.5" />}
+            {LABELS[kind]}
+            {proc && <span className={proc.running ? "text-emerald-600 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"} title={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span>}
+          </Button>;
+        })}
+        {state?.previewUrl && <Button size="sm" variant={open && tab === "preview" ? "secondary" : "ghost"} onClick={() => selectTab("preview")}>Preview</Button>}
         {(state?.setupError || error || conflicts.length > 0) && <span className="text-destructive text-xs">{conflicts.length ? `${conflicts.length} conflicts` : "Needs attention"}</span>}
         <span className="flex-1" />
-        {git?.target && <span className="text-muted-foreground text-xs">{git.ahead} ahead · {git.behind} behind {git.target}</span>}
+        {open && tab !== "preview" && (selected?.running
+          ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }))}>
+              <SquareIcon className="size-3" /> {tab === "run" ? "Stop server" : "Stop"}
+            </Button>
+          : tab !== "archive" && <Button size="sm" variant="outline" disabled={blocked || (tab === "run" && !state?.scripts.run)} onClick={() => start(tab)}>
+              {tab === "run" ? <><PlayIcon className="size-3" /> Start server</> : tab === "setup" ? "Run setup" : "New shell"}
+            </Button>)}
+        {tab === "run" && state?.port ? <span className="text-muted-foreground text-xs">:{state.port}</span> : null}
+        {tab === "preview" && state?.previewUrl && <a href={state.previewUrl} target="_blank" rel="noreferrer" aria-label="Open dev server in new tab" className="text-muted-foreground px-1"><ExternalLinkIcon className="size-3.5" /></a>}
+        {git?.target && !open && <span className="text-muted-foreground whitespace-nowrap px-1 text-xs" title={`${git.ahead} ahead, ${git.behind} behind ${git.target}`}>{git.ahead}↑ {git.behind}↓ {git.target}</span>}
+        <Button size="icon-sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Collapse console" : "Expand console"}>
+          {open ? <ChevronDownIcon /> : <ChevronUpIcon />}
+        </Button>
       </div>
       {open && <div className="flex h-[min(50vh,420px)] min-h-64 flex-col border-t">
-        <div className="flex flex-wrap items-center gap-1 border-b px-3 py-1">
-          {KINDS.map((kind) => {
-            const proc = state?.processes.find((p) => p.kind === kind);
-            return <Button key={kind} size="sm" variant={tab === kind ? "secondary" : "ghost"} onClick={() => setTab(kind)}>
-              {kind === "shell" ? "Terminal" : kind[0].toUpperCase() + kind.slice(1)}
-              {proc && <span className={proc.running ? "text-emerald-600" : proc.exitCode ? "text-destructive" : "text-muted-foreground"}>{proc.running ? "●" : `exit ${proc.exitCode}`}</span>}
-            </Button>;
-          })}
-          {state?.previewUrl && <Button size="sm" variant={tab === "preview" ? "secondary" : "ghost"} onClick={() => setTab("preview")}>Preview</Button>}
-          <span className="flex-1" />
-          {selected?.running && <Button size="sm" variant="ghost" onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }))}>Stop {selected.kind}</Button>}
-          {tab === "shell" && !selected?.running && <Button size="sm" variant="outline" disabled={blocked} onClick={() => start("shell")}>New shell</Button>}
-        </div>
         {(error || state?.setupError) && <p role="alert" className="text-destructive max-h-24 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{error || state?.setupError}</p>}
         {git?.canManage && <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
           <Select value={gitAction} onValueChange={setGitAction}>
@@ -132,13 +137,13 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
         {tab === "preview" ? state?.previewUrl
           ? <iframe title="Workspace preview" src={state.previewUrl} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-downloads" />
           : <p className="text-muted-foreground p-4 text-sm">Start the dev server to preview it.</p>
-          : <WorkspaceTerminal key={`${workspaceId}:${tab}:${selected?.id ?? "empty"}`} workspaceId={workspaceId} process={selected} />}
+          : <WorkspaceTerminal key={`${workspaceId}:${tab}:${selected?.id ?? "empty"}`} workspaceId={workspaceId} process={selected} empty={EMPTY[tab]} />}
       </div>}
     </section>
   );
 }
 
-function WorkspaceTerminal({ workspaceId, process: proc }: { workspaceId: string; process?: ProcessSnapshot }) {
+function WorkspaceTerminal({ workspaceId, process: proc, empty }: { workspaceId: string; process?: ProcessSnapshot; empty: string }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
   const current = useRef(proc);
@@ -181,11 +186,11 @@ function WorkspaceTerminal({ workspaceId, process: proc }: { workspaceId: string
           if (data.done) stream?.close();
         };
         stream.onerror = () => setError("Terminal disconnected. Reconnecting…");
-      } else terminal.writeln("Use New shell to open a terminal, or select Setup / Run to view script output.");
+      } else terminal.writeln(empty);
       teardown = () => { stream?.close(); observer.disconnect(); input.dispose(); terminal.dispose(); term.current = null; };
     })().catch((err) => setError(err.message));
     return () => { disposed = true; teardown(); };
-  }, [workspaceId]);
+  }, [workspaceId, empty]);
   return <div className="relative min-h-0 flex-1 bg-[#111113] p-2">
     {error && <p role="alert" className="absolute top-1 right-2 z-10 bg-red-950 p-1 text-xs text-white">{error}</p>}
     <div ref={host} className="h-full w-full" aria-label="Workspace terminal" />
