@@ -47,7 +47,8 @@ export function parseDeliveries(pages: { errors?: { message: string }[]; data?: 
     if (page.errors?.length) throw new Error(page.errors.map((e) => e.message).join("; "));
     if (!page.data?.repository) throw new Error("GitHub repository unavailable");
     return page.data.repository.pullRequests.nodes.filter((raw) => !raw.isCrossRepository).map((raw) => {
-      const { headRefName, baseRefName, isCrossRepository: _fork, commits, reviewDecision, ...pr } = raw;
+      const { headRefName, baseRefName, commits, reviewDecision } = raw;
+      const pr = { number: raw.number, url: raw.url, state: raw.state, title: raw.title, isDraft: raw.isDraft, mergeable: raw.mergeable, mergeStateStatus: raw.mergeStateStatus };
       const commit = commits.nodes[0]?.commit;
       const contexts = commit?.statusCheckRollup?.contexts;
       const checks = (contexts?.nodes ?? []).map(toCheck);
@@ -70,6 +71,7 @@ async function projectDelivery(project: Project) {
   let cached = state.projects.get(project.id);
   if (cached && Date.now() < cached.nextPoll) return cached;
   cached ??= { branches: [], nextPoll: 0, updatedAt: null, error: null };
+  const startedAt = Date.now();
   try {
     cached.branches = project.kind === "repo" && project.remote
       ? parseDeliveries(JSON.parse(await run("gh", ["api", "graphql", "--paginate", "--slurp", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${DELIVERY_QUERY}`], project.root)))
@@ -80,7 +82,7 @@ async function projectDelivery(project: Project) {
     const message = String((err as { stderr?: string }).stderr || err);
     cached.error = /ENOENT/.test(message) ? "GitHub CLI (gh) is not installed" : /auth login|not logged/i.test(message) ? "Run gh auth login to see delivery status" : "GitHub delivery refresh failed; showing last known status";
   }
-  cached.nextPoll = Date.now() + (!cached.error && cached.branches.some((b) => b.pr.checks.some((c) => c.state === "pending")) ? 10_000 : 60_000);
+  cached.nextPoll = startedAt + (!cached.error && cached.branches.some((b) => b.pr.checks.some((c) => c.state === "pending")) ? 10_000 : 60_000);
   state.projects.set(project.id, cached);
   return cached;
 }
@@ -132,7 +134,10 @@ async function tick() {
     }
     state.deliveries = deliveries;
     for (const id of state.projects.keys()) if (!projects.some((p) => p.id === id)) state.projects.delete(id);
-  } catch (err) { console.error("[thunk] delivery poll failed", err); }
+  } catch (err) {
+    console.error("[thunk] delivery poll failed", err);
+    state.deliveries = state.deliveries.map((d) => ({ ...d, error: "Delivery refresh failed; showing last known status" }));
+  }
   finally { state.ticking = false; }
 }
 
