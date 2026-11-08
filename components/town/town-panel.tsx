@@ -13,6 +13,7 @@ export function TownPanel({
   eyebrow,
   closeHref,
   wide,
+  compact,
   escapable = true,
   actions,
   children,
@@ -21,6 +22,8 @@ export function TownPanel({
   eyebrow?: string;
   closeHref: string;
   wide?: boolean;
+  /** Size to the content instead of filling the screen height. */
+  compact?: boolean;
   /** Chat uses Esc to interrupt a turn, so it opts out of Esc-to-close. */
   escapable?: boolean;
   actions?: React.ReactNode;
@@ -43,11 +46,11 @@ export function TownPanel({
     <aside
       className={cn(
         "absolute top-20 right-4 z-30 flex",
-        process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4",
+        !compact && (process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4"),
         wide ? "w-[min(720px,calc(100vw-2rem))]" : "w-[min(460px,calc(100vw-2rem))]",
       )}
     >
-      <CivPanel className="h-full w-full" bodyClassName="flex h-full min-h-0 flex-col">
+      <CivPanel className={cn("w-full", !compact && "h-full")} bodyClassName="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             {eyebrow && <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">{eyebrow}</p>}

@@ -228,7 +228,7 @@ const BUILDINGS = {
 export function BuildingPanel({ building, closeHref }: { building: keyof typeof BUILDINGS; closeHref: string }) {
   const b = BUILDINGS[building];
   return (
-    <TownPanel eyebrow="Under construction" title={b.title} closeHref={closeHref}>
+    <TownPanel eyebrow="Under construction" title={b.title} closeHref={closeHref} compact>
       <div className="px-4 py-6">
         <p className="text-sm leading-relaxed">{b.body}</p>
         <Link href={b.href} className="pixel mt-4 inline-block text-sm underline underline-offset-4">
