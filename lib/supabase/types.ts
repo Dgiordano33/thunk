@@ -14,6 +14,15 @@ export type Database = {
   }
   public: {
     Tables: {
+      project_repo_folders: {
+        Row: { id: string; project_id: string; repo_id: string | null; path: string; label: string; created_at: string; updated_at: string }
+        Insert: { id?: string; project_id: string; repo_id?: string | null; path: string; label: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; project_id?: string; repo_id?: string | null; path?: string; label?: string; created_at?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "project_repo_folders_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_repo_folders_repo_id_fkey"; columns: ["repo_id"]; isOneToOne: false; referencedRelation: "project_repos"; referencedColumns: ["id"] }
+        ]
+      }
       comments: {
         Row: {
           anchor: Json | null

@@ -8,17 +8,20 @@ import type { Note } from "./types";
 /** Cap on injected note text so a big notebook can't crowd out the conversation. */
 const INJECT_LIMIT = 24_000;
 
-export type SessionNotes = { projectDir: string; workspaceDir: string; project: Note[]; workspace: Note[] };
+export type SessionNotes = { projectDir: string; workspaceDir: string; project: Note[]; workspace: Note[]; repos: { label: string; dir: string; extra: boolean; notes: Note[] }[] };
 
 /** Ensure both notes dirs exist (agents may create files there) and read their notes, memory excluded. */
 export async function loadSessionNotes(project: Project, workspace: Workspace): Promise<SessionNotes> {
-  const dirs = notesDirsFor(project, workspace);
+  const dirs = await notesDirsFor(project, workspace);
   await Promise.all([mkdir(dirs.project.notesDir, { recursive: true }), mkdir(dirs.workspace.notesDir, { recursive: true })]);
   const [p, w] = await Promise.all([
     listNotes(dirs.project, { withMemory: false }).catch(() => []),
     listNotes(dirs.workspace, { withMemory: false }).catch(() => []),
   ]);
-  return { projectDir: dirs.project.notesDir, workspaceDir: dirs.workspace.notesDir, project: p, workspace: w };
+  return { projectDir: dirs.project.notesDir, workspaceDir: dirs.workspace.notesDir, project: p, workspace: w, repos: await Promise.all(dirs.repos.map(async (d) => {
+    const folder = project.repoFolders.find((f) => f.id === d.scope.id)!;
+    return { label: folder.label, dir: d.notesDir, extra: folder.repoId !== null, notes: await listNotes(d) };
+  })) };
 }
 
 const day = (iso: string) => iso.slice(0, 10);
@@ -44,7 +47,11 @@ export function notesPrompt(notes: SessionNotes) {
     lines.push("", `## ${label}`, ...(list.length ? list.map(indexLine) : ["- (none yet)"]));
   }
 
-  const injected = [...notes.project, ...notes.workspace].filter((n) => n.inject && n.markdown.trim());
+  if (notes.repos.length) {
+    lines.push("", "## Repo notebooks", "These files are in the main checkout. When working in a worktree, edit your branch's copy; the Library reflects main after merge.");
+    for (const repo of notes.repos) lines.push(`- ${repo.label} (\`${repo.dir}\`, in the repo, main checkout)`, ...repo.notes.map(indexLine));
+  }
+  const injected = [...notes.project, ...notes.workspace, ...notes.repos.flatMap((r) => r.notes)].filter((n) => n.inject && n.markdown.trim());
   if (injected.length) {
     lines.push("", "## Injected notes (current contents)");
     let budget = INJECT_LIMIT;

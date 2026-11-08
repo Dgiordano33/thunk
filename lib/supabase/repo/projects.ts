@@ -1,5 +1,7 @@
 import "server-only";
 import type { Project, ProjectSummary } from "@/lib/projects/types";
+import { forgetRepoFolders } from "./repo-folders";
+import { withRepoFolders } from "@/lib/notes/folders";
 import { db } from "../server";
 import { memForgetProject, memProjectRepos, PROJECT_REPO_COLUMNS, toProjectRepos, type ProjectRepoRow } from "./project-repos";
 import { deleteTask, listTasks } from "./tasks";
@@ -28,6 +30,7 @@ function toProject(r: Row): Project {
     remote: r.remote,
     defaultBranch: r.default_branch,
     extraRepos: toProjectRepos(r.project_repos),
+    repoFolders: [],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -39,16 +42,16 @@ const g = globalThis as typeof globalThis & { __thunkMemProjects?: Map<string, P
 const mem = (g.__thunkMemProjects ??= new Map());
 const withRepos = (p: Project): Project => ({ ...p, extraRepos: memProjectRepos(p.id) });
 
-export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "extraRepos">): Promise<Project> {
+export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "extraRepos" | "repoFolders">): Promise<Project> {
   const client = db();
   const now = new Date().toISOString();
   if (!client) {
     const existing = [...mem.values()].find((p) => p.root === input.root);
     const project: Project = existing
       ? { ...existing, ...input, updatedAt: now }
-      : { id: crypto.randomUUID(), ...input, extraRepos: [], createdAt: now, updatedAt: now };
+      : { id: crypto.randomUUID(), ...input, extraRepos: [], repoFolders: [], createdAt: now, updatedAt: now };
     mem.set(project.id, project);
-    return withRepos(project);
+    return withRepoFolders(withRepos(project));
   }
   const { data, error } = await client
     .from("projects")
@@ -66,29 +69,29 @@ export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "u
     .select(COLUMNS)
     .single();
   if (error) throw error;
-  return toProject(data);
+  return withRepoFolders(toProject(data));
 }
 
 export async function getProject(id: string): Promise<Project | null> {
   const client = db();
   if (!client) {
     const p = mem.get(id);
-    return p ? withRepos(p) : null;
+    return p ? withRepoFolders(withRepos(p)) : null;
   }
   const { data, error } = await client.from("projects").select(COLUMNS).eq("id", id).maybeSingle();
   if (error) throw error;
-  return data ? toProject(data) : null;
+  return data ? withRepoFolders(toProject(data)) : null;
 }
 
 export async function getProjectByRoot(root: string): Promise<Project | null> {
   const client = db();
   if (!client) {
     const p = [...mem.values()].find((p) => p.root === root);
-    return p ? withRepos(p) : null;
+    return p ? withRepoFolders(withRepos(p)) : null;
   }
   const { data, error } = await client.from("projects").select(COLUMNS).eq("root", root).maybeSingle();
   if (error) throw error;
-  return data ? toProject(data) : null;
+  return data ? withRepoFolders(toProject(data)) : null;
 }
 
 export async function updateProject(id: string, patch: { name?: string }): Promise<void> {
@@ -107,6 +110,7 @@ export async function deleteProject(id: string): Promise<void> {
   if (!client) {
     for (const task of await listTasks({ projectId: id })) await deleteTask(task.id);
     memForgetProject(id);
+    forgetRepoFolders(id);
     mem.delete(id);
     return;
   }
@@ -119,19 +123,19 @@ export async function deleteProject(id: string): Promise<void> {
 export async function listProjects(): Promise<ProjectSummary[]> {
   const client = db();
   if (!client) {
-    return [...mem.values()]
+    return Promise.all([...mem.values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((p) => ({ ...withRepos(p), workspaceCount: 0, sessionCount: 0, lastActivityAt: null }));
+      .map(async (p) => ({ ...await withRepoFolders(withRepos(p)), workspaceCount: 0, sessionCount: 0, lastActivityAt: null })));
   }
   const { data, error } = await client
     .from("projects")
     .select(`${COLUMNS}, workspaces(id, updated_at, sessions(count))`)
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return data.map((r) => {
+  return Promise.all(data.map(async (r) => {
     const ws = (r.workspaces ?? []) as unknown as { id: string; updated_at: string; sessions: { count: number }[] }[];
     const last = ws.map((w) => w.updated_at).sort().at(-1) ?? null;
     const sessionCount = ws.reduce((n, w) => n + (w.sessions[0]?.count ?? 0), 0);
-    return { ...toProject(r as unknown as Row), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
-  });
+    return { ...await withRepoFolders(toProject(r as unknown as Row)), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
+  }));
 }

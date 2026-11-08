@@ -6,8 +6,10 @@ import { getProject } from "@/lib/supabase/repo/projects";
 import { getWorkspace, listWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { getSessionRow } from "@/lib/supabase/repo/sessions";
 import { getTask, insertTask, listTasks, updateTask } from "@/lib/supabase/repo/tasks";
-import { dirsForScope } from "@/lib/notes/resolve";
-import { listNotes, tasksOf } from "@/lib/notes/store";
+import { dirsForScope, repoDirsFor, repoNoteDirs } from "@/lib/notes/resolve";
+import { listNotes, tasksOf, readNote, writeNote } from "@/lib/notes/store";
+import { repoTaskLink, parseRepoTaskLink } from "@/lib/notes/task-link";
+import { extractTasks } from "@/lib/notes/frontmatter";
 import { TaskInputSchema, TaskPatchSchema, type TaskInput, type TaskPatch } from "./schema";
 import type { NoteImportScope, Task, TaskTree } from "./types";
 
@@ -61,6 +63,10 @@ export async function patchTask(id: string, input: TaskPatch): Promise<Task> {
   }
   const result = await updateTask(id, changes);
   if (!result) throw new HttpError(404, "Task not found");
+  if (patch.status !== undefined && patch.status !== task.status) {
+    try { await writeBackRepoTask(result); }
+    catch (err) { console.error("[thunk] task board write-back", err); }
+  }
   return result;
 }
 export async function taskTree(projectId: string): Promise<TaskTree> {
@@ -90,10 +96,13 @@ export async function noteImportCandidates(scope: NoteImportScope) {
     projectId = scope.projectId;
     if (!await getProject(taskId(projectId))) throw new HttpError(404, "Project not found");
   }
+  const project = (await getProject(projectId))!;
+  const repoNotes = (await Promise.all((await repoDirsFor(project)).map((d) => listNotes(d)))).flat();
   const projectNotes = await listNotes(await dirsForScope({ kind: "projects", id: projectId }));
   const items = [
     ...tasksOf(workspaceNotes).map((item) => ({ ...item, workspaceId })),
     ...tasksOf(projectNotes).map((item) => ({ ...item, workspaceId: null })),
+    ...repoNotes.flatMap((note) => extractTasks(note.markdown).map((item) => ({ ...item, noteId: repoTaskLink(note.scope.id, note.id), workspaceId: null, folder: project.repoFolders.find((f) => f.id === note.scope.id)!.path }))),
   ];
   const occurrences = new Map<string, number>();
   const candidates = items.map((item) => {
@@ -101,13 +110,12 @@ export async function noteImportCandidates(scope: NoteImportScope) {
     const occurrence = occurrences.get(key) ?? 0;
     occurrences.set(key, occurrence + 1);
     // Content + occurrence keeps IDs stable when unrelated note lines move, including duplicate checklists.
-    const hash = createHash("sha256").update(JSON.stringify([key, occurrence])).digest("hex");
-    const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-    return { id, projectId, workspaceId: item.workspaceId, noteId: item.noteId, title: item.text.trim().slice(0, 200), body: item.text.length > 200 ? item.text : null };
+    const id = importedTaskId(key, occurrence);
+    return { id, done: item.done, folder: "folder" in item ? item.folder as string : null, projectId, workspaceId: item.workspaceId, noteId: item.noteId, title: item.text.trim().slice(0, 200), body: item.text.length > 200 ? item.text : null };
   });
   const pending = [];
   for (const candidate of candidates) {
-    if (await getTask(candidate.id)) continue;
+    if (candidate.done || await getTask(candidate.id)) continue;
     parse(TaskInputSchema, { projectId: candidate.projectId, workspaceId: candidate.workspaceId, noteId: candidate.noteId, title: candidate.title, body: candidate.body });
     pending.push(candidate);
   }
@@ -122,4 +130,35 @@ export async function importNoteTasks(scope: NoteImportScope): Promise<number> {
     }
   }
   return imported;
+}
+
+// shortcut: identical items use occurrence order; add persistent item IDs if duplicate deletion must preserve identity.
+function importedTaskId(key: string, occurrence: number) {
+  const hash = createHash("sha256").update(JSON.stringify([key, occurrence])).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+async function writeBackRepoTask(task: Task) {
+  const link = parseRepoTaskLink(task.noteId);
+  if (!link) return;
+  const project = await getProject(task.projectId);
+  const folder = project?.repoFolders.find((f) => f.id === link.scope.id);
+  if (!project || !folder) throw new Error("Linked notebook no longer exists");
+  const dirs = await repoNoteDirs(project, folder);
+  const note = await readNote(dirs, link.id);
+  if (!note) throw new Error("Linked board no longer exists");
+  const occurrences = new Map<string, number>();
+  const items = extractTasks(note.markdown);
+  let item = items.find((item) => {
+    const key = JSON.stringify([project.id, task.noteId, item.text]);
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
+    return importedTaskId(key, occurrence) === task.id;
+  });
+  if (!item) {
+    const matches = items.filter((i) => i.text === (task.body ?? task.title));
+    if (matches.length === 1) item = matches[0];
+  }
+  if (!item) throw new Error("Task is not in board or its text is ambiguous");
+  await writeNote(dirs, link.id, { expectedUpdatedAt: note.updatedAt, task: { line: item.line, text: item.text, done: task.status === "done" || task.status === "cancelled" } });
 }

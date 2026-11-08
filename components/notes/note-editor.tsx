@@ -70,6 +70,8 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
   const known = useRef(new Set([initial.markdown]));
   const dirty = useRef(false);
   const titleRef = useRef(initial.title);
+  const version = useRef(initial.updatedAt);
+  const savedTitle = useRef(initial.title);
 
   const flush = useCallback(async () => {
     if (timer.current) clearTimeout(timer.current);
@@ -77,12 +79,14 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     const editor = editorRef.current;
     if (!editor || !dirty.current) return;
     const markdown = docToMarkdown(editor);
-    const body = memory ? { markdown } : { markdown, title: titleRef.current };
+    const body = { markdown, expectedUpdatedAt: version.current, ...(!memory && titleRef.current !== savedTitle.current ? { title: titleRef.current } : {}) };
     known.current.add(markdown);
     dirty.current = false;
     setSave("saving");
     try {
       const r = await api.patchNote(scope.kind, scope.id, initial.id, body);
+      version.current = r.note.updatedAt;
+      savedTitle.current = r.note.title;
       setNote(r.note);
       known.current = new Set([r.note.markdown, markdown]);
       setSave(dirty.current ? "dirty" : "saved");
@@ -92,6 +96,10 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
       dirty.current = true;
       setSave("error");
       setSaveError((err as Error).message);
+      if (/changed on disk/i.test((err as Error).message)) {
+        const fresh = await api.getNote(scope.kind, scope.id, initial.id).catch(() => null);
+        if (fresh) setConflict(fresh.note);
+      }
     }
   }, [scope, initial.id, memory]);
 
@@ -142,7 +150,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
   );
 
   // Someone else (an agent, another tab) changed the file.
-  const rev = useNotesFeed((s) => s.noteRev[`${scopeKey(scope)}/${initial.id}`] ?? 0);
+  const rev = useNotesFeed((s) => (s.noteRev[`${scopeKey(scope)}/${initial.id}`] ?? 0) + (s.noteRev[`${scopeKey(scope)}/*`] ?? 0));
   useEffect(() => {
     if (!rev) return;
     let cancelled = false;
@@ -150,14 +158,18 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
       .getNote(scope.kind, scope.id, initial.id)
       .then(({ note: fresh }) => {
         if (cancelled) return;
-        if (known.current.has(fresh.markdown)) {
+        if (known.current.has(fresh.markdown) && fresh.title === savedTitle.current) {
+          version.current = fresh.updatedAt;
           setNote(fresh);
           return;
         }
         if (dirty.current) {
+          if (timer.current) clearTimeout(timer.current);
           setConflict(fresh);
           return;
         }
+        version.current = fresh.updatedAt;
+        savedTitle.current = fresh.title;
         known.current = new Set([fresh.markdown]);
         setNote(fresh);
         if (!memory) {
@@ -180,6 +192,8 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     if (!conflict) return;
     if (timer.current) clearTimeout(timer.current);
     dirty.current = false;
+    version.current = conflict.updatedAt;
+    savedTitle.current = conflict.title;
     known.current = new Set([conflict.markdown]);
     setNote(conflict);
     setTitle(conflict.title);
@@ -190,6 +204,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
   };
 
   const keepMine = () => {
+    if (conflict) version.current = conflict.updatedAt;
     setConflict(null);
     dirty.current = true;
     void flush();
@@ -200,6 +215,8 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     try {
       const r = await api.patchNote(scope.kind, scope.id, initial.id, flags);
       known.current.add(r.note.markdown);
+      version.current = r.note.updatedAt;
+      savedTitle.current = r.note.title;
       setNote(r.note);
       useNotesFeed.getState().touch(scope);
     } catch (err) {
@@ -208,7 +225,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete "${note.title}"? This removes the file from disk.`)) return;
+    if (!window.confirm(note.source === "repo" ? `Delete ${note.path}? This removes the file from the working tree.` : `Delete "${note.title}"? This removes the file from disk.`)) return;
     if (timer.current) clearTimeout(timer.current);
     dirty.current = false;
     await api.deleteNote(scope.kind, scope.id, initial.id);
@@ -216,7 +233,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     onDeleted?.();
   };
 
-  if (broken && memory) {
+  if (broken && memory && scope.kind !== "repos") {
     // TipTap couldn't parse the file; fall back to the plain-text memory editor.
     return (
       <div className="p-4">

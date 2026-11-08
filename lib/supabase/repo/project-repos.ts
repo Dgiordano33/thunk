@@ -1,5 +1,6 @@
 import "server-only";
 import type { ProjectRepo, WorkspaceRepo } from "@/lib/projects/types";
+import { forgetRepoFolders } from "./repo-folders";
 import { db } from "../server";
 
 /**
@@ -136,6 +137,8 @@ export async function insertProjectRepo(input: Omit<ProjectRepo, "id" | "created
 export async function deleteProjectRepo(id: string): Promise<void> {
   const client = db();
   if (!client) {
+    const repo = memRepos.get(id);
+    if (repo) forgetRepoFolders(repo.projectId, id);
     memRepos.delete(id);
     return;
   }

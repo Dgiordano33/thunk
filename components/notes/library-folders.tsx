@@ -19,7 +19,7 @@ export function LibraryFolders({
   onSelect: (scope: NoteScope | null) => void;
 }) {
   const active = selected ? scopeKey(selected) : null;
-  const total = folders?.reduce((n, f) => n + f.notes.length + f.workspaces.reduce((m, w) => m + w.notes.length, 0), 0) ?? 0;
+  const total = folders?.reduce((n, f) => n + f.repos.reduce((m, r) => m + r.notes.length, 0) + f.notes.length + f.workspaces.reduce((m, w) => m + w.notes.length, 0), 0) ?? 0;
   const row = (on: boolean) =>
     cn(
       "focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] outline-none focus-visible:ring-2",
@@ -60,6 +60,13 @@ export function LibraryFolders({
                   {count(notes.length)}
                 </button>
               );
+            })}
+            {f.repos.map(({ notebook, notes }) => {
+              const scope: NoteScope = { kind: "repos", id: notebook.id };
+              return <button key={notebook.id} type="button" className={cn(row(active === scopeKey(scope)), "pl-7")} onClick={() => onSelect(scope)} aria-current={active === scopeKey(scope) ? "true" : undefined}>
+                <span className="min-w-0 truncate">{notebook.repoId ? `${notebook.repoName} / ` : ""}{notebook.path}</span>
+                <span className="text-muted-foreground text-[10px]">repo</span>{count(notes.length)}
+              </button>;
             })}
           </div>
         );

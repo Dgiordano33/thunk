@@ -1,7 +1,7 @@
 // Shared between server and client. Keep free of server-only imports.
 
 /** Matches the memory routes: `/api/projects/[id]/…` or `/api/workspaces/[id]/…`. */
-export type NoteScopeKind = "projects" | "workspaces";
+export type NoteScopeKind = "projects" | "workspaces" | "repos";
 
 export type NoteScope = { kind: NoteScopeKind; id: string };
 
@@ -18,6 +18,7 @@ export type NoteFlags = {
 };
 
 export type NoteMeta = NoteFlags & {
+  readonly source: "thunk" | "repo";
   id: string;
   scope: NoteScope;
   title: string;
@@ -46,17 +47,20 @@ export type NoteTask = {
 
 export type NoteEvent = { scope: NoteScope; noteId: string; kind: "changed" | "removed" };
 
+export type RepoNotebook = import("@/lib/projects/types").RepoFolder & { repoName: string };
+
 export type NoteFolder = {
+  repos: { notebook: RepoNotebook; notes: NoteMeta[] }[];
   project: { id: string; name: string };
   notes: NoteMeta[];
   workspaces: { workspace: { id: string; name: string; slug: string }; notes: NoteMeta[] }[];
 };
 
-export const scopeKey = (s: NoteScope) => `${s.kind === "projects" ? "p" : "w"}:${s.id}`;
+export const scopeKey = (s: NoteScope) => `${s.kind === "projects" ? "p" : s.kind === "repos" ? "r" : "w"}:${s.id}`;
 
 export function parseScopeKey(key: string | null | undefined): NoteScope | null {
-  const m = /^([pw]):(.+)$/.exec(key ?? "");
-  return m ? { kind: m[1] === "p" ? "projects" : "workspaces", id: m[2] } : null;
+  const m = /^([pwr]):(.+)$/.exec(key ?? "");
+  return m ? { kind: m[1] === "p" ? "projects" : m[1] === "r" ? "repos" : "workspaces", id: m[2] } : null;
 }
 
 /** Pinned first (memory before other pins), then most recently updated. */

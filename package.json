@@ -11,7 +11,7 @@
     "test:lifecycle": "node --conditions=react-server --test tests/lifecycle.test.cjs",
     "typecheck": "tsc --noEmit",
     "test:tasks": "node --conditions=react-server --test tests/tasks.test.cjs tests/task-tools.test.cjs && node --test components/tasks/ui.test.cjs",
-    "test:notes": "node --conditions=react-server --test tests/notes.test.cjs",
+    "test:notes": "node --conditions=react-server --test tests/notes.test.cjs tests/repo-notebooks.test.cjs",
     "test:routines": "node --conditions=react-server --test tests/routines.test.cjs",
     "test:vault": "node --conditions=react-server --test tests/vault.test.cjs",
     "test:multi-repo": "node --conditions=react-server --test tests/multi-repo.test.cjs"

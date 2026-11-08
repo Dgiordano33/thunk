@@ -16,8 +16,9 @@ const Flags = {
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 };
 
-const CreateBody = z.object({ title: z.string().max(200).optional(), markdown: z.string().max(200_000).optional(), ...Flags });
+const CreateBody = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i).optional(), title: z.string().max(200).optional(), markdown: z.string().max(200_000).optional(), ...Flags });
 const PatchBody = z.object({
+  expectedUpdatedAt: z.string().optional(),
   title: z.string().max(200).optional(),
   markdown: z.string().max(200_000).optional(),
   task: z.object({ line: z.number().int().nonnegative(), text: z.string().max(200_000), done: z.boolean() }).optional(),
@@ -38,7 +39,12 @@ export function notesCollection(kind: NoteScopeKind) {
     POST: handle(async (req: Request, ctx: Ctx<{ id: string }>) => {
       const dirs = await dirsForScope({ kind, id: (await ctx.params).id });
       const body = await parseBody(req, CreateBody);
-      return Response.json({ note: await createNote(dirs, body) });
+      if (kind === "repos" && (!body.id || body.id.toLowerCase() === MEMORY_NOTE_ID)) throw new HttpError(400, "A filename other than memory is required");
+      const note = await createNote(dirs, body).catch((err) => {
+        if (err.code === "EEXIST") throw new HttpError(409, "A note with this filename already exists");
+        throw err;
+      });
+      return Response.json({ note });
     }),
   };
 }
@@ -55,7 +61,7 @@ export function noteItem(kind: NoteScopeKind) {
       const p = await ctx.params;
       const id = noteId(p.noteId);
       const body = await parseBody(req, PatchBody);
-      if (id === MEMORY_NOTE_ID && Object.keys(body).some((k) => k !== "markdown"))
+      if (id === MEMORY_NOTE_ID && Object.keys(body).some((k) => k !== "markdown" && k !== "expectedUpdatedAt"))
         throw new HttpError(400, "Memory only takes markdown edits");
       const note = await writeNote(await dirsForScope({ kind, id: p.id }), id, body).catch((err) => {
         if (err instanceof NoteConflictError) throw new HttpError(409, err.message);

@@ -1,5 +1,7 @@
 import "server-only";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
+import { stat } from "node:fs/promises";
+import { repoNoteDirs } from "./resolve";
 import path from "node:path";
 import { DATA_DIR, projectSlug } from "@/lib/projects/paths";
 import { listProjects } from "@/lib/supabase/repo/projects";
@@ -10,6 +12,9 @@ type Listener = (e: NoteEvent) => void;
 
 type Watch = {
   watcher: FSWatcher | null;
+  folders?: Map<string, { watcher: FSWatcher; inode: number; path: string }>;
+  folderRetry?: ReturnType<typeof setTimeout>;
+  refreshing?: Promise<void>;
   retry?: ReturnType<typeof setTimeout>;
   retryDelay?: number;
   healthy?: ReturnType<typeof setTimeout>;
@@ -84,6 +89,7 @@ function retry() {
 function start() {
   if (state.watcher || state.retry) return;
   void refreshSlugs();
+  void refreshFolders();
   try {
     mkdirSync(ROOT, { recursive: true });
     state.watcher = watch(ROOT, { recursive: true }, (_event, filename) => {
@@ -113,6 +119,10 @@ export function subscribeNotes(listener: Listener) {
   return () => {
     state.listeners.delete(listener);
     if (state.listeners.size === 0) {
+      clearTimeout(state.folderRetry);
+      state.folderRetry = undefined;
+      for (const entry of state.folders?.values() ?? []) entry.watcher.close();
+      state.folders?.clear();
       clearTimeout(state.retry);
       clearTimeout(state.healthy);
       state.retry = undefined;
@@ -123,4 +133,55 @@ export function subscribeNotes(listener: Listener) {
       state.watcher = null;
     }
   };
+}
+
+/** Reconcile watches after registration and when git replaces a watched directory. */
+export function refreshFolders(): Promise<void> {
+  if (!state.listeners.size) return Promise.resolve();
+  if (state.refreshing) return state.refreshing;
+  state.refreshing = refreshRepoWatches().catch((err) => console.error("[thunk] repo notes watcher", err)).finally(() => {
+    state.refreshing = undefined;
+    clearTimeout(state.folderRetry);
+    if (state.listeners.size) state.folderRetry = setTimeout(() => { void refreshFolders(); }, 5000);
+  });
+  return state.refreshing;
+}
+
+async function refreshRepoWatches() {
+  const folders = (state.folders ??= new Map());
+  const projects = await listProjects();
+  const wanted = new Set<string>();
+  for (const project of projects) for (const folder of project.repoFolders) {
+    if (!state.listeners.size) return;
+    const key = `r:${folder.id}`;
+    try {
+      const dirs = await repoNoteDirs(project, folder);
+      const info = await stat(dirs.notesDir);
+      if (!state.listeners.size) return;
+      wanted.add(folder.id);
+      const current = folders.get(folder.id);
+      if (current?.inode === info.ino && current.path === dirs.notesDir) continue;
+      current?.watcher.close();
+      const emitFolder = () => {
+        for (const listener of state.listeners) listener({ scope: dirs.scope, noteId: "*", kind: "changed" });
+      };
+      const watcher = watch(dirs.notesDir, (_event, filename) => {
+        if (filename && !filename.toString().endsWith(".md") && existsSync(dirs.notesDir)) return;
+        clearTimeout(state.pending.get(key));
+        state.pending.set(key, setTimeout(() => { state.pending.delete(key); emitFolder(); }, 300));
+      });
+      watcher.on("error", (err) => {
+        console.error("[thunk] repo notebook watcher", err);
+        watcher.close();
+        folders.delete(folder.id);
+      });
+      folders.set(folder.id, { watcher, inode: info.ino, path: dirs.notesDir });
+      emitFolder();
+    } catch { /* Missing directories are retried while subscribed. */ }
+  }
+  for (const [id, entry] of folders) if (!wanted.has(id)) {
+    entry.watcher.close(); folders.delete(id);
+    clearTimeout(state.pending.get(`r:${id}`)); state.pending.delete(`r:${id}`);
+    for (const listener of state.listeners) listener({ scope: { kind: "repos", id }, noteId: "*", kind: "removed" });
+  }
 }
