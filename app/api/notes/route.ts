@@ -1,5 +1,5 @@
 import { handle } from "@/lib/api/http";
-import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
+import { projectNoteDirs, workspaceNoteDirs, repoNoteDirs } from "@/lib/notes/resolve";
 import { listNotes, metaOf } from "@/lib/notes/store";
 import type { NoteFolder } from "@/lib/notes/types";
 import { listProjects } from "@/lib/supabase/repo/projects";
@@ -22,6 +22,10 @@ export const GET = handle(async () => {
       return {
         project: { id: project.id, name: project.name },
         notes: notes.map(metaOf),
+        repos: await Promise.all(project.repoFolders.map(async (folder) => ({
+          notebook: { ...folder, repoName: folder.repoId ? project.extraRepos.find((r) => r.id === folder.repoId)!.name : project.name },
+          notes: await repoNoteDirs(project, folder).then(listNotes).then((ns) => ns.map(metaOf)).catch(() => []),
+        }))),
         workspaces: workspaces.map((w, i) => ({ workspace: { id: w.id, name: w.name, slug: w.slug }, notes: wsNotes[i].map(metaOf) })),
       };
     }),

@@ -8,13 +8,14 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
   const { id } = await ctx.params;
   const context = await getWorkspaceContext(id);
   if (!context) throw new HttpError(404, "Workspace not found");
-  const dirs = notesDirsFor(context.project, context.workspace);
-  const [base, projectNotes, workspaceNotes] = await Promise.all([
+  const dirs = await notesDirsFor(context.project, context.workspace);
+  const [base, projectNotes, workspaceNotes, repoNotes] = await Promise.all([
     promptContext(context.workspace.cwd, context.project.root),
     listNotes(dirs.project).catch(() => []),
     listNotes(dirs.workspace).catch(() => []),
+    Promise.all(dirs.repos.map((d) => listNotes(d).catch(() => []))),
   ]);
   // Notes are offered under @ alongside files; the mention inserts the note's absolute path.
-  const notes = [...workspaceNotes, ...projectNotes].map((n) => ({ title: n.title, path: n.path }));
+  const notes = [...workspaceNotes, ...projectNotes, ...repoNotes.flat()].map((n) => ({ title: n.title, path: n.path }));
   return Response.json({ ...base, notes });
 });

@@ -147,6 +147,7 @@ function NoteRow({ note, context, selected, onSelect }: { note: NoteMeta; contex
           </span>
         )}
       </span>
+      {note.source === "repo" && <span className="text-muted-foreground truncate rounded border px-1 text-[10px]" title={note.path}>repo · {note.path.split("/").slice(-2).join("/")}</span>}
       {context && <span className="text-muted-foreground truncate text-[11px]">{context}</span>}
       <span className="text-muted-foreground flex gap-1.5 text-[11px]">
         <span className="shrink-0 tabular-nums">{relativeTime(note.updatedAt)}</span>

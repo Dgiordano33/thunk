@@ -4,7 +4,7 @@ import type { NoteFlags, NoteTask } from "./types";
 
 export type NoteFrontmatter = NoteFlags & { title: string | null; created: string | null; updated: string | null };
 
-export type ParsedNote = { frontmatter: NoteFrontmatter; body: string };
+export type ParsedNote = { frontmatter: NoteFrontmatter; body: string; rawHeader?: string };
 
 const DEFAULTS: NoteFrontmatter = {
   title: null,
@@ -79,14 +79,32 @@ export function parseNote(raw: string): ParsedNote {
       }
     }
   }
-  return { frontmatter: fm, body: raw.slice(m[0].length) };
+  return { frontmatter: fm, body: raw.slice(m[0].length), rawHeader: m[0] };
 }
 
 function quote(v: string) {
   return /^[\w .,/()&+-]*$/.test(v) && v.trim() === v && v !== "" && parseBool(v) === null ? v : JSON.stringify(v);
 }
 
-export function serializeNote(fm: NoteFrontmatter, body: string): string {
+export function serializeNote(fm: NoteFrontmatter, body: string, original?: ParsedNote): string {
+  if (original) {
+    const changed = (Object.keys(fm) as (keyof NoteFrontmatter)[]).filter((key) => JSON.stringify(fm[key]) !== JSON.stringify(original.frontmatter[key]));
+    if (!changed.length) return (original.rawHeader ?? "") + body;
+    const newline = original.rawHeader?.includes("\r\n") ? "\r\n" : "\n";
+    const lines = original.rawHeader ? FENCE.exec(original.rawHeader)![1].split(/\r?\n/) : [];
+    for (const key of changed) {
+      const value = fm[key];
+      const line = `${key}: ${Array.isArray(value) ? `[${value.map(quote).join(", ")}]` : typeof value === "string" ? quote(value) : String(value)}`;
+      const index = lines.findIndex((l) => new RegExp(`^${key}\\s*:`, "i").test(l));
+      if (index < 0) lines.push(line);
+      else {
+        let end = index + 1;
+        while (end < lines.length && /^(\s+\S|\s*-\s)/.test(lines[end])) end++;
+        lines.splice(index, end - index, line);
+      }
+    }
+    return `---${newline}${lines.join(newline)}${newline}---${newline}${body}`;
+  }
   const lines = [
     "---",
     `title: ${quote(fm.title ?? "Untitled")}`,
@@ -124,7 +142,7 @@ export function noteExcerpt(body: string, title?: string, max = 140) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-const TASK = /^(\s*[-*+]\s+)\[([ xX])\]\s+(.+)$/;
+const TASK = /^(\s*[-*+]\s+)\[([ xX])\]\s+(.+)\r?$/;
 
 /** Every `- [ ]` / `- [x]` line in the body, outside fenced code. */
 export function extractTasks(body: string): Omit<NoteTask, "noteId" | "noteTitle" | "notePath">[] {
@@ -144,6 +162,6 @@ export function setTaskDone(body: string, line: number, done: boolean) {
   const lines = body.split("\n");
   const m = TASK.exec(lines[line] ?? "");
   if (!m) return body;
-  lines[line] = `${m[1]}[${done ? "x" : " "}] ${m[3]}`;
+  lines[line] = lines[line].replace(/^(\s*[-*+]\s+)\[[ xX]\]/, `$1[${done ? "x" : " "}]`);
   return lines.join("\n");
 }

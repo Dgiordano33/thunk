@@ -63,6 +63,7 @@ export function NotesLibrary() {
     const names = new Map<string, string>();
     for (const f of folders ?? []) {
       names.set(scopeKey({ kind: "projects", id: f.project.id }), f.project.name);
+      for (const r of f.repos) names.set(`r:${r.notebook.id}`, `${f.project.name} / ${r.notebook.label}`);
       for (const w of f.workspaces)
         names.set(scopeKey({ kind: "workspaces", id: w.workspace.id }), `${f.project.name} / ${w.workspace.slug === "main" ? "Local" : w.workspace.name}`);
     }
@@ -104,24 +105,17 @@ function AllNotes({
   onSelect: (scope: NoteScope | null, note: string | null) => void;
 }) {
   const notes = useMemo<NoteMeta[] | null>(
-    () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.workspaces.flatMap((w) => w.notes)])) : null),
+    () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.workspaces.flatMap((w) => w.notes), ...f.repos.flatMap((r) => r.notes)])) : null),
     [folders],
   );
   const keyOf = (n: NoteMeta) => `${scopeKey(n.scope)}/${n.id}`;
   const current = notes?.find((n) => keyOf(n) === selected) ?? null;
   const select = useCallback((key: string | null) => onSelect(null, key), [onSelect]);
-  const { remove } = useNoteActions(null, select);
-  const create = useCallback(
-    async (scope: NoteScope) => {
-      const { note } = await api.createNote(scope.kind, scope.id, { title: "Untitled" });
-      useNotesFeed.getState().touch(scope);
-      select(`${scopeKey(scope)}/${note.id}`);
-    },
-    [select],
-  );
+  const { remove, create, dialog } = useNoteActions(null, select);
 
   return (
     <div className="flex min-h-0 flex-1">
+      {dialog}
       <CollapsiblePane title="All notes" className="w-72">
         <NoteList
           notes={notes}
@@ -170,6 +164,7 @@ function NewNoteMenu({
               <DropdownMenuItem onSelect={() => onCreate(pScope)}>
                 <span className="truncate font-medium">{f.project.name}</span>
               </DropdownMenuItem>
+              {f.repos.map(({ notebook }) => <DropdownMenuItem key={notebook.id} onSelect={() => onCreate({ kind: "repos", id: notebook.id })}>{notebook.label} · repo</DropdownMenuItem>)}
               {f.workspaces.map(({ workspace }) => {
                 const wScope: NoteScope = { kind: "workspaces", id: workspace.id };
                 return (

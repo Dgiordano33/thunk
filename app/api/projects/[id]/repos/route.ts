@@ -1,3 +1,4 @@
+import { suggestRepoFolders } from "@/lib/notes/folders";
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { addProjectRepo } from "@/lib/projects";
@@ -35,5 +36,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/projects
   })().catch((err: Error) => {
     throw new HttpError(400, err.message);
   });
-  return Response.json({ repo }, { status: 201 });
+  const project = (await getProject(id))!;
+  return Response.json({ repo, notebookSuggestions: await suggestRepoFolders(project) }, { status: 201 });
 });

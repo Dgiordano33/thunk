@@ -28,7 +28,7 @@ const mocks = {
     tasksForWorkspace: async () => ({ workspace: rows.filter((t) => t.workspaceId === workspaceId && t.projectId === projectId), project: rows.filter((t) => t.workspaceId === null && t.projectId === projectId) }),
   },
   "@anthropic-ai/claude-agent-sdk": { createSdkMcpServer: (v) => v, tool: (name, description, schema, handler) => ({ name, description, schema, handler }) },
-  "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", workspaceDir: "/tmp" }), notesPrompt: () => "notes" },
+  "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", repos: [], workspaceDir: "/tmp" }), notesPrompt: () => "notes" },
   "@/lib/projects/memory": { readMemory: async () => "" },
   "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile", "projectVaultDir"].map((k) => [k, () => "/tmp"])),
   "@/lib/vault/store": { listItems: async () => [], readItem: async () => null },

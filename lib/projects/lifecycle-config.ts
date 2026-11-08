@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const Config = z.object({
   scripts: z.object({ setup: z.string().optional(), run: z.string().optional(), archive: z.string().optional() }).default({}),
+  notebooks: z.array(z.string().min(1)).optional(),
   filesToCopy: z.array(z.string().min(1)).optional(),
 });
 export type LifecycleConfig = z.infer<typeof Config>;
