@@ -54,6 +54,7 @@ test("task extraction skips code fences and toggles by line", () => {
   assert.equal(fm.setTaskDone(body, 0, true).split("\n")[0], "- [x] open");
   assert.equal(fm.setTaskDone(body, 1, false).split("\n")[1], "  * [ ] done nested");
   assert.equal(fm.setTaskDone(body, 5, true), body);
+  assert.equal(fm.setTaskDone("- [ ]  keep spacing\r\n", 0, true), "- [x]  keep spacing\r\n");
 });
 
 test("store creates, lists, patches and deletes notes; memory is a virtual pinned note", async (t) => {
@@ -92,7 +93,7 @@ test("store creates, lists, patches and deletes notes; memory is a virtual pinne
   await assert.rejects(store.readNote(d, "../etc"), /Invalid note id/);
 });
 
-test("task patches preserve agent edits and reject a displaced task", async (t) => {
+test("task patches preserve agent edits, follow a moved task and reject missing text", async (t) => {
   const d = await dirs(t);
   const note = await store.createNote(d, { markdown: "- [ ] do it\n", actionable: true });
   const file = path.join(d.notesDir, note.id + ".md");
@@ -100,8 +101,9 @@ test("task patches preserve agent edits and reject a displaced task", async (t) 
   const updated = await store.writeNote(d, note.id, { task: { line: 0, text: "do it", done: true } });
   assert.equal(updated.markdown, "- [x] do it\n\nAgent addition\n");
   await store.writeNote(d, note.id, { markdown: "New heading\n- [ ] do it\n" });
+  await store.writeNote(d, note.id, { task: { line: 0, text: "do it", done: true } });
   const before = await fs.readFile(file, "utf8");
-  await assert.rejects(store.writeNote(d, note.id, { task: { line: 0, text: "do it", done: true } }), store.NoteConflictError);
+  await assert.rejects(store.writeNote(d, note.id, { task: { line: 0, text: "missing", done: true } }), store.NoteConflictError);
   assert.equal(await fs.readFile(file, "utf8"), before);
 });
 
@@ -141,6 +143,7 @@ test("watcher retries with backoff for existing subscribers and cancels on unsub
     if (id === "@/lib/projects/paths") return { DATA_DIR: "/tmp/watch-test", projectSlug: (s) => s };
     if (id === "@/lib/supabase/repo/projects") return { listProjects: async () => [] };
     if (id === "@/lib/supabase/repo/workspaces") return { listAllWorkspaces: async () => [] };
+    if (id === "./resolve") return {};
     if (id === "./types") return { MEMORY_NOTE_ID: "memory" };
     return require(id);
   };
@@ -164,4 +167,49 @@ test("watcher retries with backoff for existing subscribers and cancels on unsub
   assert.ok([...timers.values()].some((t) => t.delay === 4000));
   unsubscribe();
   assert.equal(timers.size, 0);
+});
+
+
+test("repo notes preserve plain files and unknown YAML, require filenames and refuse overwrite", async (t) => {
+  const base = await dirs(t);
+  await fs.mkdir(base.notesDir);
+  const d = { scope: { kind: "repos", id: "r1" }, notesDir: base.notesDir };
+  assert.equal(await store.readNote(d, "memory"), null);
+  assert.equal(await store.writeNote(d, "memory", { markdown: "no" }), null);
+  assert.equal(await store.countNotes([d]), 0);
+  await assert.rejects(store.createNote(d, { title: "No filename" }), /filename/);
+  const note = await store.createNote(d, { id: "plan", title: "Plan" });
+  assert.equal(note.source, "repo");
+  await assert.rejects(store.createNote(d, { id: "plan", title: "Overwrite" }), /EEXIST/);
+  const file = path.join(d.notesDir, "plan.md");
+  const plain = "# Plan\n\n- [ ] ship\n";
+  await fs.writeFile(file, plain);
+  await store.writeNote(d, "plan", { task: { line: 2, text: "ship", done: true } });
+  assert.equal(await fs.readFile(file, "utf8"), plain.replace("[ ]", "[x]"));
+  const header = "---\r\nowner: Dan\r\ncustom:\r\n  nested: keep\r\n# comment\r\npinned: false\r\n---\r\n";
+  await fs.writeFile(file, header + plain);
+  await store.writeNote(d, "plan", { markdown: plain + "more\n" });
+  assert.equal(await fs.readFile(file, "utf8"), header + plain + "more\n");
+  await store.writeNote(d, "plan", { pinned: true });
+  assert.equal(await fs.readFile(file, "utf8"), header.replace("pinned: false", "pinned: true") + plain + "more\n");
+  assert.equal(await store.countNotes([d]), 1);
+  assert.equal((await store.listNotes(d)).length, 1);
+  await fs.writeFile(file, plain);
+  await store.writeNote(d, "plan", { inject: true });
+  assert.equal(await fs.readFile(file, "utf8"), "---\ninject: true\n---\n" + plain);
+});
+
+test("repo notes reject symlinks and stale writes", async (t) => {
+  const base = await dirs(t);
+  await fs.mkdir(base.notesDir);
+  const d = { scope: { kind: "repos", id: "r1" }, notesDir: base.notesDir };
+  const external = path.join(path.dirname(d.notesDir), "external.md");
+  await fs.writeFile(external, "secret");
+  await fs.symlink(external, path.join(d.notesDir, "link.md"));
+  await assert.rejects(store.readNote(d, "link"), /regular file/);
+  await assert.rejects(store.writeNote(d, "link", { markdown: "overwrite" }), /regular file/);
+  const note = await store.createNote(d, { id: "safe", title: "Safe" });
+  await fs.utimes(note.path, new Date(0), new Date(0));
+  await assert.rejects(store.writeNote(d, "safe", { markdown: "stale", expectedUpdatedAt: note.updatedAt }), store.NoteConflictError);
+  assert.equal(await fs.readFile(external, "utf8"), "secret");
 });

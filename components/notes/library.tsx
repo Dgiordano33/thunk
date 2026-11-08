@@ -1,33 +1,44 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { api } from "@/lib/client/api";
-import type { NoteMeta, NoteScope } from "@/lib/notes/types";
+import { scopeKey, type NoteMeta, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed, useScopeNotes } from "@/lib/store/notes-store";
 import { cn } from "@/lib/utils";
 import { CollapsiblePane } from "./collapsible-pane";
 import { NoteEditor } from "./note-editor";
+import { NewRepoNote } from "./new-repo-note";
 import { NoteList } from "./note-list";
 
 /** Create and delete notes in a scope, keeping every open view in sync. */
 export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | null) => void) {
-  const create = useCallback(async () => {
-    if (!scope) return;
-    const { note } = await api.createNote(scope.kind, scope.id, { title: "Untitled" });
-    useNotesFeed.getState().touch(scope);
-    onSelect(note.id);
+  const [creating, setCreating] = useState<NoteScope | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const created = useCallback((target: NoteScope, id: string) => {
+    useNotesFeed.getState().touch(target);
+    onSelect(scope ? id : `${scopeKey(target)}/${id}`);
+    setCreating(null);
   }, [scope, onSelect]);
+  const create = useCallback(async (target = scope) => {
+    if (!target) return;
+    if (target.kind === "repos") { setCreating(target); return; }
+    try {
+    const { note } = await api.createNote(target.kind, target.id, { title: "Untitled" });
+    created(target, note.id);
+    } catch (err) { setError((err as Error).message); }
+  }, [scope, created]);
   const remove = useCallback(
     async (note: NoteMeta) => {
-      if (!window.confirm(`Delete "${note.title}"? This removes the file from disk.`)) return;
+      if (!window.confirm(note.source === "repo" ? `Delete ${note.path}? This removes the file from the working tree.` : `Delete "${note.title}"? This removes the file from disk.`)) return;
       await api.deleteNote(note.scope.kind, note.scope.id, note.id);
       useNotesFeed.getState().touch(note.scope);
       onSelect(null);
     },
     [onSelect],
   );
-  return { create, remove };
+  const dialog = <>{error && <p role="alert" className="text-destructive p-2 text-xs">{error}</p>}{creating && <NewRepoNote scope={creating} onClose={() => setCreating(null)} onCreated={(id) => created(creating, id)} />}</>;
+  return { create, remove, dialog };
 }
 
 /** List + editor for one scope: the body of the town Library panel and the right two panes of /notes. */
@@ -48,12 +59,13 @@ export function ScopeNotes({
   className?: string;
 }) {
   const { notes } = useScopeNotes(scope);
-  const { create, remove } = useNoteActions(scope, onSelect);
+  const { create, remove, dialog } = useNoteActions(scope, onSelect);
   const selected = selectedId;
   const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />;
 
   return (
     <div className={cn("flex min-h-0 flex-1", className)}>
+      {dialog}
       {listTitle ? (
         <CollapsiblePane title={listTitle} className="w-64">
           {list}

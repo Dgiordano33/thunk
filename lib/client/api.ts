@@ -36,6 +36,7 @@ const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", j
 
 export const api = {
   // Projects
+  getProject: (id: string) => call<{ project: Project }>(`/api/projects/${id}`),
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
   addProject: (
     body:
@@ -98,15 +99,19 @@ export const api = {
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),
   putMemory: (scope: "projects" | "workspaces", id: string, content: string) =>
     call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content } }),
+  listRepoFolders: (id: string) => call<{ folders: import("@/lib/projects/types").RepoFolder[] }>(`/api/projects/${id}/repo-folders`),
+  addRepoFolder: (id: string, body: { repoId?: string | null; path: string; label?: string }) => post(`/api/projects/${id}/repo-folders`, body),
+  removeRepoFolder: (id: string, folderId: string) => call(`/api/projects/${id}/repo-folders/${folderId}`, { method: "DELETE" }),
+  suggestRepoFolders: (id: string) => post<{ candidates: { repoId: string | null; repoName: string; path: string; count: number }[] }>(`/api/projects/${id}/repo-folders/suggest`, {}),
   // Notes (project or workspace scope). Memory is the note with id "memory".
   listNotes: (scope: NoteScopeKind, id: string) => call<{ notes: NoteMeta[]; dir: string }>(`/api/${scope}/${id}/notes`),
   noteCounts: () => call<{ counts: Record<string, number> }>("/api/notes/counts"),
   listAllNotes: () => call<{ projects: NoteFolder[] }>("/api/notes"),
   getNote: (scope: NoteScopeKind, id: string, noteId: string) =>
     call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`),
-  createNote: (scope: NoteScopeKind, id: string, body: { title?: string; markdown?: string } & Partial<NoteFlags> = {}) =>
+  createNote: (scope: NoteScopeKind, id: string, body: { id?: string; title?: string; markdown?: string } & Partial<NoteFlags> = {}) =>
     post<{ note: Note }>(`/api/${scope}/${id}/notes`, body),
-  patchNote: (scope: NoteScopeKind, id: string, noteId: string, body: { title?: string; markdown?: string; task?: { line: number; text: string; done: boolean } } & Partial<NoteFlags>) =>
+  patchNote: (scope: NoteScopeKind, id: string, noteId: string, body: { expectedUpdatedAt?: string; title?: string; markdown?: string; task?: { line: number; text: string; done: boolean } } & Partial<NoteFlags>) =>
     call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`, { method: "PATCH", json: body }),
   deleteNote: (scope: NoteScopeKind, id: string, noteId: string) =>
     call(`/api/${scope}/${id}/notes/${noteId}`, { method: "DELETE" }),
@@ -119,7 +124,7 @@ export const api = {
   patchTask: (id: string, body: TaskPatch) => call<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", json: body }),
   deleteTask: (id: string) => call(`/api/tasks/${id}`, { method: "DELETE" }),
   sendTask: (id: string, body: { sessionId?: string; workspaceId?: string }) => post<{ sessionId: string; workspaceId: string }>(`/api/tasks/${id}/send`, body),
-  taskImportCount: (scope: NoteImportScope) => call<{ count: number }>(`/api/tasks/import-notes?${new URLSearchParams(scope)}`),
+  taskImportCount: (scope: NoteImportScope) => call<{ count: number; folders: string[] }>(`/api/tasks/import-notes?${new URLSearchParams(scope)}`),
   importNoteTasks: (scope: NoteImportScope) => post<{ imported: number }>("/api/tasks/import-notes", scope),
   // Routines
   listRoutines: (projectId?: string) =>

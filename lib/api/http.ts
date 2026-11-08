@@ -2,14 +2,8 @@ import "server-only";
 import type { z } from "zod";
 import { getSession, type LiveSession } from "@/lib/agent";
 
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { HttpError } from "./errors";
+export { HttpError } from "./errors";
 
 export async function parseBody<S extends z.ZodType>(req: Request, schema: S): Promise<z.infer<S>> {
   const json = await req.json().catch(() => {

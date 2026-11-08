@@ -95,6 +95,7 @@ export function NoteMetaBar({
           )}
         </div>
       )}
+      {note.source === "repo" && <p className="text-muted-foreground text-[11px]">{note.id}.md · Edits save to the file in the repo.</p>}
       <p className="text-muted-foreground truncate font-mono text-[10px]" title={note.path}>
         {tildify(note.path)}
       </p>

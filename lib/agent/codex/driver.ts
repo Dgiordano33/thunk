@@ -153,7 +153,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
   ]);
-  const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir];
+  const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
   // A worktree's git metadata lives in the main checkout; commits need to write there.
   const writableRoots = workspace.worktreePath ? [...dataDirs, path.join(project.root, ".git")] : [...dataDirs];

@@ -1,5 +1,5 @@
 import { handle } from "@/lib/api/http";
-import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
+import { projectNoteDirs, workspaceNoteDirs, repoDirsFor } from "@/lib/notes/resolve";
 import { countNotes } from "@/lib/notes/store";
 import { listProjects } from "@/lib/supabase/repo/projects";
 import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
@@ -12,6 +12,7 @@ export const GET = handle(async () => {
     const workspaces = (await listWorkspaces(project.id)).filter((w) => w.status === "active");
     return [project.id, await countNotes([
       projectNoteDirs(project),
+      ...await repoDirsFor(project),
       ...workspaces.map((w) => workspaceNoteDirs(project, w)),
     ])] as const;
   }));

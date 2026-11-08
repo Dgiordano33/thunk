@@ -32,7 +32,7 @@ Module._load = function (request, parent, isMain) {
   if (request === "server-only") return {};
   if (request === "@/lib/agent") return agent;
   if (request === "../server") return { db: () => null }; // Never connect to configured local or remote databases.
-  if (request === "@/lib/notes/resolve") return { dirsForScope: async (scope) => scope.kind === "projects" ? projectNoteDirs : noteDirs };
+  if (request === "@/lib/notes/resolve") return { dirsForScope: async (scope) => scope.kind === "projects" ? projectNoteDirs : noteDirs, repoDirsFor: async () => [] };
   return load.call(this, request, parent, isMain);
 };
 const repo = require("../lib/supabase/repo/tasks.ts");
@@ -147,7 +147,7 @@ test("import preview and concurrent retries preserve notes and task edits", asyn
   const note = await notes.createNote(noteDirs, { title: "Checklist", actionable: true, markdown: "- [ ] Same\n- [ ] Same\n- [x] Done\n" });
   await notes.createNote(noteDirs, { markdown: "- [ ] Not actionable" });
   const before = await fs.readFile(note.path, "utf8");
-  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?workspaceId=${w.id}`))).json(), { count: 2 });
+  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?workspaceId=${w.id}`))).json(), { count: 2, folders: [] });
   const results = await Promise.all([imports.POST(req("POST", { workspaceId: w.id })), imports.POST(req("POST", { workspaceId: w.id }))]);
   const counts = await Promise.all(results.map((r) => r.json()));
   assert.equal(counts.reduce((sum, r) => sum + r.imported, 0), 2);
@@ -156,10 +156,10 @@ test("import preview and concurrent retries preserve notes and task edits", asyn
   assert.equal(imported[0].noteId, note.id);
   await service.patchTask(imported[0].id, { title: "Edited", status: "done" });
   assert.deepEqual(await (await imports.POST(req("POST", { workspaceId: w.id }))).json(), { imported: 0 });
-  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?workspaceId=${w.id}`))).json(), { count: 0 });
+  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?workspaceId=${w.id}`))).json(), { count: 0, folders: [] });
   assert.equal(await fs.readFile(note.path, "utf8"), before);
   const projectNote = await notes.createNote(projectNoteDirs, { title: "Project checklist", actionable: true, markdown: "- [ ] Shared follow-up\n" });
-  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?projectId=${w.projectId}`))).json(), { count: 1 });
+  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?projectId=${w.projectId}`))).json(), { count: 1, folders: [] });
   assert.deepEqual(await (await imports.POST(req("POST", { projectId: w.projectId }))).json(), { imported: 1 });
   const projectTasks = await repo.listTasks({ projectId: w.projectId, workspaceId: null });
   assert.equal(projectTasks.length, 1);

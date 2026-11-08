@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { RepoNotebooks } from "@/components/project/repo-notebooks";
 import { ScopeNotes } from "@/components/notes/library";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { scopeKey, type NoteScope } from "@/lib/notes/types";
@@ -49,6 +50,7 @@ export function LibraryPanel({
       }
     >
       <div className="flex h-full min-h-0 flex-col">
+        <RepoNotebooks projectId={projectId} />
         <ScopeNotes
           key={scopeKey(scope)}
           scope={scope}

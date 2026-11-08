@@ -1,4 +1,6 @@
 "use client";
+import { extractTasks } from "@/lib/notes/frontmatter";
+import { parseRepoTaskLink } from "@/lib/notes/task-link";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,16 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
   const [scope, setScope] = useState(task ? task.workspaceId ?? "project" : workspaceId ?? "project");
   const [sessionId, setSessionId] = useState(task?.sessionId ?? "none");
   const [noteId, setNoteId] = useState(task?.noteId ?? "");
+  const [boardState, setBoardState] = useState<string | null>(null);
+  useEffect(() => {
+    const link = parseRepoTaskLink(noteId);
+    if (!link) return;
+    let active = true;
+    api.getNote(link.scope.kind, link.scope.id, link.id).then(({ note }) => {
+      if (active) setBoardState(extractTasks(note.markdown).some((i) => i.text === (task?.body ?? task?.title)) ? "Linked to repo board" : "Not in board");
+    }).catch(() => { if (active) setBoardState("Board unavailable"); });
+    return () => { active = false; };
+  }, [noteId, task?.body, task?.title]);
   const [dueAt, setDueAt] = useState(task?.dueAt?.slice(0, 10) ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +74,8 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
           <div className="space-y-1.5 text-xs">Scope<Select value={scope} onValueChange={(v) => { setScope(v); setSessionId("none"); setNoteId(""); }}><SelectTrigger aria-label="Task scope" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="project">Project</SelectItem>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>Workspace · {w.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5 text-xs">Owner<Select value={sessionId} onValueChange={setSessionId}><SelectTrigger aria-label="Owner session" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Unassigned</SelectItem>{sessionId !== "none" && !available.some((s) => s.id === sessionId) && <SelectItem value={sessionId}>Assigned session</SelectItem>}{available.map((s) => <SelectItem key={s.id} value={s.id}>{s.title || "Untitled session"}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5 text-xs">Linked note<Select value={noteId || "none"} onValueChange={(v) => setNoteId(v === "none" ? "" : v)}><SelectTrigger aria-label="Linked note" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{noteId && !notes.some((n) => n.id === noteId) && <SelectItem value={noteId}>Linked note</SelectItem>}{notes.map((n) => <SelectItem key={n.id} value={n.id}>{n.title || "Untitled note"}</SelectItem>)}</SelectContent></Select></div>
-          {noteId && <Link className="text-xs underline" href={`/notes?${new URLSearchParams({ scope: scopeKey({ kind: scope === "project" ? "projects" : "workspaces", id: scope === "project" ? projectId : scope }), note: noteId })}`}>Open linked note</Link>}
+          {parseRepoTaskLink(noteId) && boardState && <p className="text-muted-foreground text-xs">{boardState}</p>}
+          {noteId && <Link className="text-xs underline" href={`/notes?${new URLSearchParams({ scope: scopeKey(parseRepoTaskLink(noteId)?.scope ?? { kind: scope === "project" ? "projects" : "workspaces", id: scope === "project" ? projectId : scope }), note: parseRepoTaskLink(noteId)?.id ?? noteId })}`}>Open linked note</Link>}
           <label className="grid gap-1.5 text-xs">Due date<Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
         </fieldset>
         {error && <p role="alert" className="text-destructive text-xs">{error}</p>}

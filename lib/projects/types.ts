@@ -12,9 +12,12 @@ export type Project = {
   defaultBranch: string | null;
   /** Repos the project spans besides its primary root, in the order they were added. */
   extraRepos: ProjectRepo[];
+  repoFolders: RepoFolder[];
   createdAt: string;
   updatedAt: string;
 };
+
+export type RepoFolder = { id: string; projectId: string; repoId: string | null; path: string; label: string };
 
 /** An additional git repo in a multi-repo project. The primary repo is the project's own root. */
 export type ProjectRepo = {
