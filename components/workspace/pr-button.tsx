@@ -27,8 +27,21 @@ const POLL_MS = 30_000;
 /** While a PR is being created, checks are running, or mergeability is being computed. */
 const FAST_POLL_MS = 8_000;
 
-function prPrompt(status: WorkspacePrStatus) {
+/** An extra repo of a multi-repo workspace; without one the button is about the primary checkout. */
+export type PrRepo = { id: string; name: string; cwd: string };
+
+/** Points a PR job at the right repo: agents start in the primary checkout. */
+function inRepo(repo: PrRepo | undefined, lines: string[]) {
+  if (!repo) return lines.join("\n");
   return [
+    `This is about the **${repo.name}** repo of this workspace, at \`${repo.cwd}\`. Run every git and gh command there (\`cd ${repo.cwd}\` first, or \`git -C\`), not in your cwd.`,
+    "",
+    ...lines,
+  ].join("\n");
+}
+
+function prPrompt(status: WorkspacePrStatus, repo?: PrRepo) {
+  return inRepo(repo, [
     `Create a pull request for this workspace's branch \`${status.branch}\` into \`${status.base}\`.`,
     "",
     `1. Review what changed vs \`origin/${status.base}\` (git status, git diff, git log).`,
@@ -37,12 +50,12 @@ function prPrompt(status: WorkspacePrStatus) {
     `4. Open the PR with \`gh pr create --base ${status.base}\`: a concise title and a description summarizing the changes and how to test them.`,
     "",
     "Reply with the PR URL when it's open.",
-  ].join("\n");
+  ]);
 }
 
-function fixChecksPrompt(pr: PullRequestInfo) {
+function fixChecksPrompt(pr: PullRequestInfo, repo?: PrRepo) {
   const failing = pr.checks.filter((c) => c.state === "fail");
-  return [
+  return inRepo(repo, [
     `CI is failing on PR #${pr.number} (${pr.url}). Fix it.`,
     "",
     "Failing checks:",
@@ -54,11 +67,11 @@ function fixChecksPrompt(pr: PullRequestInfo) {
     "4. Commit with a clear message and push to the PR branch.",
     "",
     "Summarize what was wrong and what you changed.",
-  ].join("\n");
+  ]);
 }
 
-function resolveConflictsPrompt(pr: PullRequestInfo, base: string) {
-  return [
+function resolveConflictsPrompt(pr: PullRequestInfo, base: string, repo?: PrRepo) {
+  return inRepo(repo, [
     `PR #${pr.number} (${pr.url}) has merge conflicts with \`${base}\`. Resolve them.`,
     "",
     `1. \`git fetch origin\` and merge \`origin/${base}\` into this branch (merge, not rebase, so no force-push is needed).`,
@@ -67,11 +80,11 @@ function resolveConflictsPrompt(pr: PullRequestInfo, base: string) {
     "4. Commit the merge and push.",
     "",
     "Summarize which files conflicted and how you resolved each.",
-  ].join("\n");
+  ]);
 }
 
-function addressReviewPrompt(pr: PullRequestInfo) {
-  return [
+function addressReviewPrompt(pr: PullRequestInfo, repo?: PrRepo) {
+  return inRepo(repo, [
     `Reviewers requested changes on PR #${pr.number} (${pr.url}). Address them.`,
     "",
     `1. Read the review and inline comments: \`gh pr view ${pr.number} --comments\` and \`gh api repos/{owner}/{repo}/pulls/${pr.number}/comments\`.`,
@@ -79,7 +92,7 @@ function addressReviewPrompt(pr: PullRequestInfo) {
     "3. Build/lint/test, commit and push.",
     "",
     "List each comment and what you did about it.",
-  ].join("\n");
+  ]);
 }
 
 export type PrAction = "create" | "fix-checks" | "resolve-conflicts" | "address-review";
@@ -95,7 +108,7 @@ const ACTION_TITLE: Record<PrAction, string> = {
 const FAST_AFTER_REQUEST_MS = 5 * 60_000;
 
 /** Top-right PR action: "Create PR" hands the job to the agent; once a PR exists it links to it. */
-export function PrButton({ workspaceId, deliveryStatus, inline = false }: { workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean }) {
+export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: { workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean; repo?: PrRepo }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loadedStatus, setStatus] = useState<WorkspacePrStatus | null>(null);
@@ -113,10 +126,10 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false }: { work
   const load = useCallback(
     () =>
       api
-        .workspacePr(workspaceId)
+        .workspacePr(workspaceId, repo?.id)
         .then((r) => setStatus(r.status))
         .catch(() => setStatus(null)),
-    [workspaceId],
+    [workspaceId, repo?.id],
   );
   useEffect(() => {
     if (deliveryStatus !== undefined) return;
@@ -133,7 +146,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false }: { work
       if (sid && s.sessionId === sid && s.meta?.live) {
         await api.send(sid, prompt);
       } else {
-        const { id } = await api.createSession({ workspaceId, prompt, title: ACTION_TITLE[action] });
+        const { id } = await api.createSession({ workspaceId, prompt, title: repo ? `${ACTION_TITLE[action]} (${repo.name})` : ACTION_TITLE[action] });
         router.push(`/w/${workspaceId}/s/${id}`);
         router.refresh();
       }
@@ -153,16 +166,17 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false }: { work
         inline={inline}
         pr={pr}
         base={status.base}
+        repoName={repo?.name}
         pending={pending}
         requested={requested && Date.now() - requested.at < FAST_AFTER_REQUEST_MS ? requested.action : null}
         onAsk={(action) =>
           void ask(
             action,
             action === "fix-checks"
-              ? fixChecksPrompt(pr)
+              ? fixChecksPrompt(pr, repo)
               : action === "resolve-conflicts"
-                ? resolveConflictsPrompt(pr, status.base)
-                : addressReviewPrompt(pr),
+                ? resolveConflictsPrompt(pr, status.base, repo)
+                : addressReviewPrompt(pr, repo),
           )
         }
       />
@@ -173,22 +187,23 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false }: { work
       <Button size="sm" variant="outline" className="h-7 gap-1.5" asChild>
         <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title}>
           <GitMergeIcon className="text-violet-600 dark:text-violet-400" />
-          Merged #{pr.number}
+          {repo && `${repo.name} `}Merged #{pr.number}
         </a>
       </Button>
     );
 
   // The wrapper carries the tooltip: disabled buttons don't receive pointer events.
   return (
-    <span title={status.reason ?? `Ask Claude to commit, push and open a PR into ${status.base}`}>
+    <span title={`${repo ? `${repo.name}: ` : ""}${status.reason ?? `Ask Claude to commit, push and open a PR into ${status.base}`}`}>
       <Button
         size="sm"
         className="h-7 gap-1.5"
-        onClick={() => void ask("create", prPrompt(status))}
+        onClick={() => void ask("create", prPrompt(status, repo))}
         disabled={!status.canCreate || pending !== null || creating}
       >
         {pending || creating ? <Loader2Icon className="animate-spin" /> : <GitPullRequestArrowIcon />}
         {creating ? "Creating PR…" : "Create PR"}
+        {repo && <span className="opacity-70">· {repo.name}</span>}
       </Button>
     </span>
   );
@@ -233,6 +248,7 @@ function OpenPr({
   inline,
   pr,
   base,
+  repoName,
   pending,
   requested,
   onAsk,
@@ -240,6 +256,7 @@ function OpenPr({
   inline?: boolean;
   pr: PullRequestInfo;
   base: string;
+  repoName?: string;
   pending: PrAction | null;
   requested: PrAction | null;
   onAsk: (action: Exclude<PrAction, "create">) => void;
@@ -255,7 +272,7 @@ function OpenPr({
       <PopoverTrigger asChild>
         <Button size="sm" variant="outline" className="h-7 gap-1.5" title={pr.title}>
           <GitPullRequestIcon className={cn(pr.isDraft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400")} />
-          {pr.isDraft ? "Draft" : "PR"} #{pr.number}
+          {repoName && `${repoName} `}{pr.isDraft ? "Draft" : "PR"} #{pr.number}
           {conflicts ? (
             <CircleDotIcon className={TONE.bad} aria-label="Merge conflicts" />
           ) : (

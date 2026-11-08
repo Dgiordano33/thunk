@@ -1,4 +1,5 @@
-import { captureCheckpoint } from "@/lib/projects/checkpoints";
+import { captureWorkspaceCheckpoint } from "@/lib/projects/checkpoints";
+import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { withWorkspaceLock } from "@/lib/projects/runtime";
 import { expandCommand } from "@/lib/prompts/context";
 import type { PromptImage } from "@/lib/prompts/schema";
@@ -327,11 +328,12 @@ export function pushUserMessage(
 
 function dispatchMessage(live: LiveSession, messageId: string, content: string, images?: PromptImage[]) {
   void (async () => {
-    if (live.ctx.project.kind === "repo") {
+    if (workspaceRepoTargets(live.ctx).length) {
       // Queue behind other workspace operations (another session's checkpoint, a rewind) rather than failing the turn.
       await withWorkspaceLock(live.ctx.workspace.id, async () => {
         try {
-          await captureCheckpoint(live.ctx.workspace.cwd, live.ctx.workspace.id, live.id, messageId, content);
+          const { skipped } = await captureWorkspaceCheckpoint(live.ctx, live.id, messageId, content);
+          if (skipped.length) emit(live, { type: "error", message: `Checkpoint skipped some repos; rewind won't restore them for this turn: ${skipped.join("; ")}` });
         } catch (err) {
           // A Git conflict must not prevent asking the agent to resolve it.
           emit(live, { type: "error", message: `Checkpoint unavailable; this turn will run without rewind: ${(err as Error).message}` });

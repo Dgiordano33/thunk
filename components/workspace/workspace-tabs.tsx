@@ -78,6 +78,10 @@ export function WorkspaceTabs({
         <span className="max-w-48 truncate font-mono">{branch ?? workspace.name}</span>
         {dirty > 0 && <span className="tabular-nums">{dirty} changed</span>}
         <PrButton workspaceId={workspace.id} />
+        {/* Each extra repo with its own branch gets its own PR. */}
+        {workspace.extraRepos?.filter((r) => r.branch).map((r) => (
+          <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />
+        ))}
       </div>
     </div>
   );

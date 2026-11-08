@@ -68,11 +68,19 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
   };
   const selected = state?.processes.find((p) => p.kind === tab);
   const blocked = busy || state?.busy || state?.archived;
-  const conflicts = [...new Set([...(git?.conflicts ?? []), ...(git?.rootConflicts ?? [])])];
+  // Multi-repo workspaces report every repo; actions without a repo id apply to all of them.
+  const repos = git?.repos ?? [];
+  const multi = repos.length > 1;
+  const conflicts = [...new Set(repos.flatMap((r) => [...r.conflicts, ...r.rootConflicts].map((f) => multi ? `${r.name}: ${f}` : f)))];
+  const canManage = repos.some((r) => r.canManage);
+  const mergeOpen = repos.some((r) => r.operation === "merge" || r.rootOperation === "merge");
+  const rebaseOpen = repos.some((r) => r.operation === "rebase");
+  const inRoot = repos.some((r) => r.rootConflicts.length);
 
   const applyGit = () => {
     const merging = gitAction === "merge" || gitAction === "squash";
-    if (merging && !window.confirm(`${gitAction === "squash" ? "Squash" : "Merge"} committed workspace changes into local ${git?.target}?${cleanup ? " Then run the archive hook and delete this workspace and its sessions." : ""}`)) return;
+    const into = multi ? "each repo's default branch" : `local ${git?.target}`;
+    if (merging && !window.confirm(`${gitAction === "squash" ? "Squash" : "Merge"} committed workspace changes into ${into}?${cleanup ? " Then run the archive hook and delete this workspace and its sessions." : ""}`)) return;
     void act(async () => {
       const result = await api.workspaceGitAction(workspaceId, gitAction, merging && cleanup);
       if (result.deleted) { router.push("/"); return; }
@@ -103,27 +111,27 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
             </Button>)}
         {tab === "run" && state?.port ? <span className="text-muted-foreground text-xs">:{state.port}</span> : null}
         {tab === "preview" && state?.previewUrl && <a href={state.previewUrl} target="_blank" rel="noreferrer" aria-label="Open dev server in new tab" className="text-muted-foreground px-1"><ExternalLinkIcon className="size-3.5" /></a>}
-        {git?.target && !open && <span className="text-muted-foreground whitespace-nowrap px-1 text-xs" title={`${git.ahead} ahead, ${git.behind} behind ${git.target}`}>{git.ahead}↑ {git.behind}↓ {git.target}</span>}
+        {!open && repos.filter((r) => r.target).map((r) => <span key={r.id} className="text-muted-foreground whitespace-nowrap px-1 text-xs" title={`${multi ? `${r.name}: ` : ""}${r.ahead} ahead, ${r.behind} behind ${r.target}`}>{multi && `${r.name} `}{r.ahead}↑ {r.behind}↓{!multi && ` ${r.target}`}</span>)}
         <Button size="icon-sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Collapse console" : "Expand console"}>
           {open ? <ChevronDownIcon /> : <ChevronUpIcon />}
         </Button>
       </div>
       {open && <div className="flex h-[min(50vh,420px)] min-h-64 flex-col border-t">
         {(error || state?.setupError) && <p role="alert" className="text-destructive max-h-24 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{error || state?.setupError}</p>}
-        {git?.canManage && <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
+        {canManage && <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
           <Select value={gitAction} onValueChange={setGitAction}>
             <SelectTrigger size="sm" className="w-44" aria-label="Git action"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sync">Sync with {git.target}</SelectItem>
-              <SelectItem value="rebase">Rebase onto {git.target}</SelectItem>
-              <SelectItem value="merge">Merge into {git.target}</SelectItem>
-              <SelectItem value="squash">Squash into {git.target}</SelectItem>
+              <SelectItem value="sync">Sync with {multi ? "default branches" : git?.target}</SelectItem>
+              <SelectItem value="rebase">Rebase onto {multi ? "default branches" : git?.target}</SelectItem>
+              <SelectItem value="merge">Merge into {multi ? "default branches" : git?.target}</SelectItem>
+              <SelectItem value="squash">Squash into {multi ? "default branches" : git?.target}</SelectItem>
             </SelectContent>
           </Select>
           {(gitAction === "merge" || gitAction === "squash") && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={cleanup} onChange={(e) => setCleanup(e.target.checked)} /> Then delete workspace</label>}
           <Button size="sm" variant="outline" disabled={blocked} onClick={applyGit}>Apply</Button>
-          {(git.operation === "merge" || git.rootOperation === "merge") && <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "merge-abort"))}>Abort merge</Button>}
-          {git.operation === "rebase" && <>
+          {mergeOpen && <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "merge-abort"))}>Abort merge</Button>}
+          {rebaseOpen && <>
             <Button size="sm" variant="outline" disabled={blocked || conflicts.length > 0} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-continue"))}>Continue rebase</Button>
             <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-abort"))}>Abort rebase</Button>
           </>}
@@ -133,7 +141,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
             }
           }}>{state?.archived ? "Archived" : "Archive"}</Button>
         </div>}
-        {conflicts.length > 0 && <p role="alert" className="text-destructive max-h-20 overflow-auto px-3 py-2 text-xs">Resolve and stage these files in {git?.rootConflicts.length ? "the project root" : "the workspace"}: {conflicts.join(", ")}. {git?.operation === "merge" || git?.rootOperation === "merge" ? "Commit the merge in the terminal, or abort." : "Then continue the rebase, or abort."}</p>}
+        {conflicts.length > 0 && <p role="alert" className="text-destructive max-h-20 overflow-auto px-3 py-2 text-xs">Resolve and stage these files in {inRoot ? (multi ? "each repo's main checkout" : "the project root") : "the workspace"}: {conflicts.join(", ")}. {mergeOpen ? "Commit the merge in the terminal, or abort." : "Then continue the rebase, or abort."}</p>}
         {tab === "preview" ? state?.previewUrl
           ? <iframe title="Workspace preview" src={state.previewUrl} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-downloads" />
           : <p className="text-muted-foreground p-4 text-sm">Start the dev server to preview it.</p>

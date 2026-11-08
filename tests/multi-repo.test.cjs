@@ -126,3 +126,69 @@ test("workspaces without worktrees use every extra repo in place", async () => {
   assert.equal(ws.cwd, a);
   assert.deepEqual(ws.extraRepos.map((r) => [r.cwd, r.worktreePath]), [[b, null]]);
 });
+
+const { workspaceGitAction, workspaceGitState } = require("../lib/projects/workspace-git.ts");
+const { captureWorkspaceCheckpoint, listWorkspaceCheckpoints, restoreWorkspaceCheckpoint } = require("../lib/projects/checkpoints.ts");
+const { workspaceRepoTargets } = require("../lib/projects/repo-targets.ts");
+
+async function twoRepoWorkspace(prefix, name) {
+  const app = await makeRepo(`${prefix}-app`);
+  const lib = await makeRepo(`${prefix}-lib`);
+  const project = await projects.addProject(app);
+  await projects.ensureMainWorkspace(project);
+  await projects.addProjectRepo(project.id, lib);
+  const ws = await projects.createWorkspace({ projectId: project.id, name, setup: "skip" });
+  const ctx = await projects.getWorkspaceContext(ws.id);
+  return { app, lib, ctx, libCwd: ctx.workspace.extraRepos[0].cwd };
+}
+
+test("git state and actions cover every repo, and check them all before changing any", async () => {
+  const { app, lib, ctx, libCwd } = await twoRepoWorkspace("git", "berlin");
+  assert.deepEqual(workspaceRepoTargets(ctx).map((t) => [t.name, t.primary]), [["git-app", true], ["git-lib", false]]);
+
+  await fs.writeFile(path.join(ctx.workspace.cwd, "a"), "a\n");
+  git(ctx.workspace.cwd, "add", "."); git(ctx.workspace.cwd, "commit", "-m", "a");
+  await fs.writeFile(path.join(libCwd, "b"), "b\n");
+  git(libCwd, "add", "."); git(libCwd, "commit", "-m", "b");
+  const state = await workspaceGitState(ctx);
+  assert.deepEqual(state.repos.map((r) => [r.name, r.ahead, r.canManage]), [["git-app", 1, true], ["git-lib", 1, true]]);
+
+  // A dirty extra repo stops the merge before the primary repo is touched.
+  await fs.writeFile(path.join(libCwd, "dirty"), "x\n");
+  await assert.rejects(workspaceGitAction(ctx, "merge"), /Commit or stash changes/);
+  assert.equal(git(app, "log", "-1", "--format=%s"), "base");
+  await fs.rm(path.join(libCwd, "dirty"));
+
+  await workspaceGitAction(ctx, "merge");
+  assert.equal(git(app, "log", "-1", "--format=%s"), "a");
+  assert.equal(git(lib, "log", "-1", "--format=%s"), "b");
+
+  // With a repo id, only that repo is touched.
+  await fs.writeFile(path.join(libCwd, "c"), "c\n");
+  git(libCwd, "add", "."); git(libCwd, "commit", "-m", "c");
+  await workspaceGitAction(ctx, "squash", workspaceRepoTargets(ctx)[1].id);
+  assert.equal(git(lib, "log", "-1", "--format=%s"), "Merge workspace berlin");
+  await projects.removeWorkspace(ctx.workspace.id, { removeWorktree: true });
+});
+
+test("checkpoints snapshot and rewind every repo together", async () => {
+  const { ctx, libCwd } = await twoRepoWorkspace("cp", "kyoto");
+  await fs.writeFile(path.join(ctx.workspace.cwd, "app.txt"), "one\n");
+  await fs.writeFile(path.join(libCwd, "lib.txt"), "one\n");
+  const { checkpoint, skipped } = await captureWorkspaceCheckpoint(ctx, "session", "message", "Before edits");
+  assert.deepEqual(skipped, []);
+  assert.deepEqual((await listWorkspaceCheckpoints(ctx)).map((c) => c.id), [checkpoint.id]);
+
+  await fs.writeFile(path.join(ctx.workspace.cwd, "app.txt"), "two\n");
+  await fs.writeFile(path.join(libCwd, "lib.txt"), "two\n");
+  await fs.writeFile(path.join(libCwd, "new.txt"), "new\n");
+  const recovery = await restoreWorkspaceCheckpoint(ctx, checkpoint.id);
+  assert.equal(await fs.readFile(path.join(ctx.workspace.cwd, "app.txt"), "utf8"), "one\n");
+  assert.equal(await fs.readFile(path.join(libCwd, "lib.txt"), "utf8"), "one\n");
+  await assert.rejects(fs.stat(path.join(libCwd, "new.txt")));
+
+  // The recovery checkpoint shares one id across repos, so undoing the rewind is also all-or-nothing.
+  await restoreWorkspaceCheckpoint(ctx, recovery.id);
+  assert.equal(await fs.readFile(path.join(libCwd, "lib.txt"), "utf8"), "two\n");
+  assert.equal(await fs.readFile(path.join(ctx.workspace.cwd, "app.txt"), "utf8"), "two\n");
+});

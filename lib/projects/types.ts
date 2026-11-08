@@ -79,6 +79,14 @@ export type WorkspaceChanges = {
   deletions: number;
 };
 
+/** One repo's changes in a multi-repo workspace. `id` is "primary" for the project's own repo. */
+export type RepoChanges = {
+  id: string;
+  name: string;
+  cwd: string;
+  changes: WorkspaceChanges | null;
+};
+
 export type CheckState = "pass" | "fail" | "pending" | "skipped";
 
 export type PrCheck = { name: string; state: CheckState; url: string | null };

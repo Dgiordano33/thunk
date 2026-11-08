@@ -3,6 +3,7 @@ import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, SproutIcon } from "lucide
 import Link from "next/link";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
+import { ProjectRepos } from "@/components/project/project-repos";
 import { SessionView } from "@/components/session/session-view";
 import { relativeTime, workspaceLabel } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
@@ -97,8 +98,14 @@ export function TownCenterPanel({
             ]}
           />
           <div className="mt-3">
-            <NewWorkspaceButton projectId={project.id} projectName={project.name} />
+            <NewWorkspaceButton projectId={project.id} projectName={project.name} repos={project.extraRepos} />
           </div>
+        </Section>
+      )}
+
+      {capital && (
+        <Section title={`Repos (${project.extraRepos.length + (project.kind === "repo" ? 1 : 0)})`}>
+          <ProjectRepos project={project} />
         </Section>
       )}
 
@@ -110,6 +117,16 @@ export function TownCenterPanel({
             <span className="text-muted-foreground">In place at the project root</span>
           )}
         </div>
+        {workspace.extraRepos.length > 0 && (
+          <ul className="text-muted-foreground mb-3 flex flex-col gap-0.5 text-xs">
+            {workspace.extraRepos.map((r) => (
+              <li key={r.repoId} className="flex items-center gap-1.5" title={r.cwd}>
+                <span className="text-foreground font-medium">{r.name}</span>
+                {r.worktreePath ? <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{r.branch}</span> : <span>in place</span>}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" asChild>
             <Link href={`/w/${workspace.id}/new`}><SproutIcon /> Sow a new field</Link>
