@@ -8,6 +8,7 @@ import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { tasksTools } from "@/lib/tasks/tools";
 import { tasksPrompt } from "@/lib/tasks/prompt";
 import { tasksForWorkspace } from "@/lib/tasks/service";
+import { extraRepoDirectories, extraReposPrompt } from "@/lib/projects/repos-prompt";
 import type { Task } from "@/lib/tasks/types";
 import { vaultDirOf } from "@/lib/vault/dir";
 import { listItems } from "@/lib/vault/store";
@@ -45,6 +46,7 @@ export function hierarchyPrompt(
     workspace.worktreePath
       ? `Workspace: **${workspace.name}** · git worktree at \`${workspace.worktreePath}\` on branch \`${workspace.branch}\` (branched from \`${workspace.baseRef}\`). Your cwd is the worktree${provider === "claude" ? "; the project's CLAUDE.md and .claude/ config come from the main checkout" : ""}. Do not switch branches or cd into the main checkout.`
       : `Workspace: **${workspace.name}** · works directly in the project root (no worktree).`,
+    ...extraReposPrompt(workspace),
     "",
     "Two memory scopes, both plain markdown files you may read and edit with your file tools:",
     `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.`,
@@ -76,7 +78,8 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // In a worktree, CLAUDE.md / .claude / .mcp.json still come from the trusted main checkout.
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
-    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, vaultDir.dir],
+    // Extra repos of a multi-repo workspace are working directories too.
+    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), vaultDir.dir],
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [

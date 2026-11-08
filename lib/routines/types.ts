@@ -4,10 +4,11 @@ import type { ChangedFile } from "@/lib/projects/types";
 /** Where a run happens: an existing workspace, or a fresh worktree created per run. */
 export type RoutineTargetKind = "workspace" | "ephemeral";
 
-export const ROUTINE_EVENTS = ["pr_opened", "run_failed"] as const;
+export const DELIVERY_ROUTINE_EVENTS = ["ci_failed", "review_requested", "deploy_ready"] as const;
+export const ROUTINE_EVENTS = ["pr_opened", "run_failed", ...DELIVERY_ROUTINE_EVENTS] as const;
 export type RoutineEvent = (typeof ROUTINE_EVENTS)[number];
 
-export const RUN_TRIGGERS = ["manual", "cron", "webhook", "pr_opened", "run_failed"] as const;
+export const RUN_TRIGGERS = ["manual", "cron", "webhook", ...ROUTINE_EVENTS] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 export const RUN_STATUSES = ["queued", "running", "needs_attention", "succeeded", "failed", "cancelled"] as const;
@@ -19,6 +20,7 @@ export const OPEN_RUN_STATUSES: readonly RunStatus[] = ["queued", "running", "ne
 export type RoutineCatchUp = "skip" | "once";
 
 export type RoutineTriggerState = {
+  delivery?: { epoch: string; seq: number; config: string } | null;
   /** Newest PR createdAt seen by the poller; PRs at or before it never fire. */
   prSeenAt?: string;
   /** PR numbers already fired for (capped). */
@@ -109,11 +111,17 @@ export const RUN_TRIGGER_LABELS: Record<RunTrigger, string> = {
   webhook: "Webhook",
   pr_opened: "New PR",
   run_failed: "Run script failed",
+  ci_failed: "CI failed",
+  review_requested: "Review requested",
+  deploy_ready: "Deploy ready",
 };
 
 export const EVENT_LABELS: Record<RoutineEvent, string> = {
   pr_opened: "New pull request",
   run_failed: "Run script fails",
+  ci_failed: "CI fails",
+  review_requested: "A review is requested",
+  deploy_ready: "A deployment is ready",
 };
 
 export const MAX_CONCURRENT_RUNS = 3;

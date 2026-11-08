@@ -12,7 +12,13 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   const { id } = await params;
   const ctx = await getWorkspaceContext(id);
   if (!ctx) notFound();
-  const [sessions, git] = await Promise.all([listSessions({ workspaceId: id, limit: 50 }), worktreeStatus(ctx.workspace.cwd)]);
+  const [sessions, git, ...extras] = await Promise.all([
+    listSessions({ workspaceId: id, limit: 50 }),
+    worktreeStatus(ctx.workspace.cwd),
+    // Uncommitted files across a multi-repo workspace's other repos count too.
+    ...ctx.workspace.extraRepos.map((r) => worktreeStatus(r.cwd)),
+  ]);
+  const dirty = (git?.dirty ?? 0) + extras.reduce((n, s) => n + (s?.dirty ?? 0), 0);
 
   const ordered = [...sessions].reverse();
   return (
@@ -25,7 +31,7 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
           workspace={ctx.workspace}
           sessions={ordered}
           branch={git?.branch ?? null}
-          dirty={git?.dirty ?? 0}
+          dirty={dirty}
         />
       }
     >

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Project, ProjectSummary } from "@/lib/projects/types";
 import { db } from "../server";
+import { memForgetProject, memProjectRepos, PROJECT_REPO_COLUMNS, toProjectRepos, type ProjectRepoRow } from "./project-repos";
 import { deleteTask, listTasks } from "./tasks";
 import { emitTask } from "@/lib/tasks/events";
 
@@ -13,9 +14,10 @@ type Row = {
   default_branch: string | null;
   created_at: string;
   updated_at: string;
+  project_repos?: ProjectRepoRow[] | null;
 };
 
-const COLUMNS = "id, name, root, kind, remote, default_branch, created_at, updated_at";
+const COLUMNS = `id, name, root, kind, remote, default_branch, created_at, updated_at, project_repos(${PROJECT_REPO_COLUMNS})`;
 
 function toProject(r: Row): Project {
   return {
@@ -25,25 +27,28 @@ function toProject(r: Row): Project {
     kind: r.kind as Project["kind"],
     remote: r.remote,
     defaultBranch: r.default_branch,
+    extraRepos: toProjectRepos(r.project_repos),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
 }
 
 // Memory-only mode (no Supabase): projects live for the server's lifetime. Pinned to globalThis for HMR.
+// Stored without extraRepos; `withRepos` attaches the current list on every read.
 const g = globalThis as typeof globalThis & { __thunkMemProjects?: Map<string, Project> };
 const mem = (g.__thunkMemProjects ??= new Map());
+const withRepos = (p: Project): Project => ({ ...p, extraRepos: memProjectRepos(p.id) });
 
-export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<Project> {
+export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "extraRepos">): Promise<Project> {
   const client = db();
   const now = new Date().toISOString();
   if (!client) {
     const existing = [...mem.values()].find((p) => p.root === input.root);
     const project: Project = existing
       ? { ...existing, ...input, updatedAt: now }
-      : { id: crypto.randomUUID(), ...input, createdAt: now, updatedAt: now };
+      : { id: crypto.randomUUID(), ...input, extraRepos: [], createdAt: now, updatedAt: now };
     mem.set(project.id, project);
-    return project;
+    return withRepos(project);
   }
   const { data, error } = await client
     .from("projects")
@@ -66,7 +71,10 @@ export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "u
 
 export async function getProject(id: string): Promise<Project | null> {
   const client = db();
-  if (!client) return mem.get(id) ?? null;
+  if (!client) {
+    const p = mem.get(id);
+    return p ? withRepos(p) : null;
+  }
   const { data, error } = await client.from("projects").select(COLUMNS).eq("id", id).maybeSingle();
   if (error) throw error;
   return data ? toProject(data) : null;
@@ -74,7 +82,10 @@ export async function getProject(id: string): Promise<Project | null> {
 
 export async function getProjectByRoot(root: string): Promise<Project | null> {
   const client = db();
-  if (!client) return [...mem.values()].find((p) => p.root === root) ?? null;
+  if (!client) {
+    const p = [...mem.values()].find((p) => p.root === root);
+    return p ? withRepos(p) : null;
+  }
   const { data, error } = await client.from("projects").select(COLUMNS).eq("root", root).maybeSingle();
   if (error) throw error;
   return data ? toProject(data) : null;
@@ -95,6 +106,7 @@ export async function deleteProject(id: string): Promise<void> {
   const client = db();
   if (!client) {
     for (const task of await listTasks({ projectId: id })) await deleteTask(task.id);
+    memForgetProject(id);
     mem.delete(id);
     return;
   }
@@ -109,7 +121,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   if (!client) {
     return [...mem.values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((p) => ({ ...p, workspaceCount: 0, sessionCount: 0, lastActivityAt: null }));
+      .map((p) => ({ ...withRepos(p), workspaceCount: 0, sessionCount: 0, lastActivityAt: null }));
   }
   const { data, error } = await client
     .from("projects")
@@ -120,6 +132,6 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     const ws = (r.workspaces ?? []) as unknown as { id: string; updated_at: string; sessions: { count: number }[] }[];
     const last = ws.map((w) => w.updated_at).sort().at(-1) ?? null;
     const sessionCount = ws.reduce((n, w) => n + (w.sessions[0]?.count ?? 0), 0);
-    return { ...toProject(r), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
+    return { ...toProject(r as unknown as Row), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
   });
 }

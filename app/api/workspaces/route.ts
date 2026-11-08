@@ -17,6 +17,8 @@ const CreateBody = z.object({
   worktree: z.boolean().optional(),
   branch: z.string().max(200).optional(),
   baseRef: z.string().max(200).optional(),
+  /** Which of the project's extra repos to include; all of them when omitted. */
+  repoIds: z.array(z.string().min(1)).max(50).optional(),
 });
 
 export const POST = handle(async (req: Request) => {

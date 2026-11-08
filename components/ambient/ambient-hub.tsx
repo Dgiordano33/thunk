@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ActivityResponse, SearchResult } from "@/lib/ambient/types";
 import { RUN_STATUS_LABELS, OPEN_RUN_STATUSES, type RoutineRunActivity } from "@/lib/routines/types";
+import { DELIVERY_EVENT_LABELS } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
@@ -53,6 +54,9 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
     const seen = new Map<string, number>();
+    const deliveryStartedAt = Date.now();
+    const deliverySeen = new Set<string>();
+    const deliveryBaseline = new Set<string>();
     const runStatus = new Map<string, string>();
     let initialized = false;
     const alert = (title: string, body: string, tag: string, href: string) => {
@@ -86,6 +90,18 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
           }
           runStatus.set(run.id, run.status);
         }
+        for (const delivery of data.deliveries ?? []) {
+          for (const event of [...(delivery.activity ?? [])].reverse()) {
+            if (deliveryBaseline.has(delivery.workspaceId) && !deliverySeen.has(event.id) && Date.parse(event.at) >= deliveryStartedAt) {
+              alert(DELIVERY_EVENT_LABELS[event.type], `#${event.pr.number} · ${event.pr.title}`, `thunk-delivery-${event.id}`, `/p/${delivery.projectId}?ws=${delivery.workspaceId}`);
+            }
+            deliverySeen.add(event.id);
+          }
+          deliveryBaseline.add(delivery.workspaceId);
+        }
+        // Keep deduplication bounded to the activity still included in the feed.
+        const retained = new Set((data.deliveries ?? []).flatMap((d) => (d.activity ?? []).map((e) => e.id)));
+        for (const id of deliverySeen) if (!retained.has(id)) deliverySeen.delete(id);
         initialized = true;
       } catch (error) {
         if (!stopped) useAmbient.setState({ error: error instanceof Error ? error.message : "Activity unavailable" });

@@ -2,7 +2,7 @@
 import type { RunTrigger, SessionOrigin } from "./types";
 
 /** Placeholders a routine prompt may use; shown as help text in the form. */
-export const PROMPT_PLACEHOLDERS = ["{{event.type}}", "{{event.pr.url}}", "{{event.pr.title}}", "{{event.exitCode}}", "{{payload}}"];
+export const PROMPT_PLACEHOLDERS = ["{{event.type}}", "{{event.pr.url}}", "{{event.pr.title}}", "{{event.exitCode}}", "{{event.pr.branch}}", "{{event.previewUrl}}", "{{payload}}"];
 
 type Payload = Record<string, unknown> | null | undefined;
 
