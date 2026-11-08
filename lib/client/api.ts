@@ -5,6 +5,7 @@ import type { PromptImage } from "@/lib/prompts/schema";
 import type { RevisionComment, RevisionStat } from "@/lib/revisions/build-payload";
 import type { ModelOption, SessionMeta } from "@/lib/agent/types";
 import type { Artifact, DocComment } from "@/lib/documents/types";
+import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind, NoteTask } from "@/lib/notes/types";
 import type {
   Project,
   ProjectSummary,
@@ -70,6 +71,18 @@ export const api = {
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),
   putMemory: (scope: "projects" | "workspaces", id: string, content: string) =>
     call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content } }),
+  // Notes (project or workspace scope). Memory is the note with id "memory".
+  listNotes: (scope: NoteScopeKind, id: string) => call<{ notes: NoteMeta[]; dir: string }>(`/api/${scope}/${id}/notes`),
+  listAllNotes: () => call<{ projects: NoteFolder[] }>("/api/notes"),
+  getNote: (scope: NoteScopeKind, id: string, noteId: string) =>
+    call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`),
+  createNote: (scope: NoteScopeKind, id: string, body: { title?: string; markdown?: string } & Partial<NoteFlags> = {}) =>
+    post<{ note: Note }>(`/api/${scope}/${id}/notes`, body),
+  patchNote: (scope: NoteScopeKind, id: string, noteId: string, body: { title?: string; markdown?: string } & Partial<NoteFlags>) =>
+    call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`, { method: "PATCH", json: body }),
+  deleteNote: (scope: NoteScopeKind, id: string, noteId: string) =>
+    call(`/api/${scope}/${id}/notes/${noteId}`, { method: "DELETE" }),
+  noteTasks: (scope: NoteScopeKind, id: string) => call<{ tasks: NoteTask[] }>(`/api/${scope}/${id}/notes/tasks`),
   listModels: () => call<{ models: ModelOption[]; codexError: string | null }>("/api/models"),
   // Sessions
   createSession: (body: {
@@ -89,7 +102,8 @@ export const api = {
     ),
   resume: (id: string) => post<{ session: SessionMeta; seq: number }>(`/api/sessions/${id}/resume`, {}),
   send: (id: string, content: string, images: PromptImage[] = []) => post<{ messageId: string }>(`/api/sessions/${id}/input`, { content, images }),
-  promptContext: (id: string) => call<{ files: string[]; commands: string[] }>(`/api/workspaces/${id}/prompt-context`),
+  promptContext: (id: string) =>
+    call<{ files: string[]; commands: string[]; notes: { title: string; path: string }[] }>(`/api/workspaces/${id}/prompt-context`),
   permission: (
     id: string,
     body: { requestId: string; decision: "allow" | "allow_always" | "deny"; message?: string },

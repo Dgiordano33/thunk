@@ -1,6 +1,11 @@
 import { listLiveSessions } from "@/lib/agent";
 import type { SearchResult } from "@/lib/ambient/types";
 import { handle, HttpError } from "@/lib/api/http";
+import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
+import { listNotes } from "@/lib/notes/store";
+import { scopeKey } from "@/lib/notes/types";
+import { listProjects } from "@/lib/supabase/repo/projects";
+import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
 import { db } from "@/lib/supabase/server";
 
@@ -49,8 +54,36 @@ export const GET = handle(async (req: Request) => {
       results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.markdown, term), href: `/w/${s.meta.workspaceId}/s/${s.id}#doc-${d.id}`, kind: "Document" });
     }
   }
+  for (const r of await searchNotes(term)) results.set(r.id, r);
   return Response.json({ results: [...results.values()].slice(0, 60) });
 });
+
+/** Note titles and bodies across every project and active workspace. */
+async function searchNotes(term: string): Promise<SearchResult[]> {
+  const projects = await listProjects().catch(() => []);
+  const scopes = await Promise.all(
+    projects.map(async (p) => [
+      { dirs: projectNoteDirs(p), where: p.name },
+      ...(await listWorkspaces(p.id).catch(() => []))
+        .filter((w) => w.status === "active")
+        .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
+    ]),
+  );
+  const hits = await Promise.all(
+    scopes.flat().map(async ({ dirs, where }) =>
+      (await listNotes(dirs).catch(() => []))
+        .filter((n) => n.title.toLowerCase().includes(term) || n.markdown.toLowerCase().includes(term))
+        .map((n) => ({
+          id: `note:${scopeKey(n.scope)}/${n.id}`,
+          label: n.title,
+          detail: `${where} · ${n.title.toLowerCase().includes(term) ? n.excerpt : excerpt(n.markdown, term)}`,
+          href: `/notes?scope=${scopeKey(n.scope)}&note=${n.id}`,
+          kind: "Note",
+        })),
+    ),
+  );
+  return hits.flat().slice(0, 30);
+}
 
 function excerpt(text: string, term: string) {
   const start = Math.max(0, text.toLowerCase().indexOf(term) - 50);

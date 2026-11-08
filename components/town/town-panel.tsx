@@ -35,7 +35,7 @@ export function TownPanel({
     if (!escapable) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if ((event.target as HTMLElement | null)?.closest("[role=dialog],[role=menu],[role=listbox],textarea,input")) return;
+      if ((event.target as HTMLElement | null)?.closest("[role=dialog],[role=menu],[role=listbox],textarea,input,[contenteditable=true]")) return;
       router.replace(closeHref, { scroll: false });
     };
     window.addEventListener("keydown", onKey);

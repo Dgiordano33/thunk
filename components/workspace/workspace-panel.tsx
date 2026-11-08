@@ -4,7 +4,6 @@ import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSqu
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { MemoryEditor } from "@/components/memory/memory-editor";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/client/api";
@@ -17,11 +16,12 @@ import { cn } from "@/lib/utils";
 import { ReviewDiff, SendReview, useDiffComments } from "./diff-review";
 import { Checkpoints } from "./checkpoints";
 import { SessionsList } from "./sessions-list";
+import { WorkspaceNotes } from "./workspace-notes";
 
 const CHANGES_POLL_MS = 5000;
 
 /** Workspace-wide info, shared by every session tab: what was produced and what changed on disk. */
-export function WorkspacePanel({ workspaceId, sessions }: { workspaceId: string; sessions: SessionMeta[] }) {
+export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspaceId: string; projectId: string; sessions: SessionMeta[] }) {
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
@@ -52,7 +52,7 @@ export function WorkspacePanel({ workspaceId, sessions }: { workspaceId: string;
             Changes
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>
-          <TabsTrigger value="memory">Memory</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
         </TabsList>
       </div>
@@ -73,14 +73,9 @@ export function WorkspacePanel({ workspaceId, sessions }: { workspaceId: string;
         </div>
       </TabsContent>
       <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>
-      <TabsContent value="memory" className="min-h-0 flex-1">
-        <div className="h-full overflow-y-auto p-4">
-          <MemoryEditor
-            scope="workspaces"
-            id={workspaceId}
-            title="Workspace memory"
-            hint="Shared by every session in this workspace: the task, progress, decisions, what's next. Agents read and edit it too."
-          />
+      <TabsContent value="notes" className="min-h-0 flex-1">
+        <div className="h-full overflow-y-auto">
+          <WorkspaceNotes workspaceId={workspaceId} projectId={projectId} />
         </div>
       </TabsContent>
     </Tabs>

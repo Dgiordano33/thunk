@@ -8,7 +8,8 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "postinstall": "node scripts/prepare-pty.mjs",
-    "test:lifecycle": "node --conditions=react-server --test tests/lifecycle.test.cjs"
+    "test:lifecycle": "node --conditions=react-server --test tests/lifecycle.test.cjs",
+    "test:notes": "node --conditions=react-server --test tests/notes.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",

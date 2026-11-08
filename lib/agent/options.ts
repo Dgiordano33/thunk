@@ -1,5 +1,6 @@
 import "server-only";
 import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
+import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { buildCanUseTool } from "./permissions";
@@ -17,7 +18,12 @@ The user may edit the document directly and leave comments on highlighted spans,
 - End with a short "Notes" section only if you need to explain something that doesn't belong in the document.
 `.trim();
 
-export function hierarchyPrompt(live: LiveSession, projectMemory: string, provider: AgentProvider = "claude") {
+export function hierarchyPrompt(
+  live: LiveSession,
+  projectMemory: string,
+  provider: AgentProvider = "claude",
+  notes?: SessionNotes,
+) {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.root);
   const wmDir = workspaceMemoryDir(project.root, workspace.slug);
@@ -35,20 +41,24 @@ export function hierarchyPrompt(live: LiveSession, projectMemory: string, provid
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];
   if (projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
+  if (notes) lines.push("", notesPrompt(notes));
   return lines.join("\n");
 }
 
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
-  const projectMemory = await readMemory(projectMemoryFile(project.root));
+  const [projectMemory, notes] = await Promise.all([
+    readMemory(projectMemoryFile(project.root)),
+    loadSessionNotes(project, workspace),
+  ]);
   const isWorktree = Boolean(workspace.worktreePath);
 
   return {
     cwd: workspace.cwd,
     // In a worktree, CLAUDE.md / .claude / .mcp.json still come from the trusted main checkout.
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
-    // Project memory lives outside the repo; grant file-tool access to it.
-    additionalDirectories: [projectMemoryDir(project.root)],
+    // Project memory and notes live outside the repo; grant file-tool access to them.
+    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir],
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.
@@ -62,7 +72,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: `${CANVAS_PROMPT}\n\n${hierarchyPrompt(live, projectMemory)}`,
+      append: `${CANVAS_PROMPT}\n\n${hierarchyPrompt(live, projectMemory, "claude", notes)}`,
     },
     // `env` replaces process.env entirely, so always spread it.
     env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "thunk/0.1.0" },

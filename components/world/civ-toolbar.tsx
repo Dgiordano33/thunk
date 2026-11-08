@@ -23,7 +23,7 @@ function Mark({ className }: { className?: string }) {
 }
 
 /** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes and Routines. */
-export function CivToolbar({ cityCount }: { cityCount: number }) {
+export function CivToolbar({ cityCount, noteCount }: { cityCount: number; noteCount: number }) {
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
   const pathname = usePathname();
@@ -43,7 +43,7 @@ export function CivToolbar({ cityCount }: { cityCount: number }) {
 
   const slots: { href: string; label: string; icon: PixelIconName; detail: string; soon?: boolean }[] = [
     { href: "/", label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
-    { href: "/notes", label: "Notes", icon: "scroll", detail: "Soon", soon: true },
+    { href: "/notes", label: "Notes", icon: "scroll", detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
     { href: "/routines", label: "Routines", icon: "hourglass", detail: "Soon", soon: true },
   ];
 

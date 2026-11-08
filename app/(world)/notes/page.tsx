@@ -1,11 +1,12 @@
-import { Undiscovered } from "@/components/world/undiscovered";
+import { Suspense } from "react";
+import { NotesLibrary } from "@/components/notes/notes-library";
 
-export const metadata = { title: "Notes · Thunk" };
+export const metadata = { title: "Library · Thunk" };
 
 export default function NotesPage() {
   return (
-    <Undiscovered title="Notes" icon="scroll">
-      A scroll for everything you learn along the way: notes that live beside your projects and travel with every session.
-    </Undiscovered>
+    <Suspense>
+      <NotesLibrary />
+    </Suspense>
   );
 }

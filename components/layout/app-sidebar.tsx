@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
+import { useAllNotes } from "@/components/notes/notes-library";
+import { PixelIcon } from "@/components/world/pixel-icon";
 import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { workspaceActivity } from "@/lib/ambient/summary";
 import { useAmbient } from "@/lib/store/ambient-store";
@@ -26,6 +28,11 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   const activeProjectId = section === "p" ? activeId : undefined;
   const activeWorkspaceId = section === "w" ? activeId : undefined;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const folders = useAllNotes();
+  const noteCounts = new Map(
+    (folders ?? []).map((f) => [f.project.id, f.notes.length + f.workspaces.reduce((n, w) => n + w.notes.length, 0)]),
+  );
+  const totalNotes = [...noteCounts.values()].reduce((a, b) => a + b, 0);
 
   return (
     <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col">
@@ -37,6 +44,20 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
       </div>
 
       <AmbientHub projects={projects} />
+
+      <div className="px-2 pt-1">
+        <Link
+          href="/notes"
+          className={cn(
+            "hover:bg-sidebar-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+            section === "notes" && "bg-sidebar-accent",
+          )}
+        >
+          <PixelIcon name="scroll" className="size-4 shrink-0" />
+          Library
+          {folders && <span className="text-muted-foreground ml-auto text-[11px] tabular-nums">{totalNotes}</span>}
+        </Link>
+      </div>
 
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <h2 className="text-muted-foreground text-xs font-medium">Projects</h2>
@@ -74,6 +95,17 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     <ProjectIcon className="text-muted-foreground size-4 shrink-0" />
                     <span className="truncate text-[13px] font-medium">{p.name}</span>
                   </Link>
+                  {(noteCounts.get(p.id) ?? 0) > 0 && (
+                    <Link
+                      href={`/p/${p.id}?building=library`}
+                      title={`${noteCounts.get(p.id)} notes`}
+                      aria-label={`${p.name} notes (${noteCounts.get(p.id)})`}
+                      className="text-muted-foreground hover:text-foreground hidden shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums group-hover:flex focus-visible:flex"
+                    >
+                      <PixelIcon name="scroll" className="size-3" />
+                      {noteCounts.get(p.id)}
+                    </Link>
+                  )}
                   <NewWorkspaceButton
                     compact
                     projectId={p.id}

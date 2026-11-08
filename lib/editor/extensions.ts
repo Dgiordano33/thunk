@@ -1,4 +1,5 @@
 import type { AnyExtension } from "@tiptap/core";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TableKit } from "@tiptap/extension-table";
 import { Markdown } from "@tiptap/markdown";
@@ -10,6 +11,9 @@ export function schemaExtensions(): AnyExtension[] {
   return [
     StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
     TableKit.configure({ table: { resizable: false } }),
+    // `- [ ]` checklists: notes surface unchecked items as tasks.
+    TaskList,
+    TaskItem.configure({ nested: true }),
     CommentMark,
   ];
 }
