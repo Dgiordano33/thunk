@@ -1,8 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import type { WorldCity } from "@/lib/world/cities";
-import { MAP_H, MAP_W, TILE_H, TILE_W, generateTerrain, isWater, isoPolygon, toIso, type Tile } from "@/lib/world/terrain";
+import { TILE_H, TILE_W, isWater, isoPolygon, mapSize, toIso, type Cell, type Grid, type Tile } from "@/lib/world/terrain";
 
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
@@ -12,8 +11,8 @@ const CLIFF = 6;
 const pts = (list: [number, number][]) => list.map(([x, y]) => `${x},${y}`).join(" ");
 
 /** Terrain detail drawn on top of a tile, around its centre. Variant picks between looks so the map isn't uniform. */
-function Glyph({ tile }: { tile: Tile }) {
-  const { x, y } = toIso(tile.col, tile.row);
+function Glyph({ tile, grid }: { tile: Tile; grid: Grid }) {
+  const { x, y } = toIso(tile.col, tile.row, grid);
   const v = tile.variant;
   switch (tile.kind) {
     case "forest": {
@@ -67,6 +66,13 @@ function Glyph({ tile }: { tile: Tile }) {
           <rect x={x - 2 + v * 8} y={y - 2} width={1} height={3} />
         </g>
       ) : null;
+    case "road":
+      return v > 0.5 ? (
+        <g fill="var(--w-cliff)" opacity={0.35}>
+          <rect x={x - 6} y={y - 1} width={2} height={1} />
+          <rect x={x + 5} y={y + 2} width={2} height={1} />
+        </g>
+      ) : null;
     case "ocean":
     case "shallows":
       return v > 0.62 ? (
@@ -79,8 +85,8 @@ function Glyph({ tile }: { tile: Tile }) {
   }
 }
 
-function Cliffs({ tile, tiles }: { tile: Tile; tiles: Tile[][] }) {
-  const { x, y } = toIso(tile.col, tile.row);
+function Cliffs({ tile, tiles, grid }: { tile: Tile; tiles: Tile[][]; grid: Grid }) {
+  const { x, y } = toIso(tile.col, tile.row, grid);
   const below = tiles[tile.row + 1]?.[tile.col];
   const right = tiles[tile.row]?.[tile.col + 1];
   return (
@@ -95,32 +101,34 @@ function Cliffs({ tile, tiles }: { tile: Tile; tiles: Tile[][] }) {
   );
 }
 
+export type Border = { id: string; hue: number; cells: Cell[] };
+
 /** Civ-style culture border: a tinted wash over the territory and a dashed line around its outer edge. */
-function Border({ city }: { city: WorldCity }) {
-  const inside = new Set(city.territory.map((c) => `${c.col},${c.row}`));
+function BorderPath({ border, grid }: { border: Border; grid: Grid }) {
+  const inside = new Set(border.cells.map((c) => `${c.col},${c.row}`));
   const has = (col: number, row: number) => inside.has(`${col},${row}`);
   const edges: string[] = [];
-  for (const { col, row } of city.territory) {
-    const { x, y } = toIso(col, row);
+  for (const { col, row } of border.cells) {
+    const { x, y } = toIso(col, row, grid);
     const top = `${x},${y - HH}`, right = `${x + HW},${y}`, bottom = `${x},${y + HH}`, left = `${x - HW},${y}`;
     if (!has(col, row - 1)) edges.push(`M${top}L${right}`);
     if (!has(col + 1, row)) edges.push(`M${right}L${bottom}`);
     if (!has(col, row + 1)) edges.push(`M${bottom}L${left}`);
     if (!has(col - 1, row)) edges.push(`M${left}L${top}`);
   }
-  const color = `oklch(0.72 0.17 ${city.hue})`;
+  const color = `oklch(0.72 0.17 ${border.hue})`;
   return (
     <g>
-      {city.territory.map(({ col, row }) => (
-        <polygon key={`${col},${row}`} points={isoPolygon(col, row)} fill={color} opacity={0.2} />
+      {border.cells.map(({ col, row }) => (
+        <polygon key={`${col},${row}`} points={isoPolygon(col, row, grid)} fill={color} opacity={0.2} />
       ))}
       <path d={edges.join("")} stroke={color} strokeWidth={2} strokeDasharray="5 3" fill="none" />
     </g>
   );
 }
 
-export const TerrainLayer = memo(function TerrainLayer({ cities }: { cities: WorldCity[] }) {
-  const tiles = useMemo(() => generateTerrain(), []);
+export const TerrainLayer = memo(function TerrainLayer({ tiles, grid, borders = [] }: { tiles: Tile[][]; grid: Grid; borders?: Border[] }) {
+  const { w, h } = mapSize(grid);
   // Painter's order: water first so land cliffs overlap it, then back-to-front by diagonal.
   const ordered = useMemo(() => {
     const flat = tiles.flat();
@@ -130,25 +138,25 @@ export const TerrainLayer = memo(function TerrainLayer({ cities }: { cities: Wor
 
   return (
     <svg
-      width={MAP_W}
-      height={MAP_H + CLIFF}
-      viewBox={`0 0 ${MAP_W} ${MAP_H + CLIFF}`}
+      width={w}
+      height={h + CLIFF}
+      viewBox={`0 0 ${w} ${h + CLIFF}`}
       shapeRendering="crispEdges"
       className="pixel absolute top-0 left-0 overflow-visible"
       aria-hidden="true"
     >
       {ordered.map((tile) => (
         <g key={`${tile.col},${tile.row}`}>
-          {!isWater(tile.kind) && <Cliffs tile={tile} tiles={tiles} />}
+          {!isWater(tile.kind) && <Cliffs tile={tile} tiles={tiles} grid={grid} />}
           <polygon
-            points={isoPolygon(tile.col, tile.row)}
+            points={isoPolygon(tile.col, tile.row, grid)}
             className={`t-${tile.kind}${tile.variant > 0.5 ? "-alt" : ""}${isWater(tile.kind) ? "" : " t-tile"}`}
           />
-          <Glyph tile={tile} />
+          <Glyph tile={tile} grid={grid} />
         </g>
       ))}
-      {cities.map((city) => (
-        <Border key={city.project.id} city={city} />
+      {borders.map((border) => (
+        <BorderPath key={border.id} border={border} grid={grid} />
       ))}
     </svg>
   );

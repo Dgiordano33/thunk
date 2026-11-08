@@ -9,46 +9,12 @@ import { LEVEL_NAMES, cityScore, type CityActivity, type CityLevel, type WorldCi
 import { toIso } from "@/lib/world/terrain";
 import { cn } from "@/lib/utils";
 import { CivPanel } from "./civ-panel";
+import { DOOR, GOLD, STONE, STONE_DARK, WALL, WOOD, flag, house, hut, r } from "./pixel-parts";
 
 /** Sprite grid: 32×28 pixels drawn at 2× so it reads as pixel art on a 64px tile. */
 const SPRITE_W = 32;
 const SPRITE_H = 28;
 const SCALE = 2;
-
-const WALL = "oklch(0.88 0.04 80)";
-const DOOR = "oklch(0.3 0.04 50)";
-const WOOD = "oklch(0.48 0.08 55)";
-const STRAW = "oklch(0.76 0.12 85)";
-const STONE = "oklch(0.7 0.02 70)";
-const STONE_DARK = "oklch(0.52 0.02 70)";
-const GOLD = "oklch(0.83 0.15 85)";
-
-const r = (x: number, y: number, w: number, h: number, fill: string, key?: string) => (
-  <rect key={key ?? `${x},${y},${w},${h}`} x={x} y={y} width={w} height={h} fill={fill} />
-);
-
-/** A gabled house whose bottom-left corner sits at (x, y). */
-const house = (x: number, y: number, roof: string) => [
-  r(x, y - 4, 7, 4, WALL),
-  r(x + 3, y - 2, 1, 2, DOOR),
-  r(x + 1, y - 3, 1, 1, DOOR),
-  r(x + 5, y - 9, 1, 3, STONE_DARK),
-  r(x - 1, y - 5, 9, 1, roof),
-  r(x, y - 6, 7, 1, roof),
-  r(x + 1, y - 7, 5, 1, roof),
-  r(x + 2, y - 8, 3, 1, roof),
-];
-
-const hut = (x: number, y: number) => [
-  r(x + 1, y - 3, 6, 3, "oklch(0.62 0.08 60)"),
-  r(x + 3, y - 2, 2, 2, DOOR),
-  r(x, y - 4, 8, 1, STRAW),
-  r(x + 1, y - 5, 6, 1, STRAW),
-  r(x + 2, y - 6, 4, 1, STRAW),
-  r(x + 3, y - 7, 2, 1, STRAW),
-];
-
-const flag = (x: number, y: number, color: string) => [r(x, y - 9, 1, 9, DOOR), r(x + 1, y - 9, 4, 3, color)];
 
 const palisade = (y: number) => Array.from({ length: 14 }, (_, i) => r(2 + i * 2, y - 5, 1, 5, WOOD));
 

@@ -63,7 +63,7 @@ export function CivToolbar({ cityCount }: { cityCount: number }) {
           >
             <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">
               {slots.map((slot) => {
-                const active = slot.href === "/" ? pathname === "/" : pathname.startsWith(slot.href);
+                const active = slot.href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(slot.href);
                 return (
                   <Link
                     key={slot.href}

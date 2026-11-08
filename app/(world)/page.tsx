@@ -20,7 +20,7 @@ export default async function Home() {
   });
 
   return (
-    <WorldMap cities={cities}>
+    <WorldMap tiles={tiles} cities={cities}>
       {projects.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
           <CivPanel parchment className="pointer-events-auto w-full max-w-sm" bodyClassName="flex flex-col items-center px-6 py-6 text-center">

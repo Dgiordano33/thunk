@@ -100,7 +100,7 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
       let kind: TerrainKind;
       if (roads.has(key(here))) kind = "road";
       else if (edge) kind = "forest";
-      else if (near <= 4) kind = moisture > 0.55 ? "grass" : moisture > 0.35 ? "grass" : "plains";
+      else if (near <= 4) kind = moisture > 0.35 ? "grass" : "plains";
       else if (height < 0.2 && near > 5) kind = "shallows";
       else if (moisture > 0.52 || near > 6) kind = "forest";
       else if (height > 0.8) kind = "hills";
