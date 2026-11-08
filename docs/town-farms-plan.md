@@ -51,13 +51,13 @@ export type TownLayout = {
 Changes inside the function:
 
 - Lattice size `k` is chosen so `(2k+1)² - 1 >= workspaces.length` (the central slot is the Town center). Lattice cells sort by Chebyshev distance then angle as today; skip `{0,0}`.
-- `center = {mid, mid}`. Buildings sit at fixed offsets inside ring 1–2 of the center: library `(-2, +1)`, workshop `(+1, -2)`, vault `(-4, -3)` becomes `(-2, -2)`, town hall `(+2, +1)`. Reserve ring 0–2 of the center.
+- `center = {mid, mid}`. Buildings sit at fixed offsets around the center: library `(-2, +1)`, workshop `(+1, -2)`, vault `(-4, -3)`, town hall `(+4, +1)`. The vault and town hall stay outside ring 2 so they don't cover the center's roof and nameplate. Reserve ring 0–2 of the center and each building's cell.
 - Roads run from each farmhouse to the center, as they run to the capital today.
 - Fields keep `FARM_RINGS = [2, 3]` around each farmhouse. Reserve ring 0–1 of each farmhouse.
 - Terrain rules are unchanged except `near` measures to the nearest farmhouse or the center.
 - Export `TOWN_SPACING = 6`.
 
-`lib/world/town.test.mjs` gets: center at the middle; every farmhouse at least `TOWN_SPACING` from every other and from the center; buildings on distinct cells inside ring 2 of the center and not on a road or field; `main` is the first farmhouse; no field on a reserved cell; overflow counts unchanged.
+`lib/world/town.test.mjs` gets: center at the middle; every farmhouse at least `TOWN_SPACING` from every other and from the center; buildings on distinct cells within ring 4 of the center and not on a road or field; `main` is the first farmhouse; no field on a reserved cell; overflow counts unchanged.
 
 ## View
 

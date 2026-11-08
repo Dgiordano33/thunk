@@ -10,13 +10,20 @@ import { headerOnly } from "./granary";
 import { listTasks, updateTask } from "../supabase/repo/tasks";
 import { emitNote } from "../notes/watch";
 
+/** The log minus lines project memory already holds, so harvesting again doesn't repeat them. */
+function unharvested(log: string, projectMemory: string) {
+  const known = new Set(projectMemory.split("\n").map(line => line.trim()).filter(Boolean));
+  const fresh = log.split("\n").filter(line => !known.has(line.trim())).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return headerOnly(fresh) ? "" : fresh;
+}
+
 export async function readHarvest({ project, workspace }: WorkspaceContext) {
   const source = workspaceNoteDirs(project, workspace);
   const destination = projectNoteDirs(project);
   const [memory, projectMemory, notes] = await Promise.all([
     readOptional(source.memoryFile!), readOptional(destination.memoryFile!), listNotes(source, { withMemory: false }),
   ]);
-  return { memory: memory ?? "", projectMemory: projectMemory ?? "", notes: notes.map(metaOf), empty: headerOnly(memory ?? "") && !notes.length };
+  return { memory: memory ?? "", suggested: unharvested(memory ?? "", projectMemory ?? ""), projectMemory: projectMemory ?? "", notes: notes.map(metaOf), empty: headerOnly(memory ?? "") && !notes.length };
 }
 
 export async function harvestWorkspace(ctx: WorkspaceContext, input: { memory: string | null; noteIds: string[] }) {
@@ -64,12 +71,13 @@ export async function harvestWorkspace(ctx: WorkspaceContext, input: { memory: s
     const file = destination.memoryFile!;
     for (let attempt = 0; ; attempt++) {
       const current = await readOptional(file) ?? "";
+      if (current.includes(memory)) break;
       try {
         await writeMemory(file, `${current.trimEnd()}\n\n## Harvested from ${ctx.workspace.name.replace(/[\r\n]/g, " ")} · ${new Date().toISOString().slice(0, 10)}\n\n${memory}\n`, current);
+        emitNote({ scope: destination.scope, noteId: "memory", kind: "changed" });
         break;
       } catch (err) { if (!(err instanceof NoteConflictError) || attempt > 0) throw err; }
     }
-    emitNote({ scope: destination.scope, noteId: "memory", kind: "changed" });
   }
   return { memory: memory || null, notes: moved };
 }

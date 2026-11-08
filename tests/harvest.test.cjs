@@ -112,3 +112,35 @@ test("Claude uses project auto-memory; Codex still gets injected project memory"
   assert.doesNotMatch(hierarchyPrompt(live, "unique fact", "claude"), /unique fact/);
   assert.match(hierarchyPrompt(live, "unique fact", "codex"), /unique fact/);
 });
+
+test("a header-only log suggests nothing, even when notes need harvesting", async () => {
+  const ctx = await context("header-only");
+  await createNote(workspaceNoteDirs(ctx.project, ctx.workspace), { title: "Keep", markdown: "facts" });
+  const data = await readHarvest(ctx);
+  assert.equal(data.empty, false);
+  assert.equal(data.suggested, "");
+});
+
+test("harvesting again suggests only new lines and never appends the same text twice", async () => {
+  const ctx = await context("repeat");
+  const log = paths.workspaceMemoryFile(ctx.project.root, ctx.workspace.slug), target = projectNoteDirs(ctx.project).memoryFile;
+  await fs.appendFile(log, "\nFirst lesson\n");
+  const first = await readHarvest(ctx);
+  assert.match(first.suggested, /First lesson/);
+  await harvestWorkspace(ctx, { memory: first.suggested, noteIds: [] });
+  assert.equal((await readHarvest(ctx)).suggested, "");
+  const once = await fs.readFile(target, "utf8");
+  await harvestWorkspace(ctx, { memory: first.suggested, noteIds: [] });
+  assert.equal(await fs.readFile(target, "utf8"), once);
+  await fs.appendFile(log, "\nSecond lesson\n");
+  assert.equal((await readHarvest(ctx)).suggested, "Second lesson");
+});
+
+test("Claude gets project memory injected once it outgrows the auto-memory limit", async () => {
+  const ctx = await context("oversized");
+  const live = { ctx, meta: { model: "claude-sonnet-4-6", permissionMode: "default" }, id: "test" };
+  const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
+  assert.doesNotMatch(hierarchyPrompt(live, lines(200), "claude"), /line 199/);
+  assert.match(hierarchyPrompt(live, lines(201), "claude"), /line 200/);
+  assert.match(hierarchyPrompt(live, `tail fact ${"x".repeat(25_000)}`, "claude"), /tail fact/);
+});
