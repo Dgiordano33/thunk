@@ -83,3 +83,11 @@ Git controls operate locally: **Sync** fetches origin's default branch and merge
 **Then delete workspace** runs the archive hook and removes the merged worktree and its sessions. Deletion refuses dirty or unmerged work and never force-removes a worktree. Git branches are retained. Archive alone keeps the worktree; a failed archive hook keeps the workspace active and its logs available. Stop active agents in the project before using Git controls.
 
 Process state and bounded terminal output live in the Thunk server, survive development hot reload, and reset on server restart. These features require local Node.js with the native `node-pty` module; they cannot run in a serverless deployment. The checked-in `thunk.json` configures Thunk's own install and dev commands. Run `npm run test:lifecycle` for isolated Git fixtures and real PTY / preview checks.
+
+## Town delivery status
+
+Town centers show PR/check pennants (– draft, … running, ✓ passed, × failure/conflicts, ? unknown) and lit windows when their local dev server is running. Open a town center for its Delivery section: checks, reviews, agent hand-offs, Start/Stop dev server, and deployed/local preview links. Hover cards include branch divergence and uncommitted changes; divergence uses local refs and does not fetch origin.
+
+The scheduler caches open PRs per project through `gh api graphql`, polling about every 60 seconds, or 10 seconds while checks are pending. Local Git/runtime status refreshes about every 10 seconds. GitHub failures retain the last result with an explicit warning and back off to 60 seconds. GitHub CLI authentication is required; folder projects and repositories without an origin still show local runtime status. Preview links come from successful deployments on the PR head commit; providers must publish GitHub Deployments for these links to appear.
+
+PR lists are paginated. Each head includes up to 100 checks and the last 20 deployments; truncated check lists show an additional pending row linking to GitHub, never an all-green result. Delivery history, desktop delivery notifications, and CI/deployment routine triggers are deferred. Run `node --conditions=react-server --test tests/delivery.test.cjs` for delivery checks.
