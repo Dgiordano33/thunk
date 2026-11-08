@@ -136,6 +136,15 @@ Routines reuse the existing surfaces rather than adding new ones. The town Works
 - Run status badges use the session header's palette: amber pulse for running, amber for “Needs you”, emerald for succeeded, red for failed, muted for cancelled and skipped.
 - Sessions started by a routine show a “Routine · <name>” badge in the session header, the hourglass pixel icon in session lists, and “· Routine” in the field panel eyebrow.
 
+## Inbox
+
+The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses the toolbar’s bronze selection treatment and amber attention counts; below the large-screen breakpoint it becomes a project picker in the header.
+
+- Requests that need a decision get an amber left edge, a status icon, readable context, and a primary action. Details expand in place so permissions and plans can be inspected before acting.
+- Earlier updates use quiet, divided rows instead of equally prominent cards. Pixel type stays on headings; titles, details, and timestamps use the body font.
+- Empty views use a parchment bell and one clear next step. Loading skeletons stop on failure, which shows a retry state instead of an endless loading screen.
+- Bulk actions live in the header menu. The scrollable content sits between a fixed header and a keyboard-shortcut footer; all controls remain available without hover.
+
 ## Vault
 
 The Vault reuses the Notes shapes. The town Vault is a `wide` `TownPanel` titled “Holdings”: a narrow left pane (dashed drop zone with **Paste text**, search, item rows) and a detail pane; `/vault` is the same two-pane body inside one `CivPanel` under the HUD, with a project picker that also sets the upload target. The selected item is in `?item=` (`<projectId>/<itemId>` on `/vault` when browsing all projects).
