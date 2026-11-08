@@ -1,6 +1,7 @@
 import type { PullRequestInfo, WorkspacePrStatus } from "./types";
 
 export type WorkspaceDelivery = {
+  activity: DeliveryEvent[];
   workspaceId: string;
   projectId: string;
   status: WorkspacePrStatus;
@@ -31,3 +32,20 @@ export function httpUrl(value: string | null | undefined): string | null {
     return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
   } catch { return null; }
 }
+
+export const DELIVERY_EVENT_TYPES = ["ci_passed", "ci_failed", "review_posted", "review_requested", "deploy_ready", "pr_merged"] as const;
+export type DeliveryEventType = (typeof DELIVERY_EVENT_TYPES)[number];
+export const DELIVERY_EVENT_LABELS: Record<DeliveryEventType, string> = {
+  ci_passed: "CI passed", ci_failed: "CI failed", review_posted: "Review posted",
+  review_requested: "Review requested", deploy_ready: "Deploy ready", pr_merged: "PR merged",
+};
+export type DeliveryEvent = {
+  id: string;
+  seq: number;
+  type: DeliveryEventType;
+  at: string;
+  branch: string;
+  pr: { number: number; url: string; title: string; head: string };
+  checks: { name: string; state: string; url: string | null }[];
+  previewUrl: string | null;
+};

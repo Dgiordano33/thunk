@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Exercise server TypeScript with the installed compiler. */
-const { test } = require("node:test");
+const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
 const ts = require("typescript");
+const fs = require("node:fs");
+const dataDir = fs.mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "thunk-delivery-"));
+process.env.THUNK_DATA_DIR = dataDir;
+after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 const Module = require("node:module");
 const { promisify } = require("node:util");
 require.extensions[".ts"] = (module, filename) => {
@@ -14,17 +18,20 @@ let workspaces = ["a", "b"].map((id) => ({ id, projectId: "p", cwd: "/repo/" + i
 let projects = [project];
 let fail = false;
 let calls = 0;
+let prMissing = false;
+let confirmedState = "CLOSED";
 const raw = () => ({
+  id: "PR_42", reviews: { nodes: [] }, reviewRequests: { nodes: [] },
   number: 42, url: "https://github.com/owner/repo/pull/42", state: "OPEN", title: "Test", isDraft: false,
   headRefName: "topic", baseRefName: "main", isCrossRepository: false, reviewDecision: "", mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
-  commits: { nodes: [{ commit: {
+  commits: { nodes: [{ commit: { oid: "head1",
     statusCheckRollup: { contexts: { totalCount: 2, nodes: [
       { __typename: "CheckRun", name: "build", status: "IN_PROGRESS", conclusion: null, detailsUrl: null },
       { __typename: "StatusContext", context: "hosting", state: "SUCCESS", targetUrl: null },
     ] } }, deployments: { nodes: [
-      { environment: "Preview", latestStatus: { state: "SUCCESS", environmentUrl: "https://preview.example/" } },
-      { environment: "Preview", latestStatus: { state: "FAILURE", environmentUrl: "https://failed.example/" } },
-      { environment: "Preview", latestStatus: { state: "SUCCESS", environmentUrl: "javascript:alert(1)" } },
+      { id: "deployment", environment: "Preview", latestStatus: { state: "SUCCESS", environmentUrl: "https://preview.example/" } },
+      { id: "failed-deployment", environment: "Preview", latestStatus: { state: "FAILURE", environmentUrl: "https://failed.example/" } },
+      { id: "unsafe-deployment", environment: "Preview", latestStatus: { state: "SUCCESS", environmentUrl: "javascript:alert(1)" } },
     ] },
   } }] },
 });
@@ -35,7 +42,8 @@ fakeExec[promisify.custom] = async (cmd, args) => {
     calls++;
     await new Promise((resolve) => setImmediate(resolve));
     if (fail) throw new Error("not logged in; gh auth login");
-    return { stdout: JSON.stringify([page([raw()])]) };
+    if (args.some((arg) => arg.startsWith("ids[]="))) return { stdout: JSON.stringify({ data: { nodes: [{ id: "PR_42", state: confirmedState }] } }) };
+    return { stdout: JSON.stringify([page(prMissing ? [] : [raw()])]) };
   }
   return { stdout: args[0] === "status" ? "# branch.head topic\n1 M. modified\n" : "2\t3" };
 };
@@ -113,6 +121,22 @@ test("shared polling deduplicates, caches, preserves stale data on auth failure,
   state.projects.get("p").nextPoll = 0;
   await state.tick();
   assert.equal(workspaceDeliveries()[0].error, null);
+  prMissing = true;
+  state.projects.get("p").nextPoll = 0;
+  await state.tick();
+  assert.equal(workspaceDeliveries()[0].activity.length, 0, "closed PR is not a merge");
+  prMissing = false;
+  state.projects.get("p").nextPoll = 0;
+  await state.tick();
+  prMissing = true;
+  confirmedState = "MERGED";
+  state.projects.get("p").nextPoll = 0;
+  await state.tick();
+  assert.equal(workspaceDeliveries()[0].activity[0].type, "pr_merged");
+  assert.equal(workspaceDeliveries()[0].status.pr, null);
+  state.projects.get("p").nextPoll = 0;
+  await state.tick();
+  assert.equal(workspaceDeliveries()[0].activity.length, 1, "confirmed merge is not emitted twice");
   workspaces = workspaces.map((w) => ({ ...w, status: "archived" }));
   projects = [];
   await state.tick();

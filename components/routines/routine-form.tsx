@@ -14,7 +14,7 @@ import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
 import { cronError, nextRuns } from "@/lib/routines/cron";
 import { PROMPT_PLACEHOLDERS } from "@/lib/routines/prompt";
-import { ROUTINE_SCHEDULE_PRESETS, type Routine, type RoutineEvent } from "@/lib/routines/types";
+import { DELIVERY_ROUTINE_EVENTS, EVENT_LABELS, ROUTINE_SCHEDULE_PRESETS, type Routine, type RoutineEvent } from "@/lib/routines/types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 
@@ -312,6 +312,11 @@ export function RoutineForm({
           >
             <TerminalSquareIcon /> The Run script fails
           </Chip>
+          {DELIVERY_ROUTINE_EVENTS.map((event) => <Chip key={event}
+            on={events.includes(event)} disabled={!hasRemote}
+            title={hasRemote ? "New delivery activity after the first poll; existing workspace targets match their branch" : "Needs a GitHub remote"}
+            onClick={() => setEvents((current) => current.includes(event) ? current.filter((e) => e !== event) : [...current, event])}
+          >{EVENT_LABELS[event]}</Chip>)}
           <Chip on={webhook} onClick={() => setWebhook(!webhook)} title="POST to a local URL (git hook, cron, script)">
             <WebhookIcon /> Webhook
           </Chip>

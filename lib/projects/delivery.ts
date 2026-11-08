@@ -1,4 +1,5 @@
 import "server-only";
+import { advanceDeliveryHistory, readDeliveryHistory, writeDeliveryHistory, type DeliveryHistory, type DeliverySnapshot } from "./delivery-history";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { listProjects } from "../supabase/repo/projects";
@@ -18,14 +19,17 @@ export const DELIVERY_QUERY = `query($owner:String!, $name:String!, $endCursor:S
     pullRequests(first:50, after:$endCursor, states:OPEN, orderBy:{field:UPDATED_AT,direction:DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number url state title isDraft headRefName baseRefName isCrossRepository reviewDecision mergeable mergeStateStatus
+        id number url state title isDraft headRefName baseRefName isCrossRepository reviewDecision mergeable mergeStateStatus
+        reviews(last:20) { nodes { id state submittedAt } }
+        reviewRequests(first:100) { nodes { requestedReviewer { ... on User { id } ... on Team { id } ... on Mannequin { id } } } }
         commits(last:1) { nodes { commit {
+          oid
           statusCheckRollup { contexts(first:100) { totalCount nodes {
             __typename
             ... on CheckRun { name status conclusion detailsUrl }
             ... on StatusContext { context state targetUrl }
           } } }
-          deployments(last:20) { nodes { environment latestStatus { state environmentUrl } } }
+          deployments(last:20) { nodes { id environment latestStatus { state environmentUrl } } }
         } } }
       }
     }
@@ -33,14 +37,18 @@ export const DELIVERY_QUERY = `query($owner:String!, $name:String!, $endCursor:S
 }`;
 
 type RawPr = Omit<PullRequestInfo, "checks" | "reviewDecision"> & {
+  id: string;
+  reviews: { nodes: { id: string; state: string; submittedAt: string | null }[] };
+  reviewRequests: { nodes: { requestedReviewer: { id: string } | null }[] };
   headRefName: string; baseRefName: string; isCrossRepository: boolean;
   reviewDecision: PullRequestInfo["reviewDecision"] | "";
   commits: { nodes: { commit: {
+    oid: string;
     statusCheckRollup: { contexts: { totalCount: number; nodes: RollupEntry[] } } | null;
-    deployments: { nodes: { environment: string; latestStatus: { state: string; environmentUrl: string | null } | null }[] };
+    deployments: { nodes: { id: string; environment: string; latestStatus: { state: string; environmentUrl: string | null } | null }[] };
   } }[] };
 };
-type BranchDelivery = { branch: string; base: string; pr: PullRequestInfo; previewUrl: string | null };
+type BranchDelivery = { snapshot: DeliverySnapshot; branch: string; base: string; pr: PullRequestInfo; previewUrl: string | null };
 
 export function parseDeliveries(pages: { errors?: { message: string }[]; data?: { repository: { pullRequests: { nodes: RawPr[] } } | null } }[]): BranchDelivery[] {
   return pages.flatMap((page) => {
@@ -51,18 +59,25 @@ export function parseDeliveries(pages: { errors?: { message: string }[]; data?: 
       const pr = { number: raw.number, url: raw.url, state: raw.state, title: raw.title, isDraft: raw.isDraft, mergeable: raw.mergeable, mergeStateStatus: raw.mergeStateStatus };
       const commit = commits.nodes[0]?.commit;
       const contexts = commit?.statusCheckRollup?.contexts;
-      const checks = (contexts?.nodes ?? []).map(toCheck);
+      const checks = (contexts?.nodes ?? []).map(toCheck).map((check) => ({ ...check, url: httpUrl(check.url) }));
       if (contexts && contexts.totalCount > contexts.nodes.length)
         checks.push({ name: "Additional checks — open GitHub to see all", state: "pending", url: pr.url });
       const previewUrl = [...(commit?.deployments.nodes ?? [])].reverse()
         .filter((d) => d.latestStatus?.state === "SUCCESS")
         .map((d) => httpUrl(d.latestStatus?.environmentUrl)).find(Boolean) ?? null;
-      return { branch: headRefName, base: baseRefName, pr: { ...pr, reviewDecision: reviewDecision || null, checks }, previewUrl };
+      const snapshot: DeliverySnapshot = {
+        id: raw.id, branch: headRefName, pr: { number: pr.number, url: pr.url, title: pr.title, head: commit?.oid ?? "" },
+        state: pr.state, checks,
+        reviews: raw.reviews.nodes.filter((r) => r.submittedAt && r.state !== "PENDING").map((r) => r.id),
+        requests: raw.reviewRequests.nodes.flatMap((r) => r.requestedReviewer ? [r.requestedReviewer.id] : []),
+        deployments: (commit?.deployments.nodes ?? []).map((d) => ({ id: d.id, state: d.latestStatus?.state ?? "PENDING", url: httpUrl(d.latestStatus?.environmentUrl) })),
+      };
+      return { snapshot, branch: headRefName, base: baseRefName, pr: { ...pr, reviewDecision: reviewDecision || null, checks }, previewUrl };
     });
   });
 }
 
-type CachedProject = { branches: BranchDelivery[]; nextPoll: number; updatedAt: string | null; error: string | null };
+type CachedProject = { history?: DeliveryHistory; branches: BranchDelivery[]; nextPoll: number; updatedAt: string | null; error: string | null };
 type State = { projects: Map<string, CachedProject>; deliveries: WorkspaceDelivery[]; timer: ReturnType<typeof setInterval> | null; ticking: boolean; tick: () => Promise<void> };
 const g = globalThis as typeof globalThis & { __thunkDelivery?: State };
 const state = (g.__thunkDelivery ??= { projects: new Map(), deliveries: [], timer: null, ticking: false, tick: async () => {} } as State);
@@ -73,9 +88,32 @@ async function projectDelivery(project: Project) {
   cached ??= { branches: [], nextPoll: 0, updatedAt: null, error: null };
   const startedAt = Date.now();
   try {
-    cached.branches = project.kind === "repo" && project.remote
+    const branches = project.kind === "repo" && project.remote
       ? parseDeliveries(JSON.parse(await run("gh", ["api", "graphql", "--paginate", "--slurp", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${DELIVERY_QUERY}`], project.root)))
       : [];
+    if (project.kind === "repo" && project.remote) {
+      const previous = cached.history ?? await readDeliveryHistory(project.root);
+      const snapshots = branches.map((b) => b.snapshot);
+      const missing = previous.snapshots.filter((s) => !snapshots.some((now) => now.id === s.id));
+      // Disappearance alone can mean closed, deleted, or temporarily inaccessible, not merged.
+      for (let offset = 0; offset < missing.length; offset += 50) {
+        const batch = missing.slice(offset, offset + 50);
+        const query = "query($ids:[ID!]!) { nodes(ids:$ids) { ... on PullRequest { id state } } }";
+        const args = ["api", "graphql", "-f", `query=${query}`, ...batch.flatMap((s) => ["-f", `ids[]=${s.id}`])];
+        const result = JSON.parse(await run("gh", args, project.root)) as { errors?: unknown[]; data?: { nodes: ({ id: string; state: DeliverySnapshot["state"] } | null)[] } };
+        if (result.errors?.length || !result.data) throw new Error("Could not confirm missing PR states");
+        for (const old of batch) {
+          const confirmed = result.data.nodes.find((n) => n?.id === old.id);
+          snapshots.push({ ...old, state: confirmed?.state ?? "CLOSED" });
+        }
+      }
+      const history = advanceDeliveryHistory(previous, snapshots);
+      if (JSON.stringify(history) !== JSON.stringify(previous)) await writeDeliveryHistory(project.root, history);
+      // Persist even an empty first baseline so its epoch survives restart.
+      else if (!cached.history) await writeDeliveryHistory(project.root, history);
+      cached.history = history;
+    }
+    cached.branches = branches;
     cached.updatedAt = new Date().toISOString();
     cached.error = null;
   } catch (err) {
@@ -100,6 +138,7 @@ async function workspaceDelivery(project: Project, ws: Workspace, cached: Cached
   const [behind, ahead] = counts?.split(/\s+/).map(Number) ?? [null, null];
   const reason = cached.error || (project.kind !== "repo" ? "Not a Git repository" : !project.remote ? "No origin remote" : !actualBranch ? "Not on a branch" : actualBranch === base || actualBranch === project.defaultBranch ? "Start a workspace with its own branch" : null);
   return {
+    activity: (cached.history?.events ?? []).filter((e) => e.branch === actualBranch).slice(-10).reverse(),
     workspaceId: ws.id, projectId: project.id,
     status: { branch: actualBranch, base: match?.base ?? base, pr: match?.pr ?? null, canCreate: !reason && !match, reason },
     git: local === null ? null : { ahead, behind, dirty: local.split("\n").some((line) => line && !line.startsWith("#")) },
@@ -124,6 +163,7 @@ async function tick() {
         catch {
           const previous = state.deliveries.find((d) => d.workspaceId === ws.id);
           deliveries.push({
+            activity: previous?.activity ?? [],
             workspaceId: ws.id, projectId: project.id,
             status: previous?.status ?? { branch: ws.branch, base: ws.baseRef || project.defaultBranch || "main", pr: null, canCreate: false, reason: "Workspace unavailable" },
             git: null, running: false, localPreviewUrl: null, deployedPreviewUrl: previous?.deployedPreviewUrl ?? null,
@@ -150,3 +190,7 @@ export function ensureDeliveryPolling() {
 }
 
 export function workspaceDeliveries() { return state.deliveries; }
+
+export function deliveryHistories() {
+  return [...state.projects].flatMap(([projectId, cached]) => cached.history && !cached.error ? [{ projectId, history: cached.history }] : []);
+}

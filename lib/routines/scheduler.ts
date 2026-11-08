@@ -4,6 +4,7 @@ import { getSession, isTerminated } from "@/lib/agent";
 import { projectEvents } from "@/lib/projects/events";
 import { listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
 import { computeNextRun } from "./cron";
+import { pollDeliveryRoutines } from "./delivery-poll";
 import { pollPullRequests } from "./pr-poll";
 import { fire, isRunActive, startRun } from "./runner";
 import { routinesState as state } from "./state";
@@ -28,6 +29,7 @@ async function tick() {
       await updateRoutine(routine.id, { nextRunAt: nextRunIso(routine, now) });
       await fire(routine, "cron").catch((err) => console.error(`[thunk] routine "${routine.name}" failed to start`, err));
     }
+    await pollDeliveryRoutines();
     if (++state.tickCount % PR_POLL_EVERY === 0) await pollPullRequests();
   } catch (err) {
     console.error("[thunk] routines tick failed", err);

@@ -63,6 +63,7 @@ export async function patchRoutine(id: string, patch: z.output<typeof RoutinePat
     scheduleTz: next.scheduleTz,
     targetWorkspaceId: next.targetWorkspaceId,
     webhookToken,
+    ...(next.enabled !== current.enabled ? { triggerState: { ...current.triggerState, delivery: null } } : {}),
     // A changed schedule starts its PR cursor over too, harmlessly: only the next poll records.
     ...(rescheduled ? scheduleFields(next) : {}),
   });
