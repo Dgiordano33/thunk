@@ -1,0 +1,280 @@
+/* Design mocks: a "Kingdom Hearts cover" treatment of the world map. Blacks, whites, silver, long shadows.
+   Only loaded by /mock/[variant]; nothing here ships to the real map. */
+
+/* ---------- Variant A · Obsidian (black cover) ---------- */
+.mock-obsidian {
+  --background: oklch(0.1 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.13 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.22 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.8 0 0);
+
+  --w-sea: oklch(0.09 0 0);
+  --w-ocean: oklch(0.13 0 0);
+  --w-ocean-alt: oklch(0.12 0 0);
+  --w-wave: oklch(0.6 0 0);
+  --w-shallows: oklch(0.19 0 0);
+  --w-shallows-alt: oklch(0.2 0 0);
+  --w-grass: oklch(0.36 0 0);
+  --w-grass-alt: oklch(0.34 0 0);
+  --w-plains: oklch(0.47 0 0);
+  --w-plains-alt: oklch(0.45 0 0);
+  --w-forest: oklch(0.27 0 0);
+  --w-forest-alt: oklch(0.25 0 0);
+  --w-tree: oklch(0.15 0 0);
+  --w-hills: oklch(0.42 0 0);
+  --w-hills-alt: oklch(0.4 0 0);
+  --w-hump: oklch(0.3 0 0);
+  --w-mountain: oklch(0.52 0 0);
+  --w-rock: oklch(0.2 0 0);
+  --w-snow: oklch(0.97 0 0);
+  --w-cliff: oklch(0.06 0 0);
+  --w-edge: oklch(1 0 0 / 0.07);
+  --w-road: oklch(0.62 0 0);
+  --w-soil: oklch(0.3 0 0);
+  --w-soil-dark: oklch(0.24 0 0);
+  /* Bronze becomes pewter/silver. */
+  --w-bronze: oklch(0.58 0 0);
+  --w-bronze-dark: oklch(0.14 0 0);
+  --w-bronze-light: oklch(0.93 0 0);
+  --w-parchment: oklch(0.15 0 0);
+  --w-parchment-ink: oklch(0.95 0 0);
+}
+/* Terrain and sprites drop to near-grey; the project hue survives only as a faint tint. */
+.mock-obsidian .world svg { filter: saturate(0.12) contrast(1.08); }
+.mock-obsidian .world a svg { filter: saturate(0.3) contrast(1.15) drop-shadow(3px 6px 0 oklch(0 0 0 / 0.75)); }
+/* Nameplates: white ink on black, hard shadow. */
+.mock-obsidian .world a > span.pixel { box-shadow: 3px 3px 0 #000, 0 0 0 1px oklch(1 0 0 / 0.35); }
+.mock-obsidian .world a > span.pixel > span:first-child { filter: saturate(0.45) brightness(0.9); }
+.mock-obsidian .civ-panel { filter: drop-shadow(0 4px 0 #000) drop-shadow(0 14px 22px oklch(0 0 0 / 0.8)); }
+.mock-obsidian .civ-panel > .civ-panel-body { box-shadow: inset 0 0 0 1px oklch(0 0 0), inset 0 2px 0 1px oklch(1 0 0 / 0.1); }
+.mock-obsidian .world-vignette {
+  background:
+    radial-gradient(ellipse 70% 65% at 50% 45%, transparent 55%, oklch(0 0 0 / 0.75) 100%),
+    linear-gradient(to bottom, oklch(0 0 0 / 0.35), transparent 20%, transparent 80%, oklch(0 0 0 / 0.55));
+}
+
+/* ---------- Variant B · Vellum (white cover) ---------- */
+.mock-vellum {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.1 0 0);
+  --card: oklch(0.99 0 0);
+  --card-foreground: oklch(0.1 0 0);
+  --popover: oklch(0.985 0 0);
+  --popover-foreground: oklch(0.1 0 0);
+  --muted: oklch(0.9 0 0);
+  --muted-foreground: oklch(0.4 0 0);
+  --border: oklch(0 0 0 / 18%);
+  --input: oklch(0 0 0 / 18%);
+  --ring: oklch(0.2 0 0);
+
+  --w-sea: oklch(0.93 0 0);
+  --w-ocean: oklch(0.9 0 0);
+  --w-ocean-alt: oklch(0.89 0 0);
+  --w-wave: oklch(0.55 0 0);
+  --w-shallows: oklch(0.84 0 0);
+  --w-shallows-alt: oklch(0.85 0 0);
+  /* Land is ink: dark masses on paper, with black cliffs as the cast shadow. */
+  --w-grass: oklch(0.42 0 0);
+  --w-grass-alt: oklch(0.4 0 0);
+  --w-plains: oklch(0.54 0 0);
+  --w-plains-alt: oklch(0.52 0 0);
+  --w-forest: oklch(0.3 0 0);
+  --w-forest-alt: oklch(0.28 0 0);
+  --w-tree: oklch(0.14 0 0);
+  --w-hills: oklch(0.48 0 0);
+  --w-hills-alt: oklch(0.46 0 0);
+  --w-hump: oklch(0.3 0 0);
+  --w-mountain: oklch(0.6 0 0);
+  --w-rock: oklch(0.22 0 0);
+  --w-snow: oklch(0.99 0 0);
+  --w-cliff: oklch(0.08 0 0);
+  --w-edge: oklch(1 0 0 / 0.12);
+  --w-road: oklch(0.7 0 0);
+  --w-soil: oklch(0.36 0 0);
+  --w-soil-dark: oklch(0.28 0 0);
+  /* Bronze becomes black ink framing. */
+  --w-bronze: oklch(0.22 0 0);
+  --w-bronze-dark: oklch(0.04 0 0);
+  --w-bronze-light: oklch(0.5 0 0);
+  --w-parchment: oklch(0.985 0 0);
+  --w-parchment-ink: oklch(0.1 0 0);
+}
+.mock-vellum .world svg { filter: saturate(0.1) contrast(1.1); }
+.mock-vellum .world a svg { filter: saturate(0.35) contrast(1.2) drop-shadow(4px 7px 0 oklch(0 0 0 / 0.85)); }
+.mock-vellum .world a > span.pixel { box-shadow: 3px 3px 0 #000; }
+.mock-vellum .world a > span.pixel > span:first-child { filter: saturate(0.5); }
+.mock-vellum .civ-panel { filter: drop-shadow(5px 5px 0 #000); }
+.mock-vellum .civ-panel > .civ-panel-body { box-shadow: inset 0 0 0 1px oklch(0 0 0), inset 0 2px 0 1px oklch(1 0 0 / 0.6); }
+.mock-vellum .world-vignette {
+  background:
+    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 60%, oklch(0 0 0 / 0.35) 100%),
+    repeating-linear-gradient(0deg, oklch(0 0 0 / 0.025) 0 1px, transparent 1px 3px);
+}
+
+/* ---------- Variant C · Moonlit (KH1 cover: indigo night, moon glow, lamplit towns, soft painterly shading) ---------- */
+.mock-moonlit {
+  --background: oklch(0.17 0.05 268);
+  --foreground: oklch(0.94 0.02 250);
+  --card: oklch(0.21 0.05 268);
+  --card-foreground: oklch(0.94 0.02 250);
+  --popover: oklch(0.2 0.05 268 / 0.92);
+  --popover-foreground: oklch(0.95 0.02 250);
+  --muted: oklch(0.3 0.05 268);
+  --muted-foreground: oklch(0.74 0.04 255);
+  --border: oklch(0.8 0.05 250 / 18%);
+  --input: oklch(0.8 0.05 250 / 18%);
+  --ring: oklch(0.85 0.08 85);
+
+  --w-sea: oklch(0.17 0.06 268);
+  --w-ocean: oklch(0.22 0.07 265);
+  --w-ocean-alt: oklch(0.21 0.07 268);
+  --w-wave: oklch(0.72 0.07 240);
+  --w-shallows: oklch(0.3 0.08 255);
+  --w-shallows-alt: oklch(0.31 0.08 252);
+  --w-grass: oklch(0.4 0.07 225);
+  --w-grass-alt: oklch(0.39 0.07 228);
+  --w-plains: oklch(0.49 0.06 235);
+  --w-plains-alt: oklch(0.47 0.06 238);
+  --w-forest: oklch(0.3 0.08 250);
+  --w-forest-alt: oklch(0.29 0.08 253);
+  --w-tree: oklch(0.19 0.07 262);
+  --w-hills: oklch(0.44 0.06 245);
+  --w-hills-alt: oklch(0.42 0.06 248);
+  --w-hump: oklch(0.31 0.07 258);
+  --w-mountain: oklch(0.56 0.05 250);
+  --w-rock: oklch(0.26 0.06 262);
+  --w-snow: oklch(0.96 0.03 90);
+  --w-cliff: oklch(0.12 0.05 270);
+  --w-edge: transparent;
+  --w-road: oklch(0.62 0.07 80);
+  --w-soil: oklch(0.34 0.05 250);
+  --w-soil-dark: oklch(0.27 0.05 255);
+  /* Frames: moon-silver over midnight steel. */
+  --w-bronze: oklch(0.52 0.05 255);
+  --w-bronze-dark: oklch(0.16 0.05 268);
+  --w-bronze-light: oklch(0.9 0.04 240);
+  --w-parchment: oklch(0.22 0.05 268 / 0.94);
+  --w-parchment-ink: oklch(0.95 0.03 95);
+}
+/* Night sky: a moon high and slightly left, a star field, and haze that thickens toward the horizon. */
+.mock-moonlit.dark .world,
+.mock-moonlit .world {
+  background:
+    radial-gradient(circle at 38% 18%, oklch(0.97 0.06 95 / 0.9) 0 70px, oklch(0.95 0.08 92 / 0.55) 90px, oklch(0.85 0.1 90 / 0.18) 160px, transparent 300px),
+    radial-gradient(1px 1px at 12% 22%, #fff 99%, transparent), radial-gradient(1px 1px at 72% 12%, #fffc 99%, transparent),
+    radial-gradient(1.5px 1.5px at 85% 30%, #fff 99%, transparent), radial-gradient(1px 1px at 55% 8%, #fffa 99%, transparent),
+    radial-gradient(1px 1px at 22% 48%, #fff9 99%, transparent), radial-gradient(1px 1px at 92% 58%, #fffb 99%, transparent),
+    radial-gradient(1.5px 1.5px at 65% 40%, #fffd 99%, transparent), radial-gradient(1px 1px at 8% 70%, #fff8 99%, transparent),
+    radial-gradient(1px 1px at 40% 62%, #fff7 99%, transparent), radial-gradient(1px 1px at 78% 76%, #fff8 99%, transparent),
+    linear-gradient(to bottom, oklch(0.12 0.05 272), oklch(0.2 0.07 265) 45%, oklch(0.3 0.08 255) 100%);
+}
+/* Smooth shading instead of crisp pixel facets: no tile grid, anti-aliased edges, a soft ground shadow under the landmass. */
+.mock-moonlit .world svg.pixel { shape-rendering: geometricPrecision; image-rendering: auto; }
+.mock-moonlit .world .t-tile { stroke: none; }
+.mock-moonlit .world > div > div > div > svg {
+  filter: saturate(0.9) drop-shadow(0 18px 28px oklch(0.05 0.04 270 / 0.9)) drop-shadow(0 4px 6px oklch(0.05 0.04 270 / 0.8));
+}
+/* Buildings read as moonlit stone with lamplight: cool-shifted, then a warm halo. */
+.mock-moonlit .world a svg {
+  filter: sepia(0.5) hue-rotate(185deg) saturate(0.75) brightness(0.92) contrast(1.05)
+    drop-shadow(0 0 8px oklch(0.85 0.12 85 / 0.55)) drop-shadow(0 6px 10px oklch(0.05 0.04 270 / 0.9));
+}
+.mock-moonlit .world a > span.pixel { box-shadow: 0 4px 12px oklch(0.05 0.05 270 / 0.8); --tw-ring-color: oklch(0.9 0.05 240 / 0.35); }
+.mock-moonlit .world a > span.pixel > span:last-child { background: oklch(0.14 0.05 268 / 0.78); }
+.mock-moonlit .world a > span.pixel > span:first-child { filter: saturate(0.7) brightness(0.95); }
+.mock-moonlit .world .wave { fill: oklch(0.85 0.05 240); }
+.mock-moonlit .civ-panel {
+  filter: drop-shadow(0 10px 24px oklch(0.05 0.04 270 / 0.85)) drop-shadow(0 0 1px oklch(0.9 0.04 240 / 0.5));
+}
+.mock-moonlit .civ-panel > .civ-panel-body { box-shadow: inset 0 0 0 1px oklch(0.1 0.05 270), inset 0 1px 0 1px oklch(0.9 0.04 240 / 0.12); backdrop-filter: blur(10px); }
+.mock-moonlit .world-vignette {
+  background:
+    linear-gradient(to top, oklch(0.6 0.08 250 / 0.35), oklch(0.45 0.08 255 / 0.12) 30%, transparent 55%),
+    radial-gradient(ellipse 80% 70% at 50% 50%, transparent 55%, oklch(0.06 0.04 272 / 0.7) 100%);
+}
+
+/* ---------- Variant D · Dusk (violet twilight, amber rim light, warmer towns) ---------- */
+.mock-dusk {
+  --background: oklch(0.2 0.06 310);
+  --foreground: oklch(0.95 0.02 60);
+  --card: oklch(0.24 0.06 310);
+  --card-foreground: oklch(0.95 0.02 60);
+  --popover: oklch(0.22 0.06 310 / 0.92);
+  --popover-foreground: oklch(0.96 0.02 70);
+  --muted: oklch(0.32 0.06 310);
+  --muted-foreground: oklch(0.76 0.04 320);
+  --border: oklch(0.85 0.08 60 / 18%);
+  --input: oklch(0.85 0.08 60 / 18%);
+  --ring: oklch(0.8 0.14 60);
+
+  --w-sea: oklch(0.2 0.07 305);
+  --w-ocean: oklch(0.26 0.08 300);
+  --w-ocean-alt: oklch(0.25 0.08 303);
+  --w-wave: oklch(0.8 0.1 55);
+  --w-shallows: oklch(0.34 0.09 290);
+  --w-shallows-alt: oklch(0.35 0.09 287);
+  --w-grass: oklch(0.42 0.07 300);
+  --w-grass-alt: oklch(0.41 0.07 303);
+  --w-plains: oklch(0.52 0.08 330);
+  --w-plains-alt: oklch(0.5 0.08 333);
+  --w-forest: oklch(0.32 0.08 295);
+  --w-forest-alt: oklch(0.31 0.08 298);
+  --w-tree: oklch(0.2 0.07 300);
+  --w-hills: oklch(0.46 0.07 320);
+  --w-hills-alt: oklch(0.44 0.07 323);
+  --w-hump: oklch(0.32 0.08 305);
+  --w-mountain: oklch(0.58 0.06 320);
+  --w-rock: oklch(0.28 0.07 305);
+  --w-snow: oklch(0.95 0.06 70);
+  --w-cliff: oklch(0.13 0.06 305);
+  --w-edge: transparent;
+  --w-road: oklch(0.7 0.1 65);
+  --w-soil: oklch(0.36 0.06 320);
+  --w-soil-dark: oklch(0.29 0.06 315);
+  /* Frames: brass catching the last light, over plum. */
+  --w-bronze: oklch(0.6 0.1 65);
+  --w-bronze-dark: oklch(0.18 0.06 305);
+  --w-bronze-light: oklch(0.92 0.09 80);
+  --w-parchment: oklch(0.24 0.06 310 / 0.94);
+  --w-parchment-ink: oklch(0.96 0.04 80);
+}
+/* Sunset band low on the horizon under a violet sky; a soft sun glow bottom-right. */
+.mock-dusk .world {
+  background:
+    radial-gradient(ellipse 45% 30% at 78% 92%, oklch(0.85 0.15 60 / 0.55), oklch(0.7 0.17 40 / 0.25) 45%, transparent 75%),
+    radial-gradient(1px 1px at 18% 14%, #fffc 99%, transparent), radial-gradient(1px 1px at 62% 10%, #fff9 99%, transparent),
+    radial-gradient(1.5px 1.5px at 88% 20%, #fffd 99%, transparent), radial-gradient(1px 1px at 40% 24%, #fff8 99%, transparent),
+    linear-gradient(to bottom, oklch(0.14 0.06 300), oklch(0.26 0.09 310) 40%, oklch(0.42 0.12 335) 75%, oklch(0.62 0.15 50) 100%);
+}
+.mock-dusk .world svg.pixel { shape-rendering: geometricPrecision; image-rendering: auto; }
+.mock-dusk .world .t-tile { stroke: none; }
+.mock-dusk .world > div > div > div > svg {
+  filter: saturate(0.95) drop-shadow(0 18px 28px oklch(0.08 0.05 305 / 0.9)) drop-shadow(-6px 4px 8px oklch(0.08 0.05 305 / 0.7));
+}
+/* Towns keep their warmth and pick up an amber rim from the low sun. */
+.mock-dusk .world a svg {
+  filter: sepia(0.35) hue-rotate(-10deg) saturate(0.9) brightness(0.95) contrast(1.08)
+    drop-shadow(-2px -1px 0 oklch(0.9 0.14 70 / 0.55)) drop-shadow(0 7px 10px oklch(0.08 0.05 305 / 0.9));
+}
+.mock-dusk .world a > span.pixel { box-shadow: 0 4px 12px oklch(0.08 0.05 305 / 0.8); --tw-ring-color: oklch(0.9 0.1 70 / 0.35); }
+.mock-dusk .world a > span.pixel > span:last-child { background: oklch(0.16 0.06 305 / 0.8); }
+.mock-dusk .civ-panel { filter: drop-shadow(0 10px 24px oklch(0.08 0.05 305 / 0.85)) drop-shadow(0 0 1px oklch(0.92 0.09 80 / 0.5)); }
+.mock-dusk .civ-panel > .civ-panel-body { box-shadow: inset 0 0 0 1px oklch(0.12 0.06 305), inset 0 1px 0 1px oklch(0.92 0.09 80 / 0.14); backdrop-filter: blur(10px); }
+.mock-dusk .world-vignette {
+  background:
+    linear-gradient(to top, oklch(0.75 0.14 55 / 0.3), oklch(0.6 0.12 20 / 0.1) 30%, transparent 55%),
+    radial-gradient(ellipse 80% 70% at 50% 50%, transparent 55%, oklch(0.08 0.05 305 / 0.7) 100%);
+}
+
+/* Open water is the sky itself in the smooth variants; only shallows show as a faint ring around land. */
+.mock-moonlit .world .t-ocean, .mock-moonlit .world .t-ocean-alt,
+.mock-dusk .world .t-ocean, .mock-dusk .world .t-ocean-alt { fill: transparent; }
+.mock-moonlit .world .t-shallows, .mock-moonlit .world .t-shallows-alt { fill: oklch(0.45 0.09 250 / 0.35); }
+.mock-dusk .world .t-shallows, .mock-dusk .world .t-shallows-alt { fill: oklch(0.5 0.1 300 / 0.35); }

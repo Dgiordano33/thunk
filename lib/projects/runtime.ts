@@ -89,8 +89,8 @@ async function launch(ctx: WorkspaceContext, kind: ProcessKind, command: string)
     proc.exitCode = exitCode;
     finish(exitCode);
     // A Run script that dies on its own (not via Stop/archive) is something routines can react to.
-    if (kind === "run" && exitCode !== 0 && !proc.stopped) {
-      projectEvents().emit("run_failed", {
+    if ((kind === "run" || kind === "setup") && exitCode !== 0 && !proc.stopped) {
+      projectEvents().emit(kind === "setup" ? "setup_failed" : "run_failed", {
         projectId: ctx.project.id, workspaceId: ctx.workspace.id, exitCode, tail: proc.output.slice(-4000),
       });
     }

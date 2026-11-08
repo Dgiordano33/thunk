@@ -1,3 +1,4 @@
+import type { Notification, NotificationCounts } from "@/lib/notifications/types";
 import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
 import type { NoteImportScope, Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
@@ -36,6 +37,11 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
 const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", json });
 
 export const api = {
+  listNotifications: (query = "status=all&limit=500") => call<{ notifications: Notification[]; counts: NotificationCounts }>(`/api/notifications?${query}`),
+  readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
+  dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),
+  dismissAllNotifications: (projectId?: string) => post<{ notifications: Notification[] }>("/api/notifications/dismiss-all", { projectId }),
+  notificationAction: (action: Notification["actions"][number]) => post(action.path, action.body ?? {}),
   // Vault
   listVault: (projectId: string) => call<{ items: VaultItem[]; dir: string }>(`/api/projects/${projectId}/vault`),
   listAllVault: () => call<{ items: (VaultItem & { projectName: string })[] }>("/api/vault"),

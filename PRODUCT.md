@@ -31,7 +31,7 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 - **Document turns:** an assistant's final prose becomes an editable document. The person edits it or comments on it and sends revisions, and plans from plan mode follow the same flow.
 - **Orchestration:** routines start agents on schedules or events. A proposal in `docs/orchestration-plan.md` adds briefs built from selected tasks, notes, and free text that dispatch to worker sessions.
 - **Delivery:** the workspace has a terminal, Setup and Run scripts, dev-server preview, and Git controls. Towns show PR, check, and deployment status from GitHub.
-- **Attention:** an agent can park on a permission, question, or plan, and those moments need to reach the person.
+- **Attention:** an agent can park on a permission, question, or plan, and those moments reach the person through the **Inbox**, with optional desktop alerts.
 
 ## Capabilities and Constraints
 
@@ -48,6 +48,8 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 - Routines fire only while the Thunk server is running.
 
 **Terminology**
+
+- **Notifications / Inbox:** server-created records of requests and outcomes across projects. Action notifications resolve when their cause clears; informational updates resolve when read or dismissed.
 
 Use Project, Workspace, Session, Notes, Tasks, Routines, Vault, and Library. Within the map, projects appear as cities on the world map and as a town center up close, workspaces as farms, and sessions as fields. Closed sessions are fallow fields; archived workspaces are listed in the Town center. The Library building holds notes, the Workshop holds routines, the Town hall holds tasks, and the Vault building holds uploads.
 

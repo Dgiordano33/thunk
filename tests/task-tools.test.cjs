@@ -110,10 +110,10 @@ test("updates/completions cannot cross projects; claims cannot cross workspaces"
   assert.equal(rows[0].body.length, 20_000);
 });
 
-test("Claude autoallows exactly the four local tools; similarly named tools still request permission", async () => {
+test("Claude autoallows local task and notification tools; similarly named tools still request permission", async () => {
   const session = live(); const canUse = buildCanUseTool(session);
   const opts = { toolUseID: "tool", signal: new AbortController().signal };
-  for (const name of TASK_TOOL_NAMES) assert.equal((await canUse(`mcp__thunk__${name}`, {}, opts)).behavior, "allow");
+  for (const name of [...TASK_TOOL_NAMES, "notify"]) assert.equal((await canUse(`mcp__thunk__${name}`, {}, opts)).behavior, "allow");
   for (const name of ["tasks_create", "mcp__evil__tasks_create", "mcp__thunk__tasks_delete", "mcp__thunk__tasks_create_extra"]) {
     const pending = canUse(name, {}, opts);
     assert.equal(session.pending.size, 1);
@@ -125,13 +125,13 @@ test("Claude autoallows exactly the four local tools; similarly named tools stil
 test("both transports include workspace/project tasks and register validated tools", async () => {
   const options = await buildOptions(live(), {});
   assert.equal(options.mcpServers.thunk.alwaysLoad, true);
-  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), [...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
+  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), ["notify", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
   assert.match(options.systemPrompt.append, /Workspace job/); assert.match(options.systemPrompt.append, /Project job/);
   assert.doesNotMatch(options.systemPrompt.append, /Secret job|Sibling job/);
   const driver = await createCodexDriver(live(), {}); await driver.run();
   assert.equal(requests[0].params.capabilities.experimentalApi, true);
   const start = requests.find((r) => r.method === "thread/start").params;
-  assert.equal(start.dynamicTools.length, 6);
+  assert.deepEqual(start.dynamicTools.map((t) => t.name), ["notify", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
   assert.ok(start.dynamicTools.every((t) => t.type === "function" && t.inputSchema.additionalProperties === false));
   assert.match(start.developerInstructions, /Workspace job/); assert.match(start.developerInstructions, /Project job/);
   assert.doesNotMatch(start.developerInstructions, /Secret job|Sibling job/);

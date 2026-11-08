@@ -122,7 +122,7 @@ function BorderPath({ border, grid }: { border: Border; grid: Grid }) {
       {border.cells.map(({ col, row }) => (
         <polygon key={`${col},${row}`} points={isoPolygon(col, row, grid)} fill={color} opacity={0.2} />
       ))}
-      <path d={edges.join("")} stroke={color} strokeWidth={2} strokeDasharray="5 3" fill="none" />
+      <path className="territory-border" d={edges.join("")} stroke={color} strokeWidth={2} strokeDasharray="5 3" fill="none" />
     </g>
   );
 }

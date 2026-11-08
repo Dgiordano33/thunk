@@ -51,14 +51,14 @@ const load = Module._load;
 Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/projects/delivery.ts")) {
     if (request === "node:child_process") return { execFile: fakeExec };
-    if (request === "../supabase/repo/routines") return { listEnabledRoutines: async () => [] };
+    if (request === "@/lib/notifications/delivery") return { deliveryNotifications: async () => {} };
     if (request === "../supabase/repo/projects") return { listProjects: async () => projects };
     if (request === "../supabase/repo/workspaces") return { listAllWorkspaces: async () => workspaces };
     if (request === "./runtime") return { runtimeSnapshot: async () => ({ processes: [{ kind: "run", running: true }], previewUrl: "http://127.0.0.1:3000", setupError: null }) };
   }
   return load.call(this, request, parent, ...rest);
 };
-const { parseDeliveries, ensureDeliveryPolling, workspaceDeliveries } = require("../lib/projects/delivery.ts");
+const { parseDeliveries, workspaceDeliveries } = require("../lib/projects/delivery.ts");
 const { deliveryCue, httpUrl } = require("../lib/projects/delivery-types.ts");
 Module._load = load;
 

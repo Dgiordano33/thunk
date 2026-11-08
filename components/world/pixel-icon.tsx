@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
  * index into `palette`.
  */
 const ICONS = {
+  bell: {
+    palette: { a: "var(--w-bronze-dark)", b: "var(--w-bronze-light)" },
+    rows: ["....aa....", "...abba...", "..abbbba..", "..abbbba..", "..abbbba..", ".abbbbbba.", "abbbbbbbba", "aaaaaaaaaa", "....aa...."],
+  },
   checklist: {
     palette: { a: "var(--w-bronze-dark)", b: "var(--w-parchment)", c: "var(--w-parchment-ink)" },
     rows: [".aaaaaaaaa.", ".abbbbbbba.", ".abcbcccba.", ".abbbbbbba.", ".abcbcccba.", ".abbbbbbba.", ".abcbcccba.", ".abbbbbbba.", ".aaaaaaaaa."],

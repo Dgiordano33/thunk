@@ -27,6 +27,7 @@ export function WorldMap({ tiles, cities, children }: { tiles: Tile[][]; cities:
       }
       controls={<LegendButton label="Map legend"><Legend /></LegendButton>}
     >
+      <div aria-hidden="true" className="world-vignette pointer-events-none absolute inset-0 z-10" />
       {children}
     </IsoViewport>
   );
