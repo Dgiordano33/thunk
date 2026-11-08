@@ -31,7 +31,7 @@ function Pixels({ w, h, children, className }: { w: number; h: number; children:
 const roof = (cx: number, y: number, width: number, rows: number, color: string, shade: string) =>
   Array.from({ length: rows }, (_, i) => {
     const w = Math.max(2, width - i * 2);
-    return [r(cx - w / 2, y - i, w / 2, 1, color, `rl${y}-${i}`), r(cx, y - i, w / 2, 1, shade, `rr${y}-${i}`)];
+    return [r(cx - w / 2, y - i, w / 2, 1, color, `rl${cx},${y}-${i}`), r(cx, y - i, w / 2, 1, shade, `rr${cx},${y}-${i}`)];
   }).flat();
 
 /** Wooden scaffolding over a building that isn't finished. */

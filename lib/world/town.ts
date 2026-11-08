@@ -75,9 +75,9 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
     capital: i === 0,
   }));
   const capital = centers[0]?.cell ?? { col: mid, row: mid };
-  // Behind the capital, one to each side.
-  const library = { col: capital.col - 2, row: capital.row };
-  const workshop = { col: capital.col, row: capital.row - 2 };
+  // Either side of the capital, clear of its sprite.
+  const library = { col: capital.col - 2, row: capital.row + 1 };
+  const workshop = { col: capital.col + 1, row: capital.row - 2 };
 
   const key = (c: Cell) => `${c.col},${c.row}`;
   const reserved = new Set([key(library), key(workshop)]);
@@ -102,7 +102,7 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
       else if (edge) kind = "forest";
       else if (near <= 4) kind = moisture > 0.35 ? "grass" : "plains";
       else if (height < 0.2 && near > 5) kind = "shallows";
-      else if (moisture > 0.52 || near > 6) kind = "forest";
+      else if (moisture > 0.58 || near > 7) kind = "forest";
       else if (height > 0.8) kind = "hills";
       else kind = moisture > 0.38 ? "grass" : "plains";
       return { col, row, kind, height, moisture, variant: variants() };
@@ -113,7 +113,8 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
   const farms: Record<string, Cell> = {};
   const overflow: Record<string, number> = {};
   for (const { workspaceId, cell } of centers) {
-    const slots = FARM_RINGS.flatMap((r) => ring(r))
+    // Front of the town (toward the viewer) first, so the first fields aren't hidden behind the town center.
+    const slots = FARM_RINGS.flatMap((r) => ring(r).sort((a, b) => b.col + b.row - (a.col + a.row) || angle(a) - angle(b)))
       .map((d) => ({ col: cell.col + d.col, row: cell.row + d.row }))
       .filter((c) => !reserved.has(key(c)) && !roads.has(key(c)) && tiles[c.row]?.[c.col]);
     const own = sessions
