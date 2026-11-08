@@ -1,7 +1,7 @@
 import "server-only";
 import type { Project, ProjectSummary } from "@/lib/projects/types";
-import { forgetRepoFolders } from "./repo-folders";
-import { withRepoFolders } from "@/lib/notes/folders";
+import type { RepoFolder } from "@/lib/projects/types";
+import { forgetRepoFolders, listAllRepoFolders, listRepoFolders } from "./repo-folders";
 import { db } from "../server";
 import { memForgetProject, memProjectRepos, PROJECT_REPO_COLUMNS, toProjectRepos, type ProjectRepoRow } from "./project-repos";
 import { deleteTask, listTasks } from "./tasks";
@@ -41,6 +41,13 @@ function toProject(r: Row): Project {
 const g = globalThis as typeof globalThis & { __thunkMemProjects?: Map<string, Project> };
 const mem = (g.__thunkMemProjects ??= new Map());
 const withRepos = (p: Project): Project => ({ ...p, extraRepos: memProjectRepos(p.id) });
+
+/** Attach registered folders whose repo is still in the project. Pure: one query, no file reads or writes. */
+const attachFolders = <T extends Project>(project: T, folders: RepoFolder[]): T => ({
+  ...project,
+  repoFolders: folders.filter((f) => f.repoId === null || project.extraRepos.some((r) => r.id === f.repoId)),
+});
+const withRepoFolders = async <T extends Project>(project: T): Promise<T> => attachFolders(project, await listRepoFolders(project.id));
 
 export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "extraRepos" | "repoFolders">): Promise<Project> {
   const client = db();
@@ -122,20 +129,22 @@ export async function deleteProject(id: string): Promise<void> {
 
 export async function listProjects(): Promise<ProjectSummary[]> {
   const client = db();
+  const folders = await listAllRepoFolders();
+  const foldersOf = (p: Project) => attachFolders(p, folders.get(p.id) ?? []);
   if (!client) {
-    return Promise.all([...mem.values()]
+    return [...mem.values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(async (p) => ({ ...await withRepoFolders(withRepos(p)), workspaceCount: 0, sessionCount: 0, lastActivityAt: null })));
+      .map((p) => ({ ...foldersOf(withRepos(p)), workspaceCount: 0, sessionCount: 0, lastActivityAt: null }));
   }
   const { data, error } = await client
     .from("projects")
     .select(`${COLUMNS}, workspaces(id, updated_at, sessions(count))`)
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return Promise.all(data.map(async (r) => {
+  return data.map((r) => {
     const ws = (r.workspaces ?? []) as unknown as { id: string; updated_at: string; sessions: { count: number }[] }[];
     const last = ws.map((w) => w.updated_at).sort().at(-1) ?? null;
     const sessionCount = ws.reduce((n, w) => n + (w.sessions[0]?.count ?? 0), 0);
-    return { ...await withRepoFolders(toProject(r as unknown as Row)), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
-  }));
+    return { ...foldersOf(toProject(r as unknown as Row)), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
+  });
 }

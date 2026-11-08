@@ -79,7 +79,10 @@ test("declared notebooks, extra repo notebooks and session prompts use main chec
   const extra = await fixture();
   const repo = await repos.insertProjectRepo({ projectId: project.id, name: "extra", path: extra.root, remote: null, defaultBranch: "main" });
   await folders.insertRepoFolder({ projectId: project.id, repoId: repo.id, path: "docs", label: "Extra plans" });
-  const [loaded, concurrent] = await Promise.all([projects.getProject(project.id), projects.getProject(project.id)]);
+  // Getters are pure: thunk.json is only read when the project is reconciled.
+  assert.equal((await projects.getProject(project.id)).repoFolders.length, 1);
+  const before = await projects.getProject(project.id);
+  const [loaded, concurrent] = await Promise.all([discovery.reconcileDeclaredFolders(before), discovery.reconcileDeclaredFolders(before)]);
   assert.equal(concurrent.repoFolders.length, 2);
   assert.equal(loaded.repoFolders.length, 2);
   assert.equal((await projects.getProject(project.id)).repoFolders.length, 2);
@@ -88,8 +91,13 @@ test("declared notebooks, extra repo notebooks and session prompts use main chec
   assert.equal(notes.repos.filter((r) => r.extra).length, 1);
   assert.match(prompts.notesPrompt(notes), /main checkout/);
   assert.match(prompts.notesPrompt(notes), /Board/);
+  const extraFolder = loaded.repoFolders.find((f) => f.repoId === repo.id);
+  assert.equal((await resolution.dirsForScope({ kind: "repos", id: extraFolder.id })).scope.id, extraFolder.id);
   await repos.deleteProjectRepo(repo.id);
   assert.equal((await projects.getProject(project.id)).repoFolders.length, 1);
+  // The lookup goes straight to the folder row, but a folder whose repo left the project is still gone.
+  await assert.rejects(resolution.dirsForScope({ kind: "repos", id: extraFolder.id }), { status: 404 });
+  await assert.rejects(resolution.dirsForScope({ kind: "repos", id: crypto.randomUUID() }), { status: 404 });
 });
 
 test("imports distinguish identical filenames and duplicate items; completion and reopen only change checkboxes", async (t) => {

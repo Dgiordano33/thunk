@@ -3,7 +3,8 @@ import { HttpError } from "@/lib/api/http";
 import { getWorkspaceContext } from "@/lib/projects";
 import { projectMemoryFile, projectNotesDir, workspaceMemoryFile, workspaceNotesDir } from "@/lib/projects/paths";
 import type { Project, Workspace, RepoFolder } from "@/lib/projects/types";
-import { getProject, listProjects } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/supabase/repo/projects";
+import { getRepoFolder } from "@/lib/supabase/repo/repo-folders";
 import { resolveRepoFolder } from "./folders";
 import type { NoteDirs } from "./store";
 import type { NoteScope, NoteScopeKind } from "./types";
@@ -34,11 +35,11 @@ export async function notesDirsFor(project: Project, workspace: Workspace) {
 /** Resolve an API scope (`projects/<id>` or `workspaces/<id>`) to its dirs, 404 when it doesn't exist. */
 export async function dirsForScope(scope: NoteScope | { kind: NoteScopeKind; id: string }): Promise<NoteDirs> {
   if (scope.kind === "repos") {
-    for (const project of await listProjects()) {
-      const folder = project.repoFolders.find((f) => f.id === scope.id);
-      if (folder) return repoNoteDirs(project, folder);
-    }
-    throw new HttpError(404, "Repo notebook not found");
+    const folder = await getRepoFolder(scope.id);
+    const project = folder && await getProject(folder.projectId);
+    // getProject drops folders whose repo left the project; treat those as gone too.
+    if (!folder || !project?.repoFolders.some((f) => f.id === folder.id)) throw new HttpError(404, "Repo notebook not found");
+    return repoNoteDirs(project, folder);
   }
   if (scope.kind === "projects") {
     const project = await getProject(scope.id);

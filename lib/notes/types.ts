@@ -22,6 +22,8 @@ export type NoteMeta = NoteFlags & {
   id: string;
   scope: NoteScope;
   title: string;
+  /** Repo notes only: whether the file already has a `title:` frontmatter key (renaming adds one if not). */
+  titleInFile?: boolean;
   /** Absolute path of the backing file. */
   path: string;
   createdAt: string;

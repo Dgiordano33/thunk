@@ -16,6 +16,30 @@ export async function listRepoFolders(projectId: string): Promise<RepoFolder[]> 
   return data.map(fromRow);
 }
 
+/** One folder by id, for repo-scope lookups that should not scan every project. */
+export async function getRepoFolder(id: string): Promise<RepoFolder | null> {
+  const client = db();
+  if (!client) return mem.get(id) ?? null;
+  const { data, error } = await client.from("project_repo_folders").select(columns).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data) : null;
+}
+
+/** Every project's folders in one query, grouped by project id. */
+export async function listAllRepoFolders(): Promise<Map<string, RepoFolder[]>> {
+  const client = db();
+  let folders: RepoFolder[];
+  if (!client) folders = [...mem.values()];
+  else {
+    const { data, error } = await client.from("project_repo_folders").select(columns).order("created_at");
+    if (error) throw error;
+    folders = data.map(fromRow);
+  }
+  const byProject = new Map<string, RepoFolder[]>();
+  for (const f of folders) byProject.set(f.projectId, [...byProject.get(f.projectId) ?? [], f]);
+  return byProject;
+}
+
 export async function insertRepoFolder(input: Omit<RepoFolder, "id">): Promise<RepoFolder> {
   const client = db();
   if (!client) {

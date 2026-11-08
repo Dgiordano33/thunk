@@ -144,6 +144,7 @@ test("watcher retries with backoff for existing subscribers and cancels on unsub
     if (id === "@/lib/supabase/repo/projects") return { listProjects: async () => [] };
     if (id === "@/lib/supabase/repo/workspaces") return { listAllWorkspaces: async () => [] };
     if (id === "./resolve") return {};
+    if (id === "./folders") return { reconcileDeclaredFolders: async (p) => p };
     if (id === "./types") return { MEMORY_NOTE_ID: "memory" };
     return require(id);
   };

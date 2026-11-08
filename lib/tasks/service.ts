@@ -92,11 +92,9 @@ export async function noteImportCandidates(scope: NoteImportScope) {
     if (!workspace) throw new HttpError(404, "Workspace not found");
     projectId = workspace.projectId;
     workspaceNotes = await listNotes(await dirsForScope({ kind: "workspaces", id: workspaceId }));
-  } else {
-    projectId = scope.projectId;
-    if (!await getProject(taskId(projectId))) throw new HttpError(404, "Project not found");
-  }
-  const project = (await getProject(projectId))!;
+  } else projectId = taskId(scope.projectId);
+  const project = await getProject(projectId);
+  if (!project) throw new HttpError(404, "Project not found");
   const repoNotes = (await Promise.all((await repoDirsFor(project)).map((d) => listNotes(d)))).flat();
   const projectNotes = await listNotes(await dirsForScope({ kind: "projects", id: projectId }));
   const items = [

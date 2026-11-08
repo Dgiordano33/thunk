@@ -18,6 +18,7 @@ import {
   listWorkspaces,
 } from "@/lib/supabase/repo/workspaces";
 import { createWorktree, detectProject, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
+import { reconcileDeclaredFolders } from "@/lib/notes/folders";
 import { ensureMemory } from "./memory";
 import { projectMemoryFile, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
 import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock, forgetWorkspaceRuntime, stopWorkspaceProcesses } from "./runtime";
@@ -29,7 +30,7 @@ export type WorkspaceContext = { project: Project; workspace: Workspace };
 /** Register (or refresh) the project that contains `input`. Idempotent per root. */
 export async function addProject(input: string): Promise<Project> {
   const detected = await detectProject(input);
-  const project = await upsertProject(detected);
+  const project = await reconcileDeclaredFolders(await upsertProject(detected));
   await ensureMemory(projectMemoryFile(project.root), `# ${project.name} — project memory`);
   return project;
 }
@@ -80,6 +81,8 @@ export async function addProjectRepo(projectId: string, input: string, opts: { n
   });
   const main = await findWorkspace(projectId, { slug: "main" });
   if (main) await insertWorkspaceRepos(main.id, [inPlace(repo)]);
+  // The new checkout may declare its own notebooks in thunk.json.
+  await reconcileDeclaredFolders({ ...project, extraRepos: [...project.extraRepos, repo] });
   return repo;
 }
 

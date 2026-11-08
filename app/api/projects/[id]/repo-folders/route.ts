@@ -2,7 +2,7 @@ import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { insertRepoFolder } from "@/lib/supabase/repo/repo-folders";
-import { resolveRepoFolder } from "@/lib/notes/folders";
+import { reconcileDeclaredFolders, resolveRepoFolder } from "@/lib/notes/folders";
 import { refreshFolders } from "@/lib/notes/watch";
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
@@ -18,6 +18,7 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   const input = { projectId: project.id, repoId: body.repoId ?? null, path: body.path, label: body.label ?? body.path };
   await resolveRepoFolder(project, input);
   const folder = await insertRepoFolder(input);
+  await reconcileDeclaredFolders({ ...project, repoFolders: [...project.repoFolders, folder] });
   await refreshFolders();
   return Response.json({ folder });
 });
