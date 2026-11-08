@@ -19,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
-      <body className="h-full">
+      <body className="h-full" suppressHydrationWarning>
         <Providers>{children}</Providers>
         {process.env.NODE_ENV === "development" && <Retune />}
       </body>
