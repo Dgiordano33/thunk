@@ -29,7 +29,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
         {task.sessionId && <Link className="max-w-40 truncate hover:underline" href={workspaceId ? `/w/${workspaceId}/s/${task.sessionId}` : `/s/${task.sessionId}`}>{owner?.title || "Assigned session"}</Link>}
       </div>
     </div>
-    <SendMenu compact label="Send" disabled={busy} sessions={sessions.filter((s) => !task.workspaceId || s.workspaceId === task.workspaceId)} onPick={(id) => onSend(task, id)} />
+    <SendMenu compact label="Send" disabled={busy} sessions={sessions.filter((s) => s.live && (!task.workspaceId || s.workspaceId === task.workspaceId))} onPick={(id) => onSend(task, id)} />
     <Button size="icon-xs" variant="ghost" className="sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" disabled={busy} aria-label={`Delete ${task.title}`} onClick={() => onDelete(task)}><Trash2Icon /></Button>
   </li>;
 }

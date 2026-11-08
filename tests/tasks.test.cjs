@@ -159,13 +159,25 @@ test("import preview and concurrent retries preserve notes and task edits", asyn
   assert.deepEqual(await (await imports.GET(req("GET", undefined, `?workspaceId=${w.id}`))).json(), { count: 0 });
   assert.equal(await fs.readFile(note.path, "utf8"), before);
   const projectNote = await notes.createNote(projectNoteDirs, { title: "Project checklist", actionable: true, markdown: "- [ ] Shared follow-up\n" });
-  assert.equal(await service.importNoteTasks(w.id), 1);
+  assert.deepEqual(await (await imports.GET(req("GET", undefined, `?projectId=${w.projectId}`))).json(), { count: 1 });
+  assert.deepEqual(await (await imports.POST(req("POST", { projectId: w.projectId }))).json(), { imported: 1 });
   const projectTasks = await repo.listTasks({ projectId: w.projectId, workspaceId: null });
   assert.equal(projectTasks.length, 1);
   assert.equal(projectTasks[0].noteId, projectNote.id);
+  assert.equal(await service.importNoteTasks({ workspaceId: w.id }), 0);
   const sibling = await workspaces.insertWorkspace({ ...w, id: crypto.randomUUID(), slug: "sibling" });
   noteDirs = { ...noteDirs, notesDir: path.join(base, "sibling-notes"), memoryFile: path.join(base, "sibling-memory.md") };
-  assert.equal(await service.importNoteTasks(sibling.id), 0);
+  assert.equal(await service.importNoteTasks({ workspaceId: sibling.id }), 0);
+});
+
+test("concurrent creates in a scope get distinct positions, and a failed insert does not block the next", async () => {
+  const { p, w } = await fixture();
+  const created = await Promise.all(Array.from({ length: 5 }, (_, i) => repo.insertTask({ projectId: p.id, workspaceId: w.id, title: `Task ${i}` })));
+  assert.deepEqual(created.map((t) => t.position).sort((a, b) => a - b), [1, 2, 3, 4, 5]);
+  const id = crypto.randomUUID();
+  await repo.insertTask({ id, projectId: p.id, title: "First" });
+  await assert.rejects(repo.insertTask({ id, projectId: p.id, title: "Duplicate" }), /already exists/);
+  assert.equal((await repo.insertTask({ projectId: p.id, title: "Second" })).position, 2);
 });
 
 test("SSE delivers changes and cleans up on abort and cancellation", async () => {

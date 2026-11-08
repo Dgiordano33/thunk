@@ -12,6 +12,12 @@ import { permissionModesFor, providerOf, type SessionMeta } from "./types";
 export * from "./session-registry";
 export { deleteTranscripts } from "./transcripts";
 
+export class WorkspaceArchivedError extends Error {
+  constructor() {
+    super("Workspace is archived. Unarchive it to resume this session.");
+  }
+}
+
 export type StartSessionInput = {
   /** Start inside an existing workspace... */
   workspaceId?: string;
@@ -52,6 +58,8 @@ export async function resumeSession(id: string) {
   const live = getSession(id);
   if (live && !isTerminated(live)) return live;
   if (live) {
+    // live.ctx is a snapshot from when the session started, so read the workspace's current status.
+    if ((await getWorkspaceContext(live.meta.workspaceId))?.workspace.status === "archived") throw new WorkspaceArchivedError();
     // The runtime exited or crashed: start a new one on the same SDK session / thread, keeping history.
     evictSession(live);
     return createSession({
@@ -71,6 +79,7 @@ export async function resumeSession(id: string) {
   if (!row) return null;
   const ctx = await getWorkspaceContext(row.workspaceId);
   if (!ctx) throw new Error("This session's workspace no longer exists");
+  if (ctx.workspace.status === "archived") throw new WorkspaceArchivedError();
   return createSession({
     id: row.id,
     ctx,

@@ -1,5 +1,5 @@
 import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
-import type { Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
+import type { NoteImportScope, Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
 import type { RuntimeSnapshot, ProcessKind } from "@/lib/projects/runtime-types";
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
@@ -119,8 +119,8 @@ export const api = {
   patchTask: (id: string, body: TaskPatch) => call<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", json: body }),
   deleteTask: (id: string) => call(`/api/tasks/${id}`, { method: "DELETE" }),
   sendTask: (id: string, body: { sessionId?: string; workspaceId?: string }) => post<{ sessionId: string; workspaceId: string }>(`/api/tasks/${id}/send`, body),
-  taskImportCount: (workspaceId: string) => call<{ count: number }>(`/api/tasks/import-notes?workspaceId=${encodeURIComponent(workspaceId)}`),
-  importNoteTasks: (workspaceId: string) => post<{ imported: number }>("/api/tasks/import-notes", { workspaceId }),
+  taskImportCount: (scope: NoteImportScope) => call<{ count: number }>(`/api/tasks/import-notes?${new URLSearchParams(scope)}`),
+  importNoteTasks: (scope: NoteImportScope) => post<{ imported: number }>("/api/tasks/import-notes", scope),
   // Routines
   listRoutines: (projectId?: string) =>
     call<{ routines: RoutineSummary[] }>(`/api/routines${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`),

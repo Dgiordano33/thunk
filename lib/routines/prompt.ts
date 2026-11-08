@@ -32,10 +32,10 @@ export function renderPrompt(template: string, trigger: RunTrigger, payload?: Pa
 export const SUMMARY_FENCE = "routine-summary";
 
 /** Appended to the system prompt (Claude) or developer instructions (Codex) of routine sessions. */
-export function routineSystemPrompt(origin: SessionOrigin, trigger?: RunTrigger) {
+export function routineSystemPrompt(origin: SessionOrigin) {
   return `
 # Thunk routine
-This session was started by the routine **${origin.routineName}**${trigger ? ` (trigger: ${trigger})` : ""}. It runs unattended: nobody is watching while you work, and a person reads your report afterwards.
+This session was started by the routine **${origin.routineName}**${origin.trigger ? ` (trigger: ${origin.trigger})` : ""}. It runs unattended: nobody is watching while you work, and a person reads your report afterwards.
 - Prefer finishing the task without asking questions. Make reasonable assumptions and state them in the report. Ask only if continuing would be unsafe or destructive.
 - Never force-push, rewrite published history, or delete branches you did not create.
 - If you change code, commit it on the current branch with a clear message. Open a pull request only if the routine's instructions ask for one.

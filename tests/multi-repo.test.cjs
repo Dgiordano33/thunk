@@ -2,7 +2,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
-const { mkdtempSync } = require("node:fs");
+const { mkdtempSync, realpathSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
@@ -22,7 +22,8 @@ Module._load = function (request, parent, isMain) {
   return load.call(this, request, parent, isMain);
 };
 
-const base = mkdtempSync(path.join(os.tmpdir(), "thunk-multi-repo-"));
+// realpath: macOS tmpdir is a symlink (/var -> /private/var), and added repos are stored resolved.
+const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "thunk-multi-repo-")));
 process.env.THUNK_DATA_DIR = path.join(base, "data");
 const projects = require("../lib/projects/index.ts");
 const { extraReposPrompt, extraRepoDirectories } = require("../lib/projects/repos-prompt.ts");

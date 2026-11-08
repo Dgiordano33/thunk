@@ -16,6 +16,25 @@ function tokenMatches(given: string, expected: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** Read the body as text, giving up as soon as it passes the limit. */
+async function readBody(req: Request) {
+  const tooLarge = () => new HttpError(413, "Body over 64 KB");
+  if (Number(req.headers.get("content-length")) > MAX_BODY) throw tooLarge();
+  if (!req.body) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = req.body.getReader();
+  for (let part = await reader.read(); !part.done; part = await reader.read()) {
+    size += part.value.byteLength;
+    if (size > MAX_BODY) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(part.value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 /**
  * Trigger a routine from this machine (git hook, local cron, SSH tunnel). Token via `?token=` or
  * `Authorization: Bearer`. An optional JSON body (≤ 64 KB) becomes `{{payload}}`.
@@ -34,8 +53,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/routines
   const key = `webhook:${id}`;
   if (Date.now() - (routinesState.lastFired.get(key) ?? 0) < MIN_INTERVAL_MS) throw new HttpError(429, "Slow down: one webhook run per 10 seconds");
 
-  const text = await req.text();
-  if (text.length > MAX_BODY) throw new HttpError(413, "Body over 64 KB");
+  const text = await readBody(req);
   let payload: Record<string, unknown> | null = null;
   if (text.trim()) {
     try {

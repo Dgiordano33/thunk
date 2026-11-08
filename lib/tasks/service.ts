@@ -9,7 +9,7 @@ import { getTask, insertTask, listTasks, updateTask } from "@/lib/supabase/repo/
 import { dirsForScope } from "@/lib/notes/resolve";
 import { listNotes, tasksOf } from "@/lib/notes/store";
 import { TaskInputSchema, TaskPatchSchema, type TaskInput, type TaskPatch } from "./schema";
-import type { Task, TaskTree } from "./types";
+import type { NoteImportScope, Task, TaskTree } from "./types";
 
 export function taskId(id: string): string {
   if (!z.uuid().safeParse(id).success) throw new HttpError(400, "Invalid id");
@@ -76,26 +76,34 @@ export async function tasksForWorkspace(id: string): Promise<{ workspace: Task[]
   return { workspace: tasks.filter((t) => t.workspaceId === id), project: tasks.filter((t) => !t.workspaceId) };
 }
 
-export async function noteImportCandidates(workspaceId: string) {
-  const workspace = await getWorkspace(taskId(workspaceId));
-  if (!workspace) throw new HttpError(404, "Workspace not found");
-  const [workspaceNotes, projectNotes] = await Promise.all([
-    listNotes(await dirsForScope({ kind: "workspaces", id: workspaceId })),
-    listNotes(await dirsForScope({ kind: "projects", id: workspace.projectId })),
-  ]);
+export async function noteImportCandidates(scope: NoteImportScope) {
+  let projectId: string;
+  let workspaceId: string | null = null;
+  let workspaceNotes: Awaited<ReturnType<typeof listNotes>> = [];
+  if ("workspaceId" in scope) {
+    workspaceId = scope.workspaceId;
+    const workspace = await getWorkspace(taskId(workspaceId));
+    if (!workspace) throw new HttpError(404, "Workspace not found");
+    projectId = workspace.projectId;
+    workspaceNotes = await listNotes(await dirsForScope({ kind: "workspaces", id: workspaceId }));
+  } else {
+    projectId = scope.projectId;
+    if (!await getProject(taskId(projectId))) throw new HttpError(404, "Project not found");
+  }
+  const projectNotes = await listNotes(await dirsForScope({ kind: "projects", id: projectId }));
   const items = [
     ...tasksOf(workspaceNotes).map((item) => ({ ...item, workspaceId })),
     ...tasksOf(projectNotes).map((item) => ({ ...item, workspaceId: null })),
   ];
   const occurrences = new Map<string, number>();
   const candidates = items.map((item) => {
-    const key = JSON.stringify([item.workspaceId ?? workspace.projectId, item.noteId, item.text]);
+    const key = JSON.stringify([item.workspaceId ?? projectId, item.noteId, item.text]);
     const occurrence = occurrences.get(key) ?? 0;
     occurrences.set(key, occurrence + 1);
     // Content + occurrence keeps IDs stable when unrelated note lines move, including duplicate checklists.
     const hash = createHash("sha256").update(JSON.stringify([key, occurrence])).digest("hex");
     const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-    return { id, projectId: workspace.projectId, workspaceId: item.workspaceId, noteId: item.noteId, title: item.text.trim().slice(0, 200), body: item.text.length > 200 ? item.text : null };
+    return { id, projectId, workspaceId: item.workspaceId, noteId: item.noteId, title: item.text.trim().slice(0, 200), body: item.text.length > 200 ? item.text : null };
   });
   const pending = [];
   for (const candidate of candidates) {
@@ -105,9 +113,9 @@ export async function noteImportCandidates(workspaceId: string) {
   }
   return pending;
 }
-export async function importNoteTasks(workspaceId: string): Promise<number> {
+export async function importNoteTasks(scope: NoteImportScope): Promise<number> {
   let imported = 0;
-  for (const candidate of await noteImportCandidates(workspaceId)) {
+  for (const candidate of await noteImportCandidates(scope)) {
     try { await insertTask(candidate); imported++; }
     catch (error) {
       if ((error as { code?: string }).code !== "23505") throw error;
