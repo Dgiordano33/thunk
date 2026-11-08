@@ -22,7 +22,7 @@ type Watch = {
 
 // One watcher per server process, surviving dev hot reloads like the db client.
 const g = globalThis as typeof globalThis & { __thunkNotesWatch?: Watch };
-const state = (g.__thunkNotesWatch ??= { watcher: null, listeners: new Set(), pending: new Map(), projects: new Map(), workspaces: new Map() });
+const state: Watch = (g.__thunkNotesWatch ??= { watcher: null, listeners: new Set(), pending: new Map(), projects: new Map(), workspaces: new Map() });
 
 const ROOT = path.join(DATA_DIR, "projects");
 const DEBOUNCE_MS = 150;
