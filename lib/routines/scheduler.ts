@@ -1,4 +1,5 @@
 import "server-only";
+import { ensureDeliveryPolling } from "@/lib/projects/delivery";
 import { getSession, isTerminated } from "@/lib/agent";
 import { projectEvents } from "@/lib/projects/events";
 import { listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
@@ -60,6 +61,7 @@ async function reconcile() {
 
 /** Start the routines scheduler once per server process. Safe to call from anywhere, any number of times. */
 export function ensureScheduler() {
+  ensureDeliveryPolling();
   // Point the long-lived timer and listeners at this module's code (matters after HMR).
   state.tick = tick;
   state.onRunFailed = (event) => void onRunFailed(event).catch((err) => console.error("[thunk] run_failed trigger", err));

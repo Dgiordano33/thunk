@@ -1,3 +1,5 @@
+import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
+import type { Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
 import type { RuntimeSnapshot, ProcessKind } from "@/lib/projects/runtime-types";
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
@@ -7,7 +9,7 @@ import type { ModelOption, SessionMeta } from "@/lib/agent/types";
 import type { Artifact, DocComment } from "@/lib/documents/types";
 import type { RoutineInput, RoutinePatch } from "@/lib/routines/schema";
 import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
-import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind, NoteTask } from "@/lib/notes/types";
+import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind } from "@/lib/notes/types";
 import type {
   Project,
   ProjectSummary,
@@ -85,7 +87,17 @@ export const api = {
     call<{ note: Note }>(`/api/${scope}/${id}/notes/${noteId}`, { method: "PATCH", json: body }),
   deleteNote: (scope: NoteScopeKind, id: string, noteId: string) =>
     call(`/api/${scope}/${id}/notes/${noteId}`, { method: "DELETE" }),
-  noteTasks: (scope: NoteScopeKind, id: string) => call<{ tasks: NoteTask[] }>(`/api/${scope}/${id}/notes/tasks`),
+  // Tasks
+  listTasks: (opts: { projectId?: string; workspaceId?: string; status?: "open" } = {}) =>
+    call<{ tasks: Task[] }>(`/api/tasks?${new URLSearchParams(opts)}`),
+  taskTree: (projectId: string) => call<{ tree: TaskTree }>(`/api/tasks/tree?projectId=${encodeURIComponent(projectId)}`),
+  taskCounts: () => call<{ counts: TaskCounts }>("/api/tasks/counts"),
+  createTask: (body: TaskInput) => post<{ task: Task }>("/api/tasks", body),
+  patchTask: (id: string, body: TaskPatch) => call<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", json: body }),
+  deleteTask: (id: string) => call(`/api/tasks/${id}`, { method: "DELETE" }),
+  sendTask: (id: string, body: { sessionId?: string; workspaceId?: string }) => post<{ sessionId: string; workspaceId: string }>(`/api/tasks/${id}/send`, body),
+  taskImportCount: (workspaceId: string) => call<{ count: number }>(`/api/tasks/import-notes?workspaceId=${encodeURIComponent(workspaceId)}`),
+  importNoteTasks: (workspaceId: string) => post<{ imported: number }>("/api/tasks/import-notes", { workspaceId }),
   // Routines
   listRoutines: (projectId?: string) =>
     call<{ routines: RoutineSummary[] }>(`/api/routines${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`),

@@ -1,9 +1,13 @@
 import "server-only";
-import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
+import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
 import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
+import { tasksTools } from "@/lib/tasks/tools";
+import { tasksPrompt } from "@/lib/tasks/prompt";
+import { tasksForWorkspace } from "@/lib/tasks/service";
+import type { Task } from "@/lib/tasks/types";
 import { buildCanUseTool } from "./permissions";
 import type { LiveSession } from "./session-registry";
 import type { AgentProvider } from "./types";
@@ -24,6 +28,7 @@ export function hierarchyPrompt(
   projectMemory: string,
   provider: AgentProvider = "claude",
   notes?: SessionNotes,
+  tasks: Task[] = [],
 ) {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.root);
@@ -43,14 +48,16 @@ export function hierarchyPrompt(
   ];
   if (projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
   if (notes) lines.push("", notesPrompt(notes));
+  lines.push("", tasksPrompt(tasks));
   return lines.join("\n");
 }
 
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, notes] = await Promise.all([
+  const [projectMemory, notes, tasks] = await Promise.all([
     readMemory(projectMemoryFile(project.root)),
     loadSessionNotes(project, workspace),
+    tasksForWorkspace(workspace.id),
   ]);
   const isWorktree = Boolean(workspace.worktreePath);
 
@@ -60,6 +67,11 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir],
+    mcpServers: { thunk: createSdkMcpServer({
+      name: "thunk", alwaysLoad: true,
+      tools: tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id })
+        .map((t) => tool(t.name, t.description, t.schema, t.handler)),
+    }) },
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.
@@ -75,7 +87,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       preset: "claude_code",
       append: [
         CANVAS_PROMPT,
-        hierarchyPrompt(live, projectMemory, "claude", notes),
+        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project]),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
       ].join("\n\n"),
     },

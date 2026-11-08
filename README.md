@@ -20,17 +20,29 @@ npm run dev
 - **Workspace** = a task inside a project. Either works in place (the `main` workspace every project gets) or in its own **git worktree** at `<repo>/.claude/worktrees/<slug>` on a new branch (default `thunk/<slug>`, from `origin/<default>`). Has a **workspace memory** directory (`~/.thunk/projects/<slug>/workspaces/<slug>/memory/`) that is the SDK auto-memory dir for every session in it, so sessions share notes. Archive closes its live sessions; delete can also remove the worktree and memory.
 - **Session** = one chat in a workspace. Runs with `cwd` = workspace dir and, in a worktree, `projectConfigRoot` = the main checkout so config comes from the trusted tree.
 
-- **Notes** = a notebook per project (`~/.thunk/projects/<slug>/notes/<id>.md`) and per workspace (`…/workspaces/<slug>/notes/<id>.md`). Each note is markdown with frontmatter (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). MEMORY.md shows up as the pinned first note of each scope. Every session gets both notes dirs as readable/writable directories and a `# Thunk notes` block in its system prompt: an index of notes plus the full text of `inject: true` notes (capped at 24k chars). Unchecked `- [ ]` items in `actionable: true` notes appear as tasks you can send to a session. A file watcher streams changes (including agent edits) to the UI over SSE.
+- **Notes** = a notebook per project (`~/.thunk/projects/<slug>/notes/<id>.md`) and per workspace (`…/workspaces/<slug>/notes/<id>.md`). Each note is markdown with frontmatter (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). MEMORY.md shows up as the pinned first note of each scope. Every session gets both notes dirs as readable/writable directories and a `# Thunk notes` block in its system prompt: an index of notes plus the full text of `inject: true` notes (capped at 24k chars). Checklists remain editable in notes; the legacy `actionable` flag is still read for importing old checklist items into Tasks. A file watcher streams changes (including agent edits) to the UI over SSE.
 
 - **Routines** = standing orders for agents: a prompt, model and permission mode that start a session on a cron schedule, on **Run now**, or on events (a new GitHub PR, polled every ~2 min via `gh`; a workspace's Run script exiting non-zero; a local webhook `POST /api/routines/[id]/webhook?token=…`). Each run gets a fresh worktree by default (removed when nothing changed, archived otherwise) or runs in a chosen workspace. Prompts, questions and plans park the run as *Needs you*. When a run ends, its summary, diff stat, PR link and cost are recorded and a report note is written to the project's notebook. Guardrails: one run per routine, max runs/day (default 24), a per-run time limit (default 60 min), and at most 3 routine runs at once. **Routines fire only while the Thunk server is running**; runs open at shutdown are marked interrupted on the next start, and a missed schedule runs once on start if the routine asks to catch up.
 
-Pages: `/` projects · `/p/[id]` project (workspaces, notes in the Library building, other Claude Code transcripts on disk for this repo that you can import) · `/w/[id]` workspace (sessions, git status, Notes tab with tasks) · `/s/[id]` session · `/notes` the Library (every notebook; `?scope=p:<id>|w:<id>&note=<id>`) · `/routines` every routine (each town's Workshop holds its own: `/p/[id]?building=workshop`).
+Pages: `/` projects · `/p/[id]` project (workspaces, notes in the Library building, other Claude Code transcripts on disk for this repo that you can import) · `/w/[id]` workspace (sessions, git status, Notes and Tasks tabs) · `/s/[id]` session · `/notes` the Library (every notebook; `?scope=p:<id>|w:<id>&note=<id>`) · `/routines` every routine (each town's Workshop holds its own: `/p/[id]?building=workshop`).
 
 Routines API: `GET/POST /api/routines` (`?projectId=`), `GET/PATCH/DELETE /api/routines/[id]`, `POST …/run`, `GET …/runs`, `DELETE …/runs/[runId]` (cancel), `POST …/webhook`.
 
-Notes API: `GET/POST /api/{projects|workspaces}/[id]/notes`, `GET/PATCH/DELETE …/notes/[noteId]` (`memory` is the MEMORY.md note: markdown edits only, not deletable), `GET …/notes/tasks`, `GET /api/notes` (all notebooks), `GET /api/notes/events` (SSE).
+Notes API: `GET/POST /api/{projects|workspaces}/[id]/notes`, `GET/PATCH/DELETE …/notes/[noteId]` (`memory` is the MEMORY.md note: markdown edits only, not deletable), `GET /api/notes` (all notebooks), `GET /api/notes/events` (SSE).
 
 Retune's visual editor is available in development. Press `⌥D` (Alt+D) to toggle editing. The project `.mcp.json` configures its local MCP server for compatible agents; other clients can use `npx --no-install retune` from the project root. Restart your agent to load the configuration, or use Retune's clipboard output to apply edits. See the [Retune docs](https://github.com/khadgi-sujan/retune).
+
+## Tasks
+
+Tasks have stable IDs, status (open, in progress, blocked, done, cancelled), priority, optional markdown detail, due date, note link, and an owning session. Open the **Tasks** tab in a workspace (`/w/<id>?tab=tasks`) for workspace and project tasks, or the town's **Town hall** (`/p/<id>?building=tasks`) for the project's full list grouped by workspace. Sidebar badges show open counts and update live.
+
+Enter a title to create a task; use ⌘↵ to add details. Open a task to edit its fields, or send it to an existing session or a new chat. Claude and Codex receive `tasks_list`, `tasks_create`, `tasks_update`, and `tasks_complete` tools and the current workspace/project open-task context. IDs may be full UUIDs or unambiguous prefixes. Codex threads created before task tools were added need a new session; newly created threads retain the tools when resumed.
+
+Existing actionable notes are not migrated automatically. The workspace Tasks tab offers to import unchecked checklist items from workspace and project notes, preserving the note text and linking each imported task to its note.
+
+Apply `supabase/migrations/20261110090000_0004_tasks.sql` for persistent storage. Without Supabase, tasks live in server memory and are lost on restart. Task events use an in-process SSE feed, like other local runtime features.
+
+Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/[id]/send`, `GET /api/tasks/tree?projectId=…`, `GET /api/tasks/counts`, `GET /api/tasks/events`, and `GET/POST /api/tasks/import-notes`. Run `npm run test:tasks` for task checks.
 
 ## How it works
 

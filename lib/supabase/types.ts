@@ -376,6 +376,68 @@ export type Database = {
           },
         ]
       }
+      tasks: {
+        Row: {
+          id: string
+          project_id: string
+          workspace_id: string | null
+          title: string
+          body: string | null
+          status: string
+          priority: number
+          position: number
+          created_by: string
+          session_id: string | null
+          created_in_session_id: string | null
+          note_id: string | null
+          due_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          workspace_id?: string | null
+          title: string
+          body?: string | null
+          status?: string
+          priority?: number
+          position?: number
+          created_by?: string
+          session_id?: string | null
+          created_in_session_id?: string | null
+          note_id?: string | null
+          due_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          workspace_id?: string | null
+          title?: string
+          body?: string | null
+          status?: string
+          priority?: number
+          position?: number
+          created_by?: string
+          session_id?: string | null
+          created_in_session_id?: string | null
+          note_id?: string | null
+          due_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "tasks_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "tasks_workspace_id_fkey"; columns: ["workspace_id"]; isOneToOne: false; referencedRelation: "workspaces"; referencedColumns: ["id"] },
+          { foreignKeyName: "tasks_session_id_fkey"; columns: ["session_id"]; isOneToOne: false; referencedRelation: "sessions"; referencedColumns: ["id"] },
+          { foreignKeyName: "tasks_created_in_session_id_fkey"; columns: ["created_in_session_id"]; isOneToOne: false; referencedRelation: "sessions"; referencedColumns: ["id"] },
+        ]
+      }
       sessions: {
         Row: {
           created_at: string

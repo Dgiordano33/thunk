@@ -2,8 +2,8 @@
 
 import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/client/api";
@@ -16,12 +16,24 @@ import { cn } from "@/lib/utils";
 import { ReviewDiff, SendReview, useDiffComments } from "./diff-review";
 import { Checkpoints } from "./checkpoints";
 import { SessionsList } from "./sessions-list";
+import { WorkspaceTasks } from "./workspace-tasks";
+import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { WorkspaceNotes } from "./workspace-notes";
 
 const CHANGES_POLL_MS = 5000;
 
 /** Workspace-wide info, shared by every session tab: what was produced and what changed on disk. */
 export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspaceId: string; projectId: string; sessions: SessionMeta[] }) {
+  return <Suspense fallback={<Loading />}><WorkspacePanelContent workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></Suspense>;
+}
+
+function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspaceId: string; projectId: string; sessions: SessionMeta[] }) {
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const tab = params.get("tab") ?? "sessions";
+  const counts = useTaskCounts()[projectId];
+  const openCount = (counts?.project ?? 0) + (counts?.byWorkspace[workspaceId] ?? 0);
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
@@ -43,8 +55,12 @@ export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspace
   const fileCount = changes?.files.length ?? 0;
 
   return (
-    <Tabs defaultValue="sessions" className="flex h-full flex-col gap-0">
-      <div className="flex h-11 shrink-0 items-end border-b px-2">
+    <Tabs value={["sessions", "artifacts", "changes", "tasks", "notes", "checkpoints"].includes(tab) ? tab : "sessions"} onValueChange={(value) => {
+      const query = new URLSearchParams(params.toString());
+      query.set("tab", value);
+      router.replace(`${pathname}?${query}`, { scroll: false });
+    }} className="flex h-full flex-col gap-0">
+      <div className="flex h-11 shrink-0 items-end overflow-x-auto border-b px-2">
         <TabsList variant="line" className="h-full">
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
@@ -52,6 +68,7 @@ export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspace
             Changes
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>
+          <TabsTrigger value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
         </TabsList>
@@ -73,6 +90,7 @@ export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspace
         </div>
       </TabsContent>
       <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>
+      <TabsContent value="tasks" className="min-h-0 flex-1 overflow-y-auto"><WorkspaceTasks workspaceId={workspaceId} projectId={projectId} /></TabsContent>
       <TabsContent value="notes" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <WorkspaceNotes workspaceId={workspaceId} projectId={projectId} />

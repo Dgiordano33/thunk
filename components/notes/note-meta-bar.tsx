@@ -1,6 +1,6 @@
 "use client";
 
-import { BrainIcon, ListChecksIcon, PinIcon, Trash2Icon } from "lucide-react";
+import { BrainIcon, PinIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MEMORY_NOTE_ID, type NoteFlags, type NoteMeta } from "@/lib/notes/types";
@@ -38,7 +38,7 @@ function Toggle({
   );
 }
 
-/** Pin · Inject into sessions · Actionable, tags, and the file path agents edit. */
+/** Pin · Inject into sessions, tags, and the file path agents edit. */
 export function NoteMetaBar({
   note,
   onChange,
@@ -78,13 +78,6 @@ export function NoteMetaBar({
             icon={BrainIcon}
             label="Inject into sessions"
             title="Put the full note in the system prompt of new sessions in this scope"
-          />
-          <Toggle
-            on={note.actionable}
-            onClick={() => onChange({ actionable: !note.actionable })}
-            icon={ListChecksIcon}
-            label="Actionable"
-            title="Show unchecked - [ ] items as tasks you can send to a session"
           />
           <input
             value={tags}

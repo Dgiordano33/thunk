@@ -1,6 +1,8 @@
 import "server-only";
 import type { Workspace, WorkspaceSummary } from "@/lib/projects/types";
 import { db } from "../server";
+import { deleteTask, listTasks } from "./tasks";
+import { emitTask } from "@/lib/tasks/events";
 
 type Row = {
   id: string;
@@ -116,11 +118,14 @@ export async function touchWorkspace(id: string): Promise<void> {
 export async function deleteWorkspace(id: string): Promise<void> {
   const client = db();
   if (!client) {
+    for (const task of await listTasks({ workspaceId: id })) await deleteTask(task.id);
     mem.delete(id);
     return;
   }
+  const tasks = await listTasks({ workspaceId: id });
   const { error } = await client.from("workspaces").delete().eq("id", id);
   if (error) throw error;
+  for (const task of tasks) emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind: "removed" });
 }
 
 export async function listWorkspaces(projectId: string): Promise<WorkspaceSummary[]> {

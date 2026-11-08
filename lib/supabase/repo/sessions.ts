@@ -3,6 +3,7 @@ import type { SessionMeta, SessionState } from "@/lib/agent/types";
 import type { SessionOrigin } from "@/lib/routines/types";
 import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
+import { listTasks, updateTask } from "./tasks";
 
 export type SessionRow = Omit<SessionMeta, "live"> & { totalCostUsd: number; updatedAt: string };
 
@@ -106,7 +107,17 @@ export async function listSessionRows(opts: { workspaceId?: string; projectId?: 
 
 export async function deleteSessionRow(id: string): Promise<void> {
   const client = db();
-  if (!client) return;
+  if (!client) {
+    for (const task of await listTasks()) {
+      if (task.sessionId === id || task.createdInSessionId === id) {
+        await updateTask(task.id, {
+          ...(task.sessionId === id ? { sessionId: null } : {}),
+          ...(task.createdInSessionId === id ? { createdInSessionId: null } : {}),
+        });
+      }
+    }
+    return;
+  }
   const { error } = await client.from("sessions").delete().eq("id", id);
   if (error) throw error;
 }

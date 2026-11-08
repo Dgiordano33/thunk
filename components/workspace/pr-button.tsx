@@ -95,13 +95,14 @@ const ACTION_TITLE: Record<PrAction, string> = {
 const FAST_AFTER_REQUEST_MS = 5 * 60_000;
 
 /** Top-right PR action: "Create PR" hands the job to the agent; once a PR exists it links to it. */
-export function PrButton({ workspaceId }: { workspaceId: string }) {
+export function PrButton({ workspaceId, deliveryStatus, inline = false }: { workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [status, setStatus] = useState<WorkspacePrStatus | null>(null);
+  const [loadedStatus, setStatus] = useState<WorkspacePrStatus | null>(null);
   const [requested, setRequested] = useState<{ action: PrAction; at: number } | null>(null);
   const [pending, setPending] = useState<PrAction | null>(null);
 
+  const status = deliveryStatus === undefined ? loadedStatus : deliveryStatus;
   const pr = status?.pr;
   const creating = requested?.action === "create" && pr?.state !== "OPEN";
   const fast =
@@ -118,10 +119,11 @@ export function PrButton({ workspaceId }: { workspaceId: string }) {
     [workspaceId],
   );
   useEffect(() => {
+    if (deliveryStatus !== undefined) return;
     void load();
     const t = setInterval(() => document.visibilityState === "visible" && void load(), fast ? FAST_POLL_MS : POLL_MS);
     return () => clearInterval(t);
-  }, [load, fast]);
+  }, [load, fast, deliveryStatus]);
   /** Hand a PR job to the agent: the open session tab if it's live, otherwise a dedicated new session. */
   const ask = async (action: PrAction, prompt: string) => {
     setPending(action);
@@ -148,6 +150,7 @@ export function PrButton({ workspaceId }: { workspaceId: string }) {
   if (pr && pr.state === "OPEN")
     return (
       <OpenPr
+        inline={inline}
         pr={pr}
         base={status.base}
         pending={pending}
@@ -227,12 +230,14 @@ const TONE = {
 };
 
 function OpenPr({
+  inline,
   pr,
   base,
   pending,
   requested,
   onAsk,
 }: {
+  inline?: boolean;
   pr: PullRequestInfo;
   base: string;
   pending: PrAction | null;
@@ -241,10 +246,9 @@ function OpenPr({
 }) {
   const state = overall(pr);
   const conflicts = pr.mergeable === "CONFLICTING" || pr.mergeStateStatus === "DIRTY";
-  const merge = mergeLine(pr, base);
-  const review = pr.reviewDecision ? REVIEW_LINE[pr.reviewDecision] : { text: "No review required", tone: "muted" as const };
-  const counts = (s: CheckState) => pr.checks.filter((c) => c.state === s).length;
   const StateIcon = state ? CHECK_ICON[state].icon : null;
+
+  if (inline) return <PrSummary pr={pr} base={base} pending={pending} requested={requested} onAsk={onAsk} />;
 
   return (
     <Popover>
@@ -260,6 +264,25 @@ function OpenPr({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
+        <PrSummary pr={pr} base={base} pending={pending} requested={requested} onAsk={onAsk} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function PrSummary({ pr, base, pending, requested, onAsk }: {
+  pr: PullRequestInfo;
+  base: string;
+  pending: PrAction | null;
+  requested: PrAction | null;
+  onAsk: (action: Exclude<PrAction, "create">) => void;
+}) {
+  const state = overall(pr);
+  const conflicts = pr.mergeable === "CONFLICTING" || pr.mergeStateStatus === "DIRTY";
+  const merge = mergeLine(pr, base);
+  const review = pr.reviewDecision ? REVIEW_LINE[pr.reviewDecision] : { text: "No review required", tone: "muted" as const };
+  const counts = (s: CheckState) => pr.checks.filter((c) => c.state === s).length;
+  return <>
         <div className="border-b px-4 py-3">
           <a href={pr.url} target="_blank" rel="noreferrer" className="group flex items-start gap-2">
             <span className="min-w-0 flex-1 text-sm leading-snug font-medium group-hover:underline">
@@ -313,9 +336,7 @@ function OpenPr({
             })}
           </ul>
         )}
-      </PopoverContent>
-    </Popover>
-  );
+  </>;
 }
 
 function FixActions({

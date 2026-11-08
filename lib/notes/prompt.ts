@@ -38,7 +38,7 @@ export function notesPrompt(notes: SessionNotes) {
     `- Project notes: \`${notes.projectDir}\``,
     `- Workspace notes: \`${notes.workspaceDir}\``,
     "",
-    "Edit notes in place and keep the frontmatter intact. Put follow-ups the user should see as `- [ ]` checklist items in a note with `actionable: true`, and tick them `- [x]` when done. When a topic doesn't fit an existing note, create `<random-lowercase-id>.md` with frontmatter (title, `pinned: false`, `inject: false`, `actionable`, `tags: []`). This list was captured when the session started; re-read the files for current contents.",
+    "Edit notes in place and keep the frontmatter intact. Track follow-up work with tasks_create, tasks_update, and tasks_complete; note checklists are not the task list. When a topic doesn't fit an existing note, create `<random-lowercase-id>.md` with frontmatter (title, `pinned: false`, `inject: false`, `tags: []`). This list was captured when the session started; re-read the files for current contents.",
   ];
   for (const [label, list] of [["Project notes", notes.project], ["Workspace notes", notes.workspace]] as const) {
     lines.push("", `## ${label}`, ...(list.length ? list.map(indexLine) : ["- (none yet)"]));

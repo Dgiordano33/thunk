@@ -44,7 +44,7 @@ const scaffold = (x: number, y: number, w: number, h: number) => [
 export const TOWN_CENTER_SIZE = { w: 48, h: 44 } as const;
 
 /** Age of Empires-style town center: stone footing, timber hall, tall roof, banner. The capital gets corner towers. */
-export function TownCenterSprite({ hue, capital }: { hue: number; capital: boolean }) {
+export function TownCenterSprite({ hue, capital, running = false }: { hue: number; capital: boolean; running?: boolean }) {
   const { w, h } = TOWN_CENTER_SIZE;
   const roofColor = `oklch(0.52 0.15 ${hue})`;
   const roofShade = `oklch(0.42 0.13 ${hue})`;
@@ -61,7 +61,7 @@ export function TownCenterSprite({ hue, capital }: { hue: number; capital: boole
       {r(9, 22, 30, 10, WALL)}
       {[9, 16, 23, 31, 38].map((x) => r(x, 22, 1, 10, TIMBER, `tb${x}`))}
       {r(9, 26, 30, 1, TIMBER)}
-      {[12, 19, 27, 34].map((x) => r(x, 28, 2, 2, WINDOW, `wn${x}`))}
+      {[12, 19, 27, 34].map((x) => r(x, 28, 2, 2, running ? WINDOW : DOOR, `wn${x}`))}
       {/* Roof and lookout */}
       {roof(24, 21, 36, 12, roofColor, roofShade)}
       {r(21, 4, 6, 6, WALL)}
@@ -185,4 +185,29 @@ export function FarmField({ stage, hue, selected }: { stage: CropStage; hue: num
       />
     </svg>
   );
+}
+
+
+export const TOWN_HALL_SIZE = { w: 40, h: 36 } as const;
+
+/** Stone civic hall with columns, a clock tower and a notice board. */
+export function TownHallSprite() {
+  return <Pixels w={TOWN_HALL_SIZE.w} h={TOWN_HALL_SIZE.h}>
+    <ellipse cx={20} cy={33} rx={19} ry={3} fill="oklch(0 0 0 / 0.2)" />
+    {r(3, 29, 34, 4, STONE_DARK)}
+    {r(5, 17, 30, 12, WALL)}
+    {r(17, 21, 6, 10, DOOR)}
+    {[7, 13, 25, 31].map((x) => r(x, 19, 2, 10, STONE, `column${x}`))}
+    {roof(20, 17, 36, 8, SLATE_LIGHT, SLATE)}
+    {r(16, 4, 8, 10, WALL)}
+    {r(18, 6, 4, 4, GOLD)}
+    {r(20, 6, 1, 3, DOOR)}
+    {r(19, 8, 2, 1, DOOR)}
+    {roof(20, 3, 12, 4, SLATE_LIGHT, SLATE)}
+    {r(28, 24, 7, 6, WOOD)}
+    {r(29, 25, 5, 4, WALL)}
+    {r(30, 26, 3, 1, DOOR)}
+    {r(30, 28, 2, 1, DOOR)}
+    {r(11, 31, 18, 1, STONE)}
+  </Pixels>;
 }

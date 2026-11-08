@@ -8,6 +8,7 @@ import { listProjects } from "@/lib/supabase/repo/projects";
 import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
 import { db } from "@/lib/supabase/server";
+import { listTasks } from "@/lib/supabase/repo/tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,17 @@ export const GET = handle(async (req: Request) => {
       const s = live.find((s) => s.id === d.sessionId)!;
       results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.markdown, term), href: `/w/${s.meta.workspaceId}/s/${s.id}#doc-${d.id}`, kind: "Document" });
     }
+  }
+  for (const task of await listTasks()) {
+    if (!task.title.toLowerCase().includes(term)) continue;
+    const id = `task:${task.id}`;
+    results.set(id, {
+      id,
+      label: task.title,
+      detail: task.status.replaceAll("_", " "),
+      href: task.workspaceId ? `/w/${task.workspaceId}?tab=tasks` : `/p/${task.projectId}?building=tasks`,
+      kind: "Task",
+    });
   }
   for (const r of await searchNotes(term)) results.set(r.id, r);
   return Response.json({ results: [...results.values()].slice(0, 60) });
