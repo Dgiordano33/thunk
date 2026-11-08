@@ -19,6 +19,8 @@ import {
   FarmField,
   TOWN_HALL_SIZE,
   TownHallSprite,
+  VAULT_SIZE,
+  VaultSprite,
   LIBRARY_SIZE,
   LibrarySprite,
   SPRITE_SCALE,
@@ -51,7 +53,10 @@ export type TownFarm = {
   row: number;
 };
 
-export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop" | "tasks"; note?: string };
+export type TownSelection = { session?: string; ws?: string; building?: "library" | "workshop" | "tasks" | "vault"; note?: string };
+
+/** The Vault building: where it stands and whether anything is being read or failed. */
+export type TownVault = Cell & { busy: boolean; failed: boolean };
 
 type Live = { status: ActivitySession["status"]; pending: number } | undefined;
 
@@ -69,6 +74,7 @@ export function TownView({
   farms,
   library,
   workshop,
+  vault,
   selected,
   children,
 }: {
@@ -80,6 +86,7 @@ export function TownView({
   farms: TownFarm[];
   library: Cell;
   workshop: Cell;
+  vault: TownVault;
   selected: TownSelection;
   /** The open panel, if any. */
   children?: React.ReactNode;
@@ -150,6 +157,19 @@ export function TownView({
             attention={workshopAttention}
           >
             <WorkshopSprite building={false} />
+          </Building>
+          <Building
+            cell={vault}
+            grid={grid}
+            name="Vault"
+            href={`${base}?building=vault`}
+            selected={selected.building === "vault"}
+            size={VAULT_SIZE}
+            ground={29}
+            blurb={vault.busy ? "Reading new material… Drop in docs, images, anything — get ideas back." : "Drop in docs, images, anything — get ideas back."}
+            attention={vault.failed}
+          >
+            <VaultSprite busy={vault.busy} />
           </Building>
           <Building cell={townHall} grid={grid} name="Town hall" href={`${base}?building=tasks`} selected={selected.building === "tasks"} size={TOWN_HALL_SIZE} ground={33} blurb="This project's task list: what's open, who's on it.">
             <TownHallSprite />
@@ -429,7 +449,7 @@ function TownLegend() {
       <ul className="mt-1 grid gap-0.5">
         <li>Town center = workspace (★ capital = main)</li>
         <li>Field = session, fenced in its workspace&apos;s colour</li>
-        <li>Library = notes · Workshop = routines · Town hall = tasks</li>
+        <li>Library = notes · Workshop = routines · Town hall = tasks · Vault = uploads</li>
       </ul>
       <p className="text-muted-foreground mt-2 mb-1 text-[11px]">Crops ripen with session spend</p>
       <ul className="grid gap-0.5">
@@ -443,7 +463,7 @@ function TownLegend() {
       <ul className="mt-2 grid gap-0.5 border-t pt-1.5">
         <li>Pennants: – draft · … checks running</li>
         <li>✓ checks passed · × failure/conflict · ? unknown</li>
-        <li>Lit windows: dev server running</li>
+        <li>Lit windows: dev server running · Vault lamps: reading uploads</li>
         <li>Farmer in the field: session running</li>
         <li className="flex items-center gap-2"><span className="pixel flex size-3 items-center justify-center bg-[oklch(0.86_0.17_90)] text-[9px] text-black">!</span> Needs attention</li>
       </ul>

@@ -1,4 +1,5 @@
 import "server-only";
+import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
 import { readMemory } from "@/lib/projects/memory";
@@ -9,6 +10,10 @@ import { tasksPrompt } from "@/lib/tasks/prompt";
 import { tasksForWorkspace } from "@/lib/tasks/service";
 import { extraRepoDirectories, extraReposPrompt } from "@/lib/projects/repos-prompt";
 import type { Task } from "@/lib/tasks/types";
+import { vaultDirOf } from "@/lib/vault/dir";
+import { listItems } from "@/lib/vault/store";
+import { vaultPrompt, vaultTools } from "@/lib/vault/tools";
+import type { VaultItem } from "@/lib/vault/types";
 import { buildCanUseTool } from "./permissions";
 import type { LiveSession } from "./session-registry";
 import type { AgentProvider } from "./types";
@@ -30,6 +35,7 @@ export function hierarchyPrompt(
   provider: AgentProvider = "claude",
   notes?: SessionNotes,
   tasks: Task[] = [],
+  vault?: { items: VaultItem[]; dir: string },
 ) {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.root);
@@ -51,16 +57,20 @@ export function hierarchyPrompt(
   if (projectMemory.trim()) lines.push("", "## Project memory (current contents)", projectMemory.trim());
   if (notes) lines.push("", notesPrompt(notes));
   lines.push("", tasksPrompt(tasks));
+  if (vault) lines.push("", vaultPrompt(vault.items, vault.dir));
   return lines.join("\n");
 }
 
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, notes, tasks] = await Promise.all([
+  const vaultDir = vaultDirOf(project);
+  const [projectMemory, notes, tasks, vaultItems] = await Promise.all([
     readMemory(projectMemoryFile(project.root)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
+    listItems(vaultDir).catch(() => []),
   ]);
+  await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
   const isWorktree = Boolean(workspace.worktreePath);
 
   return {
@@ -69,11 +79,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // Extra repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
+    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir), vaultDir.dir],
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
-      tools: tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id })
-        .map((t) => tool(t.name, t.description, t.schema, t.handler)),
+      tools: [
+        ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
+      ],
     }) },
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
@@ -90,7 +102,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       preset: "claude_code",
       append: [
         CANVAS_PROMPT,
-        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project]),
+        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
       ].join("\n\n"),
     },

@@ -63,3 +63,8 @@ export function projectNotesDir(root: string) {
 export function workspaceNotesDir(root: string, slug: string) {
   return path.join(projectDir(root), "workspaces", slug, "notes");
 }
+
+/** Vault: one folder per uploaded item (original bytes + item.json), shared by every workspace in the project. */
+export function projectVaultDir(root: string) {
+  return path.join(projectDir(root), "vault");
+}

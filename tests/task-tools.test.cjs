@@ -30,7 +30,8 @@ const mocks = {
   "@anthropic-ai/claude-agent-sdk": { createSdkMcpServer: (v) => v, tool: (name, description, schema, handler) => ({ name, description, schema, handler }) },
   "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", repos: [], workspaceDir: "/tmp" }), notesPrompt: () => "notes" },
   "@/lib/projects/memory": { readMemory: async () => "" },
-  "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile"].map((k) => [k, () => "/tmp"])),
+  "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile", "projectVaultDir"].map((k) => [k, () => "/tmp"])),
+  "@/lib/vault/store": { listItems: async () => [], readItem: async () => null },
   "@/lib/routines/prompt": { routineSystemPrompt: () => "" },
 };
 const registry = { emit: () => {}, setState: () => {} };
@@ -124,13 +125,13 @@ test("Claude autoallows exactly the four local tools; similarly named tools stil
 test("both transports include workspace/project tasks and register validated tools", async () => {
   const options = await buildOptions(live(), {});
   assert.equal(options.mcpServers.thunk.alwaysLoad, true);
-  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), TASK_TOOL_NAMES);
+  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), [...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
   assert.match(options.systemPrompt.append, /Workspace job/); assert.match(options.systemPrompt.append, /Project job/);
   assert.doesNotMatch(options.systemPrompt.append, /Secret job|Sibling job/);
   const driver = await createCodexDriver(live(), {}); await driver.run();
   assert.equal(requests[0].params.capabilities.experimentalApi, true);
   const start = requests.find((r) => r.method === "thread/start").params;
-  assert.equal(start.dynamicTools.length, 4);
+  assert.equal(start.dynamicTools.length, 6);
   assert.ok(start.dynamicTools.every((t) => t.type === "function" && t.inputSchema.additionalProperties === false));
   assert.match(start.developerInstructions, /Workspace job/); assert.match(start.developerInstructions, /Project job/);
   assert.doesNotMatch(start.developerInstructions, /Secret job|Sibling job/);
