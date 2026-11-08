@@ -34,7 +34,7 @@ export default async function Home() {
       )}
       {!hasSupabase && (
         <p className="pixel pointer-events-none absolute inset-x-0 top-20 z-10 text-center text-xs text-white/80 [text-shadow:1px_1px_0_#0008]">
-          Supabase isn&apos;t configured: projects live in memory and won&apos;t survive a server restart.
+          Supabase isn&apos;t configured: projects, tasks, routines and session history won&apos;t survive a server restart. Notes, vault files and memory remain on disk.
         </p>
       )}
     </WorldMap>

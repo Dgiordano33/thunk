@@ -79,8 +79,8 @@ export async function createWorktree(opts: { root: string; path: string; branch:
   await ensureExcluded(opts.root, ".claude/worktrees/");
   await mkdir(path.dirname(opts.path), { recursive: true });
   const args = (await branchExists(opts.root, opts.branch))
-    ? ["worktree", "add", opts.path, opts.branch]
-    : ["worktree", "add", "-b", opts.branch, opts.path, opts.baseRef];
+    ? ["worktree", "add", "--", opts.path, opts.branch]
+    : ["worktree", "add", "-b", opts.branch, "--", opts.path, opts.baseRef];
   await git(opts.root, args);
 }
 
@@ -129,7 +129,7 @@ export async function cloneRepo(url: string, parent: string): Promise<string> {
   await mkdir(parentDir, { recursive: true });
   const dest = path.join(parentDir, repoNameFromUrl(source));
   if (await stat(dest).catch(() => null)) throw new Error(`Already exists: ${dest}`);
-  await exec("git", ["clone", source, dest], { maxBuffer: 4 * 1024 * 1024 }).catch((err: { stderr?: string }) => {
+  await exec("git", ["clone", "--", source, dest], { maxBuffer: 4 * 1024 * 1024 }).catch((err: { stderr?: string }) => {
     throw new Error(err.stderr?.trim().split("\n").pop() || `git clone failed for ${source}`);
   });
   return dest;

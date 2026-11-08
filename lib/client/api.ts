@@ -114,8 +114,8 @@ export const api = {
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),
-  putMemory: (scope: "projects" | "workspaces", id: string, content: string) =>
-    call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content } }),
+  putMemory: (scope: "projects" | "workspaces", id: string, content: string, expectedContent: string) =>
+    call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content, expectedContent } }),
   listRepoFolders: (id: string) => call<{ folders: import("@/lib/projects/types").RepoFolder[] }>(`/api/projects/${id}/repo-folders`),
   addRepoFolder: (id: string, body: { repoId?: string | null; path: string; label?: string }) => post(`/api/projects/${id}/repo-folders`, body),
   removeRepoFolder: (id: string, folderId: string) => call(`/api/projects/${id}/repo-folders/${folderId}`, { method: "DELETE" }),

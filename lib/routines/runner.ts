@@ -32,31 +32,28 @@ export class RunRejected extends Error {
  * A declined firing is written as a cancelled "Skipped: …" row so it shows in history.
  */
 export async function fire(routine: Routine, trigger: RunTrigger, payload: Payload = null): Promise<RoutineRun> {
-  const reason = state.active.has(routine.id)
-    ? "Skipped: the previous run is still in progress"
-    : (await countRunsSince(routine.id, startOfToday())) >= routine.maxRunsPerDay
-      ? `Skipped: daily limit of ${routine.maxRunsPerDay} runs reached`
-      : state.active.size >= MAX_CONCURRENT_RUNS
-        ? `Skipped: ${MAX_CONCURRENT_RUNS} routine runs already in progress`
-        : null;
-  if (reason) {
-    const now = new Date().toISOString();
-    const run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "cancelled", error: reason, finishedAt: now });
+  try {
+    return await startRun(routine, trigger, payload);
+  } catch (err) {
+    if (!(err instanceof RunRejected)) throw err;
+    const reason = `Skipped: ${err.message}`;
+    const run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "cancelled", error: reason, finishedAt: new Date().toISOString() });
     console.log(`[thunk] routine "${routine.name}" ${reason.toLowerCase()}`);
     return run;
   }
-  return startRun(routine, trigger, payload);
 }
 
-/** Insert the run and start it in the background. Throws RunRejected if the routine already has a run going. */
+/** Reserve before awaiting so every trigger shares the same concurrency and daily limits. */
 export async function startRun(routine: Routine, trigger: RunTrigger, payload: Payload = null): Promise<RoutineRun> {
-  const existing = state.active.get(routine.id);
-  if (existing) throw new RunRejected("This routine already has a run in progress", 409);
-  // Reserve the slot before the first await so two triggers can't both start.
+  if (state.active.has(routine.id)) throw new RunRejected("the previous run is still in progress", 409);
+  if (state.active.size >= MAX_CONCURRENT_RUNS)
+    throw new RunRejected(`${MAX_CONCURRENT_RUNS} routine runs already in progress`, 429);
   const slot: ActiveRun = { runId: "", routineId: routine.id, sessionId: null, cancel: () => {} };
   state.active.set(routine.id, slot);
   let run: RoutineRun;
   try {
+    if (await countRunsSince(routine.id, startOfToday()) >= routine.maxRunsPerDay)
+      throw new RunRejected(`daily limit of ${routine.maxRunsPerDay} runs reached`, 429);
     run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "queued" });
   } catch (err) {
     state.active.delete(routine.id);

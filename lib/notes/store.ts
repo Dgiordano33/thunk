@@ -2,6 +2,8 @@ import "server-only";
 import { customAlphabet } from "nanoid";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile, lstat, realpath, link } from "node:fs/promises";
 import path from "node:path";
+import { NoteConflictError, readOptional, replaceFile, withFileLock } from "./file-write";
+export { NoteConflictError } from "./file-write";
 import { extractTasks, noteExcerpt, noteTitle, parseNote, serializeNote, setTaskDone, type NoteFrontmatter } from "./frontmatter";
 import { MEMORY_NOTE_ID, sortNotes, type Note, type NoteFlags, type NoteMeta, type NoteScope, type NoteTaskPatch, type NoteTask } from "./types";
 
@@ -92,7 +94,7 @@ export async function readNote(dirs: NoteDirs, id: string): Promise<Note | null>
   if (!file) return null;
   const [raw, st] = await Promise.all([readFile(file, "utf8").catch(() => null), stat(file).catch(() => null)]);
   if (id === MEMORY_NOTE_ID) {
-    const now = new Date();
+    const now = new Date(0);
     return toNote(dirs, id, file, raw ?? "", st?.mtime ?? now, st?.birthtime ?? now);
   }
   if (raw === null || !st) return null;
@@ -114,8 +116,6 @@ export function metaOf(note: Note): NoteMeta {
 }
 
 export type NotePatch = Partial<NoteFlags> & { title?: string; markdown?: string; task?: NoteTaskPatch; expectedUpdatedAt?: string };
-
-export class NoteConflictError extends Error {}
 
 export async function createNote(dirs: NoteDirs, input: { id?: string; title?: string; markdown?: string } & Partial<NoteFlags> = {}) {
   const id = dirs.scope.kind === "repos" ? input.id : newNoteId();
@@ -141,36 +141,38 @@ export async function createNote(dirs: NoteDirs, input: { id?: string; title?: s
 export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): Promise<Note | null> {
   const file = await fileFor(dirs, id);
   if (!file) return null;
-  if (id === MEMORY_NOTE_ID) {
-    if (patch.markdown !== undefined) await atomicWrite(file, patch.markdown);
+  return withFileLock(file, async () => {
+    const raw = await readOptional(file);
+    const modified = (await stat(file).catch((err: NodeJS.ErrnoException) => { if (err.code === "ENOENT") return null; throw err; }))?.mtime.toISOString() ?? new Date(0).toISOString();
+    if (patch.expectedUpdatedAt && modified !== patch.expectedUpdatedAt)
+      throw new NoteConflictError("Note changed on disk. Reload before saving.");
+    if (id === MEMORY_NOTE_ID) {
+      if (patch.markdown !== undefined) await replaceFile(file, patch.markdown, raw);
+      return readNote(dirs, id);
+    }
+    if (raw === null) return null;
+    const parsed = parseNote(raw);
+    let markdown = patch.markdown ?? parsed.body;
+    if (patch.task) {
+      const tasks = extractTasks(parsed.body);
+      const matches = tasks.filter((t) => t.text === patch.task!.text);
+      const task = tasks.find((t) => t.line === patch.task!.line && t.text === patch.task!.text) ?? (matches.length === 1 ? matches[0] : undefined);
+      if (!task || task.text !== patch.task.text)
+        throw new NoteConflictError("Task changed on disk. Refresh the task list and try again.");
+      markdown = setTaskDone(parsed.body, task.line, patch.task.done);
+    }
+    const fm: NoteFrontmatter = {
+      ...parsed.frontmatter,
+      title: patch.title !== undefined ? patch.title.trim() || "Untitled" : parsed.frontmatter.title,
+      pinned: patch.pinned ?? parsed.frontmatter.pinned,
+      inject: patch.inject ?? parsed.frontmatter.inject,
+      actionable: patch.actionable ?? parsed.frontmatter.actionable,
+      tags: patch.tags ?? parsed.frontmatter.tags,
+      updated: dirs.scope.kind === "repos" ? parsed.frontmatter.updated : new Date().toISOString(),
+    };
+    await replaceFile(file, serializeNote(fm, markdown, parsed), raw);
     return readNote(dirs, id);
-  }
-  const raw = await readFile(file, "utf8").catch(() => null);
-  if (raw === null) return null;
-  if (patch.expectedUpdatedAt && (await stat(file)).mtime.toISOString() !== patch.expectedUpdatedAt)
-    throw new NoteConflictError("Note changed on disk. Reload before saving.");
-  const parsed = parseNote(raw);
-  let markdown = patch.markdown ?? parsed.body;
-  // shortcut: external writers can race this read/write; use coordinated file locking if strict concurrency is needed.
-  if (patch.task) {
-    const tasks = extractTasks(parsed.body);
-    const matches = tasks.filter((t) => t.text === patch.task!.text);
-    const task = tasks.find((t) => t.line === patch.task!.line && t.text === patch.task!.text) ?? (matches.length === 1 ? matches[0] : undefined);
-    if (!task || task.text !== patch.task.text)
-      throw new NoteConflictError("Task changed on disk. Refresh the task list and try again.");
-    markdown = setTaskDone(parsed.body, task.line, patch.task.done);
-  }
-  const fm: NoteFrontmatter = {
-    ...parsed.frontmatter,
-    title: patch.title !== undefined ? patch.title.trim() || "Untitled" : parsed.frontmatter.title,
-    pinned: patch.pinned ?? parsed.frontmatter.pinned,
-    inject: patch.inject ?? parsed.frontmatter.inject,
-    actionable: patch.actionable ?? parsed.frontmatter.actionable,
-    tags: patch.tags ?? parsed.frontmatter.tags,
-    updated: dirs.scope.kind === "repos" ? parsed.frontmatter.updated : new Date().toISOString(),
-  };
-  await atomicWrite(file, serializeNote(fm, markdown, parsed));
-  return readNote(dirs, id);
+  });
 }
 
 export async function deleteNote(dirs: NoteDirs, id: string) {

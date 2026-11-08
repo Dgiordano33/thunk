@@ -2,6 +2,8 @@ import "server-only";
 import { advanceDeliveryHistory, readDeliveryHistory, writeDeliveryHistory, type DeliveryHistory, type DeliverySnapshot } from "./delivery-history";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { listEnabledRoutines } from "../supabase/repo/routines";
+import { DELIVERY_ROUTINE_EVENTS } from "../routines/types";
 import { listProjects } from "../supabase/repo/projects";
 import { listAllWorkspaces } from "../supabase/repo/workspaces";
 import { toCheck, type RollupEntry } from "./github";
@@ -78,7 +80,7 @@ export function parseDeliveries(pages: { errors?: { message: string }[]; data?: 
 }
 
 type CachedProject = { history?: DeliveryHistory; branches: BranchDelivery[]; nextPoll: number; updatedAt: string | null; error: string | null };
-type State = { projects: Map<string, CachedProject>; deliveries: WorkspaceDelivery[]; timer: ReturnType<typeof setInterval> | null; ticking: boolean; tick: () => Promise<void> };
+type State = { viewedUntil?: number; backgroundAt?: number; projects: Map<string, CachedProject>; deliveries: WorkspaceDelivery[]; timer: ReturnType<typeof setInterval> | null; ticking: boolean; tick: () => Promise<void> };
 const g = globalThis as typeof globalThis & { __thunkDelivery?: State };
 const state = (g.__thunkDelivery ??= { projects: new Map(), deliveries: [], timer: null, ticking: false, tick: async () => {} } as State);
 
@@ -152,9 +154,16 @@ async function tick() {
   if (state.ticking) return;
   state.ticking = true;
   try {
+    const viewed = Date.now() < (state.viewedUntil ?? 0);
+    if (!viewed && Date.now() < (state.backgroundAt ?? 0)) return;
+    state.backgroundAt = Date.now() + 30_000;
+    const routines = viewed ? [] : await listEnabledRoutines();
+    const subscribed = new Set(routines.filter((r) => r.events.some((e) => DELIVERY_ROUTINE_EVENTS.includes(e as never))).map((r) => r.projectId));
+    if (!viewed && !subscribed.size) return;
     const [projects, workspaces] = await Promise.all([listProjects(), listAllWorkspaces()]);
     const deliveries: WorkspaceDelivery[] = [];
     for (const project of projects) {
+      if (!viewed && !subscribed.has(project.id)) continue;
       const active = workspaces.filter((w) => w.projectId === project.id && w.status === "active");
       if (!active.length) continue;
       const cached = await projectDelivery(project);
@@ -189,7 +198,14 @@ export function ensureDeliveryPolling() {
   void state.tick();
 }
 
-export function workspaceDeliveries() { return state.deliveries; }
+export function workspaceDeliveries(viewed = false) {
+  if (viewed) {
+    const expired = Date.now() >= (state.viewedUntil ?? 0);
+    state.viewedUntil = Date.now() + 15_000;
+    if (expired) { ensureDeliveryPolling(); void state.tick(); }
+  }
+  return state.deliveries;
+}
 
 export function deliveryHistories() {
   return [...state.projects].flatMap(([projectId, cached]) => cached.history && !cached.error ? [{ projectId, history: cached.history }] : []);
