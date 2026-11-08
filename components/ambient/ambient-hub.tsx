@@ -19,7 +19,8 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   return data;
 }
 
-export function AmbientHub({ projects }: { projects: SidebarProject[] }) {
+/** Activity polling, desktop alerts and ⌘K search. `hud` renders only a compact search button, for the world map. */
+export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" }) {
   const router = useRouter();
   const sessions = useAmbient((s) => s.sessions);
   const activityError = useAmbient((s) => s.error);
@@ -108,6 +109,40 @@ export function AmbientHub({ projects }: { projects: SidebarProject[] }) {
     ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: `/w/${w.id}`, kind: "Workspace" })),
   ]).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
 
+  const searchDialog = (
+    <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+      <DialogContent className="gap-2 sm:max-w-xl" showCloseButton={false}>
+        <DialogTitle className="sr-only">Search Thunk</DialogTitle>
+        <DialogDescription className="sr-only">Find projects, workspaces, session titles, prompts, and document content.</DialogDescription>
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search sessions, documents, projects…" value={query} maxLength={200} onValueChange={(value) => { setQuery(value); setResults([]); setSearchError(null); setSearching(Boolean(value.trim())); }} />
+          <CommandList>
+            <CommandEmpty>{searchError || (searching ? "Searching…" : "No results found.")}</CommandEmpty>
+            <CommandGroup heading="Navigate">
+              {!query && <CommandItem onSelect={() => { setSearchOpen(false); useAmbient.setState({ usageOpen: true }); }}>View usage</CommandItem>}
+              {navigation.map((item) => <CommandItem key={item.id} value={item.id} onSelect={() => navigate(item.href)}><span className="truncate">{item.label}</span><span className="text-muted-foreground ml-auto truncate text-xs">{item.kind} · {item.detail}</span></CommandItem>)}
+            </CommandGroup>
+            {query.trim() && <CommandGroup heading="Sessions & documents">
+              {results.map((item) => <CommandItem key={item.id} value={item.id} onSelect={() => navigate(item.href)}><div className="min-w-0"><div className="truncate">{item.label}</div><p className="text-muted-foreground truncate text-xs">{item.detail}</p></div></CommandItem>)}
+            </CommandGroup>}
+          </CommandList>
+        </Command>
+        {query.trim() && <p role="status" className="text-muted-foreground px-2 text-xs">{searchError || (searching ? "Searching…" : `${results.length} content matches · showing up to 60`)}</p>}
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (variant === "hud") {
+    return (
+      <>
+        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSearchOpen(true)}>
+          <SearchIcon /> Search <kbd className="text-muted-foreground font-sans text-[10px]">⌘K</kbd>
+        </Button>
+        {searchDialog}
+      </>
+    );
+  }
+
   return (
     <div>
       <div className="border-b px-4 pb-3">
@@ -126,26 +161,7 @@ export function AmbientHub({ projects }: { projects: SidebarProject[] }) {
           <SearchIcon className="size-4" /> Search anything…
         </Button>
       </div>
-      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="gap-2 sm:max-w-xl" showCloseButton={false}>
-          <DialogTitle className="sr-only">Search Thunk</DialogTitle>
-          <DialogDescription className="sr-only">Find projects, workspaces, session titles, prompts, and document content.</DialogDescription>
-          <Command shouldFilter={false}>
-            <CommandInput placeholder="Search sessions, documents, projects…" value={query} maxLength={200} onValueChange={(value) => { setQuery(value); setResults([]); setSearchError(null); setSearching(Boolean(value.trim())); }} />
-            <CommandList>
-              <CommandEmpty>{searchError || (searching ? "Searching…" : "No results found.")}</CommandEmpty>
-              <CommandGroup heading="Navigate">
-                {!query && <CommandItem onSelect={() => { setSearchOpen(false); useAmbient.setState({ usageOpen: true }); }}>View usage</CommandItem>}
-                {navigation.map((item) => <CommandItem key={item.id} value={item.id} onSelect={() => navigate(item.href)}><span className="truncate">{item.label}</span><span className="text-muted-foreground ml-auto truncate text-xs">{item.kind} · {item.detail}</span></CommandItem>)}
-              </CommandGroup>
-              {query.trim() && <CommandGroup heading="Sessions & documents">
-                {results.map((item) => <CommandItem key={item.id} value={item.id} onSelect={() => navigate(item.href)}><div className="min-w-0"><div className="truncate">{item.label}</div><p className="text-muted-foreground truncate text-xs">{item.detail}</p></div></CommandItem>)}
-              </CommandGroup>}
-            </CommandList>
-          </Command>
-          {query.trim() && <p role="status" className="text-muted-foreground px-2 text-xs">{searchError || (searching ? "Searching…" : `${results.length} content matches · showing up to 60`)}</p>}
-        </DialogContent>
-      </Dialog>
+      {searchDialog}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export type Workspace = {
 };
 
 export type WorkspaceSummary = Workspace & { sessionCount: number; lastSessionAt: string | null };
-export type ProjectSummary = Project & { workspaceCount: number; lastActivityAt: string | null };
+export type ProjectSummary = Project & { workspaceCount: number; sessionCount: number; lastActivityAt: string | null };
 
 export type ChangedFile = {
   path: string;

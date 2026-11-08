@@ -104,16 +104,17 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   if (!client) {
     return [...mem.values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((p) => ({ ...p, workspaceCount: 0, lastActivityAt: null }));
+      .map((p) => ({ ...p, workspaceCount: 0, sessionCount: 0, lastActivityAt: null }));
   }
   const { data, error } = await client
     .from("projects")
-    .select(`${COLUMNS}, workspaces(id, updated_at)`)
+    .select(`${COLUMNS}, workspaces(id, updated_at, sessions(id))`)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return data.map((r) => {
-    const ws = (r.workspaces ?? []) as { id: string; updated_at: string }[];
+    const ws = (r.workspaces ?? []) as { id: string; updated_at: string; sessions: { id: string }[] | null }[];
     const last = ws.map((w) => w.updated_at).sort().at(-1) ?? null;
-    return { ...toProject(r), workspaceCount: ws.length, lastActivityAt: last };
+    const sessionCount = ws.reduce((n, w) => n + (w.sessions?.length ?? 0), 0);
+    return { ...toProject(r), workspaceCount: ws.length, sessionCount, lastActivityAt: last };
   });
 }

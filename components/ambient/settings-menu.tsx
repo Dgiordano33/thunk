@@ -12,11 +12,12 @@ import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUi } from "@/lib/store/ui-store";
 import type { Theme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cost);
 
 /** Sidebar footer: app-wide settings. */
-export function SettingsMenu({ projects }: { projects: SidebarProject[] }) {
+export function SettingsMenu({ projects, className }: { projects: SidebarProject[]; className?: string }) {
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
   const notifications = useAmbient((s) => s.notifications);
@@ -64,7 +65,7 @@ export function SettingsMenu({ projects }: { projects: SidebarProject[] }) {
   };
 
   return (
-    <div className="border-t px-2 py-2">
+    <div className={cn("border-t px-2 py-2", className)}>
       <Popover onOpenChange={(open) => !open && setNotificationMessage(null)}>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
