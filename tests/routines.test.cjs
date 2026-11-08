@@ -281,3 +281,18 @@ test("ambient activity names each run's routine and project", async () => {
   assert.equal(found.projectName, "Town");
   await repo.updateRun(run.id, { status: "succeeded" });
 });
+
+test("manual starts enforce daily and concurrent limits, reserving before async checks", async () => {
+  routinesState.active.clear();
+  const capped = await newRoutine("daily-capped", { maxRunsPerDay: 1 });
+  await repo.insertRun({ routineId: capped.id, triggerSource: "manual", status: "succeeded" });
+  await assert.rejects(runner.startRun(capped, "manual"), (e) => e.status === 429 && /daily limit/.test(e.message));
+  assert.equal(routinesState.active.has(capped.id), false);
+  fakes.workspaceContext = () => new Promise(() => {});
+  const routines = await Promise.all([1, 2, 3, 4].map((n) => newRoutine(`manual-${n}`)));
+  const results = await Promise.allSettled(routines.map((r) => runner.startRun(r, "manual")));
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 3);
+  assert.equal(results.find((r) => r.status === "rejected").reason.status, 429);
+  await assert.rejects(runner.startRun(routines[0], "manual"), (e) => e.status === 409);
+  routinesState.active.clear();
+});

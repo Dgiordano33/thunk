@@ -79,7 +79,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree ? { projectConfigRoot: project.root } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // Extra repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir), vaultDir.dir],
+    additionalDirectories: [projectMemoryDir(project.root), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
@@ -96,7 +96,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // but not ~/.claude (global plugins/hooks). Our permissionMode still wins over defaultMode.
     settingSources: ["project", "local"],
     // Auto-memory is per workspace, so every session in it shares one MEMORY.md.
-    settings: { autoMemoryEnabled: true, autoMemoryDirectory: workspaceMemoryDir(project.root, workspace.slug) },
+    settings: {
+      autoMemoryEnabled: true,
+      autoMemoryDirectory: workspaceMemoryDir(project.root, workspace.slug),
+      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`] },
+    },
+    // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.
+    sandbox: { filesystem: { denyWrite: [vaultDir.dir] } },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",

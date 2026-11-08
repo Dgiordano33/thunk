@@ -38,5 +38,5 @@ export const GET = handle(async () => {
     console.error("[thunk] recent routine runs failed", err);
     return [];
   });
-  return Response.json({ sessions, runs, deliveries: workspaceDeliveries() }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ sessions, runs, deliveries: workspaceDeliveries(true) }, { headers: { "Cache-Control": "no-store" } });
 });

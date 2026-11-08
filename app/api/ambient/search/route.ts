@@ -70,8 +70,26 @@ export const GET = handle(async (req: Request) => {
   return Response.json({ results: [...results.values()].slice(0, 60) });
 });
 
-/** Note titles and bodies across every project and active workspace. */
+type IndexedNote = { note: Awaited<ReturnType<typeof listNotes>>[number]; where: string };
+let noteIndex: { expires: number; promise: Promise<IndexedNote[]> } | undefined;
+
 async function searchNotes(term: string): Promise<SearchResult[]> {
+  if (!noteIndex || Date.now() >= noteIndex.expires) {
+    const entry = { expires: Date.now() + 2000, promise: loadNoteIndex() };
+    noteIndex = entry;
+    entry.promise.catch(() => { if (noteIndex === entry) noteIndex = undefined; });
+  }
+  const notes = await noteIndex.promise;
+  return notes.filter(({ note: n }) => n.title.toLowerCase().includes(term) || n.markdown.toLowerCase().includes(term))
+    .slice(0, 30).map(({ note: n, where }) => ({
+      id: `note:${scopeKey(n.scope)}/${n.id}`, label: n.title,
+      detail: `${where} · ${n.title.toLowerCase().includes(term) ? n.excerpt : excerpt(n.markdown, term)}`,
+      href: `/notes?scope=${scopeKey(n.scope)}&note=${n.id}`, kind: "Note",
+    }));
+}
+
+/** shortcut: snapshots may lag edits by two seconds; use a watcher index if this becomes noticeable. */
+async function loadNoteIndex(): Promise<IndexedNote[]> {
   const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
   const scopes = projects.map((p) => [
     { dirs: projectNoteDirs(p), where: p.name },
@@ -79,20 +97,9 @@ async function searchNotes(term: string): Promise<SearchResult[]> {
       .filter((w) => w.projectId === p.id && w.status === "active")
       .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
   ]);
-  const hits = await Promise.all(
-    scopes.flat().map(async ({ dirs, where }) =>
-      (await listNotes(dirs).catch(() => []))
-        .filter((n) => n.title.toLowerCase().includes(term) || n.markdown.toLowerCase().includes(term))
-        .map((n) => ({
-          id: `note:${scopeKey(n.scope)}/${n.id}`,
-          label: n.title,
-          detail: `${where} · ${n.title.toLowerCase().includes(term) ? n.excerpt : excerpt(n.markdown, term)}`,
-          href: `/notes?scope=${scopeKey(n.scope)}&note=${n.id}`,
-          kind: "Note",
-        })),
-    ),
-  );
-  return hits.flat().slice(0, 30);
+  return (await Promise.all(scopes.flat().map(async ({ dirs, where }) =>
+    (await listNotes(dirs).catch(() => [])).map((note) => ({ note, where })),
+  ))).flat();
 }
 
 function excerpt(text: string, term: string) {

@@ -49,7 +49,7 @@ export function MemoryEditor({
     setSaving(true);
     setError(null);
     try {
-      await api.putMemory(scope, id, content);
+      await api.putMemory(scope, id, content, saved);
       setSaved(content);
     } catch (err) {
       setError((err as Error).message);

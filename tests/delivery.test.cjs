@@ -51,6 +51,7 @@ const load = Module._load;
 Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/projects/delivery.ts")) {
     if (request === "node:child_process") return { execFile: fakeExec };
+    if (request === "../supabase/repo/routines") return { listEnabledRoutines: async () => [] };
     if (request === "../supabase/repo/projects") return { listProjects: async () => projects };
     if (request === "../supabase/repo/workspaces") return { listAllWorkspaces: async () => workspaces };
     if (request === "./runtime") return { runtimeSnapshot: async () => ({ processes: [{ kind: "run", running: true }], previewUrl: "http://127.0.0.1:3000", setupError: null }) };
@@ -94,7 +95,7 @@ test("status symbols distinguish failures, drafts, pending, passed and absent ch
 });
 
 test("shared polling deduplicates, caches, preserves stale data on auth failure, recovers and prunes", async (t) => {
-  ensureDeliveryPolling();
+  workspaceDeliveries(true);
   const state = globalThis.__thunkDelivery;
   t.after(() => clearInterval(state.timer));
   while (state.ticking) await new Promise((resolve) => setImmediate(resolve));
@@ -142,4 +143,13 @@ test("shared polling deduplicates, caches, preserves stale data on auth failure,
   await state.tick();
   assert.deepEqual(workspaceDeliveries(), []);
   assert.equal(state.projects.size, 0);
+});
+
+test("delivery polling does no git or GitHub work without viewers or subscriptions", async () => {
+  const state = globalThis.__thunkDelivery;
+  state.viewedUntil = 0;
+  state.backgroundAt = 0;
+  const before = calls;
+  await state.tick();
+  assert.equal(calls, before);
 });

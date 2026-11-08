@@ -106,7 +106,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
       } catch (error) {
         if (!stopped) useAmbient.setState({ error: error instanceof Error ? error.message : "Activity unavailable" });
       } finally {
-        if (!stopped) timer = setTimeout(poll, 2500);
+        if (!stopped) timer = setTimeout(poll, document.visibilityState === "visible" ? 2500 : 30_000);
       }
     };
     void poll();

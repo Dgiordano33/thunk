@@ -214,3 +214,31 @@ test("repo notes reject symlinks and stale writes", async (t) => {
   await assert.rejects(store.writeNote(d, "safe", { markdown: "stale", expectedUpdatedAt: note.updatedAt }), store.NoteConflictError);
   assert.equal(await fs.readFile(external, "utf8"), "secret");
 });
+
+test("memory rejects stale saves and simultaneous note saves preserve the winner", async (t) => {
+  const d = await dirs(t);
+  const missing = await store.readNote(d, "memory");
+  await store.writeNote(d, "memory", { markdown: "agent memory", expectedUpdatedAt: missing.updatedAt });
+  await assert.rejects(store.writeNote(d, "memory", { markdown: "stale", expectedUpdatedAt: missing.updatedAt }), store.NoteConflictError);
+  assert.equal((await store.readNote(d, "memory")).markdown, "agent memory");
+  const note = await store.createNote(d, { markdown: "before" });
+  // Make the old revision unambiguously older even on filesystems with coarse timestamps.
+  await fs.utimes(note.path, new Date(0), new Date(0));
+  const expectedUpdatedAt = new Date(0).toISOString();
+  const results = await Promise.allSettled([
+    store.writeNote(d, note.id, { markdown: "first", expectedUpdatedAt }),
+    store.writeNote(d, note.id, { markdown: "second", expectedUpdatedAt }),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal((await store.readNote(d, note.id)).markdown, "first");
+});
+
+test("legacy memory saves share the file lock and reject an agent's newer content", async (t) => {
+  const d = await dirs(t);
+  const { writeMemory, ensureMemory } = require("../lib/projects/memory.ts");
+  await ensureMemory(d.memoryFile, "header");
+  await writeMemory(d.memoryFile, "agent edit", "header\n");
+  await assert.rejects(writeMemory(d.memoryFile, "stale edit", "header\n"), store.NoteConflictError);
+  await ensureMemory(d.memoryFile, "replacement");
+  assert.equal(await fs.readFile(d.memoryFile, "utf8"), "agent edit");
+});
