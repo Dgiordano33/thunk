@@ -223,7 +223,7 @@ async function finalize(input: FinalizeInput) {
     if (ephemeral) {
       if (status === "succeeded" && nothing) {
         if (input.sessionId) closeSession(input.sessionId);
-        workspaceKept = !(await removeWorkspace(workspace.id, { removeWorktree: true, removeMemory: true }).then(
+        workspaceKept = !(await removeWorkspace(workspace.id, { removeWorktree: true }).then(
           () => true,
           (err) => (console.error("[thunk] routine cleanup failed", err), false),
         ));

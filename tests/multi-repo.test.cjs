@@ -92,7 +92,7 @@ test("a workspace spans every repo of a multi-repo project", async () => {
   await assert.rejects(projects.removeWorkspace(ws.id, { removeWorktree: true }), /unmerged commits in api/);
   git(api, "merge", "--no-edit", "thunk/lisbon");
 
-  await projects.removeWorkspace(ws.id, { removeWorktree: true, removeMemory: true });
+  await projects.removeWorkspace(ws.id, { removeWorktree: true });
   await assert.rejects(fs.stat(apiCheckout.cwd));
   await assert.rejects(fs.stat(ws.cwd));
   assert.doesNotMatch(git(api, "worktree", "list"), /lisbon/);

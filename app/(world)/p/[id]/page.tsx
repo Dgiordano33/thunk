@@ -1,14 +1,15 @@
+import { ArchivedHarvestOffer } from "@/components/workspace/harvest-dialog";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { TasksPanel } from "@/components/town/tasks-panel";
 import { LibraryPanel } from "@/components/town/library-panel";
-import { FieldPanel, TownCenterPanel } from "@/components/town/panels";
+import { FieldPanel, ProjectPanel, FarmPanel } from "@/components/town/panels";
 import { WorkshopPanel } from "@/components/town/workshop-panel";
 import { VaultPanel } from "@/components/vault/vault-panel";
 import { vaultDirOf } from "@/lib/vault/dir";
 import { listItems } from "@/lib/vault/store";
 import { isBusy } from "@/lib/vault/types";
-import { TownView, type TownFarm, type TownSelection, type TownWorkspace } from "@/components/town/town-view";
+import { TownView, type TownField, type TownSelection, type TownFarmhouse } from "@/components/town/town-view";
 import { workspaceLabel } from "@/components/session/labels";
 import { listSessions, liveMeta } from "@/lib/agent";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
@@ -31,9 +32,9 @@ export async function generateMetadata({ params }: PageProps<"/p/[id]">) {
 }
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
-const BUILDINGS = ["library", "workshop", "tasks", "vault"] as const;
+const BUILDINGS = ["center", "library", "workshop", "tasks", "vault"] as const;
 
-// A project up close: workspaces are town centers, sessions are the fields around them.
+// A project up close: workspaces are farms, sessions are the fields around them.
 // `?ws=`, `?session=` and `?building=` open the matching panel without moving the camera.
 export default async function TownPage({ params, searchParams }: PageProps<"/p/[id]">) {
   const { id } = await params;
@@ -55,25 +56,25 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
   const cost = new Map(rows.map((r) => [r.id, r.totalCostUsd]));
   const layout = layoutTown(id, active, townSessions);
 
-  const townWorkspaces: TownWorkspace[] = layout.centers.flatMap(({ workspaceId, cell, capital }) => {
+  const townWorkspaces: TownFarmhouse[] = layout.farmhouses.flatMap(({ workspaceId, cell }) => {
     const w = active.find((x) => x.id === workspaceId);
     if (!w) return [];
     return [{
       id: w.id,
       label: workspaceLabel(w),
       branch: w.worktreePath ? w.branch : null,
-      capital,
-      hue: capital ? cityHue(id) : cityHue(w.id),
+      hue: cityHue(w.id),
+      lastActivityAt: [...rows.filter(r => r.workspaceId === w.id).map(r => r.updatedAt), w.updatedAt].sort().at(-1)!,
       sessionCount: townSessions.filter((s) => s.workspaceId === w.id).length,
       overflow: layout.overflow[w.id] ?? 0,
       ...cell,
     }];
   });
-  const farms: TownFarm[] = townSessions.flatMap((s) => {
-    const cell = layout.farms[s.id];
-    if (!cell) return [];
+  const fields: TownField[] = townSessions.map((s) => {
+    // Overflow fields remain reachable in the panel; only placed fields are sent to the map.
+    const cell = layout.fields[s.id] ?? layout.center;
     const costUsd = cost.get(s.id) ?? 0;
-    return [{ id: s.id, workspaceId: s.workspaceId, title: s.title ?? null, model: s.model, createdAt: s.createdAt, costUsd, stage: cropStage(costUsd), ...cell }];
+    return { id: s.id, workspaceId: s.workspaceId, title: s.title ?? null, model: s.model, createdAt: s.createdAt, costUsd, stage: cropStage(costUsd), fallow: s.status === "closed" || s.status === "error", ...cell };
   });
 
   const selected: TownSelection = {
@@ -103,28 +104,10 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
     }
   } else if (selected.ws) {
     const workspace = active.find((w) => w.id === selected.ws);
-    const center = layout.centers.find((c) => c.workspaceId === selected.ws);
-    if (workspace && center) {
-      const externalSessions = center.capital
-        ? await listExternalSessions(project, { exclude: sessions.map((s) => s.sdkSessionId) }).catch(() => [])
-        : [];
-      panel = (
-        <TownCenterPanel
-          project={project}
-          workspace={workspace}
-          capital={center.capital}
-          level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })}
-          farms={farms.filter((f) => f.workspaceId === workspace.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))}
-          allFarmCount={townSessions.length}
-          totalSpend={rows.reduce((n, r) => n + r.totalCostUsd, 0)}
-          activeCount={active.length}
-          archived={archived}
-          externalSessions={externalSessions}
-          workspaces={workspaces}
-          closeHref={closeHref}
-        />
-      );
-    }
+    if (workspace) panel = <FarmPanel project={project} workspace={workspace} fields={fields.filter((f) => f.workspaceId === workspace.id).sort((a, b) => Number(a.fallow) - Number(b.fallow) || b.createdAt.localeCompare(a.createdAt))} closeHref={closeHref} />;
+  } else if (selected.building === "center") {
+    const externalSessions = await listExternalSessions(project, { exclude: sessions.map((s) => s.sdkSessionId) }).catch(() => []);
+    panel = <ProjectPanel project={project} level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })} allFarmCount={townSessions.length} totalSpend={rows.reduce((n, r) => n + r.totalCostUsd, 0)} activeCount={active.length} archived={archived} externalSessions={externalSessions} workspaces={workspaces} closeHref={closeHref} />;
   } else if (selected.building === "library") {
     panel = (
       <Suspense>
@@ -149,14 +132,17 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
       projectName={project.name}
       grid={layout.grid}
       tiles={layout.tiles}
-      workspaces={townWorkspaces}
-      farms={farms}
+      farms={townWorkspaces}
+      fields={fields.filter(f => layout.fields[f.id])}
+      center={layout.center}
+      townHall={layout.townHall}
       library={layout.library}
       workshop={layout.workshop}
       vault={{ ...layout.vault, busy: vaultItems.some(isBusy), failed: vaultItems.some((i) => i.status === "failed") }}
       selected={selected}
     >
       {panel}
+      {archived.filter(w => w.id === one(query.harvest)).map(w => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} projectId={id} />)}
     </TownView>
   );
 }

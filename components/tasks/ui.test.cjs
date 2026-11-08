@@ -96,17 +96,25 @@ test("SSE is shared, refreshes on reconnect, and closes only after the last cons
 test("town hall stays clear of farm cells across workspace layouts", () => {
   const terrain = load("../../lib/world/terrain.ts");
   const { layoutTown } = load("../../lib/world/town.ts", { "./terrain.ts": terrain });
-  // Read the actual UI offset so moving the building keeps this regression check useful.
-  const source = fs.readFileSync(path.resolve(__dirname, "../town/town-view.tsx"), "utf8");
-  const match = source.match(/TOWN_HALL_OFFSET = \{ col: (\d+), row: (\d+) \}/);
-  assert.ok(match);
   for (const count of [1, 9, 25]) {
     const workspaces = Array.from({ length: count }, (_, i) => ({ id: `w${i}`, slug: i ? `w${i}` : "main", createdAt: String(i).padStart(3, "0") }));
     const sessions = workspaces.flatMap((w) => Array.from({ length: 100 }, (_, i) => ({ id: `${w.id}s${i}`, workspaceId: w.id, createdAt: String(i).padStart(3, "0") })));
     const layout = layoutTown("tasks", workspaces, sessions);
-    const hall = { col: layout.centers[0].cell.col + Number(match[1]), row: layout.centers[0].cell.row + Number(match[2]) };
+    const hall = layout.townHall;
     assert.ok(hall.col < layout.grid.cols && hall.row < layout.grid.rows);
-    assert.ok(!Object.values(layout.farms).some((c) => c.col === hall.col && c.row === hall.row));
-    assert.ok(!layout.centers.some(({ cell }) => cell.col === hall.col && cell.row === hall.row));
+    assert.ok(!Object.values(layout.fields).some((c) => c.col === hall.col && c.row === hall.row));
+    assert.ok(!layout.farmhouses.some(({ cell }) => cell.col === hall.col && cell.row === hall.row));
   }
+});
+
+test("fallow fields keep soil and fences but have no crop pixels", () => {
+  const sprites = load("../town/sprites.tsx", {
+    "@/lib/world/terrain": load("../../lib/world/terrain.ts"),
+    "@/components/world/pixel-parts": load("../world/pixel-parts.tsx"),
+  });
+  const render = (fallow) => renderToStaticMarkup(React.createElement(sprites.FarmField, { stage: 4, hue: 120, selected: false, fallow }));
+  assert.match(render(false), /<rect/);
+  assert.doesNotMatch(render(true), /<rect/);
+  assert.match(render(true), /var\(--w-soil\)/);
+  assert.match(render(true), /oklch\(0.62 0.12 120\)/);
 });

@@ -1,6 +1,7 @@
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
-import { rm } from "node:fs/promises";
+import { rename } from "node:fs/promises";
+import { moveToGranary } from "./granary";
 import path from "node:path";
 import { getProject, getProjectByRoot, upsertProject } from "@/lib/supabase/repo/projects";
 import {
@@ -220,7 +221,7 @@ async function pickWorkspaceName(projectId: string) {
   return `${city}-${n}`;
 }
 
-export async function removeWorkspace(id: string, opts: { removeWorktree?: boolean; removeMemory?: boolean } = {}) {
+export async function removeWorkspace(id: string, opts: { removeWorktree?: boolean } = {}) {
   const ws = await getWorkspace(id);
   if (!ws) return;
   if (ws.slug === "main") throw new Error("The main workspace can't be removed");
@@ -238,15 +239,18 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
           if (repo && checkout.worktreePath) await removeWorktree(repo.path, checkout.worktreePath);
         }
       }
-      await deleteWorkspaceRow(id);
+      const saved = await moveToGranary(project.root, ws.slug);
+      try { await deleteWorkspaceRow(id); }
+      catch (err) {
+        if (saved) await rename(saved, path.dirname(workspaceMemoryDir(project.root, ws.slug)));
+        throw err;
+      }
     });
   } else {
     await stopWorkspaceProcesses(id);
     await deleteWorkspaceRow(id);
   }
   forgetWorkspaceRuntime(id);
-  if (opts.removeMemory && project)
-    await rm(path.dirname(workspaceMemoryDir(project.root, ws.slug)), { force: true, recursive: true }).catch(() => {});
 }
 
 export async function getWorkspaceContext(workspaceId: string): Promise<WorkspaceContext | null> {

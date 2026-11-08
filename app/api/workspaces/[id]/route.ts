@@ -34,7 +34,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/workspa
 
 /**
  * Delete the workspace, its sessions and their SDK transcripts. `?worktree=1` also removes the git worktree;
- * `?memory=1` its memory dir.
+ * Memory and notes are preserved in the granary; legacy `?memory=1` is ignored.
  */
 export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/workspaces/[id]">) => {
   const { id } = await ctx.params;
@@ -43,7 +43,6 @@ export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/worksp
   for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
   await removeWorkspace(id, {
     removeWorktree: params.get("worktree") === "1",
-    removeMemory: params.get("memory") === "1",
   }).catch((err: Error) => {
     throw new HttpError(400, err.message);
   });

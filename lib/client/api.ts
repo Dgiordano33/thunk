@@ -87,8 +87,10 @@ export const api = {
     post<{ workspace: Workspace }>("/api/workspaces", body),
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
-  deleteWorkspace: (id: string, opts: { worktree?: boolean; memory?: boolean } = {}) =>
-    call(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}&memory=${opts.memory ? 1 : 0}`, { method: "DELETE" }),
+  deleteWorkspace: (id: string, opts: { worktree?: boolean } = {}) =>
+    call(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
+  getHarvest: (id: string) => call<import("@/lib/projects/harvest").HarvestData>(`/api/workspaces/${id}/harvest`),
+  harvestWorkspace: (id: string, body: { memory: string | null; noteIds: string[] }) => post(`/api/workspaces/${id}/harvest`, body),
   workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),
   workspaceProcess: (id: string, body:
     | { action: "setup" | "run" | "shell" }
