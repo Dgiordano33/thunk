@@ -36,8 +36,8 @@ function fakeTools(root, { failBuild = false } = {}) {
   fs.mkdirSync(bin);
   for (const [name, script] of Object.entries({
     git: 'if [ "$1" = "clone" ]; then for last; do :; done; mkdir -p "$last"; else printf abc123; fi',
-    npm: failBuild ? 'exit 9' : `mkdir -p dist-desktop/${process.arch === "arm64" ? "mac-arm64" : "mac"}/Thunk.app; printf updated > dist-desktop/${process.arch === "arm64" ? "mac-arm64" : "mac"}/Thunk.app/version`,
-    node: 'exit 0', codesign: 'exit 0',
+    npm: failBuild ? 'exit 9' : `mkdir -p dist-desktop/${process.arch === "arm64" ? "mac-arm64" : "mac"}/Thunk.app/Contents/Resources/backend; printf updated > dist-desktop/${process.arch === "arm64" ? "mac-arm64" : "mac"}/Thunk.app/version`,
+    node: 'test \"$2\" = \"$(cd \"$2\" && pwd -P)\"', codesign: 'exit 0',
   })) fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
   return { PATH: `${bin}:/usr/bin:/bin`, HOME: root };
 }
