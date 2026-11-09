@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProjectConfig } from "./project-config";
 import { api } from "@/lib/client/api";
 
 /** Rename or forget a project. Forgetting leaves files, worktrees and memory on disk. */
@@ -45,6 +46,7 @@ export function ProjectSettings({ id, name }: { id: string; name: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <ProjectConfig key={id} id={id} />
       <form onSubmit={rename} className="flex items-center gap-2">
         <label htmlFor="project-name" className="sr-only">Project name</label>
         <Input id="project-name" value={value} maxLength={80} onChange={(e) => setValue(e.target.value)} className="h-8 text-sm" />

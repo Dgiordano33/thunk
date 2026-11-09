@@ -45,7 +45,7 @@ async function makeRepo(name) {
 const makeFolder = async (name) => { const dir = path.join(base, name); await fs.mkdir(dir); return dir; };
 const existing = (p, name) => ({ source: "existing", path: p, name });
 
-test("a project with no repos has a main workspace in its home directory, and refuses worktrees", async () => {
+test("a project with no repos has a main workspace in its home directory, and creates isolated non-git workspaces", async () => {
   const { project, workspace, repos } = await projects.createProject({ name: "Empty Idea", repos: [] });
   assert.equal(project.dataKey, "empty-idea");
   assert.deepEqual(project.repos, []);
@@ -58,9 +58,12 @@ test("a project with no repos has a main workspace in its home directory, and re
   assert.equal(anchorRepo(ctx), null);
   assert.equal(sessionConfigRoot(ctx), workspace.cwd);
   assert.deepEqual(workspaceRepoTargets(ctx), []);
-  await assert.rejects(projects.createWorkspace({ projectId: project.id, setup: "skip" }), /at least one git repo/);
+  const extra = await projects.createWorkspace({ projectId: project.id, setup: "skip" });
+  assert.notEqual(extra.cwd, workspace.cwd);
+  assert.equal(extra.branch, null);
   const inPlace = await projects.createWorkspace({ projectId: project.id, worktree: false, setup: "skip" });
-  assert.equal(inPlace.cwd, workspace.cwd);
+  assert.notEqual(inPlace.cwd, workspace.cwd);
+  assert.notEqual(inPlace.cwd, extra.cwd);
   assert.deepEqual(await projects.listExternalSessions(project), []);
 });
 
@@ -152,7 +155,10 @@ test("plain folders are in a project but out of its git targets", async () => {
   assert.deepEqual(ws.repos.map((r) => [r.name, r.worktreePath !== null]), [["docs-folder", false], ["code", true]]);
 
   const onlyFolder = await projects.createProject({ name: "Folder Only", repos: [existing(await makeFolder("only-folder"))] });
-  await assert.rejects(projects.createWorkspace({ projectId: onlyFolder.project.id, setup: "skip" }), /at least one git repo/);
+  const folderWorkspace = await projects.createWorkspace({ projectId: onlyFolder.project.id, setup: "skip" });
+  assert.equal(folderWorkspace.cwd, onlyFolder.workspace.cwd);
+  assert.equal(folderWorkspace.branch, null);
+  assert.equal((await projects.contextForDirectory(folderWorkspace.cwd)).workspace.id, onlyFolder.workspace.id);
 });
 
 test("preflight rejects impossible specs with nothing created", async () => {
@@ -197,4 +203,38 @@ test("a failing middle spec is reported and the rest are still added", async () 
 test("folder specs without git become folder repos", async () => {
   const { project } = await projects.createProject({ name: "Plain", repos: [{ source: "new", parent: base, folder: "plain-folder", git: false }] });
   assert.deepEqual(project.repos.map((r) => [r.name, r.kind]), [["plain-folder", "folder"]]);
+});
+
+
+test("scratch deletion preserves files, and reused names never adopt leftover files", async () => {
+  const { project } = await projects.createProject({ name: "Scratch safety", repos: [] });
+  const empty = await projects.createWorkspace({ projectId: project.id, name: "empty" });
+  await projects.removeWorkspace(empty.id);
+  await assert.rejects(fs.stat(empty.cwd), { code: "ENOENT" });
+  const full = await projects.createWorkspace({ projectId: project.id, name: "full" });
+  await fs.writeFile(path.join(full.cwd, "draft.md"), "keep me");
+  assert.equal((await projects.removeWorkspace(full.id)).retainedDirectory, full.cwd);
+  assert.equal(await fs.readFile(path.join(full.cwd, "draft.md"), "utf8"), "keep me");
+  const again = await projects.createWorkspace({ projectId: project.id, name: "full" });
+  assert.notEqual(again.cwd, full.cwd);
+});
+
+test("projects sharing repos allocate different paths and branches, including concurrent creation", async () => {
+  const repo = await makeRepo("shared");
+  const one = await projects.createProject({ name: "Shared one", repos: [existing(repo)] });
+  const two = await projects.createProject({ name: "Shared two", repos: [existing(repo)] });
+  const [a, b] = await Promise.all([one, two].map(({ project }) => projects.createWorkspace({ projectId: project.id, name: "paris", setup: "skip" })));
+  assert.notEqual(a.cwd, b.cwd);
+  assert.notEqual(a.branch, b.branch);
+  assert.equal(git(a.cwd, "branch", "--show-current"), a.branch);
+  assert.equal(git(b.cwd, "branch", "--show-current"), b.branch);
+});
+
+test("removing the last folder gives each workspace its own scratch directory", async () => {
+  const { project, workspace } = await projects.createProject({ name: "Folder removal", repos: [existing(await makeFolder("remove-folder"))] });
+  const extra = await projects.createWorkspace({ projectId: project.id });
+  await projects.removeProjectRepo(project.id, project.repos[0].id);
+  const a = await projects.getWorkspaceContext(workspace.id);
+  const b = await projects.getWorkspaceContext(extra.id);
+  assert.notEqual(a.workspace.cwd, b.workspace.cwd);
 });

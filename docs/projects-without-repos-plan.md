@@ -15,7 +15,7 @@ PR #33 made a project a name with zero or more equal repos. Memory, notes, vault
 - **A workspace is a thread of work, with or without git.** Git repos get worktrees. Plain folders are shared in place. No repos at all means the workspace gets its own scratch directory.
 - **Agents cannot edit the project's config.** Instructions are the user's; memory is the agent's. Connectors run commands, so an agent must not be able to grant itself one.
 - **Instructions stay small (confirmed with the user).** Memory is the main way a project learns; instructions are expected to be used rarely. So: one plain textarea, empty by default, no template, no wizard field.
-- **Status: plan approved in outline, build not started.** Suggested first: phases 1 and 3.
+- **Status: implemented (2026-11-09).** All five non-deferred phases are complete. Deferred items remain out of scope; verification limits are recorded below.
 
 ## Target layout
 
@@ -42,7 +42,7 @@ PR #33 made a project a name with zero or more equal repos. Memory, notes, vault
 ### 2. Project connectors
 - `lib/projects/connectors.ts`: read and validate `config/mcp.json` with zod (stdio `command/args/env`, and `http`/`sse` `url/headers`). Invalid file → connectors skipped, error surfaced in the UI, session still starts.
 - Claude: merge into `mcpServers` in `buildOptions` next to `thunk`. The name `thunk` is reserved.
-- Codex: pass the same servers to `codex app-server`. **Unverified** how: likely `-c mcp_servers.<name>...` overrides at spawn (`lib/agent/codex/rpc.ts:40`) or a config field on `thread/start`. Check `codex app-server generate-ts` first. If neither works, ship Claude-only and show "Claude sessions only" in the UI.
+- Codex: pass stdio and HTTP servers through `config.mcp_servers` on `thread/start` and `thread/resume`. Legacy SSE remains Claude-only and is labelled in the UI.
 - API: `GET/PUT /api/projects/[id]/connectors`. GET returns names, type and target but masks `env` and `headers` values; PUT accepts full JSON, and a masked value means "keep what's stored".
 - UI: "Connectors" section listing each server, with a JSON editor (v1). A form and a catalog are later work.
 - Tests: valid and invalid files; reserved name; masking round-trip keeps secrets; options contain the merged servers.
@@ -71,8 +71,8 @@ PR #33 made a project a name with zero or more equal repos. Memory, notes, vault
 - Per-repo lifecycle scripts, and migration 0010 dropping the old columns (both from the previous plan).
 
 ## Risks / unknowns
-- **Codex connectors**: mechanism unverified (phase 2).
-- **Name clashes**: a project connector with the same name as one in the anchor repo's `.mcp.json`. Which wins in the SDK is unverified; test it, and prefer the project's.
+- **Codex connectors**: per-thread configuration verified with the installed app-server using connector discovery and a tool call, without a model request.
+- **Name clashes**: verified with the installed Claude SDK that the project connector overrides a same-named connector in the repo's `.mcp.json`.
 - **Write protection is not absolute**: in `bypassPermissions` (Claude) and `danger-full-access` (Codex) the deny rules don't hold, same as the vault today. An agent in those modes could edit `mcp.json` and gain a connector in the next session. Mitigation to consider: record a hash when the user saves, and ignore a file that changed outside the UI until re-approved.
 - **Secrets on disk**: connector tokens sit in plain text in `~/.thunk`. Acceptable for a local app; note it in the UI.
 - **Prompt size**: long instructions plus memory plus injected notes. The cap in phase 1 is the guard.
@@ -85,3 +85,11 @@ PR #33 made a project a name with zero or more equal repos. Memory, notes, vault
 - Add a plain folder; create a workspace; confirm it works in the folder.
 - Repeat the session check in a project with one repo that has its own `CLAUDE.md` and `.mcp.json`: both sets apply.
 - No schema change is planned, so no migration.
+
+## Completion verification
+
+- 164 tests passed with the server suite run serially; lint and TypeScript checks passed. The existing notebook-watcher test intermittently misses events in parallel full-suite runs.
+- Real Claude SDK connector precedence/connection and Codex connector discovery/tool-call checks passed without paid model turns.
+- HTTP smoke tests in an isolated memory-only app covered project creation, instructions, masked connector round trips, non-git workspace creation/deletion, and rendered settings/workspace pages.
+- Read-only Supabase checks confirmed the existing repo-less columns. This work requires no new migration and changed no remote schema.
+- Interactive browser checks were unavailable because the automation host was unavailable. Migration/cascade rehearsal and live model instruction-following/write-denial checks were not performed.

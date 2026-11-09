@@ -29,7 +29,7 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 - **Hierarchy:** a project is a git repo or folder, a workspace is a task inside a project (in place or in its own git worktree), and a session is one chat in a workspace.
 - **Context artifacts:** notes and notebooks (including repo notebooks whose files stay the source of truth), project and workspace memory, tasks, and the Vault of uploaded source material. Agents can read this context, and can write to notes, memory, and tasks.
 - **Document turns:** an assistant's final prose becomes an editable document. The person edits it or comments on it and sends revisions, and plans from plan mode follow the same flow.
-- **Orchestration:** routines start agents on schedules or events. A proposal in `docs/orchestration-plan.md` adds briefs built from selected tasks, notes, and free text that dispatch to worker sessions.
+- **Orchestration:** routines start agents on schedules or events. A proposal in `plans/orchestration-plan.md` adds briefs built from selected tasks, notes, and free text that dispatch to worker sessions.
 - **Delivery:** the workspace has a terminal, Setup and Run scripts, dev-server preview, and Git controls. Towns show PR, check, and deployment status from GitHub.
 - **Attention:** an agent can park on a permission, question, or plan, and those moments reach the person through the **Inbox**, with optional desktop alerts.
 
@@ -37,7 +37,7 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 
 **Durable commitments**
 
-- The intended shipping form is a Mac app built with Electron (`docs/desktop-app-plan.md`). The UI stays web technology and the browser development workflow keeps working.
+- The intended shipping form is a Mac app built with Electron (`plans/desktop-app-plan.md`). The UI stays web technology and the browser development workflow keeps working.
 - Multiple agents are first-class. Claude and Codex are both supported, so product language and features should not assume only Claude.
 
 **Current facts, not commitments**
@@ -64,7 +64,7 @@ The product name is Thunk. The established name and metadata describe a canvas-s
 
 ## Evidence on Hand
 
-The README, `docs/desktop-app-plan.md`, `docs/orchestration-plan.md`, and `docs/repo-notes-plan.md` describe the product and its proposals. There are no testimonials, customers, usage figures, benchmarks, or press, and future work must not invent them.
+The README, `plans/desktop-app-plan.md`, `plans/orchestration-plan.md`, and `docs/repo-notes-plan.md` describe the product and its proposals. There are no testimonials, customers, usage figures, benchmarks, or press, and future work must not invent them.
 
 ## Product Principles
 

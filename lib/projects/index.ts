@@ -1,6 +1,6 @@
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
-import { mkdir, rename, stat } from "node:fs/promises";
+import { mkdir, rename, rmdir, stat } from "node:fs/promises";
 import { moveToGranary } from "./granary";
 import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
@@ -23,10 +23,10 @@ import {
   listWorkspaces,
   updateWorkspace,
 } from "@/lib/supabase/repo/workspaces";
-import { cloneDestination, cloneRepo, createFolder, createWorktree, detectProject, folderDestination, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
+import { branchExists, git, cloneDestination, cloneRepo, createFolder, createWorktree, detectProject, folderDestination, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
 import { reconcileDeclaredFolders } from "@/lib/notes/folders";
 import { ensureMemory } from "./memory";
-import { projectDir, projectHomeDir, projectMemoryFile, projectSlug, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
+import { projectDir, projectHomeDir, projectMemoryFile, projectSlug, slugify, workspaceHomeDir, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
 import { repoNameFromUrl, type CreateProjectBody, type RepoResult, type RepoSpec } from "./repo-spec";
 import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock, forgetWorkspaceRuntime, stopWorkspaceProcesses } from "./runtime";
 import { assertWorkspaceCanRemove } from "./workspace-git";
@@ -125,8 +125,8 @@ export async function ensureMainWorkspace(project: Project): Promise<Workspace> 
   return (await getWorkspace(ws.id)) ?? ws;
 }
 
-async function ensureHome(project: Project) {
-  const home = projectHomeDir(project.dataKey);
+async function ensureHome(project: Project, slug = "main") {
+  const home = workspaceHomeDir(project.dataKey, slug);
   await mkdir(home, { recursive: true });
   return home;
 }
@@ -186,7 +186,7 @@ export async function removeProjectRepo(projectId: string, repoId: string) {
     const ws = await getWorkspace(c.workspaceId);
     if (ws?.cwd === repo.path) {
       const next = ws.repos.find((r) => r.repoId !== repoId);
-      await updateWorkspace(ws.id, { cwd: next?.cwd ?? (await ensureHome(project)) });
+      await updateWorkspace(ws.id, { cwd: next?.cwd ?? (await ensureHome(project, ws.slug)) });
     }
     await deleteWorkspaceRepo(c.workspaceId, repoId);
   }
@@ -197,7 +197,7 @@ export type CreateWorkspaceInput = {
   projectId: string;
   /** Defaults to an unused city name, Conductor-style. */
   name?: string;
-  /** Create a git worktree in each chosen git repo. Defaults to true, and then needs at least one. */
+  /** Create a git worktree in each chosen git repo. Defaults to true when git repos are selected. */
   worktree?: boolean;
   branch?: string;
   /** Base for the first git repo's worktree. The others branch from their own default branch. */
@@ -212,24 +212,43 @@ export type CreateWorkspaceInput = {
 };
 
 export async function createWorkspace(input: CreateWorkspaceInput): Promise<Workspace> {
+  // Shared repos can belong to different projects; serialize allocation across them.
+  return withWorkspaceLock("create-workspace", () => createWorkspaceUnlocked(input), { wait: true });
+}
+
+async function createWorkspaceUnlocked(input: CreateWorkspaceInput): Promise<Workspace> {
   const project = await getProject(input.projectId);
   if (!project) throw new Error("Project not found");
   const name = input.name?.trim() || (await pickWorkspaceName(project.id));
 
   let slug = slugify(name);
-  if (await findWorkspace(project.id, { slug })) slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
 
   const repos = input.repoIds
-    ? input.repoIds.map((id) => {
+    ? [...new Set(input.repoIds)].map((id) => {
         const repo = project.repos.find((r) => r.id === id);
         if (!repo) throw new Error(`Repo ${id} is not in this project`);
         return repo;
       })
     : project.repos;
 
-  const wantWorktrees = input.worktree ?? true;
-  if (wantWorktrees && !repos.some((r) => r.kind === "repo")) throw new Error("A workspace with its own worktree needs at least one git repo");
-  const branch = wantWorktrees ? input.branch?.trim() || `thunk/${slug}` : null;
+  const gitRepos = repos.filter((r) => r.kind === "repo");
+  const wantWorktrees = (input.worktree ?? true) && gitRepos.length > 0;
+  const baseSlug = slug;
+  const baseBranch = input.branch?.trim();
+  let branch: string | null = null;
+  for (let suffix = 1; ; suffix++) {
+    slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
+    branch = wantWorktrees ? (baseBranch ? `${baseBranch}${suffix === 1 ? "" : `-${suffix}`}` : `thunk/${slug}`) : null;
+    if (await findWorkspace(project.id, { slug })) continue;
+    if (!repos.length && await stat(workspaceHomeDir(project.dataKey, slug)).catch(() => null)) continue;
+    let occupied = false;
+    if (branch) for (const repo of gitRepos) {
+      const dest = worktreePath(repo.path, slug);
+      const registered = (await git(repo.path, ["worktree", "list", "--porcelain"])).split("\n").includes(`worktree ${dest}`);
+      if (registered || await stat(dest).catch(() => null) || await branchExists(repo.path, branch)) { occupied = true; break; }
+    }
+    if (!occupied) break;
+  }
   // Every worktree made so far, so a failure part-way leaves nothing behind.
   const created: { root: string; path: string }[] = [];
   const rollback = async () => {
@@ -256,7 +275,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   }
 
   // Sessions start in the first worktree when there is one, so a leading plain folder doesn't hide the branch.
-  const cwd = (checkouts.find((c) => c.worktreePath) ?? checkouts[0])?.cwd ?? (await ensureHome(project));
+  const cwd = (checkouts.find((c) => c.worktreePath) ?? checkouts[0])?.cwd ?? (await ensureHome(project, slug));
   let ws: Workspace;
   try {
     ws = await insertWorkspace({ projectId: project.id, name, slug, cwd, branch });
@@ -328,6 +347,14 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
     await deleteWorkspaceRow(id);
   }
   forgetWorkspaceRuntime(id);
+  let retainedDirectory: string | undefined;
+  if (project && !ws.repos.length && ws.cwd === workspaceHomeDir(project.dataKey, ws.slug)) {
+    try { await rmdir(ws.cwd); }
+    catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") retainedDirectory = ws.cwd;
+    }
+  }
+  return { retainedDirectory };
 }
 
 export async function getWorkspaceContext(workspaceId: string): Promise<WorkspaceContext | null> {
@@ -373,7 +400,9 @@ export async function listExternalSessions(
 ): Promise<ExternalSession[]> {
   const exclude = new Set([...(opts.exclude ?? [])].filter(Boolean));
   const limit = opts.limit ?? 30;
-  const dirs = project.repos.length ? project.repos.map((r) => r.path) : [projectHomeDir(project.dataKey)];
+  const workspaces = await listWorkspaces(project.id);
+  const dirs = [...new Set([...project.repos.map((r) => r.path), ...workspaces.map((w) => w.cwd)])];
+  if (!dirs.length) dirs.push(projectHomeDir(project.dataKey));
   const perDir = await Promise.all(dirs.map((dir) => sdkListSessions({ dir, includeWorktrees: true, limit }).catch(() => [])));
   const rows = [...new Map(perDir.flat().map((s) => [s.sessionId, s])).values()].sort((a, b) => b.lastModified - a.lastModified).slice(0, limit);
   return rows.filter((s) => !exclude.has(s.sessionId)).map((s) => ({

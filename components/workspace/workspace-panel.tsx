@@ -23,15 +23,16 @@ import { WorkspaceNotes } from "./workspace-notes";
 const CHANGES_POLL_MS = 5000;
 
 /** Workspace-wide info, shared by every session tab: what was produced and what changed on disk. */
-export function WorkspacePanel({ workspaceId, projectId, sessions }: { workspaceId: string; projectId: string; sessions: SessionMeta[] }) {
-  return <Suspense fallback={<Loading />}><WorkspacePanelContent workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></Suspense>;
+export function WorkspacePanel({ workspaceId, projectId, sessions, hasGit }: { workspaceId: string; projectId: string; sessions: SessionMeta[]; hasGit: boolean }) {
+  return <Suspense fallback={<Loading />}><WorkspacePanelContent hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></Suspense>;
 }
 
-function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspaceId: string; projectId: string; sessions: SessionMeta[] }) {
+function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { workspaceId: string; projectId: string; sessions: SessionMeta[]; hasGit: boolean }) {
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const tab = params.get("tab") ?? "sessions";
+  const requestedTab = params.get("tab") ?? "sessions";
+  const tab = !hasGit && ["changes", "checkpoints"].includes(requestedTab) ? "sessions" : requestedTab;
   const counts = useTaskCounts()[projectId];
   const openCount = (counts?.project ?? 0) + (counts?.byWorkspace[workspaceId] ?? 0);
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
@@ -49,10 +50,11 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
     [workspaceId],
   );
   useEffect(() => {
+    if (!hasGit) return;
     void loadChanges();
     const t = setInterval(() => document.visibilityState === "visible" && void loadChanges(), CHANGES_POLL_MS);
     return () => clearInterval(t);
-  }, [loadChanges, status]);
+  }, [loadChanges, status, hasGit]);
 
   const fileCount = repos.length ? repos.reduce((n, r) => n + (r.changes?.files.length ?? 0), 0) : (changes?.files.length ?? 0);
 
@@ -66,13 +68,13 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
         <TabsList variant="line" className="h-full">
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger value="changes">
+          {hasGit && <TabsTrigger value="changes">
             Changes
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
-          </TabsTrigger>
+          </TabsTrigger>}
           <TabsTrigger value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
+          {hasGit && <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>}
         </TabsList>
       </div>
       <TabsContent value="sessions" className="min-h-0 flex-1">
@@ -85,13 +87,13 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
           <Artifacts workspaceId={workspaceId} />
         </div>
       </TabsContent>
-      <TabsContent value="changes" className="min-h-0 flex-1">
+      {hasGit && <TabsContent value="changes" className="min-h-0 flex-1">
         {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
         <div className="h-full overflow-y-auto">
           <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
         </div>
-      </TabsContent>
-      <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>
+      </TabsContent>}
+      {hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
       <TabsContent value="tasks" className="min-h-0 flex-1 overflow-y-auto"><WorkspaceTasks workspaceId={workspaceId} projectId={projectId} /></TabsContent>
       <TabsContent value="notes" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">

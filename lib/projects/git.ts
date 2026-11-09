@@ -118,7 +118,7 @@ function expandHome(input: string) {
 
 /** Where `cloneRepo` would put this URL. */
 export function cloneDestination(url: string, parent: string) {
-  return path.join(expandHome(parent), repoNameFromUrl(url));
+  return folderDestination(parent, repoNameFromUrl(url));
 }
 
 /** Clone `url` into `<parent>/<repo>` and return the new checkout path. `owner/repo` expands to GitHub. */
@@ -136,8 +136,9 @@ export async function cloneRepo(url: string, parent: string): Promise<string> {
 
 /** Where `createFolder` would create this folder. */
 export function folderDestination(parent: string, name: string) {
-  if (!name.trim() || /[/\\]/.test(name) || name === "." || name === "..") throw new Error("Folder name must be a single path segment");
-  return path.join(expandHome(parent), name.trim());
+  name = name.trim();
+  if (!name || /[/\\]/.test(name) || name === "." || name === "..") throw new Error("Folder name must be a single path segment");
+  return path.join(expandHome(parent), name);
 }
 
 /** Create `<parent>/<name>` (must not exist), optionally as a fresh git repo. */

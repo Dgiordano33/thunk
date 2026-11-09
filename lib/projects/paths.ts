@@ -81,3 +81,11 @@ export function projectGranaryDir(key: string) {
 export function granaryEntryDir(key: string, slug: string, when: Date) {
   return path.join(projectGranaryDir(key), `${slug}-${when.toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID()}`);
 }
+
+/** User-owned settings, outside every agent-writable memory/notes directory. */
+export function projectConfigDir(key: string) { return path.join(projectDir(key), "config"); }
+export function projectInstructionsFile(key: string) { return path.join(projectConfigDir(key), "INSTRUCTIONS.md"); }
+export function projectConnectorsFile(key: string) { return path.join(projectConfigDir(key), "mcp.json"); }
+export function workspaceHomeDir(key: string, slug: string) {
+  return slug === "main" ? projectHomeDir(key) : `${projectHomeDir(key)}--${slug}`;
+}

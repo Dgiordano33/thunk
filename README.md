@@ -2,6 +2,8 @@
 
 For a locally packaged Mac app with no paid Apple Developer account, see [Thunk for macOS](docs/desktop.md). Build with `npm run desktop:pack`.
 
+Implemented features are documented in [docs/](docs/); unfinished proposals and projects live in [plans/](plans/).
+
 A personal Claude Code harness where assistant responses aren't chat bubbles: each turn's final prose becomes an editable document. Edit it directly, highlight spans to comment or ask questions, then **Send revisions**. Claude receives a unified diff, the quoted comment threads, and the full edited document, and replies with a revised version (v2, v3, …). Plans from plan mode use the same flow: edit or comment, then **Request changes** or **Approve**.
 
 ## Setup

@@ -3,8 +3,9 @@ import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
+import { readConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
-import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
+import { projectConfigDir, projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { tasksTools } from "@/lib/tasks/tools";
 import { tasksPrompt } from "@/lib/tasks/prompt";
@@ -43,6 +44,7 @@ export function hierarchyPrompt(
   notes?: SessionNotes,
   tasks: Task[] = [],
   vault?: { items: VaultItem[]; dir: string },
+  instructions = "",
 ) {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.dataKey);
@@ -65,6 +67,7 @@ export function hierarchyPrompt(
     "",
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];
+  if (instructions.trim()) lines.push("", "## Project instructions", instructions.slice(0, 24_000), ...(instructions.length > 24_000 ? ["[Project instructions truncated at 24,000 characters.]"] : []));
   const memory = projectMemory.trim();
   if (memory && (provider === "codex" || exceedsAutoMemory(memory))) lines.push("", "## Project memory (current contents)", memory);
   if (notes) lines.push("", notesPrompt(notes));
@@ -76,11 +79,13 @@ export function hierarchyPrompt(
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
   const vaultDir = vaultDirOf(project);
-  const [projectMemory, notes, tasks, vaultItems] = await Promise.all([
+  const [projectMemory, notes, tasks, vaultItems, instructions, connectors] = await Promise.all([
     readMemory(projectMemoryFile(project.dataKey)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
     listItems(vaultDir).catch(() => []),
+    readMemory(projectInstructionsFile(project.dataKey)),
+    readConnectors(project.dataKey),
   ]);
   await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
   const anchor = anchorRepo(live.ctx);
@@ -93,7 +98,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // The other repos of a multi-repo workspace are working directories too.
     additionalDirectories: [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
-    mcpServers: { thunk: createSdkMcpServer({
+    mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
@@ -113,16 +118,16 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     settings: {
       autoMemoryEnabled: true,
       autoMemoryDirectory: projectMemoryDir(project.dataKey),
-      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`] },
+      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`, `Edit(/${projectConfigDir(project.dataKey)}/**)`, `Write(/${projectConfigDir(project.dataKey)}/**)`] },
     },
     // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.
-    sandbox: { filesystem: { denyWrite: [vaultDir.dir] } },
+    sandbox: { filesystem: { denyWrite: [vaultDir.dir, projectConfigDir(project.dataKey)] } },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
       append: [
         CANVAS_PROMPT,
-        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }),
+        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
       ].join("\n\n"),
     },

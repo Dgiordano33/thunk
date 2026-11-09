@@ -1,6 +1,6 @@
 # Repo notebooks: plans and task boards from the repository
 
-Status: proposal · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-08
+Status: implemented · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-08
 
 > **Where the implementation landed.** The first implementation of this plan shipped in commit `d6a33da`, squash-merged under the unrelated title "Style shared buttons with bronze and parchment colors (#17)". Its second squashed commit, "Add repo notebooks with live editing and task write-back", is the repo-notebooks work. Search for that commit, not for "repo notebooks", when reading the history. The follow-up described under "Post-ship review fixes" below came in a later commit.
 
@@ -92,7 +92,7 @@ Acceptance: edit a plan file in an external editor or let an agent edit it in th
 - New note in a repo scope: a filename field (slugified from the title by default) instead of an auto id.
 - Project page (`/p/[id]`): the Library building gains a "Repo notebooks" section listing registered folders, the suggest results as one-click "Add", and a path input for anything else.
 
-Acceptance: a project with `docs/` registered shows `docs/orchestration-plan.md` as "Orchestration: one brief, many workers" in the Library, opens in the editor, and saves back to the file.
+Acceptance: a project with `plans/` registered shows `plans/orchestration-plan.md` as "Orchestration: one brief, many workers" in the Library, opens in the editor, and saves back to the file.
 
 ### 5. Sessions and prompt
 

@@ -14,7 +14,7 @@ In the words of the workflow this plan targets:
 4. Put everything that needs your judgment in one queue. Point at what needs changing, give feedback or approve the work. Your response goes back to the agent.
 5. Keep feedback open until it's addressed. Test changes before they land, get a second opinion on merges and approve anything risky.
 
-Thunk has the foundations for four of the five. This plan turns them into one workflow. It builds on `docs/orchestration-plan.md` (briefs, workers, lanes) and `docs/repo-notes-plan.md` (plans and boards in the repo). Where this plan and the orchestration plan overlap, this plan wins; the differences are called out.
+Thunk has the foundations for four of the five. This plan turns them into one workflow. It builds on `plans/orchestration-plan.md` (briefs, workers, lanes) and `docs/repo-notes-plan.md` (plans and boards in the repo). Where this plan and the orchestration plan overlap, this plan wins; the differences are called out.
 
 Non-goals for v1: auto-merge without a person, lead-to-lead coordination across projects, workers starting their own workers, and replacing GitHub review with Thunk review. Each is under "Later".
 
