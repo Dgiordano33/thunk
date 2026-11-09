@@ -47,9 +47,12 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
       const data = await api.getHarvest(workspace.id);
       if (data.empty && action !== "harvest") {
         const what = action === "merge" ? "Merge committed changes into the local default branch, run the archive hook, and delete" : "Delete";
-        if (!window.confirm(`${what} "${label}", its sessions and worktree? Memory and notes go to the granary. Worktree deletion requires committed changes merged into the default branch.`)) return;
+        if (!window.confirm(`${what} "${label}" and its sessions? Memory and notes go to the granary. ${workspace.branch ? "Worktree deletion requires committed changes merged into the default branch." : `Shared folders and non-empty scratch folders are kept at ${workspace.cwd}.`}`)) return;
         if (action === "merge") await api.workspaceGitAction(workspace.id, "merge", true);
-        else await api.deleteWorkspace(workspace.id, { worktree: true });
+        else {
+          const result = await api.deleteWorkspace(workspace.id, { worktree: true });
+          if (result.retainedDirectory) window.alert(`Files kept in ${result.retainedDirectory}`);
+        }
         done();
       } else setHarvest({ data, action });
     } catch (err) { window.alert((err as Error).message); }
@@ -97,7 +100,7 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
       </DropdownMenuContent>
     </DropdownMenu>
 
-    {harvest && <HarvestDialog workspaceId={workspace.id} label={label} {...harvest} onClose={() => setHarvest(null)} onComplete={done} />}
+    {harvest && <HarvestDialog hasGit={!!workspace.branch} workspaceId={workspace.id} label={label} {...harvest} onClose={() => setHarvest(null)} onComplete={done} />}
     </>
   );
 }

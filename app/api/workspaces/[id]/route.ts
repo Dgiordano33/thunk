@@ -41,11 +41,11 @@ export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/worksp
   const params = new URL(req.url).searchParams;
   const sessions = await allSessions({ workspaceId: id });
   for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
-  await removeWorkspace(id, {
+  const result = await removeWorkspace(id, {
     removeWorktree: params.get("worktree") === "1",
   }).catch((err: Error) => {
     throw new HttpError(400, err.message);
   });
   await deleteTranscripts(sessions);
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, ...result });
 });

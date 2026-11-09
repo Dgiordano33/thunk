@@ -109,8 +109,8 @@ test("a failed worktree in one repo rolls back the others", async () => {
   const project = await projects.addProject(one);
   await projects.ensureMainWorkspace(project);
   await projects.addProjectRepo(project.id, two);
-  // Occupy the worktree path in the extra repo so its `git worktree add` fails.
-  await fs.mkdir(path.join(two, ".claude", "worktrees", "oslo", "taken"), { recursive: true });
+  // A repo with no commits cannot create a worktree, even after path collision handling.
+  git(two, "update-ref", "-d", "refs/heads/main");
   await assert.rejects(projects.createWorkspace({ projectId: project.id, name: "oslo", setup: "skip" }));
   await assert.rejects(fs.stat(path.join(one, ".claude", "worktrees", "oslo")));
   assert.doesNotMatch(git(one, "worktree", "list"), /oslo/);

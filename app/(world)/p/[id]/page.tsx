@@ -63,6 +63,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
       id: w.id,
       label: workspaceLabel(w),
       branch: w.branch,
+      hasGit: w.repos.some((r) => project.repos.some((p) => p.id === r.repoId && p.kind === "repo")),
       hue: cityHue(w.id),
       lastActivityAt: [...rows.filter(r => r.workspaceId === w.id).map(r => r.updatedAt), w.updatedAt].sort().at(-1)!,
       sessionCount: townSessions.filter((s) => s.workspaceId === w.id).length,

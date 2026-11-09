@@ -32,6 +32,7 @@ import {
 } from "./sprites";
 
 export type TownFarmhouse = {
+  hasGit?: boolean;
   id: string;
   label: string;
   branch: string | null;
@@ -321,7 +322,7 @@ function Farmhouse({ ws, grid, selected, href, attention, running }: { ws: TownF
   const banner = `oklch(0.66 0.2 ${ws.hue})`;
   const delivery = useAmbient((s) => s.deliveries.find((d) => d.workspaceId === ws.id));
   const pr = delivery?.status.pr;
-  const cue = delivery?.error ? { label: "Delivery status unavailable", symbol: "?", color: "#737373", kind: "unknown" } : deliveryCue(pr ?? null);
+  const cue = ws.hasGit === false ? null : delivery?.error ? { label: "Delivery status unavailable", symbol: "?", color: "#737373", kind: "unknown" } : deliveryCue(pr ?? null);
   const preview = delivery?.deployedPreviewUrl || delivery?.localPreviewUrl;
   const reduced = useReducedMotion();
   return (

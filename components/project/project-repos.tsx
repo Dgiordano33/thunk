@@ -33,7 +33,7 @@ export function ProjectRepos({ project }: { project: Project }) {
   return (
     <div className="flex flex-col gap-2">
       {project.repos.length === 0 && (
-        <p className="text-muted-foreground text-xs">No repositories yet. Agents work in a scratch folder until you add one.</p>
+        <p className="text-muted-foreground text-xs">Agents work in a scratch folder. Add a folder to choose where work is saved.</p>
       )}
       {project.repos.length > 0 && (
         <ul className="flex flex-col gap-1 text-xs">
@@ -113,7 +113,7 @@ function AddRepoDialog({ projectId, primary }: { projectId: string; primary: boo
   return (
     <Dialog open={open} onOpenChange={(next) => { if (pending || picking) return; setOpen(next); if (!next) reset(); }}>
       <DialogTrigger asChild>
-        <Button size="sm" variant={primary ? "default" : "outline"}><PlusIcon /> Add repo</Button>
+        <Button size="sm" variant={primary ? "default" : "outline"}><PlusIcon /> {primary ? "Add a folder or repository" : "Add repository"}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="contents">

@@ -3,6 +3,7 @@ import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { WorkspaceTabs } from "@/components/workspace/workspace-tabs";
 import { listSessions } from "@/lib/agent";
 import { getWorkspaceContext } from "@/lib/projects";
+import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { worktreeStatus } from "@/lib/projects/git";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   const ordered = [...sessions].reverse();
   return (
     <WorkspaceShell
+      hasGit={workspaceRepoTargets(ctx).length > 0}
       workspaceId={id}
       projectId={ctx.project.id}
       sessions={ordered}

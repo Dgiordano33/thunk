@@ -15,6 +15,8 @@ import type { ExternalSession } from "@/lib/projects";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { LEVEL_NAMES, type CityLevel } from "@/lib/world/cities";
 import { CROP_NAMES } from "@/lib/world/town";
+import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
+import { WorkspaceDirectory } from "@/components/workspace/workspace-directory";
 import { DeliveryPanel } from "./delivery-panel";
 import { ProjectSettings } from "./project-settings";
 import { TownNotes } from "./town-notes";
@@ -67,6 +69,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
         </Section>
         <Section title={`Repos (${project.repos.length})`}>
           <ProjectRepos project={project} />
+          {project.repos.length === 0 && workspaces.filter((w) => w.slug === "main").map((w) => <WorkspaceDirectory key={w.id} id={w.id} cwd={w.cwd} />)}
         </Section>
           <Section title="Project notes">
             <TownNotes projectId={project.id} scope={{ kind: "projects", id: project.id }} />
@@ -103,6 +106,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
   const base = `/p/${project.id}`;
   return <TownPanel eyebrow="Farm · workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu workspace={workspace} label={label} />}>
       <Section title="Workspace">
+        <WorkspaceDirectory id={workspace.id} cwd={workspace.cwd} />
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
           {workspace.branch ? (
             <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{workspace.branch}</span>
@@ -131,9 +135,9 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
         </div>
       </Section>
 
-      <Section title="Delivery">
+      {workspaceRepoTargets({ project, workspace }).length > 0 && <Section title="Delivery">
         <DeliveryPanel key={workspace.id} workspaceId={workspace.id} />
-      </Section>
+      </Section>}
 
       <Section title={`Fields (${fields.length})`}>
         {fields.length === 0 ? (

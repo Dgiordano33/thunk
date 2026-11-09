@@ -23,6 +23,11 @@ test("clone and both worktree paths terminate options before untrusted operands"
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
   const exports = {};
   new Function("require", "exports", compiled)((name) => name === "server-only" ? {} : name === "node:child_process" ? { execFile } : name === "./repo-spec" ? { repoNameFromUrl: (url) => url.split("/").pop() } : require(name), exports);
+  for (const name of [".", "..", " .. ", " . ", "../escape", ""]) {
+    assert.throws(() => exports.folderDestination(dir, name), /single path segment/);
+  }
+  assert.throws(() => exports.cloneDestination("https://example.com/..", dir), /single path segment/);
+  assert.equal(exports.folderDestination(dir, " draft "), path.join(dir, "draft"));
   await exports.cloneRepo("--upload-pack=evil", dir);
   assert.deepEqual(calls.find((a) => a[0] === "clone").slice(0, 3), ["clone", "--", "--upload-pack=evil"]);
   const opts = { root: dir, path: path.join(dir, "worktree"), branch: "topic", baseRef: "--orphan" };

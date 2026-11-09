@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/client/api";
 
-/**
- * A new auto-named workspace (a worktree in each git repo), opened on a blank chat. One click for a
- * single-repo project; with several repos, a picker of which ones to include first (all by default).
- */
+/** Create a workspace, remembering which repos or folders the user last selected. */
 export function NewWorkspaceButton({
   projectId,
   projectName,
@@ -33,6 +30,7 @@ export function NewWorkspaceButton({
     setPending(true);
     try {
       const { workspace } = await api.createWorkspace({ projectId, ...(repoIds ? { repoIds } : {}) });
+      try { localStorage.setItem(`thunk:workspace-repos:${projectId}`, JSON.stringify(repoIds ?? repos.map((r) => r.id))); } catch {}
       setOpen(false);
       router.push(`/w/${workspace.id}/new`);
       router.refresh();
@@ -43,40 +41,26 @@ export function NewWorkspaceButton({
     }
   };
 
-  // A workspace is a worktree, so it needs at least one git repo among those chosen.
-  const hasGit = repos.some((r) => r.kind === "repo");
-  const canPick = repos.some((r) => r.kind === "repo" && chosen.has(r.id));
-  const needsPicker = repos.length > 1;
-  const noRepoHint = "Add a git repo to create workspaces";
-
+  const needsPicker = repos.length > 0;
   const icon = pending ? <Loader2Icon className="animate-spin" /> : <PlusIcon />;
   const trigger = compact ? (
     <Button
       size="icon-xs"
       variant="ghost"
       aria-label={`New workspace in ${projectName}`}
-      title={hasGit ? "New workspace" : noRepoHint}
+      title="New workspace"
       className={className}
       onClick={needsPicker ? undefined : () => void create()}
-      disabled={pending || !hasGit}
+      disabled={pending}
     >
       {icon}
     </Button>
   ) : (
-    <Button size="sm" variant="outline" className={className} title={hasGit ? undefined : noRepoHint} onClick={needsPicker ? undefined : () => void create()} disabled={pending || !hasGit}>
+    <Button size="sm" variant="outline" className={className} onClick={needsPicker ? undefined : () => void create()} disabled={pending}>
       {icon}
       New workspace
     </Button>
   );
-  if (!hasGit) {
-    // A disabled button shows no tooltip, so the hint sits on its wrapper; the full-size button also spells it out.
-    return (
-      <span title={noRepoHint} className="inline-flex items-center gap-2">
-        {trigger}
-        {!compact && <span className="text-muted-foreground text-xs">{noRepoHint}.</span>}
-      </span>
-    );
-  }
   if (!needsPicker) return trigger;
 
   return (
@@ -84,8 +68,12 @@ export function NewWorkspaceButton({
       open={open}
       onOpenChange={(next) => {
         if (pending) return;
-        // Every repo is ticked again each time the picker opens.
-        if (next) setChosen(new Set(repos.map((r) => r.id)));
+        if (next) {
+          try {
+            const saved: unknown = JSON.parse(localStorage.getItem(`thunk:workspace-repos:${projectId}`) ?? "null");
+            setChosen(new Set(Array.isArray(saved) ? repos.filter((r) => saved.includes(r.id)).map((r) => r.id) : repos.map((r) => r.id)));
+          } catch { setChosen(new Set(repos.map((r) => r.id))); }
+        }
         setOpen(next);
       }}
     >
@@ -119,7 +107,8 @@ export function NewWorkspaceButton({
               </label>
             ))}
           </fieldset>
-          <Button type="submit" size="sm" disabled={pending || !canPick}>
+          <p className="text-muted-foreground text-xs">Folders are shared in place. With none selected, this workspace gets a scratch folder.</p>
+          <Button type="submit" size="sm" disabled={pending}>
             {pending && <Loader2Icon className="animate-spin" />}
             Create workspace
           </Button>

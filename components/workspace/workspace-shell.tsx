@@ -10,12 +10,14 @@ import { WorkspacePanel } from "./workspace-panel";
 
 /** Session tabs and the open page on the left; workspace-wide panel (or the open session's comments) over the workspace console on the right. */
 export function WorkspaceShell({
+  hasGit,
   workspaceId,
   projectId,
   sessions,
   tabs,
   children,
 }: {
+  hasGit: boolean;
   workspaceId: string;
   projectId: string;
   sessions: SessionMeta[];
@@ -38,7 +40,7 @@ export function WorkspaceShell({
       <ResizablePanel defaultSize="30" minSize="20" maxSize="45">
         <div className="bg-sidebar/40 flex h-full flex-col">
           <div className="min-h-0 flex-1">
-            {showComments ? <CommentsPanel /> : <WorkspacePanel workspaceId={workspaceId} projectId={projectId} sessions={sessions} />}
+            {showComments ? <CommentsPanel /> : <WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} />}
           </div>
           <WorkspaceConsole key={workspaceId} workspaceId={workspaceId} />
         </div>

@@ -11,8 +11,9 @@ import { tasksForWorkspace } from "@/lib/tasks/service";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadSessionNotes } from "@/lib/notes/prompt";
+import { readConnectors, codexConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
-import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
+import { projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
 import { CANVAS_PROMPT, hierarchyPrompt } from "../options";
@@ -151,12 +152,14 @@ function toolResult(item: Item): { content: string; isError: boolean } {
  */
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, workspaceMemory, notes, tasks, vaultItems] = await Promise.all([
+  const [projectMemory, workspaceMemory, notes, tasks, vaultItems, instructions, connectors] = await Promise.all([
     readMemory(projectMemoryFile(project.dataKey)),
     readMemory(workspaceMemoryFile(project.dataKey, workspace.slug)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
     listItems(vaultDirOf(project)).catch(() => []),
+    readMemory(projectInstructionsFile(project.dataKey)),
+    readConnectors(project.dataKey),
   ]);
   const dataDirs = [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
@@ -169,7 +172,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
 
   const developerInstructions = [
     CANVAS_PROMPT,
-    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }),
+    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
@@ -401,6 +404,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
       approvalPolicy: approvalPolicy(),
       sandbox: live.meta.permissionMode === "bypassPermissions" ? "danger-full-access" : "workspace-write",
       developerInstructions,
+      config: { mcp_servers: codexConnectors(connectors.config) },
     };
     const res = await rpc.request<{ thread: { id: string }; model: string; cwd: string }>(
       resume ? "thread/resume" : "thread/start",

@@ -59,6 +59,11 @@ export const api = {
   deleteVaultItem: (projectId: string, id: string) => call(`/api/projects/${projectId}/vault/${id}`, { method: "DELETE" }),
   promoteVaultIdea: (projectId: string, id: string, ideaId: string, to: "note" | "task") =>
     post<{ item: VaultItem; noteId?: string; taskId?: string }>(`/api/projects/${projectId}/vault/${id}/promote`, { ideaId, to }),
+  projectInstructions: (id: string) => call<{ content: string }>(`/api/projects/${id}/instructions`),
+  saveProjectInstructions: (id: string, content: string, expectedContent: string) => call(`/api/projects/${id}/instructions`, { method: "PUT", json: { content, expectedContent } }),
+  projectConnectors: (id: string) => call<{ config: import("@/lib/projects/connectors").ConnectorConfig; revision: string | null; error: string | null }>(`/api/projects/${id}/connectors`),
+  saveProjectConnectors: (id: string, config: unknown, revision: string) => call(`/api/projects/${id}/connectors`, { method: "PUT", json: { config, revision } }),
+  revealWorkspace: (id: string) => post(`/api/workspaces/${id}/reveal`, {}),
   // Projects
   getProject: (id: string) => call<{ project: Project }>(`/api/projects/${id}`),
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
@@ -88,7 +93,7 @@ export const api = {
   updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
   deleteWorkspace: (id: string, opts: { worktree?: boolean } = {}) =>
-    call(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
+    call<{ ok: true; retainedDirectory?: string }>(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
   getHarvest: (id: string) => call<import("@/lib/projects/harvest").HarvestData>(`/api/workspaces/${id}/harvest`),
   harvestWorkspace: (id: string, body: { memory: string | null; noteIds: string[] }) => post(`/api/workspaces/${id}/harvest`, body),
   workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),

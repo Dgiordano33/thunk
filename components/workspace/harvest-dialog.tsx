@@ -10,8 +10,8 @@ import type { HarvestData } from "@/lib/projects/harvest";
 
 export type HarvestAction = "harvest" | "delete" | "merge";
 
-export function HarvestDialog({ workspaceId, label, data, action, onClose, onComplete }: {
-  workspaceId: string; label: string; data: HarvestData; action: HarvestAction; onClose: () => void; onComplete: () => void;
+export function HarvestDialog({ workspaceId, label, data, action, hasGit = false, onClose, onComplete }: {
+  hasGit?: boolean; workspaceId: string; label: string; data: HarvestData; action: HarvestAction; onClose: () => void; onComplete: () => void;
 }) {
   const [memory, setMemory] = useState(data.suggested);
   const [noteIds, setNoteIds] = useState<string[]>([]);
@@ -26,7 +26,10 @@ export function HarvestDialog({ workspaceId, label, data, action, onClose, onCom
         await api.harvestWorkspace(workspaceId, { memory, noteIds });
         setHarvested(true);
       }
-      if (action === "delete") await api.deleteWorkspace(workspaceId, { worktree: true });
+      if (action === "delete") {
+        const result = await api.deleteWorkspace(workspaceId, { worktree: true });
+        if (result.retainedDirectory) window.alert(`Files kept in ${result.retainedDirectory}`);
+      }
       if (action === "merge") await api.workspaceGitAction(workspaceId, "merge", true);
       onComplete(); onClose();
     } catch (err) { setError((err as Error).message); }
@@ -36,7 +39,7 @@ export function HarvestDialog({ workspaceId, label, data, action, onClose, onCom
     <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Keep what this farm learned. Memory and notes left behind are preserved in the granary when deleted.</DialogDescription></DialogHeader>
       {action === "merge" && <p className="text-sm">Merge committed changes into the local default branch, run the archive hook, then delete the worktree and sessions.</p>}
-      {action === "delete" && <p className="text-sm">Delete this workspace, its sessions and worktree. Worktree deletion requires committed changes merged into the default branch.</p>}
+      {action === "delete" && <p className="text-sm">{hasGit ? "Delete this workspace, its sessions and worktree. Worktree deletion requires committed changes merged into the default branch." : "Delete this workspace and its sessions. Shared folders and non-empty scratch folders are kept."}</p>}
       <fieldset disabled={busy || harvested} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div><p className="mb-2 text-sm font-medium">Workspace task log</p><pre className="bg-muted max-h-64 overflow-auto whitespace-pre-wrap rounded p-3 text-xs">{data.memory || "No task log yet."}</pre></div>
