@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, dialog, shell, session } = require("electron");
-const { mkdirSync, openSync, closeSync, existsSync, writeFileSync } = require("node:fs");
+const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync, rmSync } = require("node:fs");
 const path = require("node:path");
 const { startBackend, loginPath, externalUrl } = require("./runtime.cjs");
+
+const { prepareUpdate, installUpdate } = require("./updater.cjs");
 
 app.setName("Thunk");
 let backend;
@@ -9,6 +11,57 @@ let window;
 let quitting = false;
 let stopped = false;
 let starting = true;
+let updateController;
+let updateTask;
+
+async function checkForUpdates(item) {
+  if (updateController) return;
+  updateController = new AbortController();
+  item.enabled = false;
+  item.label = "Building Update…";
+  window?.setProgressBar(2);
+  const logFile = path.join(app.getPath("logs"), "update.log");
+  let prepared;
+  try {
+    const root = path.join(process.resourcesPath, "backend");
+    const { revision } = JSON.parse(readFileSync(path.join(root, "version.json"), "utf8"));
+    const target = path.resolve(process.execPath, "../../..");
+    // Only pass build essentials, not runtime database or agent credentials.
+    const env = { HOME: app.getPath("home"), PATH: loginPath(), SHELL: process.env.SHELL || "/bin/zsh", TMPDIR: process.env.TMPDIR, LANG: process.env.LANG };
+    prepared = await prepareUpdate({ target, revision, env, logFile, signal: updateController.signal });
+    if (quitting) return;
+    window?.setProgressBar(-1);
+    if (!prepared) {
+      await dialog.showMessageBox({ message: "Thunk is up to date", detail: "You are running the latest commit on main." });
+      return;
+    }
+    const { response } = await dialog.showMessageBox({
+      message: "Your update is ready",
+      detail: "Restarting stops active agents and routines. Your configuration and data will stay in place. A backup of this app will be kept beside it.",
+      buttons: ["Restart and Update", "Later"], defaultId: 1, cancelId: 1,
+    });
+    if (response !== 0 || quitting) return;
+    quitting = true;
+    await backend.stop();
+    stopped = true;
+    try {
+      const backup = installUpdate(prepared.staged, target);
+      try { writeFileSync(path.join(app.getPath("userData"), "previous-app.txt"), backup + "\n"); } catch (error) { console.error("Could not record backup location:", backup, error); }
+    } catch (error) {
+      dialog.showErrorBox("Update could not be installed", `${error.message}\nThe previous app will reopen.`);
+    }
+    app.relaunch();
+    app.quit();
+  } catch (error) {
+    if (!quitting) dialog.showErrorBox("Update could not be built", `${error.message}\nYour current app has not been replaced.\n\nSee ${logFile}`);
+  } finally {
+    if (prepared) rmSync(prepared.staging, { recursive: true, force: true });
+    updateController = null;
+    item.enabled = true;
+    item.label = "Check for Updates…";
+    window?.setProgressBar(-1);
+  }
+}
 
 async function openWindow() {
   window = new BrowserWindow({
@@ -43,6 +96,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", (event) => {
     quitting = true;
     if (stopped) return;
+    if (updateController) {
+      event.preventDefault();
+      updateController.abort();
+      void updateTask.finally(() => app.quit());
+      return;
+    }
     if (starting) { event.preventDefault(); return; }
     if (!backend) return;
     event.preventDefault();
@@ -67,6 +126,9 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu", submenu: [
         { role: "about" }, { type: "separator" },
+        { label: "Check for Updates…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } },
+        { label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) },
+        { type: "separator" },
         { label: "Show Configuration", click: () => shell.showItemInFolder(config) },
         { label: "Show Server Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "server.log")) },
         { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },

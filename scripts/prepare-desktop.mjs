@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync, chmodSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, chmodSync, existsSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -12,6 +12,9 @@ assert.ok(libraries.split("\n").slice(1).every((line) => !line.trim() || /^\s+\/
 const root = path.resolve("build/desktop");
 rmSync(root, { recursive: true, force: true });
 mkdirSync(path.join(root, "bin"), { recursive: true });
+writeFileSync(path.join(root, "version.json"), JSON.stringify({
+  revision: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+}));
 cpSync(process.execPath, path.join(root, "bin/node"));
 chmodSync(path.join(root, "bin/node"), 0o755);
 const server = path.join(root, "server");
