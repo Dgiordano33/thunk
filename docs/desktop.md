@@ -14,6 +14,16 @@ You can copy the generated app to `/Applications` and launch it from Finder. The
 
 `npm run desktop:dev` prepares the same production backend and opens it in an unpackaged Electron window. `npm run test:desktop` tests startup, shutdown, configuration loading, startup failures, and external-link filtering. Packaging also runs a real PTY check using the copied Node executable. For an isolated smoke test of the finished bundle, run `node scripts/smoke-desktop.mjs dist-desktop/mac-arm64/Thunk.app/Contents/Resources/backend` (use `mac` on Intel). This checks UI assets, API access and origin protection, the bundled PTY and Claude executables, shutdown, and package isolation without using your data or credentials.
 
+## Updating
+
+Choose **Thunk → Check for Updates…**. Thunk fetches the latest `main` from `Dgiordano33/thunk`, builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock show that a build is running. You can continue using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
+
+The update replaces the app at its existing location, including an Applications copy. Your source checkout, desktop `.env`, and data are untouched. A failed build leaves the current app running. A failed replacement restores the previous app. The previous bundle is retained in a hidden `.thunk-previous-*` folder beside the app; `~/Library/Application Support/Thunk/previous-app.txt` records its path for recovery. You can remove those backup folders once satisfied with an update.
+
+This is a local source updater: you still need Git, npm, an official Node installation, network access, and Git access to the repository. Updates follow `main`, not the branch you originally built. No paid Apple account is needed. **Show Update Log** reveals build errors. Quitting during a build cancels it. If the installation folder is not writable, move Thunk to a folder you own before updating.
+
+For an older app without this menu, build and install this version once using the commands above. Thereafter, use the menu. Updates are checked only when you request them; no background downloads or automatic restarts occur.
+
 ## Configuration and data
 
 The **Thunk → Show Configuration** menu reveals `~/Library/Application Support/Thunk/.env`. Add any needed settings, then quit and reopen Thunk:
@@ -42,4 +52,4 @@ Closing the window keeps the app, agents, and routines running, as expected on m
 
 ## Distribution limits
 
-This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. There is no updater, DMG installer, Windows/Linux target, or custom app artwork yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
+This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. There is no prebuilt-release updater, DMG installer, Windows/Linux target, or custom app artwork yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
