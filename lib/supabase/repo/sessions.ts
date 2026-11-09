@@ -1,6 +1,6 @@
 import "server-only";
 import type { SessionMeta, SessionState } from "@/lib/agent/types";
-import type { SessionOrigin } from "@/lib/routines/types";
+import type { SessionOrigin } from "@/lib/agent/types";
 import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
 import { listTasks, updateTask } from "./tasks";
@@ -120,4 +120,13 @@ export async function deleteSessionRow(id: string): Promise<void> {
   }
   const { error } = await client.from("sessions").delete().eq("id", id);
   if (error) throw error;
+}
+
+/** Worker ownership survives server restarts, unlike the live activity feed. */
+export async function workerWorkspaceIds(): Promise<Set<string>> {
+  const client = db();
+  if (!client) return new Set();
+  const { data, error } = await client.from("sessions").select("workspace_id").eq("origin->>kind", "worker");
+  if (error) throw error;
+  return new Set(data.map((row) => row.workspace_id));
 }

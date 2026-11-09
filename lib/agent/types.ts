@@ -1,5 +1,9 @@
 import type { PromptImage } from "@/lib/prompts/schema";
-import type { SessionOrigin } from "@/lib/routines/types";
+import type { RunTrigger } from "@/lib/routines/types";
+export type SessionOrigin =
+  | { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger }
+  | { kind: "chief" }
+  | { kind: "worker"; chiefSessionId: string | null; taskId: string };
 // Shared between server and client. Keep free of server-only imports.
 
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;

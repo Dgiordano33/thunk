@@ -1,6 +1,6 @@
 # A chief in every project: notes become delegated work
 
-Status: proposal · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-09
+Status: implemented · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-09
 
 ## Goal
 
@@ -108,3 +108,12 @@ About two weeks. Phase 2 carries the risk (report-up and enforcement); run a rea
 2. **Should the chief close tasks, or should you?** Drafted: the chief marks `done` when the report matches the task; you can reopen. numbrone leaves "close" to the person.
 3. **One chief per project or per workspace?** Drafted: per project, in `main`. Revisit when a project runs two unrelated efforts at once.
 4. **Worker model default.** Drafted: the session default model, overridable per `delegate` call.
+
+
+## Implementation notes
+
+The four phases are implemented. `chief_log` is the additional chief-only tool for note and workspace-memory writes, since Claude chiefs cannot use Edit or Write. Worker results use a durable file outbox and session-message receipts; report delivery may repeat across a crash between dispatch and receipt persistence. Interrupted sessions without a final result are marked blocked rather than silently restarted; message the worker to continue. Workers have a 60-minute timeout.
+
+Supabase installations need migration `0010_worker_reports` to extend the existing notification-kind constraint. No tables or columns were added. Default delegation selects Git repositories only, so plain folders remain outside the worker's workspace.
+
+Validation includes the complete test suite, TypeScript, lint, production build, and an isolated live Claude smoke test: the chief called delegate three times, received three worktree reports in a batch, and accepted all three tasks with tasks_complete. The smoke workers read a fixture file; they did not modify or merge application code.

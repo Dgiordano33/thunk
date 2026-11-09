@@ -6,7 +6,7 @@ import { deleteSessionRow, getSessionRow, listSessionRows } from "@/lib/supabase
 import "./persist";
 import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
 import { deleteTranscripts } from "./transcripts";
-import type { SessionOrigin } from "@/lib/routines/types";
+import type { SessionOrigin } from "@/lib/agent/types";
 import { permissionModesFor, providerOf, type SessionMeta } from "./types";
 
 export * from "./session-registry";

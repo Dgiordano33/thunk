@@ -21,7 +21,7 @@ export async function sessionNotification(live: LiveSession, e: HarnessEvent) {
       detail: e.type === "permission_request" ? e.description ?? e.decisionReason ?? JSON.stringify(e.input) : e.type === "plan_proposed" ? e.plan : null, actions });
   } else if (e.type === "permission_resolved" || e.type === "question_resolved" || e.type === "plan_resolved") {
     await resolveBySubject(`session:${sessionId}:req:${e.requestId}`);
-  } else if (e.type === "result" && live.meta.origin?.kind !== "routine") {
+  } else if (e.type === "result" && live.meta.origin?.kind !== "routine" && live.meta.origin?.kind !== "worker") {
     await notify({ ...base, kind: e.isError ? "turn_failed" : "turn_finished", urgency: "info",
       subjectKey: `session:${sessionId}:result:${e.seq}`, title: `${live.meta.title || "Agent"} · ${e.isError ? "Turn failed" : "Turn finished"}` });
   } else if (e.type === "error") {

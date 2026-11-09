@@ -33,6 +33,8 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <h1 className="min-w-0 truncate text-sm font-medium">{meta.title || "Untitled session"}</h1>
+      {meta.origin?.kind === "chief" && <Badge variant="outline">Chief</Badge>}
+      {meta.origin?.kind === "worker" && <Badge variant="outline">Worker · {meta.title || meta.origin.taskId.slice(0, 8)}</Badge>}
       {meta.origin?.kind === "routine" && <RoutineBadge meta={meta} origin={meta.origin} />}
       {live ? (
         <Badge
@@ -107,7 +109,7 @@ function CommentsToggle() {
 }
 
 /** "Routine · <name>", linking to the routine in its town's Workshop (or marked deleted). */
-function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: NonNullable<SessionMeta["origin"]> }) {
+function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: Extract<SessionMeta["origin"], { kind: "routine" }> }) {
   const [deleted, setDeleted] = useState(false);
   useEffect(() => {
     let alive = true;

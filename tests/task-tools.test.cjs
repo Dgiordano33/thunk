@@ -153,3 +153,22 @@ test("prompt omits done tasks and directs agents to claim and complete work", ()
   assert.doesNotMatch(prompt, /Workspace job/); assert.match(prompt, /bbbbbbbb/);
   assert.match(prompt, /claim tasks you start/); assert.match(prompt, /tasks_complete/);
 });
+
+test("chief tools are mounted on both providers and Claude blocks file writes", async () => {
+  const chief = live();
+  chief.meta.origin = { kind: "chief" };
+  const options = await buildOptions(chief, {});
+  assert.deepEqual(options.disallowedTools, ["Edit", "Write", "NotebookEdit"]);
+  const names = options.mcpServers.thunk.tools.map((t) => t.name);
+  for (const name of ["delegate", "workers_status", "workers_message", "workers_stop", "chief_log"]) assert.ok(names.includes(name));
+  assert.equal((await buildOptions(live(), {})).mcpServers.thunk.tools.some((t) => t.name === "delegate"), false);
+  const canUse = buildCanUseTool(chief);
+  const opts = { toolUseID: "write", signal: new AbortController().signal };
+  assert.equal((await canUse("Edit", {}, opts)).behavior, "deny");
+  assert.equal((await canUse("Bash", { command: "git commit -am changes" }, opts)).behavior, "deny");
+  assert.equal((await canUse("mcp__thunk__delegate", { title: "Work" }, opts)).behavior, "allow");
+  await (await createCodexDriver(chief, {})).run();
+  const start = requests.find((r) => r.method === "thread/start");
+  assert.ok(start.params.dynamicTools.some((t) => t.name === "delegate"));
+  assert.match(start.params.developerInstructions, /Project chief/);
+});

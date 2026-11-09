@@ -32,7 +32,7 @@ export function renderPrompt(template: string, trigger: RunTrigger, payload?: Pa
 export const SUMMARY_FENCE = "routine-summary";
 
 /** Appended to the system prompt (Claude) or developer instructions (Codex) of routine sessions. */
-export function routineSystemPrompt(origin: SessionOrigin) {
+export function routineSystemPrompt(origin: Extract<SessionOrigin, { kind: "routine" }>) {
   return `
 # Thunk routine
 This session was started by the routine **${origin.routineName}**${origin.trigger ? ` (trigger: ${origin.trigger})` : ""}. It runs unattended: nobody is watching while you work, and a person reads your report afterwards.

@@ -44,6 +44,8 @@ export function SessionsList({ workspaceId, sessions }: { workspaceId: string; s
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1">
+                  {s.origin?.kind === "chief" && <span className="text-muted-foreground text-[10px]">Chief</span>}
+                  {s.origin?.kind === "worker" && <span className="text-muted-foreground text-[10px]">Worker</span>}
                   {s.origin?.kind === "routine" && (
                     <span title={`Started by the routine ${s.origin.routineName}`} className="shrink-0">
                       <PixelIcon name="hourglass" className="size-3.5" />

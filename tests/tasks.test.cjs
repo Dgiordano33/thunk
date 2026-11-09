@@ -14,6 +14,7 @@ Module._resolveFilename = function (request, ...rest) {
 };
 const sessions = new Map();
 const sent = [];
+const delegated = [];
 let noteDirs;
 let projectNoteDirs;
 const agent = {
@@ -31,6 +32,7 @@ const load = Module._load;
 Module._load = function (request, parent, isMain) {
   if (request === "server-only") return {};
   if (request === "@/lib/agent") return agent;
+  if (request === "@/lib/workers/service") return { delegate: async (...args) => { delegated.push(args); return { taskId: args[2].taskId, sessionId: "worker-session", workspaceId: "worker-workspace" }; } };
   if (request === "../server") return { db: () => null }; // Never connect to configured local or remote databases.
   if (request === "@/lib/notes/resolve") return { dirsForScope: async (scope) => scope.kind === "projects" ? projectNoteDirs : noteDirs, repoDirsFor: async () => [] };
   return load.call(this, request, parent, isMain);
@@ -214,4 +216,14 @@ test("memory-only deletions mirror task foreign-key cleanup", async () => {
   await projects.deleteProject(p.id);
   assert.equal(await repo.getTask(shared.id), null);
   assert.equal((await repo.countOpenTasks())[p.id], undefined);
+});
+
+ test("send to a new worktree uses worker lifecycle and rejects conflicting destinations", async () => {
+  const { p, w } = await fixture();
+  const task = await service.createTask({ projectId: p.id, workspaceId: w.id, title: "Isolate this" });
+  const response = await send.POST(req("POST", { worker: true }), ctx(task.id));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { taskId: task.id, sessionId: "worker-session", workspaceId: "worker-workspace" });
+  assert.deepEqual(delegated.at(-1), [p.id, null, { taskId: task.id }]);
+  assert.equal((await send.POST(req("POST", { worker: true, workspaceId: w.id }), ctx(task.id))).status, 400);
 });
