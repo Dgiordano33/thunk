@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Playwright MCP browser logs
 /.playwright-mcp/
+
+# Local macOS app bundles
+/dist-desktop/

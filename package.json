@@ -17,7 +17,11 @@
     "test:multi-repo": "node --conditions=react-server --test tests/multi-repo.test.cjs",
     "test": "npm run test:lib && node --conditions=react-server --test tests/*.test.cjs && node --test components/tasks/ui.test.cjs components/inbox/ui.test.cjs",
     "test:lib": "node --test lib/*.test.mjs lib/*/*.test.mjs",
-    "test:notifications": "node --conditions=react-server --test tests/notifications.test.cjs && node --test components/inbox/ui.test.cjs"
+    "test:notifications": "node --conditions=react-server --test tests/notifications.test.cjs && node --test components/inbox/ui.test.cjs",
+    "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
+    "desktop:dev": "npm run desktop:prepare && electron desktop",
+    "desktop:pack": "npm run desktop:prepare && electron-builder --config desktop/builder.cjs --mac --dir",
+    "test:desktop": "node --test desktop/*.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",
@@ -66,6 +70,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
