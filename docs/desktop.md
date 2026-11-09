@@ -42,4 +42,4 @@ Closing the window keeps the app, agents, and routines running, as expected on m
 
 ## Distribution limits
 
-This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. There is no updater, DMG installer, Windows/Linux target, or custom app artwork yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
+This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. There is no updater, DMG installer, or Windows/Linux target yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
