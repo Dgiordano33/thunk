@@ -43,29 +43,29 @@ async function context(name) {
   const root = path.join(base, name);
   await fs.mkdir(root);
   const project = await projects.addProject(root);
-  const workspace = await projects.createWorkspace({ projectId: project.id, name: "farm", setup: "skip" });
+  const workspace = await projects.createWorkspace({ projectId: project.id, name: "farm", worktree: false, setup: "skip" });
   return { project, workspace };
 }
 
 test("delete preserves populated memory, notes and topics; trivial logs leave no granary", async () => {
   const ctx = await context("preserve");
-  const file = paths.workspaceMemoryFile(ctx.project.root, ctx.workspace.slug);
+  const file = paths.workspaceMemoryFile(ctx.project.dataKey, ctx.workspace.slug);
   await fs.writeFile(file, "# Task log\nA durable lesson\n");
   const note = await createNote(workspaceNoteDirs(ctx.project, ctx.workspace), { title: "Keep", markdown: "facts" });
   await projects.removeWorkspace(ctx.workspace.id);
-  const entries = await fs.readdir(paths.projectGranaryDir(ctx.project.root));
+  const entries = await fs.readdir(paths.projectGranaryDir(ctx.project.dataKey));
   assert.equal(entries.length, 1);
-  const saved = path.join(paths.projectGranaryDir(ctx.project.root), entries[0]);
+  const saved = path.join(paths.projectGranaryDir(ctx.project.dataKey), entries[0]);
   assert.match(await fs.readFile(path.join(saved, "memory/MEMORY.md"), "utf8"), /durable lesson/);
   assert.match(await fs.readFile(path.join(saved, "notes", `${note.id}.md`), "utf8"), /facts/);
   assert.equal(await projects.getWorkspaceContext(ctx.workspace.id), null);
   const empty = await context("empty");
   assert.equal((await readHarvest(empty)).empty, true);
   await projects.removeWorkspace(empty.workspace.id);
-  await assert.rejects(fs.stat(paths.projectGranaryDir(empty.project.root)), { code: "ENOENT" });
+  await assert.rejects(fs.stat(paths.projectGranaryDir(empty.project.dataKey)), { code: "ENOENT" });
   const topic = await context("topic");
-  await fs.writeFile(path.join(paths.workspaceMemoryDir(topic.project.root, topic.workspace.slug), "topic.md"), "keep me");
-  assert.ok(await moveToGranary(topic.project.root, topic.workspace.slug));
+  await fs.writeFile(path.join(paths.workspaceMemoryDir(topic.project.dataKey, topic.workspace.slug), "topic.md"), "keep me");
+  assert.ok(await moveToGranary(topic.project.dataKey, topic.workspace.slug));
 });
 
 test("harvest appends dated memory, preserves note IDs and moves task links to project scope", async () => {
@@ -107,8 +107,8 @@ test("Claude uses project auto-memory; Codex still gets injected project memory"
   const ctx = await context("options");
   const live = { ctx, meta: { model: "claude-sonnet-4-6", permissionMode: "default" }, id: "test" };
   const options = await buildOptions(live, {});
-  assert.equal(options.settings.autoMemoryDirectory, paths.projectMemoryDir(ctx.project.root));
-  assert.ok(options.additionalDirectories.includes(paths.workspaceMemoryDir(ctx.project.root, ctx.workspace.slug)));
+  assert.equal(options.settings.autoMemoryDirectory, paths.projectMemoryDir(ctx.project.dataKey));
+  assert.ok(options.additionalDirectories.includes(paths.workspaceMemoryDir(ctx.project.dataKey, ctx.workspace.slug)));
   assert.doesNotMatch(hierarchyPrompt(live, "unique fact", "claude"), /unique fact/);
   assert.match(hierarchyPrompt(live, "unique fact", "codex"), /unique fact/);
 });
@@ -123,7 +123,7 @@ test("a header-only log suggests nothing, even when notes need harvesting", asyn
 
 test("harvesting again suggests only new lines and never appends the same text twice", async () => {
   const ctx = await context("repeat");
-  const log = paths.workspaceMemoryFile(ctx.project.root, ctx.workspace.slug), target = projectNoteDirs(ctx.project).memoryFile;
+  const log = paths.workspaceMemoryFile(ctx.project.dataKey, ctx.workspace.slug), target = projectNoteDirs(ctx.project).memoryFile;
   await fs.appendFile(log, "\nFirst lesson\n");
   const first = await readHarvest(ctx);
   assert.match(first.suggested, /First lesson/);

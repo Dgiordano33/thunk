@@ -16,7 +16,7 @@ import { projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemor
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
 import { CANVAS_PROMPT, hierarchyPrompt } from "../options";
-import { extraRepoDirectories } from "@/lib/projects/repos-prompt";
+import { otherRepoDirectories } from "@/lib/projects/repos-prompt";
 import { emit, setState, type AgentDriver, type LiveSession, type PendingRequest } from "../session-registry";
 import { CodexRpc, type RpcId } from "./rpc";
 
@@ -152,20 +152,18 @@ function toolResult(item: Item): { content: string; isError: boolean } {
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
   const [projectMemory, workspaceMemory, notes, tasks, vaultItems] = await Promise.all([
-    readMemory(projectMemoryFile(project.root)),
-    readMemory(workspaceMemoryFile(project.root, workspace.slug)),
+    readMemory(projectMemoryFile(project.dataKey)),
+    readMemory(workspaceMemoryFile(project.dataKey, workspace.slug)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
     listItems(vaultDirOf(project)).catch(() => []),
   ]);
-  const dataDirs = [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
+  const dataDirs = [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
-  // A worktree's git metadata lives in the main checkout; commits need to write there.
-  const writableRoots = workspace.worktreePath ? [...dataDirs, path.join(project.root, ".git")] : [...dataDirs];
-  // Extra repos are writable, plus each one's .git when it's a worktree (its metadata lives in the main checkout).
-  writableRoots.push(...extraRepoDirectories(workspace));
-  for (const checkout of workspace.extraRepos ?? []) {
-    const repo = project.extraRepos?.find((r) => r.id === checkout.repoId);
+  // The other repos are writable, plus each worktree's .git (its metadata lives in the main checkout; commits write there).
+  const writableRoots = [...dataDirs, ...otherRepoDirectories(workspace)];
+  for (const checkout of workspace.repos) {
+    const repo = project.repos.find((r) => r.id === checkout.repoId);
     if (checkout.worktreePath && repo) writableRoots.push(path.join(repo.path, ".git"));
   }
 
@@ -197,7 +195,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
   const approvalPolicy = () => APPROVAL[live.meta.permissionMode] ?? "untrusted";
 
   const rpc = new CodexRpc({
-    cwd: workspace.cwd,
+    cwd: live.meta.cwd,
     onStderr: (data) => {
       live.stderrTail.push(data.replace(/\x1b\[[0-9;]*m/g, ""));
       if (live.stderrTail.length > 50) live.stderrTail.shift();
@@ -399,7 +397,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     rpc.notify("initialized");
     const params = {
       model: live.meta.model,
-      cwd: workspace.cwd,
+      cwd: live.meta.cwd,
       approvalPolicy: approvalPolicy(),
       sandbox: live.meta.permissionMode === "bypassPermissions" ? "danger-full-access" : "workspace-write",
       developerInstructions,

@@ -62,7 +62,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
     return [{
       id: w.id,
       label: workspaceLabel(w),
-      branch: w.worktreePath ? w.branch : null,
+      branch: w.branch,
       hue: cityHue(w.id),
       lastActivityAt: [...rows.filter(r => r.workspaceId === w.id).map(r => r.updatedAt), w.updatedAt].sort().at(-1)!,
       sessionCount: townSessions.filter((s) => s.workspaceId === w.id).length,

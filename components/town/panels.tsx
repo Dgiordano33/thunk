@@ -21,7 +21,6 @@ import { TownNotes } from "./town-notes";
 import { TownPanel } from "./town-panel";
 import type { TownField } from "./town-view";
 
-const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -53,13 +52,9 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
 }) {
   return <TownPanel eyebrow="Town center · project" title={project.name} closeHref={closeHref}>
         <Section title="Project">
-          <p className="text-muted-foreground mb-3 truncate font-mono text-[11px]">{tildify(project.root)}</p>
           <Stats
             rows={[
               ["Rank", `${LEVEL_NAMES[level - 1]} (level ${level})`],
-              ["Kind", project.kind],
-              ...(project.remote ? ([["Remote", project.remote]] as [string, React.ReactNode][]) : []),
-              ...(project.defaultBranch ? ([["Default branch", project.defaultBranch]] as [string, React.ReactNode][]) : []),
               ["Farms", activeCount],
               ["Fields", allFarmCount],
               ["Total spend", usd(totalSpend)],
@@ -67,10 +62,10 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
             ]}
           />
           <div className="mt-3">
-            <NewWorkspaceButton projectId={project.id} projectName={project.name} repos={project.extraRepos} />
+            <NewWorkspaceButton projectId={project.id} projectName={project.name} repos={project.repos} />
           </div>
         </Section>
-        <Section title={`Repos (${project.extraRepos.length + (project.kind === "repo" ? 1 : 0)})`}>
+        <Section title={`Repos (${project.repos.length})`}>
           <ProjectRepos project={project} />
         </Section>
           <Section title="Project notes">
@@ -109,15 +104,15 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
   return <TownPanel eyebrow="Farm · workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu workspace={workspace} label={label} />}>
       <Section title="Workspace">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-          {workspace.worktreePath ? (
+          {workspace.branch ? (
             <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{workspace.branch}</span>
           ) : (
-            <span className="text-muted-foreground">In place at the project root</span>
+            <span className="text-muted-foreground">{workspace.repos.length ? "In place in its repos" : "In the project's scratch folder"}</span>
           )}
         </div>
-        {workspace.extraRepos.length > 0 && (
+        {workspace.repos.length > 1 && (
           <ul className="text-muted-foreground mb-3 flex flex-col gap-0.5 text-xs">
-            {workspace.extraRepos.map((r) => (
+            {workspace.repos.map((r) => (
               <li key={r.repoId} className="flex items-center gap-1.5" title={r.cwd}>
                 <span className="text-foreground font-medium">{r.name}</span>
                 {r.worktreePath ? <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{r.branch}</span> : <span>in place</span>}

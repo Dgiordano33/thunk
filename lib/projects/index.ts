@@ -1,57 +1,134 @@
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
-import { rename } from "node:fs/promises";
+import { mkdir, rename, stat } from "node:fs/promises";
 import { moveToGranary } from "./granary";
 import path from "node:path";
-import { getProject, getProjectByRoot, upsertProject } from "@/lib/supabase/repo/projects";
+import { HttpError } from "@/lib/api/errors";
+import { getProject, getProjectByKey, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
 import {
   deleteProjectRepo,
   deleteWorkspaceRepo,
+  findProjectIdByRepoPath,
   insertProjectRepo,
   insertWorkspaceRepos,
   listCheckoutsOfRepo,
+  updateProjectRepo,
 } from "@/lib/supabase/repo/project-repos";
 import {
   deleteWorkspace as deleteWorkspaceRow,
   findWorkspace,
+  findWorkspaceByCwd,
   getWorkspace,
   insertWorkspace,
   listWorkspaces,
+  updateWorkspace,
 } from "@/lib/supabase/repo/workspaces";
-import { createWorktree, detectProject, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
+import { cloneDestination, cloneRepo, createFolder, createWorktree, detectProject, folderDestination, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
 import { reconcileDeclaredFolders } from "@/lib/notes/folders";
 import { ensureMemory } from "./memory";
-import { projectMemoryFile, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
+import { projectDir, projectHomeDir, projectMemoryFile, projectSlug, slugify, workspaceMemoryDir, workspaceMemoryFile, worktreePath } from "./paths";
+import { repoNameFromUrl, type CreateProjectBody, type RepoResult, type RepoSpec } from "./repo-spec";
 import { prepareWorkspace, archiveWorkspaceProcesses, withWorkspaceLock, forgetWorkspaceRuntime, stopWorkspaceProcesses } from "./runtime";
 import { assertWorkspaceCanRemove } from "./workspace-git";
 import type { Project, ProjectRepo, Workspace, WorkspaceRepo } from "./types";
 
 export type WorkspaceContext = { project: Project; workspace: Workspace };
 
-/** Register (or refresh) the project that contains `input`. Idempotent per root. */
+/** Register (or refresh) the project opened from the directory `input`. Idempotent per detected root. */
 export async function addProject(input: string): Promise<Project> {
   const detected = await detectProject(input);
-  const project = await reconcileDeclaredFolders(await upsertProject(detected));
-  await ensureMemory(projectMemoryFile(project.root), `# ${project.name} — project memory`);
+  const created = await upsertProjectByKey({ name: detected.name, dataKey: projectSlug(detected.root) });
+  const known = created.repos.find((r) => r.path === detected.root);
+  const facts = { kind: detected.kind, remote: detected.remote, defaultBranch: detected.defaultBranch };
+  if (known) await updateProjectRepo(known.id, facts);
+  else await insertProjectRepo({ projectId: created.id, name: detected.name, path: detected.root, ...facts });
+  const project = await reconcileDeclaredFolders((await getProject(created.id))!);
+  await ensureMemory(projectMemoryFile(project.dataKey), `# ${project.name} — project memory`);
   return project;
 }
 
-/** The in-place workspace every project has: works directly in the root (and each extra repo), no worktrees. */
+/** A data key no project or leftover directory uses: memory-only mode forgets projects but not their files. */
+async function freshDataKey(name: string) {
+  const base = slugify(name);
+  for (let n = 1; ; n++) {
+    const key = n === 1 ? base : `${base}-${n}`;
+    if (!(await getProjectByKey(key)) && !(await stat(projectDir(key)).catch(() => null))) return key;
+  }
+}
+
+/** Reject specs that could never succeed before anything is created. Side-effect free. */
+async function preflightRepoSpecs(specs: RepoSpec[]) {
+  const paths = new Set<string>();
+  const names = new Set<string>();
+  for (const spec of specs) {
+    let dest: string;
+    try {
+      if (spec.source === "existing") dest = (await detectProject(spec.path)).root;
+      else dest = spec.source === "github" ? cloneDestination(spec.url, spec.parent) : folderDestination(spec.parent, spec.folder);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+    if (spec.source !== "existing" && (await stat(dest).catch(() => null))) throw new HttpError(400, `Already exists: ${dest}`);
+    if (paths.has(dest)) throw new HttpError(400, `${dest} is listed twice`);
+    paths.add(dest);
+    const name = spec.name?.trim() || (spec.source === "github" ? repoNameFromUrl(spec.url) : path.basename(dest));
+    if (names.has(name)) throw new HttpError(400, `Two repos would be named ${name}. Give one a different name.`);
+    names.add(name);
+  }
+}
+
+/** Bring one spec into being on disk and add it to the project. */
+export async function addRepoFromSpec(projectId: string, spec: RepoSpec): Promise<ProjectRepo> {
+  const checkout =
+    spec.source === "github" ? await cloneRepo(spec.url, spec.parent)
+    : spec.source === "new" ? await createFolder(spec.parent, spec.folder, { git: spec.git })
+    : spec.path;
+  return addProjectRepo(projectId, checkout, { name: spec.name });
+}
+
+/**
+ * Create a project with its main workspace and repos. Once preflight passes, a repo that fails is reported
+ * and the rest carry on: nothing is rolled back, and the failed ones can be retried with addRepoFromSpec.
+ */
+export async function createProject(input: CreateProjectBody) {
+  await preflightRepoSpecs(input.repos);
+  const created = await insertProject({ name: input.name, dataKey: await freshDataKey(input.name) });
+  await ensureMemory(projectMemoryFile(created.dataKey), `# ${created.name} — project memory`);
+  const main = await ensureMainWorkspace(created);
+  const repos: RepoResult<ProjectRepo>[] = [];
+  for (const [index, spec] of input.repos.entries()) {
+    try {
+      repos.push({ index, status: "added", repo: await addRepoFromSpec(created.id, spec) });
+    } catch (err) {
+      repos.push({ index, status: "failed", error: (err as Error).message });
+    }
+  }
+  return { project: (await getProject(created.id))!, workspace: (await getWorkspace(main.id))!, repos };
+}
+
+/** The in-place workspace every project has: works directly in each repo, no worktrees. */
 export async function ensureMainWorkspace(project: Project): Promise<Workspace> {
   const existing = await findWorkspace(project.id, { slug: "main" });
   if (existing) return existing;
-  const ws = await insertWorkspace({
-    projectId: project.id,
-    name: "main",
-    slug: "main",
-    cwd: project.root,
-    branch: null,
-    worktreePath: null,
-    baseRef: null,
-  });
-  await insertWorkspaceRepos(ws.id, project.extraRepos.map(inPlace));
-  await ensureMemory(workspaceMemoryFile(project.root, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
+  const cwd = project.repos[0]?.path ?? (await ensureHome(project));
+  let ws: Workspace;
+  try {
+    ws = await insertWorkspace({ projectId: project.id, name: "main", slug: "main", cwd, branch: null });
+  } catch (err) {
+    // Two requests can both find no main workspace; the loser uses the winner's.
+    const raced = (err as { code?: string }).code === "23505" ? await findWorkspace(project.id, { slug: "main" }) : null;
+    if (raced) return raced;
+    throw err;
+  }
+  await insertWorkspaceRepos(ws.id, project.repos.map(inPlace));
+  await ensureMemory(workspaceMemoryFile(project.dataKey, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
   return (await getWorkspace(ws.id)) ?? ws;
+}
+
+async function ensureHome(project: Project) {
+  const home = projectHomeDir(project.dataKey);
+  await mkdir(home, { recursive: true });
+  return home;
 }
 
 /** A workspace checkout that works directly in the repo's main checkout. */
@@ -64,36 +141,40 @@ const inPlace = (repo: ProjectRepo): Omit<WorkspaceRepo, "name"> => ({
 });
 
 /**
- * Add another git repo to a project, from a path inside it (any worktree resolves to the main checkout).
- * The main workspace starts working on it in place; existing branch workspaces are left as they are.
+ * Add a repo or plain folder to a project, from a path inside it (any worktree resolves to the main checkout).
+ * The main workspace starts working on it in place, and moves out of the home directory if it was there;
+ * existing branch workspaces are left as they are.
  */
 export async function addProjectRepo(projectId: string, input: string, opts: { name?: string } = {}): Promise<ProjectRepo> {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
   const detected = await detectProject(input);
-  if (detected.kind !== "repo") throw new Error(`Not a git repository: ${detected.root}`);
-  if (detected.root === project.root) throw new Error("That repo is already the project's primary repo");
   const repo = await insertProjectRepo({
     projectId,
     name: opts.name?.trim() || detected.name,
     path: detected.root,
+    kind: detected.kind,
     remote: detected.remote,
     defaultBranch: detected.defaultBranch,
   });
   const main = await findWorkspace(projectId, { slug: "main" });
-  if (main) await insertWorkspaceRepos(main.id, [inPlace(repo)]);
+  if (main) {
+    await insertWorkspaceRepos(main.id, [inPlace(repo)]);
+    if (main.cwd === projectHomeDir(project.dataKey)) await updateWorkspace(main.id, { cwd: repo.path });
+  }
   // The new checkout may declare its own notebooks in thunk.json.
-  await reconcileDeclaredFolders({ ...project, extraRepos: [...project.extraRepos, repo] });
+  await reconcileDeclaredFolders({ ...project, repos: [...project.repos, repo] });
   return repo;
 }
 
 /**
  * Drop a repo from the project. Refuses while any workspace still has a worktree of it (remove those
- * workspaces first); in-place checkouts are simply forgotten. Nothing on disk is touched.
+ * workspaces first); in-place checkouts are simply forgotten, and a workspace running in one moves to its
+ * next repo, or to the home directory. Nothing on disk is touched.
  */
 export async function removeProjectRepo(projectId: string, repoId: string) {
   const project = await getProject(projectId);
-  const repo = project?.extraRepos.find((r) => r.id === repoId);
+  const repo = project?.repos.find((r) => r.id === repoId);
   if (!project || !repo) throw new Error("Repo not found in this project");
   const checkouts = await listCheckoutsOfRepo(repoId);
   const worktrees = checkouts.filter((c) => c.worktreePath);
@@ -101,7 +182,14 @@ export async function removeProjectRepo(projectId: string, repoId: string) {
     const names = await Promise.all(worktrees.map(async (c) => (await getWorkspace(c.workspaceId))?.name ?? c.workspaceId));
     throw new Error(`${repo.name} still has worktrees in: ${names.join(", ")}. Remove those workspaces first.`);
   }
-  for (const c of checkouts) await deleteWorkspaceRepo(c.workspaceId, repoId);
+  for (const c of checkouts) {
+    const ws = await getWorkspace(c.workspaceId);
+    if (ws?.cwd === repo.path) {
+      const next = ws.repos.find((r) => r.repoId !== repoId);
+      await updateWorkspace(ws.id, { cwd: next?.cwd ?? (await ensureHome(project)) });
+    }
+    await deleteWorkspaceRepo(c.workspaceId, repoId);
+  }
   await deleteProjectRepo(repoId);
 }
 
@@ -109,12 +197,12 @@ export type CreateWorkspaceInput = {
   projectId: string;
   /** Defaults to an unused city name, Conductor-style. */
   name?: string;
-  /** Create a git worktree for this workspace (repos only). Defaults to true. */
+  /** Create a git worktree in each chosen git repo. Defaults to true, and then needs at least one. */
   worktree?: boolean;
   branch?: string;
-  /** Base for the primary repo's worktree. Extra repos branch from their own default branch. */
+  /** Base for the first git repo's worktree. The others branch from their own default branch. */
   baseRef?: string;
-  /** Which of the project's extra repos this workspace covers. Defaults to all of them. */
+  /** Which of the project's repos this workspace covers. Defaults to all of them. */
   repoIds?: string[];
   /**
    * Run the setup script in the background (default), wait for it (setup failure throws, the workspace is kept),
@@ -133,19 +221,15 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
 
   const repos = input.repoIds
     ? input.repoIds.map((id) => {
-        const repo = project.extraRepos.find((r) => r.id === id);
+        const repo = project.repos.find((r) => r.id === id);
         if (!repo) throw new Error(`Repo ${id} is not in this project`);
         return repo;
       })
-    : project.extraRepos;
+    : project.repos;
 
   const wantWorktrees = input.worktree ?? true;
-  const useWorktree = wantWorktrees && project.kind === "repo";
-  const branchName = input.branch?.trim() || `thunk/${slug}`;
-  let cwd = project.root;
-  let branch: string | null = null;
-  let wtPath: string | null = null;
-  let baseRef: string | null = null;
+  if (wantWorktrees && !repos.some((r) => r.kind === "repo")) throw new Error("A workspace with its own worktree needs at least one git repo");
+  const branch = wantWorktrees ? input.branch?.trim() || `thunk/${slug}` : null;
   // Every worktree made so far, so a failure part-way leaves nothing behind.
   const created: { root: string; path: string }[] = [];
   const rollback = async () => {
@@ -154,34 +238,28 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
 
   const checkouts: Omit<WorkspaceRepo, "name">[] = [];
   try {
-    if (useWorktree) {
-      branch = branchName;
-      baseRef = input.baseRef?.trim() || (await pickBaseRef(project.root, project.defaultBranch));
-      wtPath = worktreePath(project.root, slug);
-      await createWorktree({ root: project.root, path: wtPath, branch, baseRef });
-      created.push({ root: project.root, path: wtPath });
-      cwd = wtPath;
-    }
-    // Extra repos get worktrees on the same branch name, so the change reads as one across repos.
+    // Every repo gets a worktree on the same branch name, so the change reads as one across repos.
     for (const repo of repos) {
-      if (!wantWorktrees) {
+      if (!branch || repo.kind !== "repo") {
         checkouts.push(inPlace(repo));
         continue;
       }
-      const repoBase = await pickBaseRef(repo.path, repo.defaultBranch);
+      const repoBase = (!created.length && input.baseRef?.trim()) || (await pickBaseRef(repo.path, repo.defaultBranch));
       const repoWt = worktreePath(repo.path, slug);
-      await createWorktree({ root: repo.path, path: repoWt, branch: branchName, baseRef: repoBase });
+      await createWorktree({ root: repo.path, path: repoWt, branch, baseRef: repoBase });
       created.push({ root: repo.path, path: repoWt });
-      checkouts.push({ repoId: repo.id, cwd: repoWt, branch: branchName, worktreePath: repoWt, baseRef: repoBase });
+      checkouts.push({ repoId: repo.id, cwd: repoWt, branch, worktreePath: repoWt, baseRef: repoBase });
     }
   } catch (err) {
     await rollback();
     throw err;
   }
 
+  // Sessions start in the first worktree when there is one, so a leading plain folder doesn't hide the branch.
+  const cwd = (checkouts.find((c) => c.worktreePath) ?? checkouts[0])?.cwd ?? (await ensureHome(project));
   let ws: Workspace;
   try {
-    ws = await insertWorkspace({ projectId: project.id, name, slug, cwd, branch, worktreePath: wtPath, baseRef });
+    ws = await insertWorkspace({ projectId: project.id, name, slug, cwd, branch });
   } catch (err) {
     await rollback();
     throw err;
@@ -194,10 +272,10 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     throw err;
   }
   ws = (await getWorkspace(ws.id)) ?? ws;
-  await ensureMemory(workspaceMemoryFile(project.root, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
+  await ensureMemory(workspaceMemoryFile(project.dataKey, ws.slug), `# ${project.name}/${ws.name} — workspace memory`);
   const setup = input.setup ?? "background";
-  if (useWorktree && setup === "await") await prepareWorkspace({ project, workspace: ws });
-  else if (useWorktree && setup === "background")
+  if (branch && setup === "await") await prepareWorkspace({ project, workspace: ws });
+  else if (branch && setup === "background")
     void prepareWorkspace({ project, workspace: ws }).catch((err) => console.error("[thunk] workspace setup", err));
   return ws;
 }
@@ -233,16 +311,15 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
       if (ws.status !== "archived") await archiveWorkspaceProcesses(ctx);
       if (opts.removeWorktree) {
         await assertWorkspaceCanRemove(ctx);
-        if (ws.worktreePath) await removeWorktree(project.root, ws.worktreePath);
-        for (const checkout of ws.extraRepos) {
-          const repo = project.extraRepos.find((r) => r.id === checkout.repoId);
+        for (const checkout of ws.repos) {
+          const repo = project.repos.find((r) => r.id === checkout.repoId);
           if (repo && checkout.worktreePath) await removeWorktree(repo.path, checkout.worktreePath);
         }
       }
-      const saved = await moveToGranary(project.root, ws.slug);
+      const saved = await moveToGranary(project.dataKey, ws.slug);
       try { await deleteWorkspaceRow(id); }
       catch (err) {
-        if (saved) await rename(saved, path.dirname(workspaceMemoryDir(project.root, ws.slug)));
+        if (saved) await rename(saved, path.dirname(workspaceMemoryDir(project.dataKey, ws.slug)));
         throw err;
       }
     });
@@ -262,15 +339,19 @@ export async function getWorkspaceContext(workspaceId: string): Promise<Workspac
 }
 
 /**
- * Convenience for the quick-start path: a bare directory becomes (project, workspace).
- * A linked worktree maps to its own workspace when Thunk created it, else to "main".
+ * Convenience for the quick-start path: a bare directory becomes (project, workspace). A directory some
+ * workspace runs in maps to it (a linked worktree Thunk created, a main checkout), else to the main
+ * workspace of the project holding its repo, else to a new project.
  */
 export async function contextForDirectory(input: string): Promise<WorkspaceContext> {
   const dir = await resolveDirectory(input);
-  const project = (await getProjectByRoot(dir)) ?? (await addProject(dir));
-  const byCwd = dir !== project.root ? await findWorkspace(project.id, { cwd: dir }) : null;
-  const workspace = byCwd ?? (await ensureMainWorkspace(project));
-  return { project, workspace };
+  const running = await findWorkspaceByCwd(dir);
+  const context = running && (await getWorkspaceContext(running.id));
+  if (context) return context;
+  const { root } = await detectProject(dir);
+  const projectId = await findProjectIdByRepoPath(root);
+  const project = (projectId && (await getProject(projectId))) || (await addProject(dir));
+  return { project, workspace: await ensureMainWorkspace(project) };
 }
 
 export type ExternalSession = {
@@ -291,9 +372,10 @@ export async function listExternalSessions(
   opts: { exclude?: Iterable<string | null | undefined>; limit?: number } = {},
 ): Promise<ExternalSession[]> {
   const exclude = new Set([...(opts.exclude ?? [])].filter(Boolean));
-  const rows = await sdkListSessions({ dir: project.root, includeWorktrees: true, limit: opts.limit ?? 30 }).catch(
-    () => [],
-  );
+  const limit = opts.limit ?? 30;
+  const dirs = project.repos.length ? project.repos.map((r) => r.path) : [projectHomeDir(project.dataKey)];
+  const perDir = await Promise.all(dirs.map((dir) => sdkListSessions({ dir, includeWorktrees: true, limit }).catch(() => [])));
+  const rows = [...new Map(perDir.flat().map((s) => [s.sessionId, s])).values()].sort((a, b) => b.lastModified - a.lastModified).slice(0, limit);
   return rows.filter((s) => !exclude.has(s.sessionId)).map((s) => ({
     sdkSessionId: s.sessionId,
     title: s.customTitle || s.summary || s.firstPrompt || "Untitled",

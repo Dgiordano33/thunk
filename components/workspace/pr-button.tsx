@@ -27,10 +27,10 @@ const POLL_MS = 30_000;
 /** While a PR is being created, checks are running, or mergeability is being computed. */
 const FAST_POLL_MS = 8_000;
 
-/** An extra repo of a multi-repo workspace; without one the button is about the primary checkout. */
+/** One repo of a multi-repo workspace; without one the button is about the workspace's anchor repo. */
 export type PrRepo = { id: string; name: string; cwd: string };
 
-/** Points a PR job at the right repo: agents start in the primary checkout. */
+/** Points a PR job at the right repo: agents start in the anchor repo. */
 function inRepo(repo: PrRepo | undefined, lines: string[]) {
   if (!repo) return lines.join("\n");
   return [

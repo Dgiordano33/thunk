@@ -57,7 +57,7 @@ const { createCodexDriver } = require("../lib/agent/codex/driver.ts");
 const call = (name, args, context = ctx) => tasksTools(context).find((t) => t.name === name).handler(args);
 const text = (result) => result.content[0].text;
 const task = (id, extra = {}) => ({ id, projectId, workspaceId, title: "Workspace job", status: "open", body: null, sessionId: null, ...extra });
-const live = () => ({ id: sessionId, ctx: { project: { id: projectId, root: "/tmp", name: "Project" }, workspace: { id: workspaceId, cwd: "/tmp", slug: "ws" } }, meta: { model: "codex", permissionMode: "default" }, events: [], pending: new Map(), stderrTail: [] });
+const live = () => ({ id: sessionId, ctx: { project: { id: projectId, dataKey: "project", repos: [], name: "Project" }, workspace: { id: workspaceId, cwd: "/tmp", slug: "ws", repos: [] } }, meta: { model: "codex", permissionMode: "default" }, events: [], pending: new Map(), stderrTail: [] });
 beforeEach(() => {
   rows = [task("aaaaaaaa-1111-4111-8111-111111111111"), task("bbbbbbbb-1111-4111-8111-111111111111", { workspaceId: null, title: "Project job" }), task("cccccccc-1111-4111-8111-111111111111", { workspaceId: otherWorkspace, title: "Sibling job" }), task("dddddddd-1111-4111-8111-111111111111", { projectId: otherWorkspace, title: "Secret job" })];
   writes = []; requests = [];

@@ -3,6 +3,7 @@ import { spawn, type IPty } from "node-pty";
 import { createServer, createConnection } from "node:net";
 import { projectEvents } from "./events";
 import { copyWorkspaceFiles, readLifecycleConfig } from "./lifecycle-config";
+import { anchorRepo, sessionConfigRoot } from "./repos";
 import type { WorkspaceContext } from "./index";
 import type { ProcessKind, ProcessSnapshot, RuntimeSnapshot } from "./runtime-types";
 
@@ -51,13 +52,15 @@ async function allocatePort(state: Runtime) {
 }
 
 export function processEnvironment(ctx: WorkspaceContext, port: number) {
-  const { project, workspace: ws } = ctx;
+  const { workspace: ws } = ctx;
+  const root = sessionConfigRoot(ctx);
+  const defaultBranch = anchorRepo(ctx)?.defaultBranch ?? "";
   return {
     ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
     THUNK_WORKSPACE_ID: ws.id, THUNK_WORKSPACE_NAME: ws.name, THUNK_WORKSPACE_PATH: ws.cwd,
-    THUNK_ROOT_PATH: project.root, THUNK_DEFAULT_BRANCH: project.defaultBranch ?? "", THUNK_PORT: String(port),
+    THUNK_ROOT_PATH: root, THUNK_DEFAULT_BRANCH: defaultBranch, THUNK_PORT: String(port),
     CONDUCTOR_WORKSPACE_ID: ws.id, CONDUCTOR_WORKSPACE_NAME: ws.name, CONDUCTOR_WORKSPACE_PATH: ws.cwd,
-    CONDUCTOR_ROOT_PATH: project.root, CONDUCTOR_DEFAULT_BRANCH: project.defaultBranch ?? "",
+    CONDUCTOR_ROOT_PATH: root, CONDUCTOR_DEFAULT_BRANCH: defaultBranch,
     CONDUCTOR_PORT: String(port), CONDUCTOR_IS_LOCAL: "1", PORT: String(port), TERM: "xterm-256color",
   };
 }
@@ -104,8 +107,9 @@ export async function prepareWorkspace(ctx: WorkspaceContext) {
   const proc = await withWorkspaceLock(ctx.workspace.id, async () => {
     state.setupError = null;
     try {
-      const config = await readLifecycleConfig(ctx.project.root);
-      await copyWorkspaceFiles(ctx.project.root, ctx.workspace.cwd, config);
+      const root = sessionConfigRoot(ctx);
+      const config = await readLifecycleConfig(root);
+      await copyWorkspaceFiles(root, ctx.workspace.cwd, config);
       return config.scripts.setup ? await launch(ctx, "setup", config.scripts.setup) : null;
     } catch (err) { return fail(err); }
   });
@@ -120,9 +124,9 @@ export async function startWorkspaceProcess(ctx: WorkspaceContext, kind: "run" |
     if (kind === "shell" && state.processes.get("shell")?.running) return;
     if (kind === "run" && state.processes.get("setup")?.running) throw new Error("Wait for setup to finish before running the dev server");
     if (kind === "run" && state.setupError) throw new Error("Fix setup before running the dev server");
-    const config = await readLifecycleConfig(ctx.project.root);
+    const config = await readLifecycleConfig(sessionConfigRoot(ctx));
     const command = kind === "shell" ? process.env.SHELL || "/bin/bash" : config.scripts.run;
-    if (!command) throw new Error("Set scripts.run in thunk.json at the project root");
+    if (!command) throw new Error(anchorRepo(ctx) ? "Set scripts.run in thunk.json at the root of the first repo" : "Add a repo with a thunk.json to run this project");
     await launch(ctx, kind, command);
   });
 }
@@ -161,7 +165,7 @@ export async function stopWorkspaceProcesses(id: string, kind?: ProcessKind) {
 
 export async function archiveWorkspaceProcesses(ctx: WorkspaceContext) {
   await stopWorkspaceProcesses(ctx.workspace.id);
-  const config = await readLifecycleConfig(ctx.project.root);
+  const config = await readLifecycleConfig(sessionConfigRoot(ctx));
   if (config.scripts.archive) {
     const proc = await launch(ctx, "archive", config.scripts.archive);
     if (await proc.done !== 0) throw new Error("Archive hook failed. Workspace kept; see Archive output.");
@@ -184,7 +188,7 @@ export async function runtimeSnapshot(ctx: WorkspaceContext, includeOutput = tru
   const state = runtime(ctx.workspace.id);
   let config;
   let configError: string | null = null;
-  try { config = await readLifecycleConfig(ctx.project.root); }
+  try { config = await readLifecycleConfig(sessionConfigRoot(ctx)); }
   catch (err) { configError = (err as Error).message; config = { scripts: {} }; }
   return {
     archived: ctx.workspace.status === "archived",

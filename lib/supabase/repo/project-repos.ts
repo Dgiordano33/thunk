@@ -4,8 +4,8 @@ import { forgetRepoFolders } from "./repo-folders";
 import { db } from "../server";
 
 /**
- * Additional repos of multi-repo projects (project_repos) and each workspace's checkout of them
- * (workspace_repos). The primary repo stays on the projects / workspaces rows themselves.
+ * The repos and folders a project spans (project_repos) and each workspace's checkout of them
+ * (workspace_repos).
  */
 
 export type ProjectRepoRow = {
@@ -13,6 +13,7 @@ export type ProjectRepoRow = {
   project_id: string;
   name: string;
   path: string;
+  kind: string;
   remote: string | null;
   default_branch: string | null;
   created_at: string;
@@ -28,7 +29,7 @@ export type WorkspaceRepoRow = {
   project_repos: { name: string } | null;
 };
 
-export const PROJECT_REPO_COLUMNS = "id, project_id, name, path, remote, default_branch, created_at";
+export const PROJECT_REPO_COLUMNS = "id, project_id, name, path, kind, remote, default_branch, created_at";
 /** Embeddable from workspaces: the repo's name comes along through the foreign key. */
 export const WORKSPACE_REPO_COLUMNS = "repo_id, cwd, branch, worktree_path, base_ref, created_at, project_repos(name)";
 
@@ -38,6 +39,7 @@ export function toProjectRepo(r: ProjectRepoRow): ProjectRepo {
     projectId: r.project_id,
     name: r.name,
     path: r.path,
+    kind: r.kind as ProjectRepo["kind"],
     remote: r.remote,
     defaultBranch: r.default_branch,
     createdAt: r.created_at,
@@ -64,11 +66,11 @@ export function toWorkspaceRepos(rows: WorkspaceRepoRow[] | null | undefined): W
 // Memory-only mode (no Supabase). Pinned to globalThis for HMR.
 type MemWorkspaceRepo = Omit<WorkspaceRepo, "name"> & { workspaceId: string; createdAt: string };
 const g = globalThis as typeof globalThis & {
-  __thunkMemProjectRepos?: Map<string, ProjectRepo>;
-  __thunkMemWorkspaceRepos?: MemWorkspaceRepo[];
+  __thunkMemProjectReposV2?: Map<string, ProjectRepo>;
+  __thunkMemWorkspaceReposV2?: MemWorkspaceRepo[];
 };
-const memRepos = (g.__thunkMemProjectRepos ??= new Map());
-const memWsRepos = (g.__thunkMemWorkspaceRepos ??= []);
+const memRepos = (g.__thunkMemProjectReposV2 ??= new Map());
+const memWsRepos = (g.__thunkMemWorkspaceReposV2 ??= []);
 
 /** Memory mode: a project's repos, oldest first. */
 export function memProjectRepos(projectId: string): ProjectRepo[] {
@@ -122,6 +124,7 @@ export async function insertProjectRepo(input: Omit<ProjectRepo, "id" | "created
       project_id: input.projectId,
       name: input.name,
       path: input.path,
+      kind: input.kind,
       remote: input.remote,
       default_branch: input.defaultBranch,
     })
@@ -132,6 +135,27 @@ export async function insertProjectRepo(input: Omit<ProjectRepo, "id" | "created
     throw error;
   }
   return toProjectRepo(data);
+}
+
+/** Refresh what git says about a repo that is already registered. */
+export async function updateProjectRepo(id: string, patch: Pick<ProjectRepo, "kind" | "remote" | "defaultBranch">): Promise<void> {
+  const client = db();
+  if (!client) {
+    const repo = memRepos.get(id);
+    if (repo) memRepos.set(id, { ...repo, ...patch });
+    return;
+  }
+  const { error } = await client.from("project_repos").update({ kind: patch.kind, remote: patch.remote, default_branch: patch.defaultBranch }).eq("id", id);
+  if (error) throw error;
+}
+
+/** The project that first registered a checkout, for finding a project from a directory. */
+export async function findProjectIdByRepoPath(repoPath: string): Promise<string | null> {
+  const client = db();
+  if (!client) return [...memRepos.values()].filter((r) => r.path === repoPath).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.projectId ?? null;
+  const { data, error } = await client.from("project_repos").select("project_id").eq("path", repoPath).order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data?.project_id ?? null;
 }
 
 export async function deleteProjectRepo(id: string): Promise<void> {

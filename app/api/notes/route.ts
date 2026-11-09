@@ -23,7 +23,7 @@ export const GET = handle(async () => {
         project: { id: project.id, name: project.name },
         notes: notes.map(metaOf),
         repos: await Promise.all(project.repoFolders.map(async (folder) => ({
-          notebook: { ...folder, repoName: folder.repoId ? project.extraRepos.find((r) => r.id === folder.repoId)!.name : project.name },
+          notebook: { ...folder, repoName: project.repos.find((r) => r.id === folder.repoId)!.name },
           notes: await repoNoteDirs(project, folder).then(listNotes).then((ns) => ns.map(metaOf)).catch(() => []),
         }))),
         workspaces: workspaces.map((w, i) => ({ workspace: { id: w.id, name: w.name, slug: w.slug }, notes: wsNotes[i].map(metaOf) })),

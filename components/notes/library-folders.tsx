@@ -64,7 +64,7 @@ export function LibraryFolders({
             {f.repos.map(({ notebook, notes }) => {
               const scope: NoteScope = { kind: "repos", id: notebook.id };
               return <button key={notebook.id} type="button" className={cn(row(active === scopeKey(scope)), "pl-7")} onClick={() => onSelect(scope)} aria-current={active === scopeKey(scope) ? "true" : undefined}>
-                <span className="min-w-0 truncate">{notebook.repoId ? `${notebook.repoName} / ` : ""}{notebook.path}</span>
+                <span className="min-w-0 truncate">{notebook.repoName} / {notebook.path}</span>
                 <span className="text-muted-foreground text-[10px]">repo</span>{count(notes.length)}
               </button>;
             })}

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 async function file(id: string) {
   const ctx = await getWorkspaceContext(id);
   if (!ctx) throw new HttpError(404, "Workspace not found");
-  return workspaceMemoryFile(ctx.project.root, ctx.workspace.slug);
+  return workspaceMemoryFile(ctx.project.dataKey, ctx.workspace.slug);
 }
 
 export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/workspaces/[id]/memory">) => {

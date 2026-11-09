@@ -26,7 +26,7 @@ Module._load = function (request, parent, isMain) {
 const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "thunk-multi-repo-")));
 process.env.THUNK_DATA_DIR = path.join(base, "data");
 const projects = require("../lib/projects/index.ts");
-const { extraReposPrompt, extraRepoDirectories } = require("../lib/projects/repos-prompt.ts");
+const { otherReposPrompt, otherRepoDirectories } = require("../lib/projects/repos-prompt.ts");
 
 test.after(() => fs.rm(base, { recursive: true, force: true }));
 
@@ -48,7 +48,7 @@ test("a workspace spans every repo of a multi-repo project", async () => {
 
   let project = await projects.addProject(web);
   const main = await projects.ensureMainWorkspace(project);
-  assert.deepEqual(project.extraRepos, []);
+  assert.deepEqual(project.repos.map((r) => r.path), [web]);
 
   const apiRepo = await projects.addProjectRepo(project.id, api);
   const docsRepo = await projects.addProjectRepo(project.id, path.join(docs, "."), { name: "handbook" });
@@ -56,20 +56,19 @@ test("a workspace spans every repo of a multi-repo project", async () => {
   assert.equal(apiRepo.defaultBranch, "main");
   assert.equal(docsRepo.name, "handbook");
   await assert.rejects(projects.addProjectRepo(project.id, api), /already/);
-  await assert.rejects(projects.addProjectRepo(project.id, web), /primary/);
-  await assert.rejects(projects.addProjectRepo(project.id, base), /Not a git repository/);
+  await assert.rejects(projects.addProjectRepo(project.id, web), /already/);
 
-  // The main workspace works on every extra repo in place.
+  // The main workspace works on every repo in place.
   const mainCtx = await projects.getWorkspaceContext(main.id);
-  assert.deepEqual(mainCtx.workspace.extraRepos.map((r) => [r.name, r.cwd, r.worktreePath]), [["api", api, null], ["handbook", docs, null]]);
+  assert.deepEqual(mainCtx.workspace.repos.map((r) => [r.name, r.cwd, r.worktreePath]), [["web", web, null], ["api", api, null], ["handbook", docs, null]]);
   project = mainCtx.project;
-  assert.deepEqual(project.extraRepos.map((r) => r.id), [apiRepo.id, docsRepo.id]);
+  assert.deepEqual(project.repos.slice(1).map((r) => r.id), [apiRepo.id, docsRepo.id]);
 
-  // A branch workspace gets a worktree in the primary repo and in each chosen extra repo, all on one branch.
-  const ws = await projects.createWorkspace({ projectId: project.id, name: "lisbon", repoIds: [apiRepo.id], setup: "skip" });
+  // A branch workspace gets a worktree in each chosen repo, all on one branch.
+  const ws = await projects.createWorkspace({ projectId: project.id, name: "lisbon", repoIds: [project.repos[0].id, apiRepo.id], setup: "skip" });
   assert.equal(ws.branch, "thunk/lisbon");
-  assert.equal(ws.extraRepos.length, 1);
-  const [apiCheckout] = ws.extraRepos;
+  assert.equal(ws.repos.length, 2);
+  const [, apiCheckout] = ws.repos;
   assert.equal(apiCheckout.name, "api");
   assert.equal(apiCheckout.branch, "thunk/lisbon");
   assert.equal(apiCheckout.cwd, path.join(api, ".claude", "worktrees", "lisbon"));
@@ -79,11 +78,11 @@ test("a workspace spans every repo of a multi-repo project", async () => {
 
   // Agents are told where each repo is and may work in them.
   const ctx = await projects.getWorkspaceContext(ws.id);
-  const prompt = extraReposPrompt(ctx.workspace).join("\n");
+  const prompt = otherReposPrompt(ctx.workspace).join("\n");
   assert.match(prompt, /multi-repo workspace/);
   assert.ok(prompt.includes(`**api**: git worktree at \`${apiCheckout.cwd}\` on branch \`thunk/lisbon\``));
-  assert.deepEqual(extraRepoDirectories(ctx.workspace), [apiCheckout.cwd]);
-  assert.deepEqual(extraReposPrompt({ ...ws, extraRepos: [] }), []);
+  assert.deepEqual(otherRepoDirectories(ctx.workspace), [apiCheckout.cwd]);
+  assert.deepEqual(otherReposPrompt({ ...ws, repos: ws.repos.slice(0, 1) }), []);
 
   // A repo with worktrees can't be dropped; unmerged work in any repo blocks deleting the workspace.
   await assert.rejects(projects.removeProjectRepo(project.id, apiRepo.id), /still has worktrees in: lisbon/);
@@ -100,8 +99,8 @@ test("a workspace spans every repo of a multi-repo project", async () => {
   // With no worktrees left, the repo can go; the main workspace forgets its in-place checkout.
   await projects.removeProjectRepo(project.id, apiRepo.id);
   const after = await projects.getWorkspaceContext(main.id);
-  assert.deepEqual(after.project.extraRepos.map((r) => r.name), ["handbook"]);
-  assert.deepEqual(after.workspace.extraRepos.map((r) => r.name), ["handbook"]);
+  assert.deepEqual(after.project.repos.map((r) => r.name), ["web", "handbook"]);
+  assert.deepEqual(after.workspace.repos.map((r) => r.name), ["web", "handbook"]);
 });
 
 test("a failed worktree in one repo rolls back the others", async () => {
@@ -125,7 +124,7 @@ test("workspaces without worktrees use every extra repo in place", async () => {
   await projects.addProjectRepo(project.id, b);
   const ws = await projects.createWorkspace({ projectId: project.id, name: "quito", worktree: false, setup: "skip" });
   assert.equal(ws.cwd, a);
-  assert.deepEqual(ws.extraRepos.map((r) => [r.cwd, r.worktreePath]), [[b, null]]);
+  assert.deepEqual(ws.repos.map((r) => [r.cwd, r.worktreePath]), [[a, null], [b, null]]);
 });
 
 const { workspaceGitAction, workspaceGitState } = require("../lib/projects/workspace-git.ts");
@@ -140,12 +139,12 @@ async function twoRepoWorkspace(prefix, name) {
   await projects.addProjectRepo(project.id, lib);
   const ws = await projects.createWorkspace({ projectId: project.id, name, setup: "skip" });
   const ctx = await projects.getWorkspaceContext(ws.id);
-  return { app, lib, ctx, libCwd: ctx.workspace.extraRepos[0].cwd };
+  return { app, lib, ctx, libCwd: ctx.workspace.repos[1].cwd };
 }
 
 test("git state and actions cover every repo, and check them all before changing any", async () => {
   const { app, lib, ctx, libCwd } = await twoRepoWorkspace("git", "berlin");
-  assert.deepEqual(workspaceRepoTargets(ctx).map((t) => [t.name, t.primary]), [["git-app", true], ["git-lib", false]]);
+  assert.deepEqual(workspaceRepoTargets(ctx).map((t) => t.name), ["git-app", "git-lib"]);
 
   await fs.writeFile(path.join(ctx.workspace.cwd, "a"), "a\n");
   git(ctx.workspace.cwd, "add", "."); git(ctx.workspace.cwd, "commit", "-m", "a");
@@ -154,7 +153,7 @@ test("git state and actions cover every repo, and check them all before changing
   const state = await workspaceGitState(ctx);
   assert.deepEqual(state.repos.map((r) => [r.name, r.ahead, r.canManage]), [["git-app", 1, true], ["git-lib", 1, true]]);
 
-  // A dirty extra repo stops the merge before the primary repo is touched.
+  // A dirty repo stops the merge before any other repo is touched.
   await fs.writeFile(path.join(libCwd, "dirty"), "x\n");
   await assert.rejects(workspaceGitAction(ctx, "merge"), /Commit or stash changes/);
   assert.equal(git(app, "log", "-1", "--format=%s"), "base");

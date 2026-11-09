@@ -4,7 +4,7 @@ import { stat } from "node:fs/promises";
 import { reconcileDeclaredFolders } from "./folders";
 import { repoNoteDirs } from "./resolve";
 import path from "node:path";
-import { DATA_DIR, projectSlug } from "@/lib/projects/paths";
+import { DATA_DIR } from "@/lib/projects/paths";
 import { listProjects } from "@/lib/supabase/repo/projects";
 import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { MEMORY_NOTE_ID, type NoteEvent, type NoteScope } from "./types";
@@ -21,7 +21,7 @@ type Watch = {
   healthy?: ReturnType<typeof setTimeout>;
   listeners: Set<Listener>;
   pending: Map<string, ReturnType<typeof setTimeout>>;
-  /** project slug → id, and `${projectSlug}/${workspaceSlug}` → workspace id. */
+  /** project data key → id, and `${dataKey}/${workspaceSlug}` → workspace id. */
   projects: Map<string, string>;
   workspaces: Map<string, string>;
 };
@@ -39,10 +39,10 @@ const FOLDER_REPLACED_MS = 1000;
 
 async function refreshSlugs() {
   const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
-  state.projects = new Map(projects.map((p) => [projectSlug(p.root), p.id]));
-  const roots = new Map(projects.map((p) => [p.id, p.root]));
+  state.projects = new Map(projects.map((p) => [p.dataKey, p.id]));
+  const keys = new Map(projects.map((p) => [p.id, p.dataKey]));
   state.workspaces = new Map(
-    workspaces.flatMap((w) => (roots.has(w.projectId) ? [[`${projectSlug(roots.get(w.projectId)!)}/${w.slug}`, w.id] as const] : [])),
+    workspaces.flatMap((w) => (keys.has(w.projectId) ? [[`${keys.get(w.projectId)}/${w.slug}`, w.id] as const] : [])),
   );
 }
 

@@ -50,8 +50,8 @@ const sse = require("../app/api/tasks/events/route.ts");
 const req = (method, body, query = "") => new Request(`http://localhost/api/tasks${query}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { "Content-Type": "application/json" } }) });
 const ctx = (id) => ({ params: Promise.resolve({ id }) });
 async function fixture() {
-  const p = await projects.upsertProject({ name: "Project", root: `/tmp/${crypto.randomUUID()}`, kind: "folder", remote: null, defaultBranch: null });
-  const w = await workspaces.insertWorkspace({ projectId: p.id, name: "Workspace", slug: "main", cwd: p.root, branch: null, worktreePath: null, baseRef: null });
+  const p = await projects.insertProject({ name: "Project", dataKey: crypto.randomUUID() });
+  const w = await workspaces.insertWorkspace({ projectId: p.id, name: "Workspace", slug: "main", cwd: "/tmp", branch: null });
   return { p, w };
 }
 

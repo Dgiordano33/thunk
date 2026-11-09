@@ -24,7 +24,7 @@ export type RoutineTriggerState = {
   /** Newest PR createdAt seen by the poller; PRs at or before it never fire. */
   prSeenAt?: string;
   /** PR numbers already fired for (capped). */
-  prSeen?: number[];
+  prSeen?: (string | number)[];
 };
 
 export type Routine = {

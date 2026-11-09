@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { repoNameFromUrl } from "./repo-spec";
 import type { ChangedFile, WorkspaceChanges } from "./types";
 
 const exec = promisify(execFile);
@@ -115,30 +116,33 @@ function expandHome(input: string) {
   return path.resolve(input.trim().replace(/^~(?=$|\/)/, os.homedir()));
 }
 
-/** Repo name from a GitHub URL or `owner/repo` shorthand. */
-export function repoNameFromUrl(url: string) {
-  const name = url.trim().replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop();
-  if (!name) throw new Error(`Can't read a repo name from ${url}`);
-  return name;
+/** Where `cloneRepo` would put this URL. */
+export function cloneDestination(url: string, parent: string) {
+  return path.join(expandHome(parent), repoNameFromUrl(url));
 }
 
 /** Clone `url` into `<parent>/<repo>` and return the new checkout path. `owner/repo` expands to GitHub. */
 export async function cloneRepo(url: string, parent: string): Promise<string> {
   const source = /^[\w.-]+\/[\w.-]+$/.test(url.trim()) ? `https://github.com/${url.trim()}.git` : url.trim();
-  const parentDir = expandHome(parent);
-  await mkdir(parentDir, { recursive: true });
-  const dest = path.join(parentDir, repoNameFromUrl(source));
+  const dest = cloneDestination(source, parent);
+  await mkdir(path.dirname(dest), { recursive: true });
   if (await stat(dest).catch(() => null)) throw new Error(`Already exists: ${dest}`);
-  await exec("git", ["clone", "--", source, dest], { maxBuffer: 4 * 1024 * 1024 }).catch((err: { stderr?: string }) => {
+  // Nothing can answer a credentials prompt from here, so a private or mistyped URL must fail instead of hanging.
+  await exec("git", ["clone", "--", source, dest], { maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).catch((err: { stderr?: string }) => {
     throw new Error(err.stderr?.trim().split("\n").pop() || `git clone failed for ${source}`);
   });
   return dest;
 }
 
+/** Where `createFolder` would create this folder. */
+export function folderDestination(parent: string, name: string) {
+  if (!name.trim() || /[/\\]/.test(name) || name === "." || name === "..") throw new Error("Folder name must be a single path segment");
+  return path.join(expandHome(parent), name.trim());
+}
+
 /** Create `<parent>/<name>` (must not exist), optionally as a fresh git repo. */
 export async function createFolder(parent: string, name: string, opts: { git?: boolean } = {}): Promise<string> {
-  if (!name.trim() || /[/\\]/.test(name) || name === "." || name === "..") throw new Error("Folder name must be a single path segment");
-  const dest = path.join(expandHome(parent), name.trim());
+  const dest = folderDestination(parent, name);
   if (await stat(dest).catch(() => null)) throw new Error(`Already exists: ${dest}`);
   await mkdir(dest, { recursive: true });
   if (opts.git) await git(dest, ["init"]);

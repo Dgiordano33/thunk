@@ -12,8 +12,8 @@ import type { NoteScope, NoteScopeKind } from "./types";
 export function projectNoteDirs(project: Project): NoteDirs {
   return {
     scope: { kind: "projects", id: project.id },
-    notesDir: projectNotesDir(project.root),
-    memoryFile: projectMemoryFile(project.root),
+    notesDir: projectNotesDir(project.dataKey),
+    memoryFile: projectMemoryFile(project.dataKey),
     memoryTitle: "Project memory",
   };
 }
@@ -21,8 +21,8 @@ export function projectNoteDirs(project: Project): NoteDirs {
 export function workspaceNoteDirs(project: Project, workspace: Workspace): NoteDirs {
   return {
     scope: { kind: "workspaces", id: workspace.id },
-    notesDir: workspaceNotesDir(project.root, workspace.slug),
-    memoryFile: workspaceMemoryFile(project.root, workspace.slug),
+    notesDir: workspaceNotesDir(project.dataKey, workspace.slug),
+    memoryFile: workspaceMemoryFile(project.dataKey, workspace.slug),
     memoryTitle: "Workspace memory",
   };
 }

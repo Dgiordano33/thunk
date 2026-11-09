@@ -4,6 +4,8 @@ import type { HarnessEvent } from "@/lib/agent/types";
 import { createWorkspace, getWorkspaceContext, removeWorkspace, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { tryGit } from "@/lib/projects/git";
+import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
+import { sessionConfigRoot } from "@/lib/projects/repos";
 import { prepareWorkspace } from "@/lib/projects/runtime";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { expandCommand } from "@/lib/prompts/context";
@@ -103,7 +105,7 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
       ctx = { project, workspace: ws };
       workspace = ws;
       await updateRun(run.id, { workspaceId: ws.id });
-      if (ws.worktreePath) await prepareWorkspace(ctx);
+      if (ws.branch) await prepareWorkspace(ctx);
     }
     workspace = ctx.workspace;
     bail();
@@ -121,7 +123,7 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
 
     watch(live, routine, run, project, workspace, () => cancelled);
     const prompt = renderPrompt(routine.prompt, trigger, payload);
-    pushUserMessage(live, prompt, { expandedContent: await expandCommand(prompt, project.root) });
+    pushUserMessage(live, prompt, { expandedContent: await expandCommand(prompt, sessionConfigRoot(ctx)) });
   } catch (err) {
     if (live) closeSession(live.id);
     await finalize({
@@ -228,7 +230,7 @@ async function finalize(input: FinalizeInput) {
           (err) => (console.error("[thunk] routine cleanup failed", err), false),
         ));
         // `-d` refuses unmerged branches, so this only drops the empty per-run branch.
-        if (!workspaceKept && project && workspace.branch) await tryGit(project.root, ["branch", "-d", workspace.branch]);
+        if (!workspaceKept && project) for (const t of workspaceRepoTargets({ project, workspace })) if (t.branch) await tryGit(t.root, ["branch", "-d", t.branch]);
       }
       if (workspaceKept) await archiveWorkspace(workspace.id).catch((err) => console.error("[thunk] routine archive failed", err));
     }

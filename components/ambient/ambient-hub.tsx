@@ -96,7 +96,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
   const attention = notices.filter((n) => n.status === "open" && n.urgency === "action");
   const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
   const navigation: SearchResult[] = projects.flatMap((p) => [
-    { id: p.id, label: p.name, detail: p.root, href: `/p/${p.id}`, kind: "Project" },
+    { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: `/p/${p.id}`, kind: "Project" },
     ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: `/w/${w.id}`, kind: "Workspace" })),
   ]).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
 

@@ -1,4 +1,5 @@
 import "server-only";
+import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { notesDirsFor } from "./resolve";
@@ -20,7 +21,7 @@ export async function loadSessionNotes(project: Project, workspace: Workspace): 
   ]);
   return { projectDir: dirs.project.notesDir, workspaceDir: dirs.workspace.notesDir, project: p, workspace: w, repos: await Promise.all(dirs.repos.map(async (d) => {
     const folder = project.repoFolders.find((f) => f.id === d.scope.id)!;
-    return { label: folder.label, dir: d.notesDir, extra: folder.repoId !== null, notes: await listNotes(d) };
+    return { label: folder.label, dir: d.notesDir, extra: !d.notesDir.startsWith(`${workspace.cwd}${path.sep}`), notes: await listNotes(d) };
   })) };
 }
 

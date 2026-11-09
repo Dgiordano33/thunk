@@ -9,7 +9,8 @@ import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { tasksTools } from "@/lib/tasks/tools";
 import { tasksPrompt } from "@/lib/tasks/prompt";
 import { tasksForWorkspace } from "@/lib/tasks/service";
-import { extraRepoDirectories, extraReposPrompt } from "@/lib/projects/repos-prompt";
+import { anchorRepo } from "@/lib/projects/repos";
+import { otherRepoDirectories, otherReposPrompt } from "@/lib/projects/repos-prompt";
 import type { Task } from "@/lib/tasks/types";
 import { vaultDirOf } from "@/lib/vault/dir";
 import { listItems } from "@/lib/vault/store";
@@ -44,15 +45,19 @@ export function hierarchyPrompt(
   vault?: { items: VaultItem[]; dir: string },
 ) {
   const { project, workspace } = live.ctx;
-  const pmFile = projectMemoryFile(project.root);
-  const wmDir = workspaceMemoryDir(project.root, workspace.slug);
+  const pmFile = projectMemoryFile(project.dataKey);
+  const wmDir = workspaceMemoryDir(project.dataKey, workspace.slug);
+  const anchor = anchorRepo(live.ctx);
+  const checkout = workspace.repos.find((r) => r.repoId === anchor?.id);
   const lines = [
     "# Thunk hierarchy",
-    `Project: **${project.name}** (${project.kind}) at \`${project.root}\`${project.remote ? ` · remote ${project.remote}` : ""}.`,
-    workspace.worktreePath
-      ? `Workspace: **${workspace.name}** · git worktree at \`${workspace.worktreePath}\` on branch \`${workspace.branch}\` (branched from \`${workspace.baseRef}\`). Your cwd is the worktree${provider === "claude" ? "; the project's CLAUDE.md and .claude/ config come from the main checkout" : ""}. Do not switch branches or cd into the main checkout.`
-      : `Workspace: **${workspace.name}** · works directly in the project root (no worktree).`,
-    ...extraReposPrompt(workspace),
+    anchor
+      ? `Project: **${project.name}** · your cwd belongs to **${anchor.name}** (${anchor.kind}) at \`${anchor.path}\`${anchor.remote ? ` · remote ${anchor.remote}` : ""}.`
+      : `Project: **${project.name}**. It has no repositories yet, so your cwd is the project's own scratch directory.`,
+    checkout?.worktreePath
+      ? `Workspace: **${workspace.name}** · git worktree at \`${checkout.worktreePath}\` on branch \`${checkout.branch}\` (branched from \`${checkout.baseRef}\`). Your cwd is the worktree${provider === "claude" ? "; the project's CLAUDE.md and .claude/ config come from the main checkout" : ""}. Do not switch branches or cd into the main checkout.`
+      : `Workspace: **${workspace.name}** · works directly in \`${workspace.cwd}\` (no worktree).`,
+    ...otherReposPrompt(workspace),
     "",
     "Two memory scopes, both plain markdown files you may read and edit with your file tools:",
     `- Project memory: \`${pmFile}\`. Facts that hold for the whole repo/folder across every workspace: architecture, conventions, gotchas, decisions. Keep it short and durable; edit in place rather than appending logs.${provider === "claude" ? " This is also your auto-memory directory, so what you save on your own lands here." : ""}`,
@@ -72,21 +77,22 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
   const { project, workspace } = live.ctx;
   const vaultDir = vaultDirOf(project);
   const [projectMemory, notes, tasks, vaultItems] = await Promise.all([
-    readMemory(projectMemoryFile(project.root)),
+    readMemory(projectMemoryFile(project.dataKey)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
     listItems(vaultDir).catch(() => []),
   ]);
   await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
-  const isWorktree = Boolean(workspace.worktreePath);
+  const anchor = anchorRepo(live.ctx);
+  const isWorktree = Boolean(workspace.repos.find((r) => r.repoId === anchor?.id)?.worktreePath);
 
   return {
-    cwd: workspace.cwd,
+    cwd: live.meta.cwd,
     // In a worktree, CLAUDE.md / .claude / .mcp.json still come from the trusted main checkout.
-    ...(isWorktree ? { projectConfigRoot: project.root } : {}),
+    ...(isWorktree && anchor ? { projectConfigRoot: anchor.path } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
-    // Extra repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [projectMemoryDir(project.root), workspaceMemoryDir(project.root, workspace.slug), notes.projectDir, notes.workspaceDir, ...extraRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
+    // The other repos of a multi-repo workspace are working directories too.
+    additionalDirectories: [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
     mcpServers: { thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
@@ -106,7 +112,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // Auto-memory is durable project knowledge shared across workspaces.
     settings: {
       autoMemoryEnabled: true,
-      autoMemoryDirectory: projectMemoryDir(project.root),
+      autoMemoryDirectory: projectMemoryDir(project.dataKey),
       permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`] },
     },
     // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.

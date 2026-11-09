@@ -19,6 +19,7 @@ import { isLocalWorkspace, workspaceDisplayName } from "@/components/session/lab
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
+import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +86,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
             const open = !collapsed[p.id];
             const tasks = taskCounts[p.id];
             const openTasks = (tasks?.project ?? 0) + Object.values(tasks?.byWorkspace ?? {}).reduce((sum, count) => sum + count, 0);
-            const ProjectIcon = p.kind === "repo" ? FolderGitIcon : FolderIcon;
+            const ProjectIcon = gitRepos(p).length ? FolderGitIcon : FolderIcon;
             return (
               <li key={p.id}>
                 <div
@@ -103,7 +104,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                   >
                     <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
                   </button>
-                  <Link href={`/p/${p.id}`} title={p.root} className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
+                  <Link href={`/p/${p.id}`} title={p.repos.map((r) => r.path).join("\n") || p.name} className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
                     <ProjectIcon className="text-muted-foreground size-4 shrink-0" />
                     <span className="truncate text-[13px] font-medium">{p.name}</span>
                   </Link>
@@ -124,7 +125,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     compact
                     projectId={p.id}
                     projectName={p.name}
-                    repos={p.extraRepos}
+                    repos={p.repos}
                     className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-100"
                   />
                 </div>
@@ -147,7 +148,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                             w.id === activeWorkspaceId && "bg-sidebar-accent",
                           )}
                         >
-                          {w.worktreePath ? (
+                          {w.branch ? (
                             <GitBranchIcon className="text-muted-foreground size-3.5 shrink-0" />
                           ) : (
                             <HouseIcon className="text-muted-foreground size-3.5 shrink-0" />

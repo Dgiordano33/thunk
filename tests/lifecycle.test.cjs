@@ -33,7 +33,7 @@ async function repo(t) {
   await fs.writeFile(path.join(root, "file"), "base\n");
   git(root, "add", "."); git(root, "commit", "-m", "base");
   git(root, "worktree", "add", "-b", "topic", cwd);
-  const ctx = { project: { root, kind: "repo", defaultBranch: "main", id: crypto.randomUUID() }, workspace: { id: crypto.randomUUID(), name: "test", cwd, branch: "topic", worktreePath: cwd, status: "active" } };
+  const ctx = { project: { id: "p", dataKey: "p", repos: [{ id: "r", name: "repo", path: root, kind: "repo", remote: null, defaultBranch: "main" }] }, workspace: { id: crypto.randomUUID(), name: "test", cwd, branch: "topic", status: "active", repos: [{ repoId: "r", name: "repo", cwd, branch: "topic", worktreePath: cwd, baseRef: null }] } };
   return { base, root, cwd, ctx };
 }
 async function commit(cwd, text, name = "file") {
@@ -155,7 +155,7 @@ test("sync fetches fresh remote default branch", async (t) => {
 
 test("real PTY setup, retry, shell input/resize, preview, stop, archive failure", async (t) => {
   const { root, cwd } = await fixture(t);
-  const ctx = { project: { root, defaultBranch: "main" }, workspace: { id: crypto.randomUUID(), name: "pty-test", cwd, status: "active" } };
+  const ctx = { project: { id: "p", dataKey: "p", repos: [{ id: "r", name: "repo", path: root, kind: "repo", remote: null, defaultBranch: "main" }] }, workspace: { id: crypto.randomUUID(), name: "pty-test", cwd, status: "active", repos: [{ repoId: "r", name: "repo", cwd, branch: null, worktreePath: cwd, baseRef: null }] } };
   t.after(() => runtime.stopWorkspaceProcesses(ctx.workspace.id));
   const config = path.join(root, "thunk.json");
   await fs.writeFile(path.join(root, ".env.local"), "copied");
@@ -211,7 +211,7 @@ test("workspace lock queues waiters in order", async () => {
 
 test("setup script runs without holding the workspace lock", async (t) => {
   const { root, cwd } = await fixture(t);
-  const ctx = { project: { root, defaultBranch: "main" }, workspace: { id: crypto.randomUUID(), name: "setup-lock", cwd, status: "active" } };
+  const ctx = { project: { id: "p", dataKey: "p", repos: [{ id: "r", name: "repo", path: root, kind: "repo", remote: null, defaultBranch: "main" }] }, workspace: { id: crypto.randomUUID(), name: "setup-lock", cwd, status: "active", repos: [{ repoId: "r", name: "repo", cwd, branch: null, worktreePath: cwd, baseRef: null }] } };
   t.after(() => runtime.stopWorkspaceProcesses(ctx.workspace.id));
   await fs.writeFile(path.join(root, "thunk.json"), JSON.stringify({ scripts: { setup: "sleep 1", run: "true" } }));
   const setup = runtime.prepareWorkspace(ctx);

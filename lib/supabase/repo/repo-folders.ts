@@ -4,7 +4,7 @@ import { db } from "../server";
 
 const g = globalThis as typeof globalThis & { __thunkRepoFolders?: Map<string, RepoFolder> };
 const mem = (g.__thunkRepoFolders ??= new Map());
-type Row = { id: string; project_id: string; repo_id: string | null; path: string; label: string };
+type Row = { id: string; project_id: string; repo_id: string; path: string; label: string };
 const columns = "id, project_id, repo_id, path, label";
 const fromRow = (r: Row): RepoFolder => ({ id: r.id, projectId: r.project_id, repoId: r.repo_id, path: r.path, label: r.label });
 

@@ -8,8 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { api } from "@/lib/client/api";
 
 /**
- * A new auto-named workspace (own worktree for repos), opened on a blank chat. One click for
- * single-repo projects; with extra repos, a picker of which ones to include first (all by default).
+ * A new auto-named workspace (a worktree in each git repo), opened on a blank chat. One click for a
+ * single-repo project; with several repos, a picker of which ones to include first (all by default).
  */
 export function NewWorkspaceButton({
   projectId,
@@ -20,8 +20,7 @@ export function NewWorkspaceButton({
 }: {
   projectId: string;
   projectName: string;
-  /** The project's extra repos; the primary repo is always included. */
-  repos?: { id: string; name: string }[];
+  repos?: { id: string; name: string; kind: "repo" | "folder" }[];
   compact?: boolean;
   className?: string;
 }) {
@@ -44,26 +43,41 @@ export function NewWorkspaceButton({
     }
   };
 
+  // A workspace is a worktree, so it needs at least one git repo among those chosen.
+  const hasGit = repos.some((r) => r.kind === "repo");
+  const canPick = repos.some((r) => r.kind === "repo" && chosen.has(r.id));
+  const needsPicker = repos.length > 1;
+  const noRepoHint = "Add a git repo to create workspaces";
+
   const icon = pending ? <Loader2Icon className="animate-spin" /> : <PlusIcon />;
   const trigger = compact ? (
     <Button
       size="icon-xs"
       variant="ghost"
       aria-label={`New workspace in ${projectName}`}
-      title="New workspace"
+      title={hasGit ? "New workspace" : noRepoHint}
       className={className}
-      onClick={repos.length ? undefined : () => void create()}
-      disabled={pending}
+      onClick={needsPicker ? undefined : () => void create()}
+      disabled={pending || !hasGit}
     >
       {icon}
     </Button>
   ) : (
-    <Button size="sm" variant="outline" className={className} onClick={repos.length ? undefined : () => void create()} disabled={pending}>
+    <Button size="sm" variant="outline" className={className} title={hasGit ? undefined : noRepoHint} onClick={needsPicker ? undefined : () => void create()} disabled={pending || !hasGit}>
       {icon}
       New workspace
     </Button>
   );
-  if (!repos.length) return trigger;
+  if (!hasGit) {
+    // A disabled button shows no tooltip, so the hint sits on its wrapper; the full-size button also spells it out.
+    return (
+      <span title={noRepoHint} className="inline-flex items-center gap-2">
+        {trigger}
+        {!compact && <span className="text-muted-foreground text-xs">{noRepoHint}.</span>}
+      </span>
+    );
+  }
+  if (!needsPicker) return trigger;
 
   return (
     <Popover
@@ -86,10 +100,6 @@ export function NewWorkspaceButton({
         >
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-xs font-medium">Repos in this workspace</legend>
-            <label className="text-muted-foreground flex items-center gap-2 text-sm">
-              <input type="checkbox" checked disabled className="accent-primary size-4" />
-              {projectName}
-            </label>
             {repos.map((r) => (
               <label key={r.id} className="flex items-center gap-2 text-sm">
                 <input
@@ -109,7 +119,7 @@ export function NewWorkspaceButton({
               </label>
             ))}
           </fieldset>
-          <Button type="submit" size="sm" disabled={pending}>
+          <Button type="submit" size="sm" disabled={pending || !canPick}>
             {pending && <Loader2Icon className="animate-spin" />}
             Create workspace
           </Button>

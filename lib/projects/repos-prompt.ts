@@ -1,13 +1,15 @@
-// How agents learn about a workspace's extra repos. Kept free of server-only imports so it is easy to test.
+// How agents learn about a workspace's other repos. Kept free of server-only imports so it is easy to test.
 import type { Workspace } from "./types";
 
-/** Lines describing the workspace's other repos; empty for single-repo workspaces. */
-export function extraReposPrompt(workspace: Workspace) {
-  const repos = workspace.extraRepos ?? [];
+const otherRepos = (workspace: Workspace) => workspace.repos.filter((r) => r.cwd !== workspace.cwd);
+
+/** Lines describing the repos besides the session's cwd; empty for single-repo workspaces. */
+export function otherReposPrompt(workspace: Workspace) {
+  const repos = otherRepos(workspace);
   if (!repos.length) return [];
   return [
     "",
-    `This is a multi-repo workspace. Besides your cwd, it covers ${repos.length === 1 ? "one more git repo" : `${repos.length} more git repos`}, each its own repository with its own history. Work on them at these paths (use absolute paths or \`git -C <path>\`; commit in each repo separately):`,
+    `This is a multi-repo workspace. Besides your cwd, it covers ${repos.length === 1 ? "one more repo" : `${repos.length} more repos`}, each with its own history. Work on them at these paths (use absolute paths or \`git -C <path>\`; commit in each repo separately):`,
     ...repos.map((r) =>
       r.worktreePath
         ? `- **${r.name}**: git worktree at \`${r.cwd}\` on branch \`${r.branch}\` (branched from \`${r.baseRef}\`). Do not switch branches or edit its main checkout.`
@@ -17,7 +19,7 @@ export function extraReposPrompt(workspace: Workspace) {
   ];
 }
 
-/** Directories the agent may use besides its cwd: each extra repo checkout. */
-export function extraRepoDirectories(workspace: Workspace) {
-  return (workspace.extraRepos ?? []).map((r) => r.cwd);
+/** Directories the agent may use besides its cwd: each other repo's checkout. */
+export function otherRepoDirectories(workspace: Workspace) {
+  return otherRepos(workspace).map((r) => r.cwd);
 }
