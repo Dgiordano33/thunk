@@ -1,0 +1,9 @@
+{
+  "name": "thunk-desktop",
+  "productName": "Thunk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thunk desktop",
+  "author": "Thunk",
+  "main": "main.cjs"
+}
