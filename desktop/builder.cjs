@@ -6,6 +6,7 @@ module.exports = {
   extraResources: [{ from: "build/desktop", to: "backend" }],
   npmRebuild: false,
   mac: {
+    icon: "desktop/icon.png",
     target: "dir",
     identity: "-",
     hardenedRuntime: false,
