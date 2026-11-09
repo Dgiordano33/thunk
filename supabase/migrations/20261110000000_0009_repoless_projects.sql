@@ -11,6 +11,9 @@
 -- 1. data_key matches projectSlug(root) in lib/projects/paths.ts, so no directory moves.
 alter table public.projects add column data_key text;
 
+-- The backfill is not activity: projects are listed by updated_at, so keep it.
+alter table public.projects disable trigger projects_updated_at;
+
 update public.projects
 set data_key = coalesce(
   nullif(regexp_replace(regexp_replace(root, '[^a-zA-Z0-9]+', '-', 'g'), '^-+|-+$', '', 'g'), ''),
@@ -25,6 +28,8 @@ from (
   from public.projects
 ) ranked
 where ranked.id = p.id and ranked.position > 1;
+
+alter table public.projects enable trigger projects_updated_at;
 
 alter table public.projects
   alter column data_key set not null,
