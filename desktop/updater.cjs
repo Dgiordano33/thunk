@@ -1,5 +1,5 @@
 const { spawn, execFileSync } = require("node:child_process");
-const { mkdtempSync, cpSync, renameSync, rmSync, openSync, closeSync, accessSync, constants } = require("node:fs");
+const { mkdtempSync, cpSync, renameSync, rmSync, openSync, closeSync, accessSync, realpathSync, constants } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
 
@@ -26,7 +26,7 @@ function run(command, args, { cwd, env, log, signal }) {
 
 async function prepareUpdate({ target, revision, env, logFile, signal }) {
   accessSync(path.dirname(target), constants.W_OK);
-  const work = mkdtempSync(path.join(tmpdir(), "thunk-update-"));
+  const work = realpathSync(mkdtempSync(path.join(tmpdir(), "thunk-update-")));
   const log = openSync(logFile, "w", 0o600);
   let staging;
   try {
