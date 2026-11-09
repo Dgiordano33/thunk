@@ -1,4 +1,5 @@
 import { ImagesSchema } from "@/lib/prompts/schema";
+import { sessionConfigRoot } from "@/lib/projects/repos";
 import { expandCommand } from "@/lib/prompts/context";
 import { z } from "zod";
 import { listSessions, pushUserMessage, startSession } from "@/lib/agent";
@@ -35,6 +36,6 @@ export const POST = handle(async (req: Request) => {
   const live = await startSession(body).catch((err: Error) => {
     throw new HttpError(400, err.message);
   });
-  if (body.prompt?.trim() || body.images.length) pushUserMessage(live, body.prompt?.trim() ?? "", { images: body.images, expandedContent: await expandCommand(body.prompt?.trim() ?? "", live.ctx.project.root) });
+  if (body.prompt?.trim() || body.images.length) pushUserMessage(live, body.prompt?.trim() ?? "", { images: body.images, expandedContent: await expandCommand(body.prompt?.trim() ?? "", sessionConfigRoot(live.ctx)) });
   return Response.json({ id: live.id, workspaceId: live.meta.workspaceId }, { status: 201 });
 });

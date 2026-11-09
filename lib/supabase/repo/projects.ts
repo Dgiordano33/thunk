@@ -10,26 +10,20 @@ import { emitTask } from "@/lib/tasks/events";
 type Row = {
   id: string;
   name: string;
-  root: string;
-  kind: string;
-  remote: string | null;
-  default_branch: string | null;
+  data_key: string;
   created_at: string;
   updated_at: string;
   project_repos?: ProjectRepoRow[] | null;
 };
 
-const COLUMNS = `id, name, root, kind, remote, default_branch, created_at, updated_at, project_repos(${PROJECT_REPO_COLUMNS})`;
+const COLUMNS = `id, name, data_key, created_at, updated_at, project_repos(${PROJECT_REPO_COLUMNS})`;
 
 function toProject(r: Row): Project {
   return {
     id: r.id,
     name: r.name,
-    root: r.root,
-    kind: r.kind as Project["kind"],
-    remote: r.remote,
-    defaultBranch: r.default_branch,
-    extraRepos: toProjectRepos(r.project_repos),
+    dataKey: r.data_key,
+    repos: toProjectRepos(r.project_repos),
     repoFolders: [],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -37,46 +31,42 @@ function toProject(r: Row): Project {
 }
 
 // Memory-only mode (no Supabase): projects live for the server's lifetime. Pinned to globalThis for HMR.
-// Stored without extraRepos; `withRepos` attaches the current list on every read.
-const g = globalThis as typeof globalThis & { __thunkMemProjects?: Map<string, Project> };
-const mem = (g.__thunkMemProjects ??= new Map());
-const withRepos = (p: Project): Project => ({ ...p, extraRepos: memProjectRepos(p.id) });
+// Stored without repos; `withRepos` attaches the current list on every read.
+const g = globalThis as typeof globalThis & { __thunkMemProjectsV2?: Map<string, Project> };
+const mem = (g.__thunkMemProjectsV2 ??= new Map());
+const withRepos = (p: Project): Project => ({ ...p, repos: memProjectRepos(p.id) });
 
 /** Attach registered folders whose repo is still in the project. Pure: one query, no file reads or writes. */
 const attachFolders = <T extends Project>(project: T, folders: RepoFolder[]): T => ({
   ...project,
-  repoFolders: folders.filter((f) => f.repoId === null || project.extraRepos.some((r) => r.id === f.repoId)),
+  repoFolders: folders.filter((f) => project.repos.some((r) => r.id === f.repoId)),
 });
 const withRepoFolders = async <T extends Project>(project: T): Promise<T> => attachFolders(project, await listRepoFolders(project.id));
 
-export async function upsertProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "extraRepos" | "repoFolders">): Promise<Project> {
+/** A new project with no repos. A taken data key is a Postgres-style unique violation (`code: "23505"`). */
+export async function insertProject(input: { name: string; dataKey: string }): Promise<Project> {
   const client = db();
-  const now = new Date().toISOString();
   if (!client) {
-    const existing = [...mem.values()].find((p) => p.root === input.root);
-    const project: Project = existing
-      ? { ...existing, ...input, updatedAt: now }
-      : { id: crypto.randomUUID(), ...input, extraRepos: [], repoFolders: [], createdAt: now, updatedAt: now };
+    if ([...mem.values()].some((p) => p.dataKey === input.dataKey)) throw Object.assign(new Error(`Data key taken: ${input.dataKey}`), { code: "23505" });
+    const now = new Date().toISOString();
+    const project: Project = { id: crypto.randomUUID(), ...input, repos: [], repoFolders: [], createdAt: now, updatedAt: now };
     mem.set(project.id, project);
     return withRepoFolders(withRepos(project));
   }
-  const { data, error } = await client
-    .from("projects")
-    .upsert(
-      {
-        name: input.name,
-        root: input.root,
-        kind: input.kind,
-        remote: input.remote,
-        default_branch: input.defaultBranch,
-        updated_at: now,
-      },
-      { onConflict: "root" },
-    )
-    .select(COLUMNS)
-    .single();
+  const { data, error } = await client.from("projects").insert({ name: input.name, data_key: input.dataKey }).select(COLUMNS).single();
   if (error) throw error;
   return withRepoFolders(toProject(data));
+}
+
+/** The project with this data key, created if needed. An existing project keeps its name. */
+export async function upsertProjectByKey(input: { name: string; dataKey: string }): Promise<Project> {
+  const existing = await getProjectByKey(input.dataKey);
+  if (existing) return existing;
+  return insertProject(input).catch(async (err: { code?: string }) => {
+    const raced = err.code === "23505" ? await getProjectByKey(input.dataKey) : null;
+    if (!raced) throw err;
+    return raced;
+  });
 }
 
 export async function getProject(id: string): Promise<Project | null> {
@@ -90,13 +80,13 @@ export async function getProject(id: string): Promise<Project | null> {
   return data ? withRepoFolders(toProject(data)) : null;
 }
 
-export async function getProjectByRoot(root: string): Promise<Project | null> {
+export async function getProjectByKey(dataKey: string): Promise<Project | null> {
   const client = db();
   if (!client) {
-    const p = [...mem.values()].find((p) => p.root === root);
+    const p = [...mem.values()].find((p) => p.dataKey === dataKey);
     return p ? withRepoFolders(withRepos(p)) : null;
   }
-  const { data, error } = await client.from("projects").select(COLUMNS).eq("root", root).maybeSingle();
+  const { data, error } = await client.from("projects").select(COLUMNS).eq("data_key", dataKey).maybeSingle();
   if (error) throw error;
   return data ? withRepoFolders(toProject(data)) : null;
 }

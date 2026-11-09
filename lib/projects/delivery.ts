@@ -8,6 +8,8 @@ import { listAllWorkspaces } from "../supabase/repo/workspaces";
 import { toCheck, type RollupEntry } from "./github";
 import { runtimeSnapshot } from "./runtime";
 import { httpUrl, type WorkspaceDelivery } from "./delivery-types";
+import { anchorTarget } from "./repo-targets";
+import { gitRepos } from "./repos";
 import type { Project, PullRequestInfo, Workspace } from "./types";
 
 const exec = promisify(execFile);
@@ -49,7 +51,7 @@ type RawPr = Omit<PullRequestInfo, "checks" | "reviewDecision"> & {
     deployments: { nodes: { id: string; environment: string; latestStatus: { state: string; environmentUrl: string | null } | null }[] };
   } }[] };
 };
-type BranchDelivery = { snapshot: DeliverySnapshot; branch: string; base: string; pr: PullRequestInfo; previewUrl: string | null };
+type BranchDelivery = { snapshot: DeliverySnapshot; branch: string; base: string; pr: PullRequestInfo; previewUrl: string | null; repoId?: string };
 
 export function parseDeliveries(pages: { errors?: { message: string }[]; data?: { repository: { pullRequests: { nodes: RawPr[] } } | null } }[]): BranchDelivery[] {
   return pages.flatMap((page) => {
@@ -89,11 +91,15 @@ async function projectDelivery(project: Project) {
   cached ??= { branches: [], nextPoll: 0, updatedAt: null, error: null };
   const startedAt = Date.now();
   try {
-    const branches = project.kind === "repo" && project.remote
-      ? parseDeliveries(JSON.parse(await run("gh", ["api", "graphql", "--paginate", "--slurp", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${DELIVERY_QUERY}`], project.root)))
-      : [];
-    if (project.kind === "repo" && project.remote) {
-      const previous = cached.history ?? await readDeliveryHistory(project.root);
+    // All or nothing: advancing history from a partial list would read the unpolled repos' PRs as gone.
+    const branches: BranchDelivery[] = [];
+    const tracked = gitRepos(project).filter((r) => r.remote);
+    for (const repo of tracked) {
+      const pages = JSON.parse(await run("gh", ["api", "graphql", "--paginate", "--slurp", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${DELIVERY_QUERY}`], repo.path));
+      branches.push(...parseDeliveries(pages).map((b) => ({ ...b, repoId: repo.id })));
+    }
+    if (tracked.length) {
+      const previous = cached.history ?? await readDeliveryHistory(project.dataKey);
       const snapshots = branches.map((b) => b.snapshot);
       const missing = previous.snapshots.filter((s) => !snapshots.some((now) => now.id === s.id));
       // Disappearance alone can mean closed, deleted, or temporarily inaccessible, not merged.
@@ -101,7 +107,7 @@ async function projectDelivery(project: Project) {
         const batch = missing.slice(offset, offset + 50);
         const query = "query($ids:[ID!]!) { nodes(ids:$ids) { ... on PullRequest { id state } } }";
         const args = ["api", "graphql", "-f", `query=${query}`, ...batch.flatMap((s) => ["-f", `ids[]=${s.id}`])];
-        const result = JSON.parse(await run("gh", args, project.root)) as { errors?: unknown[]; data?: { nodes: ({ id: string; state: DeliverySnapshot["state"] } | null)[] } };
+        const result = JSON.parse(await run("gh", args, tracked[0].path)) as { errors?: unknown[]; data?: { nodes: ({ id: string; state: DeliverySnapshot["state"] } | null)[] } };
         if (result.errors?.length || !result.data) throw new Error("Could not confirm missing PR states");
         for (const old of batch) {
           const confirmed = result.data.nodes.find((n) => n?.id === old.id);
@@ -109,9 +115,9 @@ async function projectDelivery(project: Project) {
         }
       }
       const history = advanceDeliveryHistory(previous, snapshots);
-      if (JSON.stringify(history) !== JSON.stringify(previous)) await writeDeliveryHistory(project.root, history);
+      if (JSON.stringify(history) !== JSON.stringify(previous)) await writeDeliveryHistory(project.dataKey, history);
       // Persist even an empty first baseline so its epoch survives restart.
-      else if (!cached.history) await writeDeliveryHistory(project.root, history);
+      else if (!cached.history) await writeDeliveryHistory(project.dataKey, history);
       await deliveryNotifications(project.id, previous, history, snapshots).catch((err) => console.error("[thunk] delivery notification failed", err));
       cached.history = history;
     }
@@ -128,17 +134,18 @@ async function projectDelivery(project: Project) {
 }
 
 async function workspaceDelivery(project: Project, ws: Workspace, cached: CachedProject): Promise<WorkspaceDelivery> {
-  const base = ws.baseRef?.replace(/^origin\//, "") || project.defaultBranch || "main";
+  const target = anchorTarget({ project, workspace: ws });
+  const base = target?.baseRef?.replace(/^origin\//, "") || target?.defaultBranch || "main";
   const [runtime, local] = await Promise.all([
     runtimeSnapshot({ project, workspace: ws }, false),
-    project.kind === "repo" ? run("git", ["status", "--porcelain=v2", "--branch"], ws.cwd) : Promise.resolve(null),
+    target ? run("git", ["status", "--porcelain=v2", "--branch"], target.cwd) : Promise.resolve(null),
   ]);
   const branch = local?.match(/^# branch.head (.+)$/m)?.[1] ?? null;
   const actualBranch = branch === "(detached)" ? null : branch;
-  const match = cached.branches.find((b) => b.branch === actualBranch);
-  const counts = project.kind === "repo" ? await run("git", ["rev-list", "--left-right", "--count", `${ws.baseRef || `origin/${base}`}...HEAD`], ws.cwd).catch(() => null) : null;
+  const match = cached.branches.find((b) => b.branch === actualBranch && b.repoId === target?.id);
+  const counts = target ? await run("git", ["rev-list", "--left-right", "--count", `${target.baseRef || `origin/${base}`}...HEAD`], target.cwd).catch(() => null) : null;
   const [behind, ahead] = counts?.split(/\s+/).map(Number) ?? [null, null];
-  const reason = cached.error || (project.kind !== "repo" ? "Not a Git repository" : !project.remote ? "No origin remote" : !actualBranch ? "Not on a branch" : actualBranch === base || actualBranch === project.defaultBranch ? "Start a workspace with its own branch" : null);
+  const reason = cached.error || (!target ? "No repositories" : !target.remote ? "No origin remote" : !actualBranch ? "Not on a branch" : actualBranch === base || actualBranch === target.defaultBranch ? "Start a workspace with its own branch" : null);
   return {
     activity: (cached.history?.events ?? []).filter((e) => e.branch === actualBranch).slice(-10).reverse(),
     workspaceId: ws.id, projectId: project.id,
@@ -170,7 +177,7 @@ async function tick() {
           deliveries.push({
             activity: previous?.activity ?? [],
             workspaceId: ws.id, projectId: project.id,
-            status: previous?.status ?? { branch: ws.branch, base: ws.baseRef || project.defaultBranch || "main", pr: null, canCreate: false, reason: "Workspace unavailable" },
+            status: previous?.status ?? { branch: ws.branch, base: "main", pr: null, canCreate: false, reason: "Workspace unavailable" },
             git: null, running: false, localPreviewUrl: null, deployedPreviewUrl: previous?.deployedPreviewUrl ?? null,
             updatedAt: previous?.updatedAt ?? null, error: "Workspace delivery unavailable; check its folder and configuration",
           });

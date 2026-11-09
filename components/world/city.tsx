@@ -162,7 +162,7 @@ export const City = memo(function City({ city, activity }: { city: WorldCity; ac
               <p className="text-xs opacity-70">{LEVEL_NAMES[level - 1]} · pop. {cityScore(project)}</p>
             </div>
           </div>
-          <p className="mt-2 truncate font-mono text-[11px] opacity-70">{tildify(project.root)}</p>
+          <p className="mt-2 truncate font-mono text-[11px] opacity-70">{project.repos.length > 1 ? `${project.repos.length} repositories` : project.repos[0] ? tildify(project.repos[0].path) : "No repositories"}</p>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
             <dt className="opacity-70">Workspaces</dt>
             <dd className="text-right tabular-nums">{project.workspaceCount}</dd>

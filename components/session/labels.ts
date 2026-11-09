@@ -25,15 +25,15 @@ export function relativeTime(iso: string) {
 }
 
 /** The workspace every project gets automatically: works in the repo folder itself, no worktree. */
-export function isLocalWorkspace(w: Pick<Workspace, "slug" | "worktreePath">) {
-  return w.slug === "main" && !w.worktreePath;
+export function isLocalWorkspace(w: Pick<Workspace, "slug" | "branch">) {
+  return w.slug === "main" && !w.branch;
 }
 
-export function workspaceLabel(w: Pick<Workspace, "slug" | "worktreePath" | "name">) {
+export function workspaceLabel(w: Pick<Workspace, "slug" | "branch" | "name">) {
   return isLocalWorkspace(w) ? "Local" : w.name;
 }
 
 /** What to show in lists: the branch for worktrees (like Conductor), else the label. */
-export function workspaceDisplayName(w: Pick<Workspace, "slug" | "worktreePath" | "name" | "branch">) {
-  return w.worktreePath && w.branch ? w.branch : workspaceLabel(w);
+export function workspaceDisplayName(w: Pick<Workspace, "slug" | "name" | "branch">) {
+  return w.branch ?? workspaceLabel(w);
 }

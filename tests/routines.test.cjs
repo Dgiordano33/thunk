@@ -97,7 +97,7 @@ const fakes = {
   createSession: async (input) => input,
   getSessionRow: async () => null,
 };
-const project = { id: "p", name: "Town", root: "/nowhere", kind: "repo" };
+const project = { id: "p", name: "Town", dataKey: "town", repos: [] };
 const agent = {
   closeSession() {},
   getSession: (id) => fakes.getSession(id),
@@ -110,7 +110,7 @@ const agent = {
 const projectsModule = {
   getWorkspaceContext: (id) => fakes.workspaceContext(id),
   contextForDirectory: async () => null,
-  createWorkspace: async ({ name }) => ({ id: `ws-${name}`, slug: name, name, worktreePath: "/nowhere/wt", branch: `thunk/${name}`, status: "active" }),
+  createWorkspace: async ({ name }) => ({ id: `ws-${name}`, slug: name, name, cwd: "/nowhere/wt", repos: [], branch: `thunk/${name}`, status: "active" }),
   removeWorkspace: async (id) => void removed.push(id),
 };
 const stubs = {

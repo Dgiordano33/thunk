@@ -85,7 +85,7 @@ export function WorkspaceMenu({ workspace, label, className }: { workspace: Work
         {!isMain && (
           <>
             <DropdownMenuSeparator />
-            {workspace.worktreePath && <DropdownMenuItem onSelect={() => openHarvest("merge")}>
+            {workspace.branch && <DropdownMenuItem onSelect={() => openHarvest("merge")}>
               <GitMergeIcon /> Merge and delete…
             </DropdownMenuItem>}
             <DropdownMenuItem variant="destructive" onSelect={() => openHarvest("delete")}>

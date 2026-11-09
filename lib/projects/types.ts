@@ -1,38 +1,35 @@
 // Shared between server and client. Keep free of server-only imports.
 
-export type ProjectKind = "repo" | "folder";
+export type ProjectRepoKind = "repo" | "folder";
 
 export type Project = {
   id: string;
   name: string;
-  /** Absolute path: the git toplevel for repos, the folder itself otherwise. */
-  root: string;
-  kind: ProjectKind;
-  remote: string | null;
-  defaultBranch: string | null;
-  /** Repos the project spans besides its primary root, in the order they were added. */
-  extraRepos: ProjectRepo[];
+  /** Immutable name of the project's directory under ~/.thunk/projects/. */
+  dataKey: string;
+  /** Every repo and folder the project spans, in the order they were added. May be empty. */
+  repos: ProjectRepo[];
   repoFolders: RepoFolder[];
   createdAt: string;
   updatedAt: string;
 };
 
-export type RepoFolder = { id: string; projectId: string; repoId: string | null; path: string; label: string };
+export type RepoFolder = { id: string; projectId: string; repoId: string; path: string; label: string };
 
-/** An additional git repo in a multi-repo project. The primary repo is the project's own root. */
 export type ProjectRepo = {
   id: string;
   projectId: string;
   /** Short label, unique within the project; defaults to the checkout's folder name. */
   name: string;
-  /** Absolute path of the repo's main checkout (its git toplevel). */
+  /** Absolute path of the repo's main checkout (its git toplevel), or of the plain folder. */
   path: string;
+  kind: ProjectRepoKind;
   remote: string | null;
   defaultBranch: string | null;
   createdAt: string;
 };
 
-/** Where a workspace works on one of the project's additional repos. */
+/** Where a workspace works on one of the project's repos. */
 export type WorkspaceRepo = {
   repoId: string;
   name: string;
@@ -50,13 +47,12 @@ export type Workspace = {
   projectId: string;
   name: string;
   slug: string;
-  /** Where sessions run: the worktree when one exists, else the project root. */
+  /** Where sessions run: the first repo's checkout, or the project's home directory when it has none. */
   cwd: string;
+  /** The branch shared by this workspace's worktrees; null when it works in place. */
   branch: string | null;
-  worktreePath: string | null;
-  baseRef: string | null;
-  /** The additional repos this workspace covers (a subset of the project's), each with its own checkout. */
-  extraRepos: WorkspaceRepo[];
+  /** The repos this workspace covers (a subset of the project's), each with its own checkout. */
+  repos: WorkspaceRepo[];
   status: WorkspaceStatus;
   createdAt: string;
   updatedAt: string;
@@ -82,7 +78,7 @@ export type WorkspaceChanges = {
   deletions: number;
 };
 
-/** One repo's changes in a multi-repo workspace. `id` is "primary" for the project's own repo. */
+/** One repo's changes in a multi-repo workspace. */
 export type RepoChanges = {
   id: string;
   name: string;

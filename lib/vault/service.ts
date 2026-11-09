@@ -30,7 +30,7 @@ export async function listAllItems(): Promise<(VaultItem & { projectName: string
 }
 
 /** How many items every project's vault holds, for the world menu. Counts folders; doesn't parse them. */
-export async function countVaultItems(projects: Pick<Project, "id" | "root">[]) {
+export async function countVaultItems(projects: Pick<Project, "id" | "dataKey">[]) {
   const { readdir } = await import("node:fs/promises");
   const counts = await Promise.all(
     projects.map((p) => readdir(vaultDirOf(p).dir).then((e) => e.filter((x) => /^[a-z0-9]{10}$/.test(x)).length, () => 0)),

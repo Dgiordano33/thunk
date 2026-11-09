@@ -13,8 +13,9 @@ require.extensions[".ts"] = (module, filename) => {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText, filename);
 };
-const project = { id: "p", root: "/repo", kind: "repo", remote: "git@github.com:owner/repo.git", defaultBranch: "main" };
-let workspaces = ["a", "b"].map((id) => ({ id, projectId: "p", cwd: "/repo/" + id, branch: "old", status: "active", baseRef: "origin/main" }));
+const project = { id: "p", dataKey: "repo", repos: [{ id: "r", name: "repo", path: "/repo", kind: "repo", remote: "git@github.com:owner/repo.git", defaultBranch: "main" }] };
+const checkout = (cwd) => ({ repoId: "r", name: "repo", cwd, branch: "old", worktreePath: cwd, baseRef: "origin/main" });
+let workspaces = ["a", "b"].map((id) => ({ id, projectId: "p", cwd: "/repo/" + id, branch: "old", status: "active", repos: [checkout("/repo/" + id)] }));
 let projects = [project];
 let fail = false;
 let calls = 0;
@@ -143,6 +144,29 @@ test("shared polling deduplicates, caches, preserves stale data on auth failure,
   await state.tick();
   assert.deepEqual(workspaceDeliveries(), []);
   assert.equal(state.projects.size, 0);
+});
+
+test("a multi-repo project polls each remote repo once and advances one history; zero repos make no calls", async (t) => {
+  const state = globalThis.__thunkDelivery;
+  t.after(() => clearInterval(state.timer));
+  const before = calls;
+  const repo = (id, remote) => ({ id, name: id, path: `/${id}`, kind: "repo", remote, defaultBranch: "main" });
+  const multi = { id: "m", dataKey: "multi", repos: [repo("one", "git@github.com:o/one.git"), repo("two", "git@github.com:o/two.git"), repo("local", null), { ...repo("docs", null), kind: "folder" }] };
+  const bare = { id: "z", dataKey: "bare", repos: [] };
+  const ws = (id, projectId, cwd, repoId) => ({ id, projectId, cwd, branch: null, status: "active", repos: repoId ? [{ repoId, name: repoId, cwd, branch: null, worktreePath: null, baseRef: null }] : [] });
+  projects = [multi, bare];
+  workspaces = [ws("w1", "m", "/one", "one"), ws("w2", "m", "/two", "two"), ws("home", "z", "/home", null)];
+  prMissing = false;
+  state.viewedUntil = Date.now() + 15_000;
+  state.backgroundAt = 0;
+  await state.tick();
+  assert.equal(calls - before, 2, "one call per repo with a remote; none for local repos, folders, or a zero-repo project");
+  assert.equal(state.projects.get("m").history.snapshots.length, 2, "both repos feed one history");
+  const home = workspaceDeliveries().find((d) => d.workspaceId === "home");
+  assert.equal(home.status.reason, "No repositories");
+  assert.equal(home.git, null);
+  assert.equal(workspaceDeliveries().find((d) => d.workspaceId === "w1").status.pr.number, 42);
+  state.viewedUntil = 0;
 });
 
 test("delivery polling does no git or GitHub work without viewers or subscriptions", async () => {

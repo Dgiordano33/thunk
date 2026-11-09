@@ -1,6 +1,7 @@
 import "server-only";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { gitRepos } from "@/lib/projects/repos";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { listEnabledRoutines, updateRoutine } from "@/lib/supabase/repo/routines";
 import { fire } from "./runner";
@@ -31,10 +32,13 @@ export async function pollPullRequests() {
 
   for (const [projectId, list] of byProject) {
     const project = await getProject(projectId);
-    if (!project?.remote || project.kind !== "repo") continue;
-    let prs: GhPr[];
+    if (!project) continue;
+    const tracked = gitRepos(project).filter((r) => r.remote);
+    if (!tracked.length) continue;
+    const prs: GhPr[] = [];
     try {
-      prs = await openPrs(project.root);
+      // All or nothing: moving the cursor past a repo that failed to list would lose its new PRs.
+      for (const repo of tracked) prs.push(...(await openPrs(repo.path)));
     } catch (err) {
       console.error(`[thunk] PR poll failed for ${project.name}:`, (err as { stderr?: string }).stderr?.trim() || (err as Error).message);
       continue;
@@ -43,15 +47,16 @@ export async function pollPullRequests() {
     for (const routine of list) {
       const st = routine.triggerState;
       if (!st.prSeenAt) {
-        await updateRoutine(routine.id, { triggerState: { ...st, prSeenAt: newest || new Date().toISOString(), prSeen: prs.map((p) => p.number) } });
+        await updateRoutine(routine.id, { triggerState: { ...st, prSeenAt: newest || new Date().toISOString(), prSeen: prs.map((p) => p.url) } });
         continue;
       }
+      // Keyed by URL: PR numbers repeat across repos.
       const seen = new Set(st.prSeen ?? []);
       const fresh = prs
-        .filter((pr) => pr.createdAt > st.prSeenAt! && !seen.has(pr.number) && !pr.headRefName.startsWith("thunk/"))
+        .filter((pr) => pr.createdAt > st.prSeenAt! && !seen.has(pr.url) && !pr.headRefName.startsWith("thunk/"))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       if (!fresh.length) continue;
-      for (const pr of fresh) seen.add(pr.number);
+      for (const pr of fresh) seen.add(pr.url);
       await updateRoutine(routine.id, {
         triggerState: { ...st, prSeenAt: newest > st.prSeenAt ? newest : st.prSeenAt, prSeen: [...seen].slice(-SEEN_CAP) },
       });

@@ -26,9 +26,9 @@ export type Database = {
       }
 
       project_repo_folders: {
-        Row: { id: string; project_id: string; repo_id: string | null; path: string; label: string; created_at: string; updated_at: string }
-        Insert: { id?: string; project_id: string; repo_id?: string | null; path: string; label: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; project_id?: string; repo_id?: string | null; path?: string; label?: string; created_at?: string; updated_at?: string }
+        Row: { id: string; project_id: string; repo_id: string; path: string; label: string; created_at: string; updated_at: string }
+        Insert: { id?: string; project_id: string; repo_id: string; path: string; label: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; project_id?: string; repo_id?: string; path?: string; label?: string; created_at?: string; updated_at?: string }
         Relationships: [
           { foreignKeyName: "project_repo_folders_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
           { foreignKeyName: "project_repo_folders_repo_id_fkey"; columns: ["repo_id"]; isOneToOne: false; referencedRelation: "project_repos"; referencedColumns: ["id"] }
@@ -566,6 +566,7 @@ export type Database = {
           created_at: string
           default_branch: string | null
           id: string
+          kind: string
           name: string
           path: string
           project_id: string
@@ -576,6 +577,7 @@ export type Database = {
           created_at?: string
           default_branch?: string | null
           id?: string
+          kind?: string
           name: string
           path: string
           project_id: string
@@ -586,6 +588,7 @@ export type Database = {
           created_at?: string
           default_branch?: string | null
           id?: string
+          kind?: string
           name?: string
           path?: string
           project_id?: string
@@ -605,32 +608,35 @@ export type Database = {
       projects: {
         Row: {
           created_at: string
+          data_key: string
           default_branch: string | null
           id: string
           kind: string
           name: string
           remote: string | null
-          root: string
+          root: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          data_key: string
           default_branch?: string | null
           id?: string
           kind?: string
           name: string
           remote?: string | null
-          root: string
+          root?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          data_key?: string
           default_branch?: string | null
           id?: string
           kind?: string
           name?: string
           remote?: string | null
-          root?: string
+          root?: string | null
           updated_at?: string
         }
         Relationships: []

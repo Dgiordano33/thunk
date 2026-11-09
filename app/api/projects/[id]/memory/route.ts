@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 async function file(id: string) {
   const project = await getProject(id);
   if (!project) throw new HttpError(404, "Project not found");
-  return projectMemoryFile(project.root);
+  return projectMemoryFile(project.dataKey);
 }
 
 export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/projects/[id]/memory">) => {

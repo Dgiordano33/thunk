@@ -35,7 +35,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions }: { workspace
   const counts = useTaskCounts()[projectId];
   const openCount = (counts?.project ?? 0) + (counts?.byWorkspace[workspaceId] ?? 0);
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
-  // Every repo of a multi-repo workspace (primary first); empty for single-repo workspaces.
+  // Every repo of a multi-repo workspace (in order); empty for single-repo workspaces.
   const [repos, setRepos] = useState<RepoChanges[]>([]);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
@@ -178,7 +178,7 @@ function Changes({ workspaceId, changes, repos }: { workspaceId: string; changes
   if (changes === undefined) return <Loading />;
   const multi = repos.length > 0;
   if (!multi && changes === null) return <Empty text="Not a git repository." />;
-  const sections: RepoChanges[] = multi ? repos.filter((r) => r.changes) : [{ id: "primary", name: "", cwd: "", changes }];
+  const sections: RepoChanges[] = multi ? repos.filter((r) => r.changes) : [{ id: "workspace", name: "", cwd: "", changes }];
 
   return (
     <div className="flex flex-col">

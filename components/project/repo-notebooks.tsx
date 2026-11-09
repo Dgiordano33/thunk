@@ -11,7 +11,7 @@ import { useNotesFeed } from "@/lib/store/notes-store";
 export function RepoNotebooks({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof api.suggestRepoFolders>>["candidates"]>([]);
-  const [repoId, setRepoId] = useState("primary");
+  const [picked, setPicked] = useState<string | null>(null);
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,19 +29,20 @@ export function RepoNotebooks({ projectId }: { projectId: string }) {
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
+  const repoId = picked ?? project?.repos[0]?.id ?? "";
   return <details className="border-b p-3 text-xs"><summary className="cursor-pointer font-medium">Repo notebooks</summary>
     <div className="mt-2 space-y-2">
       <p className="text-muted-foreground">Read and edit Markdown in the registered main checkout. Removing a notebook leaves its files on disk. Folders declared in thunk.json are re-added while listed there.</p>
       {project?.repoFolders.map((f) => <div key={f.id} className="flex items-center gap-2">
-        <Link className="min-w-0 flex-1 truncate underline" href={`/notes?scope=r:${f.id}`}>{f.repoId ? `${project.extraRepos.find((r) => r.id === f.repoId)?.name} / ` : ""}{f.label}</Link>
+        <Link className="min-w-0 flex-1 truncate underline" href={`/notes?scope=r:${f.id}`}>{project.repos.find((r) => r.id === f.repoId)?.name} / {f.label}</Link>
         <Button size="xs" variant="ghost" disabled={busy} onClick={() => void change(() => api.removeRepoFolder(projectId, f.id))}>Remove</Button>
       </div>)}
       {suggestions.map((s) => <div key={`${s.repoId}:${s.path}`} className="flex items-center gap-2"><span className="flex-1">{s.repoName} / {s.path} · {s.count} files</span><Button size="xs" variant="outline" disabled={busy} onClick={() => void change(() => api.addRepoFolder(projectId, s))}>Add</Button></div>)}
-      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void change(() => api.addRepoFolder(projectId, { repoId: repoId === "primary" ? null : repoId, path })); }}>
-        <Select value={repoId} onValueChange={setRepoId}><SelectTrigger aria-label="Repository" className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary repo</SelectItem>{project?.extraRepos.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select>
+      {project && project.repos.length > 0 && <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void change(() => api.addRepoFolder(projectId, { repoId, path })); }}>
+        <Select value={repoId} onValueChange={setPicked}><SelectTrigger aria-label="Repository" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{project.repos.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select>
         <Input aria-label="Notebook folder path" value={path} onChange={(e) => setPath(e.target.value)} placeholder="Existing folder, e.g. docs" required className="min-w-40 flex-1" />
         <Button size="sm" disabled={busy || !path.trim()}>Add folder</Button>
-      </form>
+      </form>}
       {error && <p role="alert" className="text-destructive">{error}</p>}
     </div>
   </details>;

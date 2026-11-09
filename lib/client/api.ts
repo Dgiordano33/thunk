@@ -2,6 +2,7 @@ import type { Notification, NotificationCounts } from "@/lib/notifications/types
 import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
 import type { NoteImportScope, Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
+import type { CreateProjectBody, RepoResult, RepoSpec } from "@/lib/projects/repo-spec";
 import type { RuntimeSnapshot, ProcessKind } from "@/lib/projects/runtime-types";
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
 import type { PromptImage } from "@/lib/prompts/schema";
@@ -61,22 +62,15 @@ export const api = {
   // Projects
   getProject: (id: string) => call<{ project: Project }>(`/api/projects/${id}`),
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
-  addProject: (
-    body:
-      | { source: "folder"; path: string }
-      | { source: "github"; url: string; parent: string }
-      | { source: "new"; parent: string; name: string; git?: boolean },
-  ) => post<{ project: Project; workspace: Workspace }>("/api/projects", body),
+  createProject: (body: CreateProjectBody) =>
+    post<{ project: Project; workspace: Workspace; repos: RepoResult<ProjectRepo>[] }>("/api/projects", body),
   pickFolder: (body: { prompt?: string; defaultPath?: string } = {}) =>
     post<{ path: string | null }>("/api/fs/pick-folder", body),
   renameProject: (id: string, name: string) => call(`/api/projects/${id}`, { method: "PATCH", json: { name } }),
   deleteProject: (id: string) => call(`/api/projects/${id}`, { method: "DELETE" }),
-  // Extra repos of a multi-repo project
+  // The repos of a project
   listProjectRepos: (id: string) => call<{ repos: ProjectRepo[] }>(`/api/projects/${id}/repos`),
-  addProjectRepo: (
-    id: string,
-    body: { source?: "folder"; path: string; name?: string } | { source: "github"; url: string; parent: string; name?: string },
-  ) => post<{ repo: ProjectRepo }>(`/api/projects/${id}/repos`, body),
+  addProjectRepo: (id: string, body: RepoSpec) => post<{ repo: ProjectRepo }>(`/api/projects/${id}/repos`, body),
   removeProjectRepo: (id: string, repoId: string) => call(`/api/projects/${id}/repos/${repoId}`, { method: "DELETE" }),
   // Workspaces
   listWorkspaces: (projectId: string) =>
@@ -87,7 +81,7 @@ export const api = {
     worktree?: boolean;
     branch?: string;
     baseRef?: string;
-    /** Extra repos to include; all of the project's when omitted. */
+    /** Repos to include; all of the project's when omitted. */
     repoIds?: string[];
   }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),

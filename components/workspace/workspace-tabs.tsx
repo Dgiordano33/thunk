@@ -26,6 +26,7 @@ export function WorkspaceTabs({
   // The open session's title and status stream in live; everything else comes from the server.
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
+  const branched = workspace.repos.filter((r) => r.branch);
 
   return (
     <div className="flex h-11 shrink-0 items-stretch border-b">
@@ -77,11 +78,10 @@ export function WorkspaceTabs({
         <GitBranchIcon className="size-3.5" />
         <span className="max-w-48 truncate font-mono">{branch ?? workspace.name}</span>
         {dirty > 0 && <span className="tabular-nums">{dirty} changed</span>}
-        <PrButton workspaceId={workspace.id} />
-        {/* Each extra repo with its own branch gets its own PR. */}
-        {workspace.extraRepos?.filter((r) => r.branch).map((r) => (
+        {/* Several branched repos each get their own PR; a single one needs no repo label. */}
+        {branched.length > 1 ? branched.map((r) => (
           <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />
-        ))}
+        )) : workspace.repos.length > 0 && <PrButton workspaceId={workspace.id} />}
       </div>
     </div>
   );

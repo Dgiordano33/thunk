@@ -23,7 +23,7 @@ async function repoGitState(t: RepoTarget) {
   const base = t.defaultBranch ? await baseRef(t) : null;
   const counts = base ? (await tryGit(t.cwd, ["rev-list", "--left-right", "--count", `${base}...HEAD`]))?.split(/\s+/).map(Number) : null;
   return {
-    id: t.id, name: t.name, primary: t.primary,
+    id: t.id, name: t.name,
     base, target: t.defaultBranch, canManage: canManage(t),
     ahead: counts?.[1] ?? 0, behind: counts?.[0] ?? 0,
     operation: await operation(t.cwd), rootOperation: await operation(t.root),
@@ -35,8 +35,8 @@ async function repoGitState(t: RepoTarget) {
 export type RepoGitState = Awaited<ReturnType<typeof repoGitState>>;
 
 /**
- * Git state of every repo in the workspace (`repos`). The top-level fields repeat the first repo's
- * (the primary repo when the project root is one), for single-repo callers.
+ * Git state of every repo in the workspace (`repos`). The top-level fields repeat the first repo's,
+ * for single-repo callers.
  */
 export async function workspaceGitState(ctx: WorkspaceContext) {
   const targets = workspaceRepoTargets(ctx);
@@ -58,9 +58,10 @@ async function assertClean(cwd: string) {
 }
 
 export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
-  for (const t of workspaceRepoTargets(ctx)) {
+  const targets = workspaceRepoTargets(ctx);
+  for (const t of targets) {
     if (!t.worktreePath) continue;
-    const where = t.primary ? "" : ` in ${t.name}`;
+    const where = targets.length > 1 ? ` in ${t.name}` : "";
     await assertClean(t.cwd);
     if (!t.defaultBranch) throw new Error(`Set a default branch${where} before deleting a worktree`);
     // A squash has different commit IDs, and the target may have moved on since. The work is merged
@@ -75,14 +76,14 @@ export async function assertWorkspaceCanRemove(ctx: WorkspaceContext) {
 }
 
 /** Checks one repo can take a sync/rebase/merge/squash, without changing anything. */
-async function assertReady(t: RepoTarget, action: GitAction) {
-  const where = t.primary ? "" : ` (${t.name})`;
+async function assertReady(t: RepoTarget, action: GitAction, multi: boolean) {
+  const where = multi ? ` (${t.name})` : "";
   if (await git(t.cwd, ["branch", "--show-current"]) !== t.branch) throw new Error(`Workspace branch changed${where}; restore its original branch first`);
   await assertClean(t.cwd);
   if (action === "merge" || action === "squash") {
     await assertClean(t.root);
     if (await git(t.root, ["branch", "--show-current"]) !== t.defaultBranch) {
-      throw new Error(`Check out ${t.defaultBranch} in ${t.primary ? "the project root" : t.root} before merging back`);
+      throw new Error(`Check out ${t.defaultBranch} in ${t.root} before merging back`);
     }
   }
 }
@@ -146,7 +147,7 @@ export async function workspaceGitAction(ctx: WorkspaceContext, action: GitActio
     return;
   }
 
-  for (const t of targets) await assertReady(t, action);
+  for (const t of targets) await assertReady(t, action, targets.length > 1);
   for (const t of targets) {
     try {
       await applyToRepo(t, action, ctx.workspace.name);

@@ -1,5 +1,6 @@
 import { captureWorkspaceCheckpoint } from "@/lib/projects/checkpoints";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
+import { sessionConfigRoot } from "@/lib/projects/repos";
 import { withWorkspaceLock } from "@/lib/projects/runtime";
 import { expandCommand } from "@/lib/prompts/context";
 import type { PromptImage } from "@/lib/prompts/schema";
@@ -109,6 +110,8 @@ export type CreateSessionInput = {
   createdAt?: string;
   /** SDK session id (Claude) or thread id (Codex) to resume. */
   resume?: string;
+  /** The directory a resumed session started in. */
+  cwd?: string;
   /** Continue numbering after persisted events. */
   seqStart?: number;
   /** In-memory history to carry over when replacing a terminated session. */
@@ -128,7 +131,8 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
       id,
       projectId: input.ctx.project.id,
       workspaceId: input.ctx.workspace.id,
-      cwd: input.ctx.workspace.cwd,
+      // A resumed transcript stays where it started, even if the workspace has since moved.
+      cwd: input.cwd ?? input.ctx.workspace.cwd,
       model: input.model,
       permissionMode: input.permissionMode,
       sdkSessionId: input.resume ?? null,
@@ -155,7 +159,7 @@ export async function createSession(input: CreateSessionInput): Promise<LiveSess
     if (event.type === "user_message" && event.queued && !dequeued.has(event.messageId)) {
       live.queuedMessages.push({
         id: event.messageId,
-        content: event.kind === "prompt" ? await expandCommand(event.content, input.ctx.project.root) : event.content,
+        content: event.kind === "prompt" ? await expandCommand(event.content, sessionConfigRoot(input.ctx)) : event.content,
         images: event.images ?? [],
       });
     }

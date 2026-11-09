@@ -12,15 +12,13 @@ type Row = {
   slug: string;
   cwd: string;
   branch: string | null;
-  worktree_path: string | null;
-  base_ref: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   workspace_repos?: WorkspaceRepoRow[] | null;
 };
 
-const COLUMNS = `id, project_id, name, slug, cwd, branch, worktree_path, base_ref, status, created_at, updated_at, workspace_repos(${WORKSPACE_REPO_COLUMNS})`;
+const COLUMNS = `id, project_id, name, slug, cwd, branch, status, created_at, updated_at, workspace_repos(${WORKSPACE_REPO_COLUMNS})`;
 
 function toWorkspace(r: Row): Workspace {
   return {
@@ -30,9 +28,7 @@ function toWorkspace(r: Row): Workspace {
     slug: r.slug,
     cwd: r.cwd,
     branch: r.branch,
-    worktreePath: r.worktree_path,
-    baseRef: r.base_ref,
-    extraRepos: toWorkspaceRepos(r.workspace_repos),
+    repos: toWorkspaceRepos(r.workspace_repos),
     status: r.status as Workspace["status"],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -40,19 +36,19 @@ function toWorkspace(r: Row): Workspace {
 }
 
 // Memory-only mode (no Supabase): workspaces live for the server's lifetime. Pinned to globalThis for HMR.
-// Stored without extraRepos; `withRepos` attaches the current list on every read.
-const g = globalThis as typeof globalThis & { __thunkMemWorkspaces?: Map<string, Workspace> };
-const mem = (g.__thunkMemWorkspaces ??= new Map());
-const withRepos = (w: Workspace): Workspace => ({ ...w, extraRepos: memWorkspaceRepos(w.id) });
+// Stored without repos; `withRepos` attaches the current list on every read.
+const g = globalThis as typeof globalThis & { __thunkMemWorkspacesV2?: Map<string, Workspace> };
+const mem = (g.__thunkMemWorkspacesV2 ??= new Map());
+const withRepos = (w: Workspace): Workspace => ({ ...w, repos: memWorkspaceRepos(w.id) });
 
-/** Insert the workspace row. Its extra repo checkouts are added separately with insertWorkspaceRepos. */
+/** Insert the workspace row. Its repo checkouts are added separately with insertWorkspaceRepos. */
 export async function insertWorkspace(
-  input: Omit<Workspace, "id" | "createdAt" | "updatedAt" | "status" | "extraRepos"> & { id?: string },
+  input: Omit<Workspace, "id" | "createdAt" | "updatedAt" | "status" | "repos"> & { id?: string },
 ): Promise<Workspace> {
   const client = db();
   const now = new Date().toISOString();
   if (!client) {
-    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, extraRepos: [], status: "active", createdAt: now, updatedAt: now };
+    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, repos: [], status: "active", createdAt: now, updatedAt: now };
     mem.set(ws.id, ws);
     return withRepos(ws);
   }
@@ -65,8 +61,6 @@ export async function insertWorkspace(
       slug: input.slug,
       cwd: input.cwd,
       branch: input.branch,
-      worktree_path: input.worktreePath,
-      base_ref: input.baseRef,
     })
     .select(COLUMNS)
     .single();
@@ -101,7 +95,19 @@ export async function findWorkspace(projectId: string, by: { slug?: string; cwd?
   return data ? toWorkspace(data) : null;
 }
 
-export async function updateWorkspace(id: string, patch: Partial<Pick<Workspace, "name" | "status">>): Promise<void> {
+/** The oldest workspace running in a directory, across projects. A project's main workspace is its oldest. */
+export async function findWorkspaceByCwd(cwd: string): Promise<Workspace | null> {
+  const client = db();
+  if (!client) {
+    const found = [...mem.values()].filter((w) => w.cwd === cwd).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+    return found ? withRepos(found) : null;
+  }
+  const { data, error } = await client.from("workspaces").select(COLUMNS).eq("cwd", cwd).order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data ? toWorkspace(data) : null;
+}
+
+export async function updateWorkspace(id: string, patch: Partial<Pick<Workspace, "name" | "status" | "cwd">>): Promise<void> {
   const client = db();
   if (!client) {
     const w = mem.get(id);

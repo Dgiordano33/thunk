@@ -14,7 +14,7 @@ export function validateFolderPath(value: string) {
 
 export async function resolveRepoFolder(project: Project, folder: Pick<RepoFolder, "repoId" | "path">) {
   validateFolderPath(folder.path);
-  const root = folder.repoId === null ? project.root : project.extraRepos.find((r) => r.id === folder.repoId)?.path;
+  const root = project.repos.find((r) => r.id === folder.repoId)?.path;
   if (!root) throw new HttpError(404, "Repo not found");
   const checkoutRoot = await realpath(root);
   const notesDir = await realpath(path.join(checkoutRoot, folder.path)).catch((err: NodeJS.ErrnoException) => {
@@ -33,7 +33,7 @@ export async function resolveRepoFolder(project: Project, folder: Pick<RepoFolde
 export async function reconcileDeclaredFolders<T extends Project>(project: T): Promise<T> {
   const folders = [...project.repoFolders];
   let added = false;
-  for (const repo of [{ id: null, path: project.root }, ...project.extraRepos]) {
+  for (const repo of project.repos) {
     const config = await readLifecycleConfig(repo.path).catch((err) => { console.error("[thunk] notebook config", err); return null; });
     for (const folderPath of config?.notebooks ?? []) {
       if (folders.some((f) => f.repoId === repo.id && f.path === folderPath)) continue;
@@ -49,7 +49,7 @@ export async function reconcileDeclaredFolders<T extends Project>(project: T): P
 
 export async function suggestRepoFolders(project: Project) {
   const candidates = [];
-  for (const repo of [{ id: null, name: project.name, path: project.root }, ...project.extraRepos]) {
+  for (const repo of project.repos) {
     for (const folderPath of [".claude/plans", ".claude/tasks", "docs", "plans"]) {
       if (project.repoFolders.some((f) => f.repoId === repo.id && f.path === folderPath)) continue;
       try {

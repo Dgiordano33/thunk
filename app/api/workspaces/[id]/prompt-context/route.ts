@@ -2,6 +2,7 @@ import { handle, HttpError } from "@/lib/api/http";
 import { notesDirsFor } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
 import { getWorkspaceContext } from "@/lib/projects";
+import { sessionConfigRoot } from "@/lib/projects/repos";
 import { promptContext } from "@/lib/prompts/context";
 
 export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -10,7 +11,7 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
   if (!context) throw new HttpError(404, "Workspace not found");
   const dirs = await notesDirsFor(context.project, context.workspace);
   const [base, projectNotes, workspaceNotes, repoNotes] = await Promise.all([
-    promptContext(context.workspace.cwd, context.project.root),
+    promptContext(context.workspace.cwd, sessionConfigRoot(context)),
     listNotes(dirs.project).catch(() => []),
     listNotes(dirs.workspace).catch(() => []),
     Promise.all(dirs.repos.map((d) => listNotes(d).catch(() => []))),

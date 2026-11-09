@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { WorkshopRoutines } from "@/components/routines/workshop-routines";
 import { isLocalWorkspace, workspaceLabel } from "@/components/session/labels";
 import { env } from "@/lib/env";
+import { gitRepos } from "@/lib/projects/repos";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { listRoutines } from "@/lib/supabase/repo/routines";
 import { TownPanel } from "./town-panel";
@@ -14,8 +15,8 @@ export async function WorkshopPanel({ project, workspaces, closeHref }: { projec
       <Suspense>
         <WorkshopRoutines
           projectId={project.id}
-          repo={project.kind === "repo"}
-          hasRemote={Boolean(project.remote)}
+          repo={gitRepos(project).length > 0}
+          hasRemote={gitRepos(project).some((r) => r.remote)}
           workspaces={workspaces
             .filter((w) => w.status === "active")
             .map((w) => ({ id: w.id, label: workspaceLabel(w), inPlace: isLocalWorkspace(w) }))

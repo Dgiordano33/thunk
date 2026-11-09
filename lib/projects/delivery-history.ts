@@ -26,19 +26,19 @@ const journal = z.object({
 export type DeliverySnapshot = z.infer<typeof snapshot>;
 export type DeliveryHistory = z.infer<typeof journal>;
 export const emptyDeliveryHistory = (): DeliveryHistory => ({ version: 1, epoch: randomUUID(), seq: 0, snapshots: [], events: [] });
-const fileFor = (root: string) => path.join(projectDir(root), "delivery.json");
+const fileFor = (key: string) => path.join(projectDir(key), "delivery.json");
 
-export async function readDeliveryHistory(root: string): Promise<DeliveryHistory> {
-  try { return journal.parse(JSON.parse(await readFile(fileFor(root), "utf8"))); }
+export async function readDeliveryHistory(key: string): Promise<DeliveryHistory> {
+  try { return journal.parse(JSON.parse(await readFile(fileFor(key), "utf8"))); }
   catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return emptyDeliveryHistory();
     throw err;
   }
 }
 
-export async function writeDeliveryHistory(root: string, history: DeliveryHistory) {
+export async function writeDeliveryHistory(key: string, history: DeliveryHistory) {
   const content = JSON.stringify(journal.parse(history));
-  const file = fileFor(root);
+  const file = fileFor(key);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomUUID()}.tmp`;
   try { await writeFile(temp, content, { mode: 0o600 }); await rename(temp, file); }

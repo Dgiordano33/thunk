@@ -43,21 +43,23 @@ async function fixture() {
   const root = await fs.mkdtemp(path.join(base, "repo-"));
   await fs.mkdir(path.join(root, "docs"));
   await fs.writeFile(path.join(root, "docs", "board.md"), "# Board\n- [ ] ship\n- [ ] ship\n");
-  const project = await projects.upsertProject({ root, name: "Repo", kind: "repo", remote: null, defaultBranch: "main" });
-  return { root, project };
+  const created = await projects.insertProject({ name: "Repo", dataKey: crypto.randomUUID() });
+  await repos.insertProjectRepo({ projectId: created.id, name: "Repo", path: root, kind: "repo", remote: null, defaultBranch: "main" });
+  const project = await projects.getProject(created.id);
+  return { root, project, repoId: project.repos[0].id };
 }
 
 test("registration, discovery, path containment, note routes and unregister preserve files", async () => {
-  const { root, project } = await fixture();
+  const { root, project, repoId } = await fixture();
   assert.equal((await discovery.suggestRepoFolders(project))[0].count, 1);
   for (const p of ["../escape", "/tmp", "docs/../docs", ".git", "docs//sub", "docs\\sub"]) {
-    assert.equal((await registration.POST(req("POST", { path: p }), ctx({ id: project.id }))).status, 400);
+    assert.equal((await registration.POST(req("POST", { repoId, path: p }), ctx({ id: project.id }))).status, 400);
   }
   await fs.symlink(base, path.join(root, "escape"));
-  assert.equal((await registration.POST(req("POST", { path: "escape" }), ctx({ id: project.id }))).status, 400);
-  assert.equal((await registration.POST(req("POST", { path: "missing" }), ctx({ id: project.id }))).status, 404);
-  assert.equal((await registration.POST(req("POST", { path: "docs", repoId: crypto.randomUUID() }), ctx({ id: project.id }))).status, 404);
-  const response = await registration.POST(req("POST", { path: "docs" }), ctx({ id: project.id }));
+  assert.equal((await registration.POST(req("POST", { repoId, path: "escape" }), ctx({ id: project.id }))).status, 400);
+  assert.equal((await registration.POST(req("POST", { repoId, path: "missing" }), ctx({ id: project.id }))).status, 404);
+  assert.equal((await registration.POST(req("POST", { repoId, path: "docs", repoId: crypto.randomUUID() }), ctx({ id: project.id }))).status, 404);
+  const response = await registration.POST(req("POST", { repoId, path: "docs" }), ctx({ id: project.id }));
   assert.equal(response.status, 200);
   const { folder } = await response.json();
   const collection = routes.notesCollection("repos");
@@ -77,7 +79,7 @@ test("declared notebooks, extra repo notebooks and session prompts use main chec
   const { root, project } = await fixture();
   await fs.writeFile(path.join(root, "thunk.json"), JSON.stringify({ notebooks: ["docs"] }));
   const extra = await fixture();
-  const repo = await repos.insertProjectRepo({ projectId: project.id, name: "extra", path: extra.root, remote: null, defaultBranch: "main" });
+  const repo = await repos.insertProjectRepo({ projectId: project.id, name: "extra", path: extra.root, kind: "repo", remote: null, defaultBranch: "main" });
   await folders.insertRepoFolder({ projectId: project.id, repoId: repo.id, path: "docs", label: "Extra plans" });
   // Getters are pure: thunk.json is only read when the project is reconciled.
   assert.equal((await projects.getProject(project.id)).repoFolders.length, 1);
@@ -86,7 +88,7 @@ test("declared notebooks, extra repo notebooks and session prompts use main chec
   assert.equal(concurrent.repoFolders.length, 2);
   assert.equal(loaded.repoFolders.length, 2);
   assert.equal((await projects.getProject(project.id)).repoFolders.length, 2);
-  const notes = await prompts.loadSessionNotes(loaded, { id: "workspace", slug: "feature", cwd: "/unused-worktree" });
+  const notes = await prompts.loadSessionNotes(loaded, { id: "workspace", slug: "feature", cwd: await fs.realpath(root), repos: [] });
   assert.equal(notes.repos.length, 2);
   assert.equal(notes.repos.filter((r) => r.extra).length, 1);
   assert.match(prompts.notesPrompt(notes), /main checkout/);
@@ -104,7 +106,7 @@ test("imports distinguish identical filenames and duplicate items; completion an
   const { root, project } = await fixture();
   await fs.mkdir(path.join(root, "plans"));
   await fs.writeFile(path.join(root, "plans", "board.md"), "# Second\n- [ ] ship\n");
-  for (const p of ["docs", "plans"]) await folders.insertRepoFolder({ projectId: project.id, repoId: null, path: p, label: p });
+  for (const p of ["docs", "plans"]) await folders.insertRepoFolder({ projectId: project.id, repoId: project.repos[0].id, path: p, label: p });
   assert.equal(await service.importNoteTasks({ projectId: project.id }), 3);
   assert.equal(await service.importNoteTasks({ projectId: project.id }), 0);
   const imported = await tasks.listTasks({ projectId: project.id });
@@ -129,7 +131,7 @@ test("imports distinguish identical filenames and duplicate items; completion an
 
 test("repo watcher debounces a folder burst and reports external edits", async (t) => {
   const { root, project } = await fixture();
-  const folder = await folders.insertRepoFolder({ projectId: project.id, repoId: null, path: "docs", label: "Docs" });
+  const folder = await folders.insertRepoFolder({ projectId: project.id, repoId: project.repos[0].id, path: "docs", label: "Docs" });
   const events = [];
   const waitForEvents = async (count) => {
     const deadline = Date.now() + 5000;

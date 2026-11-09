@@ -16,11 +16,8 @@ const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
 const fake = (id: string, name: string, workspaceCount: number, sessionCount: number, lastDays: number | null, createdDays: number): ProjectSummary => ({
   id,
   name,
-  root: `/Users/dan/code/${name}`,
-  kind: "repo",
-  remote: null,
-  defaultBranch: "main",
-  extraRepos: [],
+  dataKey: name,
+  repos: [{ id: `${id}-repo`, projectId: id, name, path: `/Users/dan/code/${name}`, kind: "repo", remote: null, defaultBranch: "main", createdAt: ago(createdDays) }],
   repoFolders: [],
   createdAt: ago(createdDays),
   updatedAt: ago(createdDays),

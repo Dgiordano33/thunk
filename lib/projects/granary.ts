@@ -14,8 +14,8 @@ const entries = (dir: string) => readdir(dir).catch((err: NodeJS.ErrnoException)
 });
 
 /** Preserve unknown files and auto-memory topic files, even if MEMORY.md is empty. */
-export async function moveToGranary(root: string, slug: string) {
-  const source = path.dirname(workspaceMemoryDir(root, slug));
+export async function moveToGranary(key: string, slug: string) {
+  const source = path.dirname(workspaceMemoryDir(key, slug));
   const files = await entries(source);
   if (!files.length) return null;
   const memory = await readOptional(path.join(source, "memory", "MEMORY.md"));
@@ -26,8 +26,8 @@ export async function moveToGranary(root: string, slug: string) {
     await rm(source, { recursive: true });
     return null;
   }
-  await mkdir(projectGranaryDir(root), { recursive: true });
-  const destination = granaryEntryDir(root, slug, new Date());
+  await mkdir(projectGranaryDir(key), { recursive: true });
+  const destination = granaryEntryDir(key, slug, new Date());
   await rename(source, destination);
   return destination;
 }

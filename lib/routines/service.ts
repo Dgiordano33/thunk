@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { permissionModesFor, providerOf } from "@/lib/agent/types";
 import { HttpError } from "@/lib/api/http";
+import { gitRepos } from "@/lib/projects/repos";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { getRoutine, insertRoutine, updateRoutine } from "@/lib/supabase/repo/routines";
 import { getWorkspace } from "@/lib/supabase/repo/workspaces";
@@ -18,7 +19,7 @@ type Settings = Pick<Routine, "projectId" | "model" | "permissionMode" | "target
 async function validate(r: Settings) {
   const project = await getProject(r.projectId);
   if (!project) throw new HttpError(404, "Project not found");
-  if (r.targetKind === "ephemeral" && project.kind !== "repo")
+  if (r.targetKind === "ephemeral" && !gitRepos(project).length)
     throw new HttpError(400, "Fresh worktrees need a git repository; pick a workspace instead");
   if (r.targetKind === "workspace") {
     const ws = r.targetWorkspaceId ? await getWorkspace(r.targetWorkspaceId) : null;
