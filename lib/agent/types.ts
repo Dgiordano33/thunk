@@ -33,6 +33,10 @@ export function permissionModesFor(provider: AgentProvider): readonly HarnessPer
 }
 
 export type SessionState = "starting" | "idle" | "running" | "awaiting" | "closed" | "error";
+/** "chief" while every request a session waits on belongs to its project chief, not the person. */
+export type WaitingOn = "chief" | null;
+/** Awaiting the person, as opposed to a worker waiting on its chief's answer. */
+export const needsPerson = (s: { status: string; waitingOn?: WaitingOn }) => s.status === "awaiting" && s.waitingOn !== "chief";
 
 export type Question = {
   question: string;
@@ -81,12 +85,15 @@ export type HarnessEventBody =
       suggestions?: PermissionSuggestion[];
     }
   | { type: "permission_resolved"; requestId: string; decision: "allow" | "deny" | "cancelled" }
-  | { type: "ask_question"; requestId: string; toolUseId: string; questions: Question[] }
+  /** routedTo: a worker's question went to its project chief before the person. */
+  | { type: "ask_question"; requestId: string; toolUseId: string; questions: Question[]; routedTo?: "chief" }
   | {
       type: "question_resolved";
       requestId: string;
       answers: Record<string, string> | null;
+      by?: "chief";
     }
+  | { type: "question_escalated"; requestId: string; recommendation: string | null; reason: string }
   | {
       type: "plan_proposed";
       requestId: string;
@@ -125,6 +132,7 @@ export type HarnessEventBody =
       model?: string;
       /** Set when a live session was (re)created from a persisted one. */
       resumed?: boolean;
+      waitingOn?: WaitingOn;
     }
   | { type: "error"; message: string };
 
@@ -142,6 +150,7 @@ export type SessionMeta = {
   sdkSessionId?: string | null;
   title?: string | null;
   status: SessionState;
+  waitingOn?: WaitingOn;
   createdAt: string;
   live: boolean;
   /** What started the session when it wasn't a person, e.g. a routine. */

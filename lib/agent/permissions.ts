@@ -1,4 +1,4 @@
-import { CHIEF_TOOL_NAMES, chiefWriteCommand } from "@/lib/workers/prompt";
+import { CHIEF_TOOL_NAMES, asksChiefFirst, chiefWriteCommand } from "@/lib/workers/prompt";
 import "server-only";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { emit, setState, type LiveSession, type PendingRequest } from "./session-registry";
@@ -23,15 +23,12 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
     const requestId = crypto.randomUUID();
     const toolUseId = opts.toolUseID;
     let kind: PendingRequest["kind"] = "permission";
+    const questions = (input.questions as Question[]) ?? [];
+    const routedTo = toolName === "AskUserQuestion" && asksChiefFirst(live) ? "chief" as const : undefined;
 
     if (toolName === "AskUserQuestion") {
       kind = "question";
-      emit(live, {
-        type: "ask_question",
-        requestId,
-        toolUseId,
-        questions: (input.questions as Question[]) ?? [],
-      });
+      emit(live, { type: "ask_question", requestId, toolUseId, questions, ...(routedTo ? { routedTo } : {}) });
     } else if (toolName === "ExitPlanMode") {
       kind = "plan";
       const prev = live.lastPlan?.changesRequested ? live.lastPlan : null;
@@ -61,9 +58,7 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
       });
     }
 
-    setState(live, "awaiting");
-
-    return new Promise<PermissionResult>((resolve) => {
+    const result = new Promise<PermissionResult>((resolve) => {
       const onAbort = () => {
         if (!live.pending.delete(requestId)) return;
         if (kind === "permission") emit(live, { type: "permission_resolved", requestId, decision: "cancelled" });
@@ -78,11 +73,17 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
         toolUseId,
         input,
         suggestions: opts.suggestions,
+        routedTo,
         resolve: (result) => {
           opts.signal.removeEventListener("abort", onAbort);
           resolve(result);
         },
       });
     });
+    // After the request is parked, so status listeners can see who owns it.
+    setState(live, "awaiting");
+    if (routedTo) void import("@/lib/workers/questions").then((m) => m.forwardQuestion(live, requestId, questions))
+      .catch((err) => console.error("[thunk] forwarding a question to the chief failed", err));
+    return result;
   };
 }
