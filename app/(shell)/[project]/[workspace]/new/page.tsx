@@ -3,22 +3,23 @@ import { workspaceLabel } from "@/components/session/labels";
 import { NewChat } from "@/components/workspace/new-chat";
 import { listSessions } from "@/lib/agent";
 import { env } from "@/lib/env";
-import { getWorkspaceContext } from "@/lib/projects";
+import { getWorkspaceContextBySlugs } from "@/lib/projects";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: PageProps<"/w/[id]/new">) {
-  const { id } = await params;
-  const ctx = await getWorkspaceContext(id).catch(() => null);
+export async function generateMetadata({ params }: PageProps<"/[project]/[workspace]/new">) {
+  const { project, workspace } = await params;
+  const ctx = await getWorkspaceContextBySlugs(project, workspace).catch(() => null);
   return { title: ctx ? `${workspaceLabel(ctx.workspace)} · ${ctx.project.name} · Thunk` : "Thunk" };
 }
 
-export default async function NewChatPage({ params, searchParams }: PageProps<"/w/[id]/new">) {
-  const { id } = await params;
+export default async function NewChatPage({ params, searchParams }: PageProps<"/[project]/[workspace]/new">) {
+  const { project, workspace } = await params;
   // Set when switching providers from a running chat's model picker.
   const { model } = await searchParams;
-  const ctx = await getWorkspaceContext(id);
+  const ctx = await getWorkspaceContextBySlugs(project, workspace);
   if (!ctx) notFound();
+  const id = ctx.workspace.id;
   // Carry over the model and mode from the workspace's latest session.
   const [latest] = await listSessions({ workspaceId: id, limit: 1 });
 

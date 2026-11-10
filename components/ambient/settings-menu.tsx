@@ -15,11 +15,13 @@ import type { Theme } from "@/lib/theme";
 import { NOTIFICATION_KINDS, NOTIFICATION_LABELS } from "@/lib/notifications/types";
 import { setMuted, useNotifications } from "@/lib/store/notifications-store";
 import { cn } from "@/lib/utils";
+import { usePaths } from "@/components/layout/paths-context";
 
 const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cost);
 
 /** Sidebar footer: app-wide settings. */
 export function SettingsMenu({ projects, className }: { projects: SidebarProject[]; className?: string }) {
+  const paths = usePaths();
   const muted = useNotifications((s) => s.muted);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
@@ -111,7 +113,7 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
               <div><h3 className="mb-2 text-sm font-medium">By workspace</h3><table className="w-full text-xs"><tbody>{usage.workspaces.map((w) => {
                 const project = projects.find((p) => p.workspaces.some((item) => item.id === w.id));
                 const name = project?.workspaces.find((item) => item.id === w.id)?.name || "Archived workspace";
-                return <tr key={w.id}><th scope="row" className="py-1 text-left font-normal"><Link href={`/w/${w.id}`} onClick={() => setUsageOpen(false)} className="hover:underline">{name}</Link>{project && <span className="text-muted-foreground block">{project.name}</span>}</th><td className="text-right tabular-nums">{usd(w.cost)}</td></tr>;
+                return <tr key={w.id}><th scope="row" className="py-1 text-left font-normal"><Link href={paths.workspace(w.id)} onClick={() => setUsageOpen(false)} className="hover:underline">{name}</Link>{project && <span className="text-muted-foreground block">{project.name}</span>}</th><td className="text-right tabular-nums">{usd(w.cost)}</td></tr>;
               })}</tbody></table></div>
             </div>
           </>}

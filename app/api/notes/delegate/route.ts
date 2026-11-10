@@ -5,6 +5,7 @@ import { getRepoFolder } from "@/lib/supabase/repo/repo-folders";
 import { openChief } from "@/lib/workers/service";
 import { noteBrief } from "@/lib/workers/notes";
 import { pushUserMessage } from "@/lib/agent";
+import { hrefForSession } from "@/lib/routes.server";
 const Body = z.object({ scope: z.object({ kind: z.enum(["projects", "workspaces", "repos"]), id: z.uuid() }).strict(), noteId: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i) }).strict();
 export const POST = handle(async (req: Request) => {
   const { scope, noteId } = await parseBody(req, Body);
@@ -18,5 +19,5 @@ export const POST = handle(async (req: Request) => {
   if (note.scope.kind !== scope.kind || note.scope.id !== scope.id) throw new HttpError(404, "Note not found in this scope");
   const chief = await openChief(projectId);
   pushUserMessage(chief, `Delegate this note: ${note.path}\nSplit unchecked checklist items into separate tasks. Use noteId ${id} for every delegate call.\n\n${brief}`);
-  return Response.json({ sessionId: chief.id, workspaceId: chief.meta.workspaceId });
+  return Response.json({ sessionId: chief.id, workspaceId: chief.meta.workspaceId, href: await hrefForSession(chief.meta.workspaceId, chief.id) });
 });

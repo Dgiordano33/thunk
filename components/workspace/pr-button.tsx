@@ -14,7 +14,7 @@ import {
   MessageSquareReplyIcon,
   WrenchIcon,
 } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,6 +22,7 @@ import { api } from "@/lib/client/api";
 import type { CheckState, PullRequestInfo, WorkspacePrStatus } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
+import { useWorkspaceBase } from "./route-context";
 
 const POLL_MS = 30_000;
 /** While a PR is being created, checks are running, or mergeability is being computed. */
@@ -110,7 +111,8 @@ const FAST_AFTER_REQUEST_MS = 5 * 60_000;
 /** Top-right PR action: "Create PR" hands the job to the agent; once a PR exists it links to it. */
 export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: { workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean; repo?: PrRepo }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const { session: sid } = useParams<{ session?: string }>();
+  const base = useWorkspaceBase();
   const [loadedStatus, setStatus] = useState<WorkspacePrStatus | null>(null);
   const [requested, setRequested] = useState<{ action: PrAction; at: number } | null>(null);
   const [pending, setPending] = useState<PrAction | null>(null);
@@ -141,13 +143,12 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: 
   const ask = async (action: PrAction, prompt: string) => {
     setPending(action);
     try {
-      const sid = pathname.match(/\/s\/([^/]+)$/)?.[1];
       const s = useSession.getState();
       if (sid && s.sessionId === sid && s.meta?.live) {
         await api.send(sid, prompt);
       } else {
         const { id } = await api.createSession({ workspaceId, prompt, title: repo ? `${ACTION_TITLE[action]} (${repo.name})` : ACTION_TITLE[action] });
-        router.push(`/w/${workspaceId}/s/${id}`);
+        router.push(`${base}/${id}`);
         router.refresh();
       }
       setRequested({ action, at: Date.now() });

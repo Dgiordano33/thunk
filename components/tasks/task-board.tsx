@@ -43,7 +43,7 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
     void run(task.id, async () => {
       const result = await api.sendTask(task.id, sessionId === "worker" ? { worker: true } : sessionId ? { sessionId } : { workspaceId: ws });
       setSending(null);
-      router.push(`/w/${result.workspaceId}/s/${result.sessionId}`); router.refresh();
+      router.push(result.href); router.refresh();
     });
   };
   const list = (items: Task[], emptyText: string) => <TaskList tasks={items} sessions={sessions} busyId={busyId} emptyText={emptyText}

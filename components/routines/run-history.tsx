@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import { OPEN_RUN_STATUSES, RUN_TRIGGER_LABELS, type RoutineRun } from "@/lib/routines/types";
 import { isSkipRun, RunStatusBadge, runDuration, usd } from "./shared";
+import { usePaths } from "@/components/layout/paths-context";
 
 /** A routine's recent runs, newest first, refreshed while any is open. */
 export function RunHistory({ routineId, projectId, refreshKey }: { routineId: string; projectId: string; refreshKey?: number }) {
@@ -73,9 +74,10 @@ export function RunHistory({ routineId, projectId, refreshKey }: { routineId: st
 
 function RunRow({ run, routineId, projectId, onChange }: { run: RoutineRun; routineId: string; projectId: string; onChange: () => void }) {
   const [cancelling, setCancelling] = useState(false);
+  const paths = usePaths();
   const isOpen = OPEN_RUN_STATUSES.includes(run.status);
   const d = run.diffStat;
-  const sessionHref = run.sessionId ? (run.workspaceId ? `/w/${run.workspaceId}/s/${run.sessionId}` : `/p/${projectId}?session=${run.sessionId}`) : null;
+  const sessionHref = run.sessionId ? (run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : `${paths.project(projectId)}?session=${run.sessionId}`) : null;
   return (
     <li className="bg-background rounded-lg border px-3 py-2">
       <div className="flex items-center gap-2 text-xs">
@@ -108,7 +110,7 @@ function RunRow({ run, routineId, projectId, onChange }: { run: RoutineRun; rout
             </Link>
           )}
           {run.noteId && (
-            <Link href={`/p/${projectId}?building=library&note=${run.noteId}`} scroll={false} className="text-primary flex items-center gap-1 hover:underline">
+            <Link href={`${paths.project(projectId)}?building=library&note=${run.noteId}`} scroll={false} className="text-primary flex items-center gap-1 hover:underline">
               <NotebookTextIcon className="size-3" /> Report note
             </Link>
           )}

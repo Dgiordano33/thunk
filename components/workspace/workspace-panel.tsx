@@ -19,6 +19,7 @@ import { SessionsList } from "./sessions-list";
 import { WorkspaceTasks } from "./workspace-tasks";
 import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { WorkspaceNotes } from "./workspace-notes";
+import { useWorkspaceBase } from "./route-context";
 
 const CHANGES_POLL_MS = 5000;
 
@@ -79,7 +80,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
       </div>
       <TabsContent value="sessions" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
-          <SessionsList workspaceId={workspaceId} sessions={sessions} />
+          <SessionsList sessions={sessions} />
         </div>
       </TabsContent>
       <TabsContent value="artifacts" className="min-h-0 flex-1">
@@ -106,6 +107,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
 
 function Artifacts({ workspaceId }: { workspaceId: string }) {
   const pathname = usePathname();
+  const base = useWorkspaceBase();
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const activeDocumentId = useSession((s) => s.activeDocumentId);
   // Refetch when the open session gains a document or finishes a turn.
@@ -127,8 +129,8 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
     <ul className="flex flex-col gap-0.5 p-2">
       {artifacts.map((a) => {
         const Icon = a.kind === "plan" ? ListChecksIcon : FileTextIcon;
-        const href = `/w/${workspaceId}/s/${a.sessionId}#doc-${a.id}`;
-        const here = pathname === `/w/${workspaceId}/s/${a.sessionId}`;
+        const href = `${base}/${a.sessionId}#doc-${a.id}`;
+        const here = pathname === `${base}/${a.sessionId}`;
         return (
           <li key={a.id}>
             <Link

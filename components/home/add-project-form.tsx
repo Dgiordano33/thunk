@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client/api";
 import type { RepoSpec } from "@/lib/projects/repo-spec";
+import { projectPath } from "@/lib/routes";
 
 type Row = { key: number; spec: RepoSpec; status: "draft" | "adding" | "added" | "failed"; error?: string };
 
@@ -29,9 +30,10 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
   const [error, setError] = useState<string | null>(null);
   // Set once the project exists but some repos failed: the dialog stays open to retry them.
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectSlug, setProjectSlug] = useState<string | null>(null);
 
   const reset = () => {
-    setName(""); setNameEdited(false); setRows([]); setDraft(null); setError(null); setPending(false); setProjectId(null);
+    setName(""); setNameEdited(false); setRows([]); setDraft(null); setError(null); setPending(false); setProjectId(null); setProjectSlug(null);
   };
 
   const onOpenChange = (next: boolean) => {
@@ -43,8 +45,8 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
     }
   };
 
-  const goToProject = (id: string) => {
-    router.push(`/p/${id}`);
+  const goToProject = (slug: string) => {
+    router.push(projectPath({ slug }));
     router.refresh();
   };
 
@@ -68,8 +70,9 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
     setPending(true);
     try {
       const result = await api.createProject({ name: name.trim(), repos: rows.map((r) => r.spec) });
-      if (result.repos.every((r) => r.status === "added")) return goToProject(result.project.id);
+      if (result.repos.every((r) => r.status === "added")) return goToProject(result.project.slug);
       setProjectId(result.project.id);
+      setProjectSlug(result.project.slug);
       setRows(rows.map((row, i) => {
         const outcome = result.repos[i];
         return { ...row, status: outcome.status, error: outcome.status === "failed" ? outcome.error : undefined };
@@ -184,7 +187,7 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
 
           <DialogFooter>
             {projectId ? (
-              <Button type="button" onClick={() => goToProject(projectId)} disabled={rows.some((r) => r.status === "adding")}>Go to project</Button>
+              <Button type="button" onClick={() => projectSlug && goToProject(projectSlug)} disabled={rows.some((r) => r.status === "adding")}>Go to project</Button>
             ) : (
               <Button type="submit" disabled={!canCreate || !!draft}>
                 {pending && <Loader2Icon className="animate-spin" />}

@@ -251,7 +251,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
         delegateDisabled={delegating || save !== "saved" || Boolean(conflict) || broken}
         onDelegate={memory ? undefined : () => {
           setDelegating(true);
-          api.delegateNote(scope, note.id).then((r) => { router.push(`/w/${r.workspaceId}/s/${r.sessionId}`); router.refresh(); })
+          api.delegateNote(scope, note.id).then((r) => { router.push(r.href); router.refresh(); })
             .catch((err: Error) => setSaveError(err.message)).finally(() => setDelegating(false));
         }} />
       {conflict && (

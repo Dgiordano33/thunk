@@ -69,6 +69,7 @@ const ALERT = "pixel absolute left-1/2 flex size-5 -translate-x-1/2 items-center
 
 export function TownView({
   projectId,
+  townHref,
   projectName,
   grid,
   tiles,
@@ -83,6 +84,8 @@ export function TownView({
   children,
 }: {
   projectId: string;
+  /** This town's page, `/{project}`. */
+  townHref: string;
   projectName: string;
   grid: Grid;
   tiles: Tile[][];
@@ -101,7 +104,7 @@ export function TownView({
   const runs = useAmbient((s) => s.runs);
   const workshopAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
   const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending }]));
-  const base = `/p/${projectId}`;
+  const base = townHref;
   const { w, h } = mapSize(grid);
   const focus = { ...toIso(center.col, center.row, grid), z: 1.1 };
   const hueOf = new Map(farms.map((ws) => [ws.id, ws.hue]));

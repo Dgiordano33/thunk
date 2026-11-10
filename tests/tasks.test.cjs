@@ -52,7 +52,7 @@ const sse = require("../app/api/tasks/events/route.ts");
 const req = (method, body, query = "") => new Request(`http://localhost/api/tasks${query}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { "Content-Type": "application/json" } }) });
 const ctx = (id) => ({ params: Promise.resolve({ id }) });
 async function fixture() {
-  const p = await projects.insertProject({ name: "Project", dataKey: crypto.randomUUID() });
+  const p = await projects.insertProject({ name: "Project", dataKey: crypto.randomUUID(), slug: crypto.randomUUID() });
   const w = await workspaces.insertWorkspace({ projectId: p.id, name: "Workspace", slug: "main", cwd: "/tmp", branch: null });
   return { p, w };
 }
@@ -223,7 +223,7 @@ test("memory-only deletions mirror task foreign-key cleanup", async () => {
   const task = await service.createTask({ projectId: p.id, workspaceId: w.id, title: "Isolate this" });
   const response = await send.POST(req("POST", { worker: true }), ctx(task.id));
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { taskId: task.id, sessionId: "worker-session", workspaceId: "worker-workspace" });
+  assert.deepEqual(await response.json(), { taskId: task.id, sessionId: "worker-session", workspaceId: "worker-workspace", href: "/w/worker-workspace/s/worker-session" });
   assert.deepEqual(delegated.at(-1), [p.id, null, { taskId: task.id }]);
   assert.equal((await send.POST(req("POST", { worker: true, workspaceId: w.id }), ctx(task.id))).status, 400);
 });

@@ -7,10 +7,10 @@ import type { NoteScope } from "@/lib/notes/types";
 import { useScopeNotes } from "@/lib/store/notes-store";
 
 /** A short note list (memory first) that opens the note in the town Library panel. */
-export function TownNotes({ projectId, scope, limit = 5 }: { projectId: string; scope: NoteScope; limit?: number }) {
+export function TownNotes({ townHref, scope, limit = 5 }: { townHref: string; scope: NoteScope; limit?: number }) {
   const router = useRouter();
   const { notes } = useScopeNotes(scope);
-  const base = `/p/${projectId}?building=library${scope.kind === "workspaces" ? `&nws=${scope.id}` : ""}`;
+  const base = `${townHref}?building=library${scope.kind === "workspaces" ? `&nws=${scope.id}` : ""}`;
   return (
     <div className="-mx-2">
       <NoteList compact notes={notes?.slice(0, limit) ?? null} onSelect={(id) => router.push(`${base}&note=${id}`, { scroll: false })} />

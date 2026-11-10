@@ -2,11 +2,12 @@ import type { LiveSession } from "@/lib/agent/session-registry";
 import type { HarnessEvent } from "@/lib/agent/types";
 import { notify, resolveBySubject, resolveWhere } from "./service";
 import type { Notification } from "./types";
+import { hrefForSession } from "@/lib/routes.server";
 
 export async function sessionNotification(live: LiveSession, e: HarnessEvent) {
   const sessionId = live.id;
   const base = { projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
-    href: `/w/${live.meta.workspaceId}/s/${sessionId}` };
+    href: await hrefForSession(live.meta.workspaceId, sessionId) };
   if (e.type === "permission_request" || e.type === "ask_question" || e.type === "plan_proposed") {
     const kind = e.type === "permission_request" ? "permission" : e.type === "ask_question" ? "question" : "plan";
     const actions: Notification["actions"] = [];

@@ -9,6 +9,7 @@ import type { RoutineSummary } from "@/lib/routines/types";
 import { cn } from "@/lib/utils";
 import { RunNowButton } from "./routine-list";
 import { RunStatusBadge, triggerSummary, untilTime, useRoutines } from "./shared";
+import { usePaths } from "@/components/layout/paths-context";
 
 /** Every project's routines in one table, refreshed every few seconds. */
 export function RoutinesOverview({
@@ -21,6 +22,7 @@ export function RoutinesOverview({
   firstProjectId: string | null;
 }) {
   const { routines, refresh } = useRoutines(undefined, initial);
+  const paths = usePaths();
   const list = routines ?? [];
 
   if (!list.length)
@@ -35,7 +37,7 @@ export function RoutinesOverview({
             that owns them. Each city builds its own in its Workshop.
           </p>
           <Link
-            href={firstProjectId ? `/p/${firstProjectId}?building=workshop&routine=new` : "/"}
+            href={firstProjectId ? `${paths.project(firstProjectId)}?building=workshop&routine=new` : "/projects"}
             className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80"
           >
             {firstProjectId ? "Visit a Workshop →" : "← Found a city first"}
@@ -76,12 +78,12 @@ export function RoutinesOverview({
                 return (
                   <tr key={r.id} className={cn("hover:bg-muted/50 border-b last:border-b-0", !r.enabled && "opacity-70")}>
                     <td className="max-w-56 px-3 py-2">
-                      <Link href={`/p/${r.projectId}?building=workshop&routine=${r.id}`} className="block truncate font-medium hover:underline">
+                      <Link href={`${paths.project(r.projectId)}?building=workshop&routine=${r.id}`} className="block truncate font-medium hover:underline">
                         {r.name}
                       </Link>
                     </td>
                     <td className="px-3 py-2">
-                      <Link href={`/p/${r.projectId}`} className="text-muted-foreground hover:underline">
+                      <Link href={paths.project(r.projectId)} className="text-muted-foreground hover:underline">
                         {r.projectName}
                       </Link>
                     </td>

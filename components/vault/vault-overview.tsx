@@ -9,6 +9,7 @@ import { PixelIcon } from "@/components/world/pixel-icon";
 import { api } from "@/lib/client/api";
 import { isBusy, type VaultItem } from "@/lib/vault/types";
 import { VaultBody } from "./vault-panel";
+import { usePaths } from "@/components/layout/paths-context";
 
 type Row = VaultItem & { projectName?: string };
 
@@ -17,6 +18,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const paths = usePaths();
   const [items, setItems] = useState<Row[]>(initial);
   const project = params.get("project");
   const projectId = projects.some((p) => p.id === project) ? project : null;
@@ -58,7 +60,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
           <h1 className="pixel mt-1 text-3xl">Nothing to guard yet</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">Every city has a Vault for source material: docs, screenshots, slides, transcripts. Found a city first.</p>
-          <Link href="/" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to the map</Link>
+          <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to the map</Link>
         </CivPanel>
       </main>
     );
@@ -83,7 +85,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
             </SelectContent>
           </Select>
           {projectId && (
-            <Link href={`/p/${projectId}?building=vault`} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Visit town →</Link>
+            <Link href={`${paths.project(projectId)}?building=vault`} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Visit town →</Link>
           )}
         </header>
         {!projectId && (

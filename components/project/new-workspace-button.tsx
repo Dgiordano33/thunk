@@ -6,16 +6,19 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/client/api";
+import { newChatPath } from "@/lib/routes";
 
 /** Create a workspace, remembering which repos or folders the user last selected. */
 export function NewWorkspaceButton({
   projectId,
+  projectSlug,
   projectName,
   repos = [],
   compact,
   className,
 }: {
   projectId: string;
+  projectSlug: string;
   projectName: string;
   repos?: { id: string; name: string; kind: "repo" | "folder" }[];
   compact?: boolean;
@@ -32,7 +35,7 @@ export function NewWorkspaceButton({
       const { workspace } = await api.createWorkspace({ projectId, ...(repoIds ? { repoIds } : {}) });
       try { localStorage.setItem(`thunk:workspace-repos:${projectId}`, JSON.stringify(repoIds ?? repos.map((r) => r.id))); } catch {}
       setOpen(false);
-      router.push(`/w/${workspace.id}/new`);
+      router.push(newChatPath({ slug: projectSlug }, workspace));
       router.refresh();
     } catch (err) {
       window.alert(`Couldn't create workspace: ${(err as Error).message}`);

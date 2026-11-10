@@ -13,6 +13,7 @@ import { useNotifications, useNotificationsEvents } from "@/lib/store/notificati
 import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
+import { pathsFor, projectPath, workspacePath } from "@/lib/routes";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -22,8 +23,8 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** A run's session when it still exists, else the Workshop entry for its routine. */
-function runHref(run: RoutineRunActivity) {
-  return run.sessionId && run.workspaceId ? `/w/${run.workspaceId}/s/${run.sessionId}` : `/p/${run.projectId}?building=workshop&routine=${run.routineId}`;
+function runHref(run: RoutineRunActivity, paths: ReturnType<typeof pathsFor>) {
+  return run.sessionId && run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : `${paths.project(run.projectId)}?building=workshop&routine=${run.routineId}`;
 }
 
 /** Activity polling and ⌘K search. `hud` renders only a compact search button, for the world map. */
@@ -96,8 +97,8 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
   const attention = notices.filter((n) => n.status === "open" && n.urgency === "action");
   const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
   const navigation: SearchResult[] = projects.flatMap((p) => [
-    { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: `/p/${p.id}`, kind: "Project" },
-    ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: `/w/${w.id}`, kind: "Workspace" })),
+    { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: projectPath(p), kind: "Project" },
+    ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: workspacePath(p, w), kind: "Workspace" })),
   ]).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
 
   const searchDialog = (
@@ -153,7 +154,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
         <div className="border-b px-4 py-3">
           <h2 className="text-muted-foreground text-xs font-medium">Routines</h2>
           <ul className="mt-1 max-h-40 overflow-y-auto">
-            {runs.map((r) => <li key={r.id}><Link href={runHref(r)} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
+            {runs.map((r) => <li key={r.id}><Link href={runHref(r, pathsFor(projects))} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
               <span className="block truncate font-medium">{r.routineName}</span>
               <span className="text-muted-foreground block truncate">{RUN_STATUS_LABELS[r.status]}{r.summary ? ` · ${r.summary.split("\n")[0]}` : r.error ? ` · ${r.error}` : ""}</span>
             </Link></li>)}

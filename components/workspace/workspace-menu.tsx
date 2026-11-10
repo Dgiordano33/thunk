@@ -15,27 +15,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/client/api";
 import type { Workspace } from "@/lib/projects/types";
+import { projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 /** New note / archive / delete for a sidebar workspace row. */
-export function WorkspaceMenu({ workspace, label, className }: { workspace: Workspace; label: string; className?: string }) {
+export function WorkspaceMenu({ project, workspace, label, className }: { project: { slug: string }; workspace: Workspace; label: string; className?: string }) {
   const router = useRouter();
   const [harvest, setHarvest] = useState<{ data: HarvestData; action: HarvestAction } | null>(null);
   const pathname = usePathname();
-  const viewing = pathname.startsWith(`/w/${workspace.id}`);
+  const base = workspacePath(project, workspace);
+  const viewing = pathname === base || pathname.startsWith(`${base}/`);
   const isMain = workspace.slug === "main";
   const archived = workspace.status === "archived";
 
   // Leaving the sidebar: step out to the project if we're looking at it.
   const done = () => {
-    if (viewing) router.push(`/p/${workspace.projectId}`);
+    if (viewing) router.push(projectPath(project));
     router.refresh();
   };
 
   const toggleArchive = async () => {
     try {
       await api.updateWorkspace(workspace.id, { status: archived ? "active" : "archived" });
-      if (!archived) router.push(`/p/${workspace.projectId}?harvest=${workspace.id}`);
+      if (!archived) router.push(`${projectPath(project)}?harvest=${workspace.id}`);
       else done();
     } catch (err) {
       window.alert((err as Error).message);

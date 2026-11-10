@@ -8,6 +8,7 @@ import { SettingsMenu } from "@/components/ambient/settings-menu";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { useNotifications } from "@/lib/store/notifications-store";
 import { useUi } from "@/lib/store/ui-store";
+import { isProjectPath, PROJECTS_PATH } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { CivPanel } from "./civ-panel";
 import { PixelIcon, type PixelIconName } from "./pixel-icon";
@@ -50,7 +51,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
   }, [expanded, setExpanded]);
 
   const slots: { href: string; label: string; icon: PixelIconName; detail: string }[] = [
-    { href: "/", label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
+    { href: PROJECTS_PATH, label: "Projects", icon: "castle", detail: `${cityCount} ${cityCount === 1 ? "city" : "cities"}` },
     { href: "/inbox", label: "Inbox", icon: "bell", detail: `${count} waiting` },
     { href: "/notes", label: "Notes", icon: "scroll", detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
     { href: "/routines", label: "Routines", icon: "hourglass", detail: `${routineCount} active` },
@@ -73,7 +74,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
           >
             <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">
               {slots.map((slot) => {
-                const active = slot.href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(slot.href);
+                const active = slot.href === PROJECTS_PATH ? pathname === PROJECTS_PATH || isProjectPath(pathname) : pathname.startsWith(slot.href);
                 return (
                   <Link
                     key={slot.href}

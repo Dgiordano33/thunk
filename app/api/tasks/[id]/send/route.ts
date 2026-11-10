@@ -5,6 +5,7 @@ import { getTask } from "@/lib/supabase/repo/tasks";
 import { getSessionRow, upsertSession } from "@/lib/supabase/repo/sessions";
 import { getWorkspace } from "@/lib/supabase/repo/workspaces";
 import { patchTask, taskId } from "@/lib/tasks/service";
+import { hrefForSession } from "@/lib/routes.server";
 const Body = z.object({ sessionId: z.uuid().optional(), workspaceId: z.uuid().optional(), worker: z.boolean().optional() }).strict();
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const task = await getTask(taskId((await ctx.params).id));
@@ -13,7 +14,8 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   if (body.worker) {
     const { delegate } = await import("@/lib/workers/service");
     if (body.sessionId || body.workspaceId) throw new HttpError(400, "Choose worker or a session/workspace destination");
-    return Response.json(await delegate(task.projectId, null, { taskId: task.id }));
+    const result = await delegate(task.projectId, null, { taskId: task.id });
+    return Response.json({ ...result, href: await hrefForSession(result.workspaceId, result.sessionId) });
   }
   const session = body.sessionId ? getSession(body.sessionId)?.meta ?? await getSessionRow(body.sessionId) : null;
   if (body.sessionId && !session) throw new HttpError(404, "Session not found");
@@ -30,5 +32,5 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   await upsertSession(live.meta);
   await patchTask(task.id, { sessionId: live.id });
   pushUserMessage(live, `${task.title}${task.body ? `\n\n${task.body}` : ""}\n\nTask id: ${task.id}. Claim it with tasks_update and complete it with tasks_complete.`);
-  return Response.json({ sessionId: live.id, workspaceId });
+  return Response.json({ sessionId: live.id, workspaceId, href: await hrefForSession(workspaceId, live.id) });
 });

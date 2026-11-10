@@ -11,17 +11,18 @@ import { PrButton } from "./pr-button";
 
 export function WorkspaceTabs({
   workspace,
+  base,
   sessions,
   branch,
   dirty,
 }: {
   workspace: Workspace;
+  base: string;
   sessions: SessionMeta[];
   branch: string | null;
   dirty: number;
 }) {
   const pathname = usePathname();
-  const base = `/w/${workspace.id}`;
   const onNew = pathname === `${base}/new`;
   // The open session's title and status stream in live; everything else comes from the server.
   const meta = useSession((s) => s.meta);
@@ -32,7 +33,7 @@ export function WorkspaceTabs({
     <div className="flex h-11 shrink-0 items-stretch border-b">
       <nav className="flex min-w-0 flex-1 items-stretch overflow-x-auto" aria-label="Sessions">
         {sessions.map((s) => {
-          const href = `${base}/s/${s.id}`;
+          const href = `${base}/${s.id}`;
           const active = pathname === href;
           const current = s.id === meta?.id;
           const live = current ? Boolean(meta?.live) : s.live;

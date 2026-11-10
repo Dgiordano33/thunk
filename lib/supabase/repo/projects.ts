@@ -11,18 +11,20 @@ type Row = {
   id: string;
   name: string;
   data_key: string;
+  slug: string;
   created_at: string;
   updated_at: string;
   project_repos?: ProjectRepoRow[] | null;
 };
 
-const COLUMNS = `id, name, data_key, created_at, updated_at, project_repos(${PROJECT_REPO_COLUMNS})`;
+const COLUMNS = `id, name, data_key, slug, created_at, updated_at, project_repos(${PROJECT_REPO_COLUMNS})`;
 
 function toProject(r: Row): Project {
   return {
     id: r.id,
     name: r.name,
     dataKey: r.data_key,
+    slug: r.slug,
     repos: toProjectRepos(r.project_repos),
     repoFolders: [],
     createdAt: r.created_at,
@@ -43,23 +45,24 @@ const attachFolders = <T extends Project>(project: T, folders: RepoFolder[]): T 
 });
 const withRepoFolders = async <T extends Project>(project: T): Promise<T> => attachFolders(project, await listRepoFolders(project.id));
 
-/** A new project with no repos. A taken data key is a Postgres-style unique violation (`code: "23505"`). */
-export async function insertProject(input: { name: string; dataKey: string }): Promise<Project> {
+/** A new project with no repos. A taken data key or slug is a Postgres-style unique violation (`code: "23505"`). */
+export async function insertProject(input: { name: string; dataKey: string; slug: string }): Promise<Project> {
   const client = db();
   if (!client) {
     if ([...mem.values()].some((p) => p.dataKey === input.dataKey)) throw Object.assign(new Error(`Data key taken: ${input.dataKey}`), { code: "23505" });
+    if ([...mem.values()].some((p) => p.slug === input.slug)) throw Object.assign(new Error(`Slug taken: ${input.slug}`), { code: "23505" });
     const now = new Date().toISOString();
     const project: Project = { id: crypto.randomUUID(), ...input, repos: [], repoFolders: [], createdAt: now, updatedAt: now };
     mem.set(project.id, project);
     return withRepoFolders(withRepos(project));
   }
-  const { data, error } = await client.from("projects").insert({ name: input.name, data_key: input.dataKey }).select(COLUMNS).single();
+  const { data, error } = await client.from("projects").insert({ name: input.name, data_key: input.dataKey, slug: input.slug }).select(COLUMNS).single();
   if (error) throw error;
   return withRepoFolders(toProject(data));
 }
 
-/** The project with this data key, created if needed. An existing project keeps its name. */
-export async function upsertProjectByKey(input: { name: string; dataKey: string }): Promise<Project> {
+/** The project with this data key, created if needed. An existing project keeps its name and slug. */
+export async function upsertProjectByKey(input: { name: string; dataKey: string; slug: string }): Promise<Project> {
   const existing = await getProjectByKey(input.dataKey);
   if (existing) return existing;
   return insertProject(input).catch(async (err: { code?: string }) => {
@@ -87,6 +90,18 @@ export async function getProjectByKey(dataKey: string): Promise<Project | null> 
     return p ? withRepoFolders(withRepos(p)) : null;
   }
   const { data, error } = await client.from("projects").select(COLUMNS).eq("data_key", dataKey).maybeSingle();
+  if (error) throw error;
+  return data ? withRepoFolders(toProject(data)) : null;
+}
+
+/** The project at `/{slug}`. */
+export async function getProjectBySlug(slug: string): Promise<Project | null> {
+  const client = db();
+  if (!client) {
+    const p = [...mem.values()].find((p) => p.slug === slug);
+    return p ? withRepoFolders(withRepos(p)) : null;
+  }
+  const { data, error } = await client.from("projects").select(COLUMNS).eq("slug", slug).maybeSingle();
   if (error) throw error;
   return data ? withRepoFolders(toProject(data)) : null;
 }

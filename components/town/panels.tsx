@@ -10,6 +10,8 @@ import { relativeTime, workspaceLabel } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { HarvestButton } from "@/components/workspace/harvest-dialog";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
+import { WorkspaceBaseProvider } from "@/components/workspace/route-context";
+import { newChatPath, projectPath, workspacePath } from "@/lib/routes";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import type { PersistedDocument } from "@/lib/documents/types";
 import type { ExternalSession } from "@/lib/projects";
@@ -79,7 +81,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
             ]}
           />
           <div className="mt-3">
-            <NewWorkspaceButton projectId={project.id} projectName={project.name} repos={project.repos} />
+            <NewWorkspaceButton projectId={project.id} projectSlug={project.slug} projectName={project.name} repos={project.repos} />
           </div>
         </Section>
         <Section title={`Repos (${project.repos.length})`}>
@@ -88,12 +90,12 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
         </Section>
       </>,
     },
-    { value: "notes", label: "Notes", content: <Pane><TownNotes projectId={project.id} scope={{ kind: "projects", id: project.id }} /></Pane> },
+    { value: "notes", label: "Notes", content: <Pane><TownNotes townHref={projectPath(project)} scope={{ kind: "projects", id: project.id }} /></Pane> },
   ];
   if (externalSessions.length > 0) tabs.push({
     value: "settlers",
     label: <>Settlers <Count n={externalSessions.length} /></>,
-    content: <Pane><ExternalSessions sessions={externalSessions} workspaces={workspaces} /></Pane>,
+    content: <Pane><ExternalSessions projectSlug={project.slug} sessions={externalSessions} workspaces={workspaces} /></Pane>,
   });
   if (archived.length > 0) tabs.push({
     value: "archived",
@@ -102,10 +104,10 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
       <ul className="flex flex-col">
         {archived.map((w) => (
           <li key={w.id}>
-            <Link href={`/w/${w.id}`} className="text-muted-foreground hover:bg-muted flex items-center gap-2 px-1 py-1 text-xs">
+            <Link href={workspacePath(project, w)} className="text-muted-foreground hover:bg-muted flex items-center gap-2 px-1 py-1 text-xs">
               <ArchiveIcon className="size-3" /> {workspaceLabel(w)}
             </Link>
-            <WorkspaceMenu workspace={w} label={workspaceLabel(w)} />
+            <WorkspaceMenu project={project} workspace={w} label={workspaceLabel(w)} />
           </li>
         ))}
       </ul>
@@ -122,8 +124,8 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
   project: Project; workspace: WorkspaceSummary; fields: TownField[]; closeHref: string;
 }) {
   const label = workspaceLabel(workspace);
-  const base = `/p/${project.id}`;
-  return <TownPanel eyebrow="Farm · workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu workspace={workspace} label={label} />}>
+  const base = projectPath(project);
+  return <TownPanel eyebrow="Farm · workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu project={project} workspace={workspace} label={label} />}>
       <Section title="Workspace">
         <WorkspaceDirectory id={workspace.id} cwd={workspace.cwd} />
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -145,10 +147,10 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
         )}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" asChild>
-            <Link href={`/w/${workspace.id}/new`}><SproutIcon /> Sow a new field</Link>
+            <Link href={newChatPath(project, workspace)}><SproutIcon /> Sow a new field</Link>
           </Button>
           <Button size="sm" variant="outline" asChild>
-            <Link href={`/w/${workspace.id}`}><ExternalLinkIcon /> Open workspace</Link>
+            <Link href={workspacePath(project, workspace)}><ExternalLinkIcon /> Open workspace</Link>
           </Button>
           <HarvestButton workspaceId={workspace.id} label={label} />
         </div>
@@ -176,7 +178,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
       </Section>
 
       <Section title="Workspace notes">
-        <TownNotes projectId={project.id} scope={{ kind: "workspaces", id: workspace.id }} />
+        <TownNotes townHref={projectPath(project)} scope={{ kind: "workspaces", id: workspace.id }} />
       </Section>
 
     </TownPanel>;
@@ -188,12 +190,15 @@ export function FieldPanel({
   events,
   documents,
   workspaceName,
+  workspaceHref,
   closeHref,
 }: {
   meta: SessionMeta;
   events: HarnessEvent[];
   documents: PersistedDocument[];
   workspaceName: string;
+  /** The session's workspace page, `/{project}/{workspace}`. */
+  workspaceHref: string;
   closeHref: string;
 }) {
   return (
@@ -205,13 +210,15 @@ export function FieldPanel({
       escapable={false}
       actions={
         <Button size="sm" variant="ghost" className="text-xs" asChild>
-          <Link href={`/w/${meta.workspaceId}/s/${meta.id}`}><ExternalLinkIcon /> Full view</Link>
+          <Link href={`${workspaceHref}/${meta.id}`}><ExternalLinkIcon /> Full view</Link>
         </Button>
       }
     >
       {/* SessionView manages its own scroll; give it the panel's full height. */}
       <div className="h-full">
-        <SessionView key={meta.id} meta={meta} events={events} documents={documents} />
+        <WorkspaceBaseProvider value={workspaceHref}>
+          <SessionView key={meta.id} meta={meta} events={events} documents={documents} />
+        </WorkspaceBaseProvider>
       </div>
     </TownPanel>
   );

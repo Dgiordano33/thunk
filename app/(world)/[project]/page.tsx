@@ -17,7 +17,8 @@ import type { PersistedDocument } from "@/lib/documents/types";
 import { ensureMainWorkspace, listExternalSessions } from "@/lib/projects";
 import { loadDocuments } from "@/lib/supabase/repo/documents";
 import { loadEvents } from "@/lib/supabase/repo/messages";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProjectBySlug } from "@/lib/supabase/repo/projects";
+import { projectPath, workspacePath } from "@/lib/routes";
 import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { cityHue, cityLevel } from "@/lib/world/cities";
@@ -25,9 +26,9 @@ import { cropStage, layoutTown } from "@/lib/world/town";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: PageProps<"/p/[id]">) {
-  const { id } = await params;
-  const project = await getProject(id).catch(() => null);
+export async function generateMetadata({ params }: PageProps<"/[project]">) {
+  const { project: slug } = await params;
+  const project = await getProjectBySlug(slug).catch(() => null);
   return { title: project ? `${project.name} · Thunk` : "Thunk" };
 }
 
@@ -36,11 +37,12 @@ const BUILDINGS = ["center", "library", "workshop", "tasks", "vault"] as const;
 
 // A project up close: workspaces are farms, sessions are the fields around them.
 // `?ws=`, `?session=` and `?building=` open the matching panel without moving the camera.
-export default async function TownPage({ params, searchParams }: PageProps<"/p/[id]">) {
-  const { id } = await params;
+export default async function TownPage({ params, searchParams }: PageProps<"/[project]">) {
+  const { project: slug } = await params;
   const query = await searchParams;
-  const project = await getProject(id);
+  const project = await getProjectBySlug(slug);
   if (!project) notFound();
+  const id = project.id;
   await ensureMainWorkspace(project);
 
   const [workspaces, sessions, rows, vaultItems] = await Promise.all([
@@ -84,7 +86,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
     building: BUILDINGS.find((b) => b === one(query.building)),
     note: one(query.note),
   };
-  const closeHref = `/p/${id}`;
+  const closeHref = projectPath(project);
 
   let panel: React.ReactNode = null;
   if (selected.session) {
@@ -101,7 +103,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
         loadDocuments(sid).catch((): PersistedDocument[] => []),
       ]);
       const ws = workspaces.find((w) => w.id === meta.workspaceId);
-      panel = <FieldPanel meta={meta} events={events} documents={documents} workspaceName={ws ? workspaceLabel(ws) : ""} closeHref={closeHref} />;
+      panel = <FieldPanel meta={meta} events={events} documents={documents} workspaceName={ws ? workspaceLabel(ws) : ""} workspaceHref={ws ? workspacePath(project, ws) : `/w/${meta.workspaceId}`} closeHref={closeHref} />;
     }
   } else if (selected.ws) {
     const workspace = active.find((w) => w.id === selected.ws);
@@ -130,6 +132,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
   return (
     <TownView
       projectId={id}
+      townHref={closeHref}
       projectName={project.name}
       grid={layout.grid}
       tiles={layout.tiles}
@@ -143,7 +146,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/p/[
       selected={selected}
     >
       {panel}
-      {archived.filter(w => w.id === one(query.harvest)).map(w => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} projectId={id} />)}
+      {archived.filter(w => w.id === one(query.harvest)).map(w => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />)}
     </TownView>
   );
 }

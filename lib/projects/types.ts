@@ -7,6 +7,8 @@ export type Project = {
   name: string;
   /** Immutable name of the project's directory under ~/.thunk/projects/. */
   dataKey: string;
+  /** URL slug: the project lives at `/{slug}`. Unique, never a reserved route, kept across renames. */
+  slug: string;
   /** Every repo and folder the project spans, in the order they were added. May be empty. */
   repos: ProjectRepo[];
   repoFolders: RepoFolder[];

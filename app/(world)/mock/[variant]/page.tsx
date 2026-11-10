@@ -17,6 +17,7 @@ const fake = (id: string, name: string, workspaceCount: number, sessionCount: nu
   id,
   name,
   dataKey: name,
+  slug: name,
   repos: [{ id: `${id}-repo`, projectId: id, name, path: `/Users/dan/code/${name}`, kind: "repo", remote: null, defaultBranch: "main", createdAt: ago(createdDays) }],
   repoFolders: [],
   createdAt: ago(createdDays),
