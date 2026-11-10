@@ -41,7 +41,7 @@ export async function workspacePrStatus(opts: {
 
   if (!branch) return no("Not on a branch");
   if (!(await run("git", ["remote", "get-url", "origin"], opts.cwd).catch(() => null))) return no("No origin remote");
-  if (branch === base || branch === opts.defaultBranch) return no(`On ${branch}: start a workspace with its own branch`);
+  if (branch === base || branch === opts.defaultBranch) return no(`On ${branch}: a PR needs its own branch`);
 
   let pr: PullRequestInfo | null = null;
   try {
