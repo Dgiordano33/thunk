@@ -16,7 +16,11 @@ export type Project = {
   updatedAt: string;
 };
 
-export type RepoFolder = { id: string; projectId: string; repoId: string; path: string; label: string };
+export type RepoFolder = {
+  id: string; projectId: string; repoId: string; path: string; label: string;
+  /** Note ids (file names without `.md`) the notebook shows; null shows every Markdown file in the folder. */
+  files: string[] | null;
+};
 
 export type ProjectRepo = {
   id: string;
@@ -59,6 +63,24 @@ export type Workspace = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** A top-level directory in the workspace file browser: one repo or folder checkout. */
+export type FileRoot = {
+  /** The repo id, or "workspace" when the workspace has no repos and the root is its cwd. */
+  id: string;
+  name: string;
+  cwd: string;
+  git: boolean;
+  /** The repo single-repo change views describe (see `anchorTarget`). */
+  anchor: boolean;
+};
+
+export type FileEntry = { name: string; path: string; kind: "dir" | "file"; ignored: boolean };
+
+/** A file opened in the editor. Binary and oversized files carry no content. */
+export type FileContent =
+  | { kind: "text"; content: string; version: string }
+  | { kind: "binary" | "too-large"; size: number; version: string };
 
 export type WorkspaceSummary = Workspace & { sessionCount: number };
 export type ProjectSummary = Project & { workspaceCount: number; sessionCount: number; lastActivityAt: string | null };

@@ -3,10 +3,12 @@
 import { GitBranchIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
+import { OpenFileTabs } from "./open-file-tabs";
 import { PrButton } from "./pr-button";
 
 export function WorkspaceTabs({
@@ -60,6 +62,9 @@ export function WorkspaceTabs({
             </Link>
           );
         })}
+        <Suspense>
+          <OpenFileTabs workspaceId={workspace.id} base={base} />
+        </Suspense>
         <Link
           href={`${base}/new`}
           aria-label="New chat"

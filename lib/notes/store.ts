@@ -8,7 +8,13 @@ import { extractTasks, noteExcerpt, noteTitle, parseNote, serializeNote, setTask
 import { MEMORY_NOTE_ID, sortNotes, type Note, type NoteFlags, type NoteMeta, type NoteScope, type NoteTaskPatch, type NoteTask } from "./types";
 
 /** Where one scope's notes live on disk. */
-export type NoteDirs = { scope: NoteScope; notesDir: string; memoryFile?: string; memoryTitle?: string; checkoutRoot?: string };
+export type NoteDirs = {
+  scope: NoteScope; notesDir: string; memoryFile?: string; memoryTitle?: string; checkoutRoot?: string;
+  /** Repo notebooks narrowed to some files: only these note ids are listed or readable. */
+  include?: string[];
+};
+
+const included = (dirs: NoteDirs, id: string) => !dirs.include || id === MEMORY_NOTE_ID || dirs.include.includes(id);
 
 /** Lowercase alphanumerics: safe as a file name on every filesystem and easy for agents to type. */
 export const newNoteId = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 10);
@@ -90,6 +96,7 @@ function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Da
 }
 
 export async function readNote(dirs: NoteDirs, id: string): Promise<Note | null> {
+  if (!included(dirs, id)) return null;
   const file = await fileFor(dirs, id);
   if (!file) return null;
   const [raw, st] = await Promise.all([readFile(file, "utf8").catch(() => null), stat(file).catch(() => null)]);
@@ -104,7 +111,7 @@ export async function readNote(dirs: NoteDirs, id: string): Promise<Note | null>
 /** Every note in the scope, memory first. Files that fail to read are skipped. */
 export async function listNotes(dirs: NoteDirs, { withMemory = true } = {}): Promise<Note[]> {
   const entries = await readdir(dirs.notesDir).catch(() => [] as string[]);
-  const ids = entries.filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((id) => ID.test(id) && id !== MEMORY_NOTE_ID);
+  const ids = entries.filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((id) => ID.test(id) && id !== MEMORY_NOTE_ID && included(dirs, id));
   const notes = await Promise.all([...(withMemory && dirs.memoryFile ? [MEMORY_NOTE_ID] : []), ...ids].map((id) => readNote(dirs, id).catch(() => null)));
   return sortNotes(notes.filter((n): n is Note => n !== null));
 }
@@ -134,11 +141,12 @@ export async function createNote(dirs: NoteDirs, input: { id?: string; title?: s
   const body = input.markdown ?? (dirs.scope.kind === "repos" ? `# ${fm.title}\n` : "");
   const flags = input.pinned !== undefined || input.inject !== undefined || input.actionable !== undefined || input.tags !== undefined;
   await atomicWrite(file, dirs.scope.kind === "repos" && !flags ? body : serializeNote(fm, body), true);
-  return (await readNote(dirs, id))!;
+  return (await readNote(dirs.include ? { ...dirs, include: [...dirs.include, id] } : dirs, id))!;
 }
 
 /** Update a note in place. Memory only takes `markdown`; its flags are fixed. */
 export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): Promise<Note | null> {
+  if (!included(dirs, id)) return null;
   const file = await fileFor(dirs, id);
   if (!file) return null;
   return withFileLock(file, async () => {
@@ -177,6 +185,8 @@ export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): P
 
 export async function deleteNote(dirs: NoteDirs, id: string) {
   if (id === MEMORY_NOTE_ID) throw new Error("Memory can't be deleted");
+  // Files outside a narrowed notebook aren't the notebook's to delete.
+  if (!included(dirs, id)) return;
   await rm((await fileFor(dirs, id))!, { force: true });
 }
 
@@ -194,7 +204,7 @@ export function tasksOf(notes: Note[], { includeDone = false } = {}): NoteTask[]
 /** How many notes (memory included) live in these scopes, without reading the files. */
 export async function countNotes(all: NoteDirs[]) {
   const counts = await Promise.all(
-    all.map(async (d) => Number(Boolean(d.memoryFile)) + (await readdir(d.notesDir, { withFileTypes: true }).catch(() => [])).filter((f) => f.isFile() && f.name.endsWith(".md") && f.name !== "memory.md" && ID.test(f.name.slice(0, -3))).length),
+    all.map(async (d) => Number(Boolean(d.memoryFile)) + (await readdir(d.notesDir, { withFileTypes: true }).catch(() => [])).filter((f) => f.isFile() && f.name.endsWith(".md") && f.name !== "memory.md" && ID.test(f.name.slice(0, -3)) && included(d, f.name.slice(0, -3))).length),
   );
   return counts.reduce((a, b) => a + b, 0);
 }
