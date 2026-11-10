@@ -3,7 +3,8 @@ import type { RunTrigger } from "@/lib/routines/types";
 export type SessionOrigin =
   | { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger }
   | { kind: "chief" }
-  | { kind: "worker"; chiefSessionId: string | null; taskId: string };
+  /** `scout`: read-only in the main checkout. `raceId`: one of several workers racing the same task on different models. */
+  | { kind: "worker"; chiefSessionId: string | null; taskId: string; scout?: boolean; raceId?: string };
 // Shared between server and client. Keep free of server-only imports.
 
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;

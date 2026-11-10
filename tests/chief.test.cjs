@@ -20,6 +20,9 @@ const notes = new Map();
 const notifications = [];
 let setupFailure = false;
 let workspaceInputs = [];
+const archivedWorkspaces = [];
+const resolved = [];
+let nextWorkspace = null;
 const emit = (live, event) => {
   event = { ...event, sessionId: live.id, seq: ++live.seq, ts: Date.now() };
   live.events.push(event);
@@ -50,13 +53,14 @@ const mocks = {
   "@/lib/agent": agent,
   "@/lib/projects": {
     ensureMainWorkspace: async () => main,
-    createWorkspace: async (input) => { workspaceInputs.push(input); if (setupFailure) throw new Error("setup failed"); const workspace = { ...main, id: id(), slug: input.name, branch: `thunk/${input.name}` }; workspaces.set(workspace.id, workspace); return workspace; },
+    createWorkspace: async (input) => { workspaceInputs.push(input); if (setupFailure) throw new Error("setup failed"); const workspace = nextWorkspace?.(input) ?? { ...main, id: id(), slug: input.name, branch: `thunk/${input.name}` }; nextWorkspace = null; workspaces.set(workspace.id, workspace); return workspace; },
     getWorkspaceContext: async (id) => workspaces.has(id) ? { project, workspace: workspaces.get(id) } : null,
   },
   "@/lib/projects/paths": { projectConfigDir: () => tmp, workspaceMemoryFile: () => path.join(tmp, "MEMORY.md") },
   "@/lib/projects/repos": { sessionConfigRoot: () => tmp },
   "@/lib/prompts/context": { expandCommand: async (s) => s },
-  "@/lib/supabase/repo/projects": { getProject: async (id) => id === project.id ? project : null },
+  "@/lib/supabase/repo/projects": { getProject: async (id) => id === project.id ? project : null, listProjects: async () => [project] },
+  "@/lib/projects/archive": { archiveWorkspace: async (id) => { archivedWorkspaces.push(id); } },
   "@/lib/supabase/repo/workspaces": { listWorkspaces: async () => [...workspaces.values()] },
   "@/lib/supabase/repo/tasks": { getTask: async (id) => tasks.get(id), listTasks: async () => [...tasks.values()] },
   "@/lib/tasks/service": {
@@ -65,7 +69,8 @@ const mocks = {
   },
   "@/lib/supabase/repo/sessions": { upsertSession: async () => {}, getSessionRow: async (id) => persisted.get(id)?.meta ?? null },
   "@/lib/supabase/repo/messages": { insertEvents: async () => {}, loadEvents: async (id) => sessions.get(id)?.events ?? persisted.get(id)?.events ?? [] },
-  "@/lib/notifications/service": { notify: async (n) => notifications.push(n) },
+  "@/lib/notifications/service": { notify: async (n) => notifications.push(n), resolveBySubject: async (subject) => { resolved.push(subject); return []; } },
+  "@/lib/projects/runtime": { processEnvironment: () => ({}) },
   "@/lib/notes/resolve": { projectNoteDirs: () => ({ notesDir: tmp }), repoDirsFor: async () => [], workspaceNoteDirs: (_p, w) => ({ notesDir: w.id }) },
   "@/lib/notes/store": {
     readNote: async (dirs, id) => notes.get(`${dirs.notesDir}/${id}`) ?? null,
@@ -107,9 +112,15 @@ test("chief delegates in isolated worktrees, caps concurrency, batches reports a
   assert.deepEqual(first.meta.origin, { kind: "worker", chiefSessionId: chief.id, taskId: workers[0].taskId });
   assert.equal(tasks.get(workers[0].taskId).sessionId, first.id);
   assert.match(first.events.find((e) => e.type === "user_message").content, /Brief 0/);
-  await assert.rejects(service.delegate(project.id, chief.id, { title: "Fifth" }), /wait for a report/);
+  const fifth = await service.delegate(project.id, chief.id, { title: "Fifth" });
+  assert.equal(fifth.queued, true, "a fifth task queues instead of failing");
+  assert.match(fifth.reason, /4 of 4 workers busy/);
+  assert.deepEqual(await service.drainQueue(project.id), [], "nothing starts while every slot is busy");
   finish(first, "First complete");
   finish(sessions.get(workers[1].sessionId), "Second complete");
+  assert.deepEqual(await service.drainQueue(project.id), [fifth.taskId], "a freed slot starts the queued task");
+  assert.equal(tasks.get(fifth.taskId).status, "in_progress");
+  await service.stopWorker(project.id, fifth.taskId, "Not needed for this test");
   await until(async () => await reports.savedReport(project, workers[1].sessionId));
   assert.equal(chief.events.filter((e) => e.type === "user_message").length, 0);
   await reports.flushReports(chief.id);
@@ -354,4 +365,224 @@ test("a session waiting only on its chief does not need the person", () => {
   assert.equal(needsPerson({ status: "awaiting", waitingOn: null }), true);
   assert.equal(needsPerson({ status: "awaiting" }), true);
   assert.equal(needsPerson({ status: "running", waitingOn: null }), false);
+});
+
+// ---- Orchestration: queue, scouts, races, stats, plans, overlaps, integration, cleanup ----
+const { execFileSync } = require("node:child_process");
+const workersState = load("@/lib/workers/state");
+const sh = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+async function stopAll() {
+  for (const live of sessions.values()) if (live.meta.origin?.kind === "worker" && ["running", "awaiting", "starting"].includes(live.meta.status)) agent.closeSession(live.id);
+  await tick();
+}
+function finishWith(live, markdown, costUsd) { emit(live, { type: "turn_complete", markdown }); emit(live, { type: "result", isError: false, costUsd }); emit(live, { type: "status", state: "idle" }); }
+
+test("dependsOn queues a task until its dependency is accepted; a cancelled dependency blocks it and tells the chief", async () => {
+  await stopAll();
+  const chief = await service.openChief(project.id);
+  const schema = await service.delegate(project.id, chief.id, { title: "Schema", brief: "Add the table" });
+  const api = await service.delegate(project.id, chief.id, { title: "API", brief: "Use the table", dependsOn: [schema.taskId] });
+  assert.equal(api.queued, true);
+  assert.match(api.reason, new RegExp(`waiting for ${schema.taskId}`));
+  const ui = await service.delegate(project.id, chief.id, { title: "UI", dependsOn: [api.taskId] });
+  await assert.rejects(service.delegate(project.id, chief.id, { title: "Ghost", dependsOn: [id()] }), /not in this project/);
+  assert.deepEqual(await service.drainQueue(project.id), [], "dependencies are not done yet");
+  tasks.get(schema.taskId).status = "done";
+  assert.deepEqual(await service.drainQueue(project.id), [api.taskId], "an accepted dependency releases the queued task");
+  const { queued } = await service.workersStatus(project.id);
+  assert.deepEqual(queued.map((q) => q.taskId), [ui.taskId]);
+  await service.stopWorker(project.id, api.taskId, "Change of plan");
+  assert.deepEqual(await service.drainQueue(project.id), []);
+  assert.equal(tasks.get(ui.taskId).status, "blocked");
+  assert.match(chief.events.at(-1).content, /<worker_queue task="[^"]+" status="blocked">[\s\S]*UI/);
+  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  await service.stopWorker(project.id, schema.taskId, "Done with test");
+});
+
+test("stopping a queued task removes it from the queue", async () => {
+  await stopAll();
+  const blocker = await service.delegate(project.id, null, { title: "Blocker" });
+  const waiting = await service.delegate(project.id, null, { title: "Waiting", dependsOn: [blocker.taskId] });
+  await service.stopWorker(project.id, waiting.taskId, "Not needed");
+  assert.equal(tasks.get(waiting.taskId).status, "cancelled");
+  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  await service.stopWorker(project.id, blocker.taskId, "Cleanup");
+});
+
+test("a scout runs read-only in the main checkout, needs no Git repository and reports without a diff", async () => {
+  await stopAll();
+  const saved = project.repos;
+  project.repos = [];
+  try {
+    await assert.rejects(service.delegate(project.id, null, { title: "Needs a repo" }), /Use mode "scout"/);
+    const before = workspaceInputs.length;
+    const scout = await service.delegate(project.id, null, { title: "Investigate flaky test", brief: "Find the cause", mode: "scout" });
+    assert.equal(workspaceInputs.length, before, "no worktree is created");
+    assert.equal(scout.workspaceId, main.id);
+    const live = sessions.get(scout.sessionId);
+    assert.equal(live.meta.origin.scout, true);
+    assert.equal(prompt.readOnlySession(live.meta.origin), true);
+    assert.equal(prompt.readOnlySession({ kind: "worker", taskId: id(), chiefSessionId: null }), false);
+    assert.match(prompt.teamPrompt(live.meta.origin), /read-only scout/);
+    finish(live, "```worker-summary\noutcome: done\nsummary: The clock is mocked twice\nbranch: none\n```");
+    await until(async () => await reports.savedReport(project, live.id));
+    const report = (await reports.savedReport(project, live.id)).content;
+    assert.match(report, /Mode: scout/);
+    assert.doesNotMatch(report, /^Diff:/m);
+    assert.equal(tasks.get(scout.taskId).status, "done");
+  } finally { project.repos = saved; }
+  await assert.rejects(service.delegate(project.id, null, { title: "Bad race", mode: "scout", race: ["a", "b"] }), /Scouts cannot race/);
+});
+
+test("a race runs one task on several models; the pick hands the task to the winner and archives the rest", async () => {
+  await stopAll();
+  const before = workspaceInputs.length;
+  const raced = await service.delegate(project.id, null, { title: "Rewrite parser", brief: "Make it faster", race: ["claude-sonnet-5-5", "claude-haiku-5-5"] });
+  assert.equal(workspaceInputs.length - before, 2, "each racer gets its own worktree");
+  assert.equal(raced.race.length, 2);
+  const [a, b] = raced.race.map((e) => sessions.get(e.sessionId));
+  assert.equal(a.meta.origin.raceId, b.meta.origin.raceId);
+  assert.equal(a.meta.origin.taskId, b.meta.origin.taskId);
+  assert.match(prompt.teamPrompt(a.meta.origin), /Other workers are doing the same task/);
+  finishWith(a, "Sonnet version", 0.4);
+  finishWith(b, "Haiku version", 0.1);
+  await until(async () => (await reports.savedReport(project, a.id)) && (await reports.savedReport(project, b.id)));
+  assert.equal(tasks.get(raced.taskId).status, "in_progress", "an undecided race leaves the task open");
+  assert.match((await reports.savedReport(project, b.id)).content, /pick one with workers_pick/);
+  await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, id()), /not racing/);
+  const picked = await service.pickRaceWinner(project.id, raced.taskId, b.id);
+  assert.deepEqual(picked.archived, [a.meta.workspaceId]);
+  assert.ok(archivedWorkspaces.includes(a.meta.workspaceId));
+  assert.equal(a.meta.status, "closed");
+  assert.equal(tasks.get(raced.taskId).sessionId, b.id);
+  await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, a.id), /already has a winner/);
+  await service.messageWorker(project.id, raced.taskId, "Add a benchmark");
+  finishWith(b, "Benchmark added", 0.2);
+  await until(async () => (await reports.savedReport(project, b.id))?.content.includes("Benchmark added"));
+  assert.equal(tasks.get(raced.taskId).status, "done", "the winner owns the task after the pick");
+  const history = await service.workersHistory(project.id);
+  const row = history.recent.find((r) => r.taskId === raced.taskId);
+  assert.equal(row.rounds, 1, "racers' first rounds are not rework");
+  assert.equal(Math.round(row.costUsd * 100), 70, "every racer's cost counts");
+  assert.deepEqual(row.models.sort(), ["claude-haiku-5-5", "claude-sonnet-5-5"]);
+  assert.ok(history.byModel.some((m) => m.model === "claude-haiku-5-5"));
+  await assert.rejects(service.delegate(project.id, null, { title: "Too big", race: ["a", "b", "c", "d"] }));
+});
+
+test("stats count each finish once, including after recovery", async () => {
+  await stopAll();
+  const worker = await service.delegate(project.id, null, { title: "Counted once", model: "claude-sonnet-5-5" });
+  const live = sessions.get(worker.sessionId);
+  finishWith(live, "First pass", 0.25);
+  await until(async () => await reports.savedReport(project, live.id));
+  await service.recoverWorkers();
+  const stats = (await workersState.readWorkerState(project)).stats[worker.taskId];
+  assert.equal(stats.rounds, 1);
+  assert.equal(stats.costUsd, 0.25);
+  assert.equal(stats.outcome, "done");
+  assert.match((await reports.savedReport(project, live.id)).content, /Cost: \$0\.2500 this round/);
+  const summary = workersState.summarizeStats([stats, { ...stats, taskId: id(), rounds: 3, costUsd: 0.75, outcome: "done" }]);
+  assert.deepEqual(summary.map((s) => [s.model, s.tasks, s.avgRounds, s.firstRoundDone, s.totalCostUsd]), [["claude-sonnet-5-5", 2, 2, 1, 1]]);
+});
+
+test("a delegation plan waits for the person; approval delegates in order with dependencies, rejection tells the chief", async () => {
+  await stopAll();
+  const plans = load("@/lib/workers/plans");
+  const chief = await service.openChief(project.id);
+  await assert.rejects(plans.proposePlan(project.id, chief.id, { summary: "x", tasks: [{ key: "b", title: "B", brief: "b", dependsOn: ["a"] }] }), /not an earlier task/);
+  const before = tasks.size;
+  const proposed = await plans.proposePlan(project.id, chief.id, { summary: "Ship onboarding", tasks: [
+    { key: "copy", title: "Onboarding copy", brief: "Write the copy" },
+    { key: "email", title: "Onboarding email", brief: "Send it", dependsOn: ["copy"] },
+  ] });
+  assert.equal(tasks.size, before, "nothing starts before approval");
+  const item = notifications.at(-1);
+  assert.equal(item.kind, "delegation_plan");
+  assert.equal(item.urgency, "action");
+  assert.deepEqual(item.actions.map((a) => [a.label, a.body.decision]), [["Approve", "approve"], ["Reject", "reject"]]);
+  assert.match(item.detail, /\[email\] Onboarding email \(after copy\)/);
+  const decided = await plans.decidePlan(project.id, proposed.planId, "approve");
+  assert.equal(decided.status, "approved");
+  const [copy, email] = decided.results;
+  assert.equal(copy.queued, false);
+  assert.equal(email.queued, true);
+  assert.deepEqual((await workersState.readWorkerState(project)).queue.find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
+  assert.ok(resolved.includes(`chief:plan:${proposed.planId}`));
+  assert.match(chief.events.at(-1).content, /<delegation_plan id="[^"]+" status="approved">[\s\S]*Onboarding copy: started[\s\S]*Onboarding email: queued/);
+  await assert.rejects(plans.decidePlan(project.id, proposed.planId, "approve"), /already approved/);
+  const rejected = await plans.proposePlan(project.id, chief.id, { summary: "Too much", tasks: [{ key: "x", title: "Rewrite everything", brief: "All of it" }] });
+  const count = tasks.size;
+  await plans.decidePlan(project.id, rejected.planId, "reject", "Start smaller");
+  assert.equal(tasks.size, count);
+  assert.match(chief.events.at(-1).content, /status="rejected">[\s\S]*Start smaller/);
+  await service.stopWorker(project.id, email.taskId, "Cleanup");
+  await service.stopWorker(project.id, copy.taskId, "Cleanup");
+});
+
+test("overlapping files are flagged, branches trial-merge into an integration worktree, and merged workspaces are archived", async () => {
+  await stopAll();
+  const root = fs.mkdtempSync(path.join(tmp, "repo-"));
+  sh(root, "init", "-q", "-b", "main");
+  sh(root, "config", "user.email", "test@example.com"); sh(root, "config", "user.name", "Test");
+  fs.writeFileSync(path.join(root, "a.txt"), "base\n");
+  sh(root, "add", "."); sh(root, "commit", "-qm", "base");
+  const saved = project.repos;
+  const repo = { id: id(), kind: "repo", path: root, defaultBranch: "main", remote: null, name: "app" };
+  project.repos = [repo];
+  const worktreeWorkspace = (name) => {
+    const dir = path.join(tmp, `wt-${name}-${id().slice(0, 4)}`);
+    sh(root, "worktree", "add", "-q", "-b", name, dir, "main");
+    const workspace = { id: id(), projectId: project.id, slug: name, name, branch: name, cwd: dir, status: "active", repos: [{ repoId: repo.id, name: "app", cwd: dir, branch: name, worktreePath: dir, baseRef: "main" }] };
+    workspaces.set(workspace.id, workspace);
+    return workspace;
+  };
+  const commit = (ws, file, text) => { fs.writeFileSync(path.join(ws.cwd, file), text); sh(ws.cwd, "add", "."); sh(ws.cwd, "commit", "-qm", `edit ${file}`); };
+  try {
+    const owned = async (ws, title) => {
+      const taskId = id();
+      const live = await agent.startSession({ workspaceId: ws.id, origin: { kind: "worker", chiefSessionId: null, taskId } });
+      tasks.set(taskId, { id: taskId, projectId: project.id, title, sessionId: live.id, workspaceId: ws.id, status: "in_progress" });
+      return { taskId, live };
+    };
+    const wsA = worktreeWorkspace("feature-a"), wsB = worktreeWorkspace("feature-b"), wsC = worktreeWorkspace("feature-c");
+    const [a, b, c] = [await owned(wsA, "A"), await owned(wsB, "B"), await owned(wsC, "C")];
+    commit(wsA, "a.txt", "from A\n");
+    fs.writeFileSync(path.join(wsB.cwd, "a.txt"), "from B\n"); // uncommitted still overlaps
+    commit(wsC, "c.txt", "new\n");
+    const conflicts = load("@/lib/workers/conflicts");
+    const overlaps = await conflicts.workerOverlaps([a, b, c].map((w, i) => ({ taskId: w.taskId, title: "ABC"[i], workspaceId: [wsA, wsB, wsC][i].id })));
+    assert.deepEqual(overlaps.get(a.taskId), [{ taskId: b.taskId, title: "B", paths: ["a.txt"] }]);
+    assert.deepEqual(overlaps.get(b.taskId).map((o) => o.taskId), [a.taskId]);
+    assert.equal(overlaps.has(c.taskId), false);
+    const status = await service.workersStatus(project.id, true);
+    assert.deepEqual(status.workers.find((w) => w.task.id === a.taskId).overlaps.map((o) => o.paths), [["a.txt"]]);
+
+    sh(wsB.cwd, "commit", "-qam", "B edit");
+    fs.writeFileSync(path.join(tmp, "thunk.json"), JSON.stringify({ scripts: { test: "test -f c.txt && grep -q 'from A' a.txt" } }));
+    const wsI = worktreeWorkspace("integration");
+    nextWorkspace = () => wsI;
+    const mainBefore = sh(root, "rev-parse", "main");
+    const integrate = load("@/lib/workers/integrate");
+    const result = await integrate.integrateWorkers(project.id, [a.taskId, b.taskId, c.taskId]);
+    assert.deepEqual(result.merged.map((m) => m.title), ["A", "C"]);
+    assert.deepEqual(result.conflicts.map((m) => [m.title, m.files]), [["B", ["a.txt"]]]);
+    assert.equal(result.tests.exitCode, 0, result.tests.output);
+    assert.equal(sh(wsI.cwd, "status", "--porcelain"), "", "the conflicting merge was aborted");
+    assert.equal(sh(root, "rev-parse", "main"), mainBefore, "nothing merged into main");
+    assert.equal(sh(wsI.cwd, "log", "--first-parent", "--format=%s", "-3"), "Integrate C\nIntegrate A\nbase", "the clean branches are merged on the integration branch");
+    assert.deepEqual((await workersState.readWorkerState(project)).integrations.map((i) => i.workspaceId), [wsI.id]);
+    await assert.rejects(integrate.integrateWorkers(project.id, [id()]), /Worker task not found/);
+
+    const cleanup = load("@/lib/workers/cleanup");
+    assert.equal(await cleanup.workspaceMerged({ project, workspace: wsC }), false);
+    sh(root, "merge", "-q", "--no-edit", "feature-c");
+    assert.equal(await cleanup.workspaceMerged({ project, workspace: wsC }), true);
+    tasks.get(c.taskId).status = "done";
+    tasks.get(a.taskId).status = "done";
+    for (const w of [a, b, c]) emit(w.live, { type: "status", state: "idle" });
+    const archived = await cleanup.cleanupWorkerWorkspaces(project.id);
+    assert.ok(archived.some((x) => x.workspaceId === wsC.id && x.reason === "merged"));
+    assert.equal(archived.some((x) => x.workspaceId === wsA.id), false, "done but unmerged work is kept");
+    assert.equal(archived.some((x) => x.workspaceId === wsB.id), false, "open tasks are kept");
+  } finally { project.repos = saved; nextWorkspace = null; }
 });

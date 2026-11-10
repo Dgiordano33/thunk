@@ -1,5 +1,5 @@
 import { chiefTools } from "@/lib/workers/tools";
-import { CHIEF_DISALLOWED_TOOLS, teamPrompt } from "@/lib/workers/prompt";
+import { CHIEF_DISALLOWED_TOOLS, readOnlySession, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
@@ -109,7 +109,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],
     }) },
-    ...(live.meta.origin?.kind === "chief" ? { disallowedTools: CHIEF_DISALLOWED_TOOLS } : {}),
+    ...(readOnlySession(live.meta.origin) ? { disallowedTools: CHIEF_DISALLOWED_TOOLS } : {}),
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.

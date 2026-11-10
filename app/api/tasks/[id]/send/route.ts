@@ -15,6 +15,8 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
     const { delegate } = await import("@/lib/workers/service");
     if (body.sessionId || body.workspaceId) throw new HttpError(400, "Choose worker or a session/workspace destination");
     const result = await delegate(task.projectId, null, { taskId: task.id });
+    // Every worker slot is busy: the task starts on its own when one frees.
+    if ("queued" in result) return Response.json({ ...result, href: null });
     return Response.json({ ...result, href: await hrefForSession(result.workspaceId, result.sessionId) });
   }
   const session = body.sessionId ? getSession(body.sessionId)?.meta ?? await getSessionRow(body.sessionId) : null;

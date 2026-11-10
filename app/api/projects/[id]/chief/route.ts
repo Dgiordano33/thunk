@@ -28,11 +28,14 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
   const live = chief ? getSession(chief.id) : null;
   const events = chief ? live?.events ?? await loadEvents(chief.id) : [];
   const prose = events.findLast((e) => e.type === "turn_complete");
-  const workers = await workersStatus(projectId);
+  const { workers, queued } = await workersStatus(projectId);
+  const today = new Date().toISOString().slice(0, 10);
   return Response.json({ chief, summary: prose?.type === "turn_complete" ? prose.markdown.slice(-600) : null,
     costUsd: chief ? (await getSessionRow(chief.id))?.totalCostUsd ?? events.reduce((n, e) => n + (e.type === "result" ? e.costUsd : 0), 0) : 0,
     running: workers.filter((w) => ["starting", "running"].includes(w.state)).length,
     waiting: workers.filter((w) => needsPerson({ status: w.state, waitingOn: w.waitingOn })).length,
-    done: workers.filter((w) => w.task.status === "done" && w.task.completedAt?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
+    done: workers.filter((w) => w.task.status === "done" && w.task.completedAt?.slice(0, 10) === today).length,
+    queued: queued.length,
+    workerCostUsdToday: workers.reduce((n, w) => n + (w.stats?.finishedAt?.slice(0, 10) === today ? w.stats.costUsd : 0), 0),
   });
 });

@@ -1,11 +1,11 @@
 export const NOTIFICATION_KINDS = [
-  "worker_report", "permission", "question", "plan", "turn_finished", "turn_failed", "session_error", "session_stuck",
+  "worker_report", "delegation_plan", "permission", "question", "plan", "turn_finished", "turn_failed", "session_error", "session_stuck",
   "run_needs_attention", "run_succeeded", "run_failed", "ci_failed", "ci_stuck", "review_requested",
   "deploy_ready", "pr_merged", "script_failed", "agent_request",
 ] as const;
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export const NOTIFICATION_LABELS: Record<NotificationKind, string> = {
-  worker_report: "Worker report", permission: "Permission", question: "Question", plan: "Plan ready", turn_finished: "Turn finished",
+  worker_report: "Worker report", delegation_plan: "Chief plan", permission: "Permission", question: "Question", plan: "Plan ready", turn_finished: "Turn finished",
   turn_failed: "Turn failed", session_error: "Session error", session_stuck: "Session stuck",
   run_needs_attention: "Run needs attention", run_succeeded: "Run succeeded", run_failed: "Run failed",
   ci_failed: "CI failed", ci_stuck: "CI stuck", review_requested: "Review requested", deploy_ready: "Deploy ready",
