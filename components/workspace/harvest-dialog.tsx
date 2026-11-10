@@ -62,12 +62,12 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
   </Dialog>;
 }
 
-export function HarvestButton({ workspaceId, label, variant = "outline" }: { workspaceId: string; label: string; variant?: "outline" | "ghost" }) {
+export function HarvestButton({ workspaceId, label }: { workspaceId: string; label: string }) {
   const router = useRouter();
   const [data, setData] = useState<HarvestData | null>(null);
   const [busy, setBusy] = useState(false);
   return <>
-    <Button size="sm" variant={variant} className={variant === "ghost" ? "text-xs" : undefined} disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
+    <Button size="sm" variant="outline" disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
       setBusy(true);
       try { setData(await api.getHarvest(workspaceId)); } catch (err) { window.alert((err as Error).message); }
       finally { setBusy(false); }

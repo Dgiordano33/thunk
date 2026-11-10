@@ -68,7 +68,7 @@ export const api = {
   saveProjectInstructions: (id: string, content: string, expectedContent: string) => call(`/api/projects/${id}/instructions`, { method: "PUT", json: { content, expectedContent } }),
   projectConnectors: (id: string) => call<{ config: import("@/lib/projects/connectors").ConnectorConfig; revision: string | null; error: string | null }>(`/api/projects/${id}/connectors`),
   saveProjectConnectors: (id: string, config: unknown, revision: string) => call(`/api/projects/${id}/connectors`, { method: "PUT", json: { config, revision } }),
-  revealWorkspace: (id: string) => post(`/api/workspaces/${id}/reveal`, {}),
+  revealWorkspace: (id: string, repoId?: string) => post(`/api/workspaces/${id}/reveal${repoId ? `?repo=${encodeURIComponent(repoId)}` : ""}`, {}),
   // Projects
   getProject: (id: string) => call<{ project: Project }>(`/api/projects/${id}`),
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),

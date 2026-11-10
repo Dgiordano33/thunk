@@ -15,6 +15,7 @@ export function NewWorkspaceButton({
   projectName,
   repos = [],
   compact,
+  hud,
   className,
 }: {
   projectId: string;
@@ -22,6 +23,8 @@ export function NewWorkspaceButton({
   projectName: string;
   repos?: { id: string; name: string; kind: "repo" | "folder" }[];
   compact?: boolean;
+  /** The HUD's primary "Add workspace" action, top right of a project's town. */
+  hud?: boolean;
   className?: string;
 }) {
   const router = useRouter();
@@ -58,6 +61,11 @@ export function NewWorkspaceButton({
     >
       {icon}
     </Button>
+  ) : hud ? (
+    <Button className={className} onClick={needsPicker ? undefined : () => void create()} disabled={pending}>
+      {icon}
+      Add workspace
+    </Button>
   ) : (
     <Button size="sm" variant="outline" className={className} onClick={needsPicker ? undefined : () => void create()} disabled={pending}>
       {icon}
@@ -81,7 +89,7 @@ export function NewWorkspaceButton({
       }}
     >
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-3">
+      <PopoverContent align={hud ? "end" : "start"} className="w-64 p-3">
         <form
           onSubmit={(e) => {
             e.preventDefault();

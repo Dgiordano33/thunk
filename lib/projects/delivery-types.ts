@@ -1,11 +1,26 @@
 import type { PullRequestInfo, WorkspacePrStatus } from "./types";
 
+type GitState = { ahead: number | null; behind: number | null; dirty: boolean };
+
+/** Branch, local changes and PR for one git repo of a workspace. */
+export type RepoDelivery = {
+  repoId: string;
+  name: string;
+  /** False when the workspace works in the repo's main checkout. */
+  worktree: boolean;
+  status: WorkspacePrStatus;
+  git: GitState;
+  deployedPreviewUrl: string | null;
+};
+
 export type WorkspaceDelivery = {
   activity: DeliveryEvent[];
   workspaceId: string;
   projectId: string;
+  /** Every git repo the workspace covers. `status`, `git` and `deployedPreviewUrl` below repeat the anchor repo's. */
+  repos: RepoDelivery[];
   status: WorkspacePrStatus;
-  git: { ahead: number | null; behind: number | null; dirty: boolean } | null;
+  git: GitState | null;
   running: boolean;
   localPreviewUrl: string | null;
   deployedPreviewUrl: string | null;

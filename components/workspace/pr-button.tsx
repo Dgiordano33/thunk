@@ -109,7 +109,11 @@ const ACTION_TITLE: Record<PrAction, string> = {
 const FAST_AFTER_REQUEST_MS = 5 * 60_000;
 
 /** Top-right PR action: "Create PR" hands the job to the agent; once a PR exists it links to it. */
-export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: { workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean; repo?: PrRepo }) {
+export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, unlabeled = false }: {
+  workspaceId: string; deliveryStatus?: WorkspacePrStatus | null; inline?: boolean; repo?: PrRepo;
+  /** Leave the repo's name off the button, when the caller already shows it beside it. */
+  unlabeled?: boolean;
+}) {
   const router = useRouter();
   const { session: sid } = useParams<{ session?: string }>();
   const base = useWorkspaceBase();
@@ -117,6 +121,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: 
   const [requested, setRequested] = useState<{ action: PrAction; at: number } | null>(null);
   const [pending, setPending] = useState<PrAction | null>(null);
 
+  const repoName = unlabeled ? undefined : repo?.name;
   const status = deliveryStatus === undefined ? loadedStatus : deliveryStatus;
   const pr = status?.pr;
   const creating = requested?.action === "create" && pr?.state !== "OPEN";
@@ -167,7 +172,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: 
         inline={inline}
         pr={pr}
         base={status.base}
-        repoName={repo?.name}
+        repoName={repoName}
         pending={pending}
         requested={requested && Date.now() - requested.at < FAST_AFTER_REQUEST_MS ? requested.action : null}
         onAsk={(action) =>
@@ -188,7 +193,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: 
       <Button size="sm" variant="outline" className="h-7 gap-1.5" asChild>
         <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title}>
           <GitMergeIcon className="text-violet-600 dark:text-violet-400" />
-          {repo && `${repo.name} `}Merged #{pr.number}
+          {repoName && `${repoName} `}Merged #{pr.number}
         </a>
       </Button>
     );
@@ -204,7 +209,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo }: 
       >
         {pending || creating ? <Loader2Icon className="animate-spin" /> : <GitPullRequestArrowIcon />}
         {creating ? "Creating PR…" : "Create PR"}
-        {repo && <span className="opacity-70">· {repo.name}</span>}
+        {repoName && <span className="opacity-70">· {repoName}</span>}
       </Button>
     </span>
   );

@@ -1,6 +1,6 @@
 import { ChiefPanel } from "@/components/project/chief-panel";
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
-import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, ExternalLinkIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
@@ -8,7 +8,6 @@ import { ProjectRepos } from "@/components/project/project-repos";
 import { SessionView } from "@/components/session/session-view";
 import { relativeTime, workspaceLabel } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
-import { HarvestButton } from "@/components/workspace/harvest-dialog";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
 import { WorkspaceBaseProvider } from "@/components/workspace/route-context";
 import { newChatPath, projectPath, workspacePath } from "@/lib/routes";
@@ -18,9 +17,8 @@ import type { ExternalSession } from "@/lib/projects";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { LEVEL_NAMES, type CityLevel } from "@/lib/world/cities";
 import { CROP_NAMES } from "@/lib/world/town";
-import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { WorkspaceDirectory } from "@/components/workspace/workspace-directory";
-import { DeliveryPanel } from "./delivery-panel";
+import { DevServer, WorkspaceRepos, type RepoRow } from "./delivery-panel";
 import { ProjectSettings } from "./project-settings";
 import { TownNotes } from "./town-notes";
 import { PanelTabs, type PanelTab } from "./panel-tabs";
@@ -125,37 +123,35 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
 }) {
   const label = workspaceLabel(workspace);
   const base = projectPath(project);
-  return <TownPanel eyebrow="Workspace" title={label} closeHref={closeHref} actions={<>
-    <HarvestButton workspaceId={workspace.id} label={label} variant="ghost" />
-    <WorkspaceMenu project={project} workspace={workspace} label={label} openLink />
-  </>}>
-      <Section title="Workspace">
-        <WorkspaceDirectory id={workspace.id} cwd={workspace.cwd} />
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-          {workspace.branch ? (
-            <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{workspace.branch}</span>
-          ) : (
-            <span className="text-muted-foreground">{workspace.repos.length ? "In place in its repos" : "In the project's scratch folder"}</span>
-          )}
-        </div>
-        {workspace.repos.length > 1 && (
-          <ul className="text-muted-foreground mb-3 flex flex-col gap-0.5 text-xs">
-            {workspace.repos.map((r) => (
-              <li key={r.repoId} className="flex items-center gap-1.5" title={r.cwd}>
-                <span className="text-foreground font-medium">{r.name}</span>
-                {r.worktreePath ? <span className="flex items-center gap-1 font-mono"><GitBranchIcon className="size-3" />{r.branch}</span> : <span>in place</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-        <Button size="sm" asChild>
+  const href = workspacePath(project, workspace);
+  const rows: RepoRow[] = workspace.repos.length
+    ? workspace.repos.map((r) => ({
+        id: r.repoId, name: r.name, cwd: r.cwd, branch: r.branch,
+        kind: project.repos.find((p) => p.id === r.repoId)?.kind === "folder" ? "folder" : r.worktreePath ? "worktree" : "checkout",
+      }))
+    : [{ id: null, name: "Files", cwd: workspace.cwd, branch: null, kind: "scratch" }];
+  const inPlace = rows.some((r) => r.kind === "checkout");
+  // PR actions start a session and land on it, so they need the workspace's page URL.
+  return <WorkspaceBaseProvider value={href}><TownPanel eyebrow="Workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu project={project} workspace={workspace} label={label} />}>
+      <div className="flex gap-2 border-b px-4 py-3">
+        <Button asChild className="flex-1">
+          <Link href={href}><ExternalLinkIcon /> Open workspace</Link>
+        </Button>
+        <Button asChild variant="outline" className="flex-1">
           <Link href={newChatPath(project, workspace)}><PlusIcon /> New session</Link>
         </Button>
+      </div>
+
+      <Section title={workspace.repos.length ? `Repos (${rows.length})` : "Folder"}>
+        <WorkspaceRepos key={workspace.id} workspaceId={workspace.id} rows={rows} />
+        {inPlace && <p className="text-muted-foreground mt-3 text-xs">
+          {label} works directly in your own {rows.length > 1 ? "checkouts" : "checkout"}, on whatever branch {rows.length > 1 ? "each has" : "it has"} checked out. Add a workspace to get a separate worktree and branch per repo.
+        </p>}
       </Section>
 
-      {workspaceRepoTargets({ project, workspace }).length > 0 && <Section title="Delivery">
-        <DeliveryPanel key={workspace.id} workspaceId={workspace.id} />
-      </Section>}
+      <Section title="Preview">
+        <DevServer key={workspace.id} workspaceId={workspace.id} />
+      </Section>
 
       <Section title={`Sessions (${fields.length})`}>
         {fields.length === 0 ? (
@@ -178,7 +174,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
         <TownNotes townHref={projectPath(project)} scope={{ kind: "workspaces", id: workspace.id }} />
       </Section>
 
-    </TownPanel>;
+    </TownPanel></WorkspaceBaseProvider>;
 }
 
 /** A field opens straight into its chat. */

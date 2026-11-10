@@ -7,8 +7,8 @@ import { listProjects } from "../supabase/repo/projects";
 import { listAllWorkspaces } from "../supabase/repo/workspaces";
 import { toCheck, type RollupEntry } from "./github";
 import { runtimeSnapshot } from "./runtime";
-import { httpUrl, type WorkspaceDelivery } from "./delivery-types";
-import { anchorTarget } from "./repo-targets";
+import { httpUrl, type RepoDelivery, type WorkspaceDelivery } from "./delivery-types";
+import { anchorTarget, workspaceRepoTargets, type RepoTarget } from "./repo-targets";
 import { gitRepos } from "./repos";
 import type { Project, PullRequestInfo, Workspace } from "./types";
 
@@ -133,26 +133,39 @@ async function projectDelivery(project: Project) {
   return cached;
 }
 
-async function workspaceDelivery(project: Project, ws: Workspace, cached: CachedProject): Promise<WorkspaceDelivery> {
-  const target = anchorTarget({ project, workspace: ws });
-  const base = target?.baseRef?.replace(/^origin\//, "") || target?.defaultBranch || "main";
-  const [runtime, local] = await Promise.all([
-    runtimeSnapshot({ project, workspace: ws }, false),
-    target ? run("git", ["status", "--porcelain=v2", "--branch"], target.cwd) : Promise.resolve(null),
-  ]);
-  const branch = local?.match(/^# branch.head (.+)$/m)?.[1] ?? null;
-  const actualBranch = branch === "(detached)" ? null : branch;
-  const match = cached.branches.find((b) => b.branch === actualBranch && b.repoId === target?.id);
-  const counts = target ? await run("git", ["rev-list", "--left-right", "--count", `${target.baseRef || `origin/${base}`}...HEAD`], target.cwd).catch(() => null) : null;
+async function repoDelivery(target: RepoTarget, cached: CachedProject): Promise<RepoDelivery> {
+  const base = target.baseRef?.replace(/^origin\//, "") || target.defaultBranch || "main";
+  const local = await run("git", ["status", "--porcelain=v2", "--branch"], target.cwd);
+  const head = local.match(/^# branch.head (.+)$/m)?.[1] ?? null;
+  const branch = head === "(detached)" ? null : head;
+  const match = cached.branches.find((b) => b.branch === branch && b.repoId === target.id);
+  const counts = await run("git", ["rev-list", "--left-right", "--count", `${target.baseRef || `origin/${base}`}...HEAD`], target.cwd).catch(() => null);
   const [behind, ahead] = counts?.split(/\s+/).map(Number) ?? [null, null];
-  const reason = cached.error || (!target ? "No repositories" : !target.remote ? "No origin remote" : !actualBranch ? "Not on a branch" : actualBranch === base || actualBranch === target.defaultBranch ? "Start a workspace with its own branch" : null);
+  const reason = cached.error || (!target.remote ? "No origin remote" : !branch ? "Not on a branch" : branch === base || branch === target.defaultBranch ? `On ${branch}: a PR needs its own branch` : null);
   return {
-    activity: (cached.history?.events ?? []).filter((e) => e.branch === actualBranch).slice(-10).reverse(),
+    repoId: target.id, name: target.name, worktree: !!target.worktreePath,
+    status: { branch, base: match?.base ?? base, pr: match?.pr ?? null, canCreate: !reason && !match, reason },
+    git: { ahead, behind, dirty: local.split("\n").some((line) => line && !line.startsWith("#")) },
+    deployedPreviewUrl: match?.previewUrl ?? null,
+  };
+}
+
+async function workspaceDelivery(project: Project, ws: Workspace, cached: CachedProject): Promise<WorkspaceDelivery> {
+  const ctx = { project, workspace: ws };
+  const [runtime, repos] = await Promise.all([
+    runtimeSnapshot(ctx, false),
+    Promise.all(workspaceRepoTargets(ctx).map((t) => repoDelivery(t, cached))),
+  ]);
+  // The workspace-level fields describe the anchor repo, for the single-repo views.
+  const anchor = repos.find((r) => r.repoId === anchorTarget(ctx)?.id) ?? null;
+  return {
+    activity: (cached.history?.events ?? []).filter((e) => repos.some((r) => r.status.branch === e.branch)).slice(-10).reverse(),
     workspaceId: ws.id, projectId: project.id,
-    status: { branch: actualBranch, base: match?.base ?? base, pr: match?.pr ?? null, canCreate: !reason && !match, reason },
-    git: local === null ? null : { ahead, behind, dirty: local.split("\n").some((line) => line && !line.startsWith("#")) },
+    repos,
+    status: anchor?.status ?? { branch: null, base: "main", pr: null, canCreate: false, reason: cached.error || "No repositories" },
+    git: anchor?.git ?? null,
     running: runtime.processes.some((p) => p.kind === "run" && p.running),
-    localPreviewUrl: runtime.previewUrl, deployedPreviewUrl: match?.previewUrl ?? null,
+    localPreviewUrl: runtime.previewUrl, deployedPreviewUrl: anchor?.deployedPreviewUrl ?? null,
     updatedAt: cached.updatedAt, error: cached.error || runtime.setupError,
   };
 }
@@ -176,7 +189,7 @@ async function tick() {
           const previous = state.deliveries.find((d) => d.workspaceId === ws.id);
           deliveries.push({
             activity: previous?.activity ?? [],
-            workspaceId: ws.id, projectId: project.id,
+            workspaceId: ws.id, projectId: project.id, repos: previous?.repos ?? [],
             status: previous?.status ?? { branch: ws.branch, base: "main", pr: null, canCreate: false, reason: "Workspace unavailable" },
             git: null, running: false, localPreviewUrl: null, deployedPreviewUrl: previous?.deployedPreviewUrl ?? null,
             updatedAt: previous?.updatedAt ?? null, error: "Workspace delivery unavailable; check its folder and configuration",
