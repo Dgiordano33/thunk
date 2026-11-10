@@ -10,7 +10,7 @@ import { createClaudeDriver } from "./claude-driver";
 import { createCodexDriver } from "./codex/driver";
 import type { WorkspaceContext } from "@/lib/projects";
 import type { SessionOrigin } from "@/lib/agent/types";
-import { providerOf, type HarnessEvent, type HarnessEventBody, type SessionMeta, type SessionState } from "./types";
+import { providerOf, type HarnessEvent, type HarnessEventBody, type SessionMeta, type SessionState, type WaitingOn } from "./types";
 
 export type PendingRequest = {
   kind: "permission" | "question" | "plan";
@@ -18,6 +18,8 @@ export type PendingRequest = {
   toolUseId: string;
   input: Record<string, unknown>;
   suggestions?: unknown[];
+  /** Set while the project chief, not the person, owns a worker's question. */
+  routedTo?: "chief";
   resolve: (result: PermissionResult) => void;
 };
 
@@ -253,13 +255,25 @@ export function setState(live: LiveSession, state: SessionState, extra: { resume
     state = "running";
   }
   live.meta.status = state;
+  live.meta.waitingOn = waitingOnOf(live);
   emit(live, {
     type: "status",
     state,
     permissionMode: live.meta.permissionMode,
     model: live.meta.model,
+    waitingOn: live.meta.waitingOn,
     ...extra,
   });
+}
+
+function waitingOnOf(live: LiveSession): WaitingOn {
+  if (live.meta.status !== "awaiting" || !live.pending.size) return null;
+  return [...live.pending.values()].every((p) => p.routedTo === "chief") ? "chief" : null;
+}
+
+/** Re-announce an awaiting session when the owner of its requests changes (answered, escalated). */
+export function refreshWaitingOn(live: LiveSession) {
+  if (live.meta.status === "awaiting" && waitingOnOf(live) !== (live.meta.waitingOn ?? null)) setState(live, "awaiting");
 }
 
 /** Emit an event. Text/thinking deltas are coalesced (~30ms) to keep SSE + React cheap. */
@@ -357,5 +371,6 @@ export function resolvePending(live: LiveSession, requestId: string, result: Per
   live.pending.delete(requestId);
   req.resolve(result);
   if (live.pending.size === 0 && live.meta.status === "awaiting") setState(live, "running");
+  else refreshWaitingOn(live);
   return req;
 }

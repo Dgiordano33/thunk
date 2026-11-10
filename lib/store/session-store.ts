@@ -40,7 +40,7 @@ export type PendingRequest =
       suggestions?: PermissionSuggestion[];
       decision?: "allow" | "deny" | "cancelled";
     })
-  | (RequestBase & { kind: "question"; questions: Question[]; answers?: Record<string, string> | null })
+  | (RequestBase & { kind: "question"; questions: Question[]; answers?: Record<string, string> | null; routedTo?: "chief"; escalation?: { recommendation: string | null; reason: string }; by?: "chief" })
   | (RequestBase & { kind: "plan"; documentId: string; decision?: "approve" | "changes" | "cancelled" });
 
 export type DocState = PersistedDocument & {
@@ -168,6 +168,7 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         patch.meta = {
           ...s.meta,
           status: e.state,
+          waitingOn: e.waitingOn ?? null,
           model: e.model ?? s.meta.model,
           permissionMode: e.permissionMode ?? s.meta.permissionMode,
           live: e.state === "closed" || e.state === "error" ? false : s.meta.live,
@@ -289,12 +290,19 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         toolUseId: e.toolUseId,
         status: "pending",
         questions: e.questions,
+        routedTo: e.routedTo,
       });
+
+    case "question_escalated": {
+      const r = s.requests[e.requestId];
+      if (!r || r.kind !== "question") return {};
+      return { requests: { ...s.requests, [r.id]: { ...r, escalation: { recommendation: e.recommendation, reason: e.reason } } } };
+    }
 
     case "question_resolved": {
       const r = s.requests[e.requestId];
       if (!r || r.kind !== "question") return {};
-      return { requests: { ...s.requests, [r.id]: { ...r, status: "resolved", answers: e.answers } } };
+      return { requests: { ...s.requests, [r.id]: { ...r, status: "resolved", answers: e.answers, by: e.by } } };
     }
 
     case "plan_proposed":

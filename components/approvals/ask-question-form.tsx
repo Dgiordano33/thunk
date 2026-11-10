@@ -26,6 +26,7 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
           <p key={q.question} className="flex items-center gap-1.5">
             <CheckIcon className="size-3.5" />
             {q.header}: {req.answers?.[q.question] ?? (req.status === "expired" ? "expired" : "skipped")}
+            {req.by === "chief" && req.answers && <span className="opacity-70">· answered by the chief</span>}
           </p>
         ))}
       </div>
@@ -63,6 +64,8 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
 
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-sky-500/40 bg-sky-500/5 p-4">
+      {req.routedTo === "chief" && !req.escalation && <p className="text-muted-foreground text-xs">Sent to the chief. It answers or asks you within 10 minutes; you can also answer now.</p>}
+      {req.escalation && <p className="text-xs">{req.escalation.recommendation ? <><span className="font-medium">Chief recommends:</span> {req.escalation.recommendation}</> : req.escalation.reason}</p>}
       {req.questions.map((q) => (
         <fieldset key={q.question} className="flex flex-col gap-2">
           <legend className="mb-2 flex items-start gap-2 text-sm font-medium">

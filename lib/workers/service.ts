@@ -87,7 +87,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
     const ctx = live?.ctx ?? await getWorkspaceContext(session.workspaceId);
     const project = ctx?.project;
     const report = project ? await savedReport(project, session.id) : null;
-    return { task, sessionId: session.id, workspaceId: session.workspaceId, state: session.live ? session.status : "closed", pendingPrompts: live?.pending.size ?? 0,
+    return { task, sessionId: session.id, workspaceId: session.workspaceId, state: session.live ? session.status : "closed", waitingOn: session.live ? session.waitingOn ?? null : null, pendingPrompts: live?.pending.size ?? 0,
       branch: ctx?.workspace.branch ?? null, diffStat: withDiff && ctx ? (await collectReport({ ...ctx, markdown: "" })).diffStat : null, lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null };
   })).then((rows) => rows.filter((r) => r !== null));
 }
@@ -157,6 +157,8 @@ export function attachWorker(live: LiveSession) {
       status: async (status) => {
         const origin = live.meta.origin;
         if (origin?.kind !== "worker") return;
+        // The chief owns these; it escalates (and logs) if the person is needed.
+        if (status === "needs_attention" && [...live.pending.values()].every((p) => p.routedTo === "chief")) return;
         if (status === "needs_attention") {
           await appendWorkLog(live.ctx.project, `[worker] blocked: ${live.meta.title} · waiting for you`);
           if (origin.chiefSessionId) {

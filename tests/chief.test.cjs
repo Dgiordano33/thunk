@@ -40,6 +40,9 @@ const agent = {
   },
   resumeSession: async (id) => { const live = sessions.get(id); if (live) { live.driver.isClosed = false; if (live.meta.status === "closed") live.meta.status = "idle"; } return live; },
   closeSession: (id) => { const live = sessions.get(id); if (live) { live.driver.isClosed = true; emit(live, { type: "status", state: "closed" }); } },
+  emit,
+  resolvePending: (live, requestId, result) => { const req = live.pending.get(requestId); if (!req) return null; live.pending.delete(requestId); req.resolve(result); return req; },
+  refreshWaitingOn: (live) => { if (live.meta.status === "awaiting") emit(live, { type: "status", state: "awaiting", waitingOn: [...live.pending.values()].every((p) => p.routedTo === "chief") ? "chief" : null }); },
   pushUserMessage: (live, content) => { const queued = ["running", "awaiting"].includes(live.meta.status); emit(live, { type: "user_message", content, queued }); if (queued) live.queuedMessages.push({ content }); else emit(live, { type: "status", state: "running" }); },
 };
 const mocks = {
@@ -292,4 +295,63 @@ test("a new chief takes over reports from running workers", async () => {
   await reports.flushReports(old.id);
   assert.match(fresh.events.find((e) => e.type === "user_message").content, /Handover complete/);
   assert.equal(old.events.slice(before).some((e) => e.type === "user_message"), false);
+});
+
+test("worker questions go to the chief, which answers or escalates with a recommendation", async () => {
+  const questions = load("@/lib/workers/questions");
+  const chief = await service.openChief(project.id);
+  const worker = await service.delegate(project.id, chief.id, { title: "Cache choice" });
+  const live = sessions.get(worker.sessionId);
+  const ask = (requestId, results) => {
+    const asked = [{ question: "Postgres or SQLite for this cache?", header: "Cache", multiSelect: false, options: [{ label: "Postgres", description: "" }, { label: "SQLite", description: "" }] }];
+    emit(live, { type: "ask_question", requestId, toolUseId: id(), questions: asked, routedTo: "chief" });
+    live.pending.set(requestId, { kind: "question", input: { questions: asked }, routedTo: "chief", resolve: (r) => results.push(r) });
+    emit(live, { type: "status", state: "awaiting", waitingOn: "chief" });
+    return asked;
+  };
+
+  const answered = id(); const results = [];
+  await questions.forwardQuestion(live, answered, ask(answered, results));
+  assert.match(chief.events.at(-1).content, /<worker_question id="[^"]+"[\s\S]*Postgres or SQLite[\s\S]*- SQLite/);
+  assert.throws(() => questions.answerQuestion(project.id, answered, { Wrong: "SQLite" }), /Missing: "Postgres or SQLite/);
+  assert.throws(() => questions.answerQuestion(id(), answered, { "Postgres or SQLite for this cache?": "SQLite" }), /No open worker question/);
+  questions.answerQuestion(project.id, answered, { "Postgres or SQLite for this cache?": "SQLite" });
+  assert.deepEqual(results[0].updatedInput.answers, { "Postgres or SQLite for this cache?": "SQLite" });
+  assert.equal(live.events.at(-1).by, "chief");
+  assert.throws(() => questions.answerQuestion(project.id, answered, { "Postgres or SQLite for this cache?": "SQLite" }), /No open worker question/);
+
+  const escalated = id();
+  await questions.forwardQuestion(live, escalated, ask(escalated, []));
+  await questions.escalateQuestion(escalated, "SQLite: the cache is per machine", "The chief asked for your decision.", project.id);
+  const event = live.events.at(-1);
+  assert.equal(event.type, "question_escalated");
+  assert.equal(event.recommendation, "SQLite: the cache is per machine");
+  assert.equal(live.pending.get(escalated).routedTo, undefined, "the person owns it now");
+  assert.equal(live.events.findLast((e) => e.type === "status").waitingOn, null);
+  assert.throws(() => questions.answerQuestion(project.id, escalated, { "Postgres or SQLite for this cache?": "SQLite" }), /No open worker question/);
+
+  const silent = id();
+  await questions.forwardQuestion(live, silent, ask(silent, []), { timeoutMs: 5 });
+  await until(() => live.events.some((e) => e.type === "question_escalated" && e.requestId === silent));
+  assert.match(live.events.findLast((e) => e.type === "question_escalated").reason, /did not answer/);
+});
+
+test("a worker whose chief is gone escalates its question at once", async () => {
+  const questions = load("@/lib/workers/questions");
+  const live = await agent.startSession({ workspaceId: main.id, origin: { kind: "worker", chiefSessionId: id(), taskId: id() } });
+  const requestId = id();
+  live.pending.set(requestId, { kind: "question", input: { questions: [] }, routedTo: "chief", resolve: () => {} });
+  await questions.forwardQuestion(live, requestId, []);
+  assert.match(live.events.at(-1).reason, /no chief/);
+  assert.equal(prompt.asksChiefFirst(live), true);
+  assert.equal(prompt.asksChiefFirst({ meta: { origin: { kind: "worker", chiefSessionId: null, taskId: id() } } }), false);
+  assert.match(prompt.teamPrompt({ kind: "chief" }), /workers_answer/);
+});
+
+test("a session waiting only on its chief does not need the person", () => {
+  const { needsPerson } = load("@/lib/agent/types");
+  assert.equal(needsPerson({ status: "awaiting", waitingOn: "chief" }), false);
+  assert.equal(needsPerson({ status: "awaiting", waitingOn: null }), true);
+  assert.equal(needsPerson({ status: "awaiting" }), true);
+  assert.equal(needsPerson({ status: "running", waitingOn: null }), false);
 });

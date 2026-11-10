@@ -96,6 +96,8 @@ Acceptance: open a project, click "Start lead", send "plan the next three tasks 
 - Timeout: if the lead does not answer within 10 minutes (configurable), the question escalates automatically with "lead did not answer" so a worker is never stuck on a silent lead.
 - Permissions (`canUseTool` for tools), `ExitPlanMode`, and anything in `default` permission mode still go to the person. The lead is told in its prompt that it cannot grant these.
 
+Implemented on the chief (`plans/chief-plan.md`), which plays the lead's role: a chief-started worker's `AskUserQuestion` is posted to the project's newest chief as `<worker_question id=…>` and stays parked on the worker (`lib/workers/questions.ts`). The chief answers with `workers_answer` or hands it over with `workers_escalate` and a recommendation; after 10 minutes it escalates on its own. Escalations reuse the `question` inbox kind with the recommendation as detail, so no `escalation` kind or migration was added. The person can still answer in the worker's session at any time. Permissions and plans go to the person as before. Chief answers are logged in the work log.
+
 Acceptance: a worker asks "Postgres or SQLite for this cache?"; the lead answers from `decisions.md` without the person seeing a prompt; the exchange shows in the worker's transcript and in the lane's activity line. A question outside the plan arrives in the inbox with the lead's recommendation.
 
 ### 4. Show your work: artifacts and rounds

@@ -19,6 +19,7 @@ export function roleFor(e: HarnessEvent): "user" | "assistant" | "tool" | "syste
     case "permission_resolved":
     case "ask_question":
     case "question_resolved":
+    case "question_escalated":
     case "plan_resolved":
       return "tool";
     default:

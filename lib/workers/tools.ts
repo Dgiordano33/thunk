@@ -20,6 +20,14 @@ export function chiefTools(live: LiveSession) {
     define("workers_status", "Snapshot of project worker tasks, live states, pending prompts, branches and latest reports. No polling needed.", {}, async () => (await import("./service")).workersStatus(live.meta.projectId, true)),
     define("workers_message", "Send follow-up instructions to a worker; queued if it is mid-turn.", { taskId: z.uuid(), content: z.string().trim().min(1).max(20_000) }, async ({ taskId, content }) => (await import("./service")).messageWorker(live.meta.projectId, taskId, content)),
     define("workers_stop", "Stop a worker and cancel its task, retaining the worktree.", { taskId: z.uuid(), reason: z.string().trim().min(1).max(2000) }, async ({ taskId, reason }) => (await import("./service")).stopWorker(live.meta.projectId, taskId, reason)),
+    define("workers_answer", "Answer a <worker_question>. answers maps each question's exact text to an option label or your own words.", { questionId: z.uuid(), answers: z.record(z.string(), z.string().trim().min(1).max(4000)) }, async ({ questionId, answers }) => {
+      (await import("./questions")).answerQuestion(live.meta.projectId, questionId, answers);
+      return { answered: true };
+    }),
+    define("workers_escalate", "Send a <worker_question> to the person with your recommendation, when it needs their judgment.", { questionId: z.uuid(), recommendation: z.string().trim().min(1).max(4000) }, async ({ questionId, recommendation }) => {
+      await (await import("./questions")).escalateQuestion(questionId, recommendation, "The chief asked for your decision.", live.meta.projectId);
+      return { escalated: true };
+    }),
     define("chief_log", "Append outcomes or decisions to today's work log. Optionally replace workspace memory with the current plan.", { entry: z.string().trim().min(1).max(20_000), plan: z.string().max(24_000).optional() }, async ({ entry, plan }) => {
       const { appendWorkLog, saveChiefPlan } = await import("./log");
       if (plan !== undefined) await saveChiefPlan(live.ctx.project, plan);
