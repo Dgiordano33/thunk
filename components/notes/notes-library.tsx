@@ -1,7 +1,7 @@
 "use client";
 
 import { PlusIcon } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +42,6 @@ export function useAllNotes() {
  * URL state: `?scope=p:<id>|w:<id>&note=<id>` so the town and sidebar can deep-link.
  */
 export function NotesLibrary() {
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const scope = parseScopeKey(params.get("scope"));
@@ -54,9 +53,9 @@ export function NotesLibrary() {
       const q = new URLSearchParams();
       if (next.scope) q.set("scope", scopeKey(next.scope));
       if (next.note) q.set("note", next.note);
-      router.replace(q.size ? `${pathname}?${q}` : pathname, { scroll: false });
+      window.history.replaceState(null, "", q.size ? `${pathname}?${q}` : pathname);
     },
-    [router, pathname],
+    [pathname],
   );
 
   const label = useMemo(() => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { InfoIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAmbient } from "@/lib/store/ambient-store";
@@ -12,6 +13,7 @@ import { TerrainLayer } from "./terrain-layer";
 
 export function WorldMap({ tiles, cities, children }: { tiles: Tile[][]; cities: WorldCity[]; children?: React.ReactNode }) {
   const sessions = useAmbient((s) => s.sessions);
+  const borders = useMemo(() => cities.map((c) => ({ id: c.project.id, hue: c.hue, cells: c.territory })), [cities]);
   return (
     <IsoViewport
       width={MAP_W}
@@ -19,7 +21,7 @@ export function WorldMap({ tiles, cities, children }: { tiles: Tile[][]; cities:
       label="World map"
       stage={
         <>
-          <TerrainLayer tiles={tiles} grid={WORLD} borders={cities.map((c) => ({ id: c.project.id, hue: c.hue, cells: c.territory }))} />
+          <TerrainLayer tiles={tiles} grid={WORLD} borders={borders} />
           {cities.map((city) => (
             <City key={city.project.id} city={city} activity={cityActivity(sessions, city.project.id)} />
           ))}

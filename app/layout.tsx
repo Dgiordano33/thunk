@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Pixelify_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
-import { Retune } from "retune";
+import { DevTools } from "@/components/dev-tools";
 import "./globals.css";
 import { themeScript } from "@/lib/theme";
 
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="h-full" suppressHydrationWarning>
         <Providers>{children}</Providers>
-        {process.env.NODE_ENV === "development" && <Retune />}
+        <DevTools />
       </body>
     </html>
   );

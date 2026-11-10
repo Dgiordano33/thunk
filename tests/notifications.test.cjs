@@ -146,3 +146,78 @@ test("installed producers detect silence, clear on new activity, and observe set
   assert.equal(rows.length, 1); assert.equal(rows[0].kind, "script_failed");
   assert.match(rows[0].title, /Setup/);
 });
+
+test("delivery batches reconciliation, preserves project scope, and emits every resolved row", async (t) => {
+  const history = { seq: 0, events: [] };
+  const snapshots = Array.from({ length: 50 }, (_, number) => ({
+    id: `pr-${number}`, state: "CLOSED", pr: { number, title: "Done", url: "/", head: "a" }, checks: [], requests: [],
+  }));
+  for (const s of snapshots) for (const suffix of ["ci", "stuck", "review"])
+    await service.notify({ ...base, projectId: "p", subjectKey: `project:p:pr:${s.pr.number}:${suffix}` });
+  await service.notify({ ...base, projectId: "q", subjectKey: "project:q:pr:0:ci" });
+  const calls = [];
+  const original = service.resolveWhere;
+  t.mock.method(service, "resolveWhere", (match) => { calls.push(match); return original(match); });
+  const events = [];
+  const off = subscribeNotifications((event) => events.push(event));
+  t.after(off);
+  await deliveryNotifications("p", history, history, snapshots);
+  assert.deepEqual(calls.map((call) => call.subjectKeys.length), [100, 50]);
+  assert.ok(calls.every((call) => call.projectId === "p"));
+  assert.equal(events.length, 150);
+  assert.ok(events.every((event) => event.kind === "updated" && event.notification.status === "resolved"));
+  assert.deepEqual((await repo.listNotifications()).map((n) => n.projectId), ["q"]);
+  assert.deepEqual(await service.resolveWhere({ projectId: "p", subjectKeys: ["project:q:pr:0:ci"] }), []);
+  assert.deepEqual(await service.resolveWhere({ projectId: "q", subjectKeys: [] }), []);
+
+  calls.length = 0;
+  events.length = 0;
+  // Reconcile again so a stale notification from another process is still cleared.
+  await service.notify({ ...base, projectId: "p", subjectKey: "project:p:pr:0:ci" });
+  events.length = 0;
+  await deliveryNotifications("p", history, history, snapshots);
+  assert.equal(calls.length, 2);
+  assert.equal(events.length, 1);
+  calls.length = 0;
+  await deliveryNotifications("p", history, history, []);
+  assert.equal(calls.length, 0);
+});
+
+test("delivery batch errors propagate and reconciliation can be retried", async (t) => {
+  const history = { seq: 0, events: [] };
+  const snapshot = { id: "pr", state: "CLOSED", pr: { number: 1, head: "a" }, checks: [], requests: [] };
+  await service.notify({ ...base, projectId: "p", subjectKey: "project:p:pr:1:ci" });
+  const original = service.resolveWhere;
+  const mocked = t.mock.method(service, "resolveWhere", async () => { throw new Error("offline"); });
+  await assert.rejects(deliveryNotifications("p", history, history, [snapshot]), /offline/);
+  mocked.mock.restore();
+  assert.equal((await repo.countOpen()).total, 1);
+  await deliveryNotifications("p", history, history, [snapshot]);
+  assert.equal((await repo.countOpen()).total, 0);
+  assert.equal(service.resolveWhere, original);
+});
+
+test("database reconciliation sends one scoped PATCH with all subjects and surfaces failures", async (t) => {
+  const { createClient } = require("@supabase/supabase-js");
+  const requests = [];
+  let fail = false;
+  const client = createClient("https://database.example", "test-key", {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: async (url, init) => {
+      requests.push({ url: new URL(url), init });
+      return new Response(JSON.stringify(fail ? { message: "offline" } : []), {
+        status: fail ? 400 : 200, headers: { "content-type": "application/json" },
+      });
+    } },
+  });
+  t.mock.method(require("../lib/supabase/server.ts"), "db", () => client);
+  assert.deepEqual(await repo.resolveWhere({ projectId: "p", subjectKeys: ["pr:1:ci", "pr:2:ci"] }), []);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].init.method, "PATCH");
+  assert.equal(requests[0].url.searchParams.get("project_id"), "eq.p");
+  assert.equal(requests[0].url.searchParams.get("status"), "eq.open");
+  assert.equal(requests[0].url.searchParams.get("subject_key"), 'in.(pr:1:ci,pr:2:ci)');
+  assert.equal(requests[0].url.searchParams.get("select"), "*");
+  fail = true;
+  await assert.rejects(repo.resolveWhere({ projectId: "p", subjectKeys: ["pr:1:ci"] }), { message: "offline" });
+});

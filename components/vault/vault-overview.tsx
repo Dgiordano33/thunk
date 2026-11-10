@@ -30,7 +30,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
       if (v) q.set(k, v);
       else q.delete(k);
     }
-    router.replace(`${pathname}?${q}`, { scroll: false });
+    window.history.replaceState(null, "", `${pathname}?${q}`);
   };
 
   const refresh = useCallback(async () => {

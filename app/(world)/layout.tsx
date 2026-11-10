@@ -13,12 +13,14 @@ export const dynamic = "force-dynamic";
 // Full-bleed home: the world map (or a placeholder section) under the strategy-game HUD. No project sidebar.
 export default async function WorldLayout({ children }: LayoutProps<"/">) {
   const projects = await loadSidebarProjects();
-  const noteCount = await countNotes(
-    projects.flatMap((p) => [projectNoteDirs(p), ...p.workspaces.map((w) => workspaceNoteDirs(p, w))]),
-  ).catch(() => 0);
-  const routineCount = await countEnabledRoutines().catch(() => 0);
-  const notificationCount = await countOpen().then((c) => c.action).catch(() => 0);
-  const vaultCount = await countVaultItems(projects).catch(() => 0);
+  const [noteCount, routineCount, notificationCount, vaultCount] = await Promise.all([
+    countNotes(
+      projects.flatMap((p) => [projectNoteDirs(p), ...p.workspaces.map((w) => workspaceNoteDirs(p, w))]),
+    ).catch(() => 0),
+    countEnabledRoutines().catch(() => 0),
+    countOpen().then((c) => c.action).catch(() => 0),
+    countVaultItems(projects).catch(() => 0),
+  ]);
   return (
     <PathsProvider projects={pathTree(projects)}>
       <div className="world relative h-dvh overflow-hidden">

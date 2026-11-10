@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 import { TILE_H, TILE_W, isWater, isoPolygon, mapSize, toIso, type Cell, type Grid, type Tile } from "@/lib/world/terrain";
 
 const HW = TILE_W / 2;
@@ -10,25 +10,20 @@ const CLIFF = 6;
 
 const pts = (list: [number, number][]) => list.map(([x, y]) => `${x},${y}`).join(" ");
 
+// The three forest variants share geometry; SVG instances avoid repeating every tree node.
+const FORESTS: [number, number][][] = [
+  [[-12, 0], [8, -3], [-1, 7]],
+  [[-6, -3], [10, 2], [-14, 5], [2, 8]],
+  [[-9, 1], [5, -2], [12, 6]],
+];
+
 /** Terrain detail drawn on top of a tile, around its centre. Variant picks between looks so the map isn't uniform. */
-function Glyph({ tile, grid }: { tile: Tile; grid: Grid }) {
+function Glyph({ tile, grid, forestId }: { tile: Tile; grid: Grid; forestId: string }) {
   const { x, y } = toIso(tile.col, tile.row, grid);
   const v = tile.variant;
   switch (tile.kind) {
-    case "forest": {
-      const trees: [number, number][] = v < 0.33 ? [[-12, 0], [8, -3], [-1, 7]] : v < 0.66 ? [[-6, -3], [10, 2], [-14, 5], [2, 8]] : [[-9, 1], [5, -2], [12, 6]];
-      return (
-        <g>
-          {trees.map(([dx, dy]) => (
-            <g key={`${dx},${dy}`}>
-              <rect x={x + dx - 1} y={y + dy} width={2} height={3} fill="var(--w-cliff)" />
-              <polygon points={pts([[x + dx, y + dy - 13], [x + dx + 6, y + dy + 1], [x + dx - 6, y + dy + 1]])} fill="var(--w-tree)" />
-              <polygon points={pts([[x + dx, y + dy - 13], [x + dx + 2, y + dy - 6], [x + dx - 3, y + dy - 4]])} fill="oklch(1 0 0 / 0.12)" />
-            </g>
-          ))}
-        </g>
-      );
-    }
+    case "forest":
+      return <use href={`#${forestId}-${v < 0.33 ? 0 : v < 0.66 ? 1 : 2}`} x={x} y={y} />;
     case "hills":
       return (
         <g>
@@ -129,6 +124,7 @@ function BorderPath({ border, grid }: { border: Border; grid: Grid }) {
 
 export const TerrainLayer = memo(function TerrainLayer({ tiles, grid, borders = [] }: { tiles: Tile[][]; grid: Grid; borders?: Border[] }) {
   const { w, h } = mapSize(grid);
+  const forestId = useId();
   // Painter's order: water first so land cliffs overlap it, then back-to-front by diagonal.
   const ordered = useMemo(() => {
     const flat = tiles.flat();
@@ -145,6 +141,19 @@ export const TerrainLayer = memo(function TerrainLayer({ tiles, grid, borders = 
       className="pixel absolute top-0 left-0 overflow-visible"
       aria-hidden="true"
     >
+      <defs>
+        {FORESTS.map((trees, i) => (
+          <g key={i} id={`${forestId}-${i}`}>
+            {trees.map(([dx, dy]) => (
+              <g key={`${dx},${dy}`}>
+                <rect x={dx - 1} y={dy} width={2} height={3} fill="var(--w-cliff)" />
+                <polygon points={pts([[dx, dy - 13], [dx + 6, dy + 1], [dx - 6, dy + 1]])} fill="var(--w-tree)" />
+                <polygon points={pts([[dx, dy - 13], [dx + 2, dy - 6], [dx - 3, dy - 4]])} fill="oklch(1 0 0 / 0.12)" />
+              </g>
+            ))}
+          </g>
+        ))}
+      </defs>
       {ordered.map((tile) => (
         <g key={`${tile.col},${tile.row}`}>
           {!isWater(tile.kind) && <Cliffs tile={tile} tiles={tiles} grid={grid} />}
@@ -152,7 +161,7 @@ export const TerrainLayer = memo(function TerrainLayer({ tiles, grid, borders = 
             points={isoPolygon(tile.col, tile.row, grid)}
             className={`t-${tile.kind}${tile.variant > 0.5 ? "-alt" : ""}${isWater(tile.kind) ? "" : " t-tile"}`}
           />
-          <Glyph tile={tile} grid={grid} />
+          <Glyph tile={tile} grid={grid} forestId={forestId} />
         </g>
       ))}
       {borders.map((border) => (

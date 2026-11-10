@@ -2,7 +2,7 @@
 
 import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon, RefreshCwIcon, SquarePenIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +33,6 @@ export function WorkspacePanel({ workspaceId, projectId, sessions, hasGit }: { w
 function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { workspaceId: string; projectId: string; sessions: SessionMeta[]; hasGit: boolean }) {
   const params = useSearchParams();
   const pathname = usePathname();
-  const router = useRouter();
   const requestedTab = params.get("tab") ?? "sessions";
   // `tab=changes` is the Files tab filtered to changed files; it falls back to all files without git.
   const tab = !hasGit && requestedTab === "checkpoints" ? "sessions" : !hasGit && requestedTab === "changes" ? "files" : requestedTab;
@@ -67,7 +66,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
   const setTab = (value: string) => {
     const query = new URLSearchParams(params.toString());
     query.set("tab", value);
-    router.replace(`${pathname}?${query}`, { scroll: false });
+    window.history.replaceState(null, "", `${pathname}?${query}`);
   };
   const tabValue = tab === "changes" ? "files" : tab;
 
