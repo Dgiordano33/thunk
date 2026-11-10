@@ -10,6 +10,7 @@ import { toIso } from "@/lib/world/terrain";
 import { cn } from "@/lib/utils";
 import { CivPanel } from "./civ-panel";
 import { DOOR, GOLD, STONE, STONE_DARK, WALL, WOOD, flag, house, hut, r } from "./pixel-parts";
+import { projectPath } from "@/lib/routes";
 
 /** Sprite grid: 32×28 pixels drawn at 2× so it reads as pixel art on a 64px tile. */
 const SPRITE_W = 32;
@@ -120,7 +121,7 @@ export const City = memo(function City({ city, activity }: { city: WorldCity; ac
     <HoverCard openDelay={120} closeDelay={60}>
       <HoverCardTrigger asChild>
         <Link
-          href={`/p/${project.id}`}
+          href={projectPath(project)}
           draggable={false}
           aria-label={`${project.name}, ${LEVEL_NAMES[level - 1]}${activity ? `, ${activity}` : dormant ? ", dormant" : ""}`}
           className="group absolute flex flex-col items-center outline-none"
@@ -177,7 +178,7 @@ export const City = memo(function City({ city, activity }: { city: WorldCity; ac
               </>
             )}
           </dl>
-          <Link href={`/p/${project.id}`} className="pixel mt-3 block text-right text-sm underline-offset-2 hover:underline">
+          <Link href={projectPath(project)} className="pixel mt-3 block text-right text-sm underline-offset-2 hover:underline">
             Enter city →
           </Link>
         </CivPanel>

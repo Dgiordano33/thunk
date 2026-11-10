@@ -43,7 +43,7 @@ async function fixture() {
   const root = await fs.mkdtemp(path.join(base, "repo-"));
   await fs.mkdir(path.join(root, "docs"));
   await fs.writeFile(path.join(root, "docs", "board.md"), "# Board\n- [ ] ship\n- [ ] ship\n");
-  const created = await projects.insertProject({ name: "Repo", dataKey: crypto.randomUUID() });
+  const created = await projects.insertProject({ name: "Repo", dataKey: crypto.randomUUID(), slug: crypto.randomUUID() });
   await repos.insertProjectRepo({ projectId: created.id, name: "Repo", path: root, kind: "repo", remote: null, defaultBranch: "main" });
   const project = await projects.getProject(created.id);
   return { root, project, repoId: project.repos[0].id };

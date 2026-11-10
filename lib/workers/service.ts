@@ -19,6 +19,7 @@ import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedRep
 
 export const MAX_WORKERS_PER_PROJECT = 4;
 import { DelegateSchema } from "./schema";
+import { sessionPath } from "@/lib/routes";
 const g = globalThis as typeof globalThis & { __thunkWorkerWatchers?: WeakSet<LiveSession> };
 const watched = g.__thunkWorkerWatchers ??= new WeakSet();
 
@@ -128,8 +129,8 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const task = await getTask(meta.origin.taskId);
     const newerTurn = getSession(meta.id)?.events.some((e) => e.seq > seq && (e.type === "user_message" || e.type === "message_dequeued"));
     if (!newerTurn && task?.sessionId === meta.id && task.status !== "cancelled") await patchTask(task.id, { status: status === "cancelled" ? "cancelled" : status === "done" ? (meta.origin.chiefSessionId ? "in_progress" : "done") : "blocked" });
-    const content = `<worker_report task="${meta.origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}">\n${report.summary}\n${result.error ?? ""}\n${needsPerson ? `Needs person: ${needsPerson}` : ""}\nBranch: ${ctx.workspace.branch ?? "none"}\nDiff: ${JSON.stringify(report.diffStat)}\nWorkspace: /w/${meta.workspaceId}/s/${meta.id}\n</worker_report>`;
-    await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? meta.origin.taskId} · ${status}`, detail: content, href: `/w/${meta.workspaceId}/s/${meta.id}` });
+    const content = `<worker_report task="${meta.origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}">\n${report.summary}\n${result.error ?? ""}\n${needsPerson ? `Needs person: ${needsPerson}` : ""}\nBranch: ${ctx.workspace.branch ?? "none"}\nDiff: ${JSON.stringify(report.diffStat)}\nWorkspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}\n</worker_report>`;
+    await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? meta.origin.taskId} · ${status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? meta.origin.taskId} · ${report.summary}`);
     await queueReport(ctx.project, meta, seq, content);
   });

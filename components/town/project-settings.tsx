@@ -38,7 +38,7 @@ export function ProjectSettings({ id, name }: { id: string; name: string }) {
     setError(null);
     try {
       await api.deleteProject(id);
-      router.push("/");
+      router.push("/projects");
       router.refresh();
     } catch (err) {
       setError((err as Error).message);

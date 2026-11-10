@@ -4,17 +4,18 @@ import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
+import { isProjectPath, PROJECTS_PATH } from "@/lib/routes";
 
 /** Top-left of the HUD: the logo on the world map; a way back to it inside a town. */
-export function HudTitle({ projects, noteCount }: { projects: { id: string; name: string }[]; noteCount: number }) {
+export function HudTitle({ projects, noteCount }: { projects: { slug: string; name: string }[]; noteCount: number }) {
   const pathname = usePathname();
-  const [, section, id] = pathname.split("/");
-  const town = section === "p" ? projects.find((p) => p.id === id) : undefined;
+  const [, section] = pathname.split("/");
 
-  if (section === "p") {
+  if (isProjectPath(pathname)) {
+    const town = projects.find((p) => p.slug === section);
     return (
       <>
-        <Link href="/" className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
+        <Link href={PROJECTS_PATH} className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
           <ArrowLeftIcon className="size-4" /> World
         </Link>
         <h1 className="pixel border-l pl-3 text-base">{town?.name ?? "Town"}</h1>
@@ -24,7 +25,7 @@ export function HudTitle({ projects, noteCount }: { projects: { id: string; name
   if (section === "routines" || section === "inbox") {
     return (
       <>
-        <Link href="/" className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
+        <Link href={PROJECTS_PATH} className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
           <ArrowLeftIcon className="size-4" /> World
         </Link>
         <h1 className="pixel border-l pl-3 text-base">{section === "inbox" ? "Inbox" : "Routines"}</h1>
@@ -34,7 +35,7 @@ export function HudTitle({ projects, noteCount }: { projects: { id: string; name
   if (section === "notes") {
     return (
       <>
-        <Link href="/" className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
+        <Link href={PROJECTS_PATH} className="pixel hover:bg-muted flex items-center gap-1.5 px-1 text-sm" aria-label="Back to the world map">
           <ArrowLeftIcon className="size-4" /> World
         </Link>
         <h1 className="pixel border-l pl-3 text-base">

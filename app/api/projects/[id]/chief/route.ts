@@ -6,6 +6,7 @@ import { openChief, workersStatus } from "@/lib/workers/service";
 import { noteBrief } from "@/lib/workers/notes";
 import { TaskInputSchema } from "@/lib/tasks/schema";
 import { taskId } from "@/lib/tasks/service";
+import { hrefForSession } from "@/lib/routes.server";
 const Body = z.object({ fresh: z.boolean().optional(), noteId: TaskInputSchema.shape.noteId }).strict();
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const projectId = taskId((await ctx.params).id);
@@ -16,7 +17,7 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   const brief = body.noteId ? await noteBrief(project, body.noteId) : null;
   const chief = await openChief(projectId, body.fresh);
   if (brief) pushUserMessage(chief, `Delegate this note: ${brief.note.path}\nSplit unchecked checklist items into separate tasks. Use noteId ${body.noteId} for each delegate call.\n\n${brief.brief}`);
-  return Response.json({ sessionId: chief.id, workspaceId: chief.meta.workspaceId });
+  return Response.json({ sessionId: chief.id, workspaceId: chief.meta.workspaceId, href: await hrefForSession(chief.meta.workspaceId, chief.id) });
 });
 export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const projectId = taskId((await ctx.params).id);

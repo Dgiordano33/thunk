@@ -48,6 +48,7 @@ test("send menu offers live sessions in scope while the owner label still resolv
     "@/components/ui/button": { Button: () => null },
     "@/lib/tasks/types": types,
     "./send-menu": { SendMenu: ({ sessions }) => { offered = sessions.map((s) => s.id); return null; } },
+    "@/components/layout/paths-context": { usePaths: () => ({ session: (w, s) => `/p/${w}/${s}` }) },
   });
   const sessions = [
     { id: "live-here", workspaceId: "w1", live: true, title: "Live" },

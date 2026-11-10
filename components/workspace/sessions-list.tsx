@@ -9,10 +9,12 @@ import { PixelIcon } from "@/components/world/pixel-icon";
 import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
+import { useWorkspaceBase } from "./route-context";
 
 /** Every session in the workspace; the expanded card shows that session's details (live for the open one). */
-export function SessionsList({ workspaceId, sessions }: { workspaceId: string; sessions: SessionMeta[] }) {
+export function SessionsList({ sessions }: { sessions: SessionMeta[] }) {
   const models = useModels();
+  const base = useWorkspaceBase();
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function SessionsList({ workspaceId, sessions }: { workspaceId: string; s
               <div className="border-t px-3 pt-2 pb-3">
                 {current ? <LiveSessionInfo /> : <SessionInfoRows session={s} />}
                 {!current && (
-                  <Link href={`/w/${workspaceId}/s/${s.id}`} className="text-primary mt-2 inline-block text-xs hover:underline">
+                  <Link href={`${base}/${s.id}`} className="text-primary mt-2 inline-block text-xs hover:underline">
                     Open session
                   </Link>
                 )}

@@ -11,7 +11,7 @@ export function Undiscovered({ title, icon, children }: { title: string; icon: P
         <p className="pixel text-xs tracking-widest uppercase opacity-60">{title}</p>
         <h1 className="pixel mt-1 text-3xl">Not yet discovered</h1>
         <p className="mt-3 text-sm leading-relaxed opacity-80">{children}</p>
-        <Link href="/" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">
+        <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">
           ← Return to the map
         </Link>
       </CivPanel>

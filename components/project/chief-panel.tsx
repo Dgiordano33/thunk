@@ -28,7 +28,7 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
     setBusy(true); setError(null);
     try {
       const result = await api.openChief(projectId, { fresh });
-      router.push(`/w/${result.workspaceId}/s/${result.sessionId}`); router.refresh();
+      router.push(result.href); router.refresh();
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };

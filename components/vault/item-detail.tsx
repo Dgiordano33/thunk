@@ -12,6 +12,7 @@ import { api } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { IDEA_LABELS, KIND_LABELS, isBusy, type IdeaKind, type VaultItem } from "@/lib/vault/types";
 import { KIND_ICONS, VaultStatusBadge, formatBytes } from "./item-list";
+import { usePaths } from "@/components/layout/paths-context";
 
 const IDEA_STYLE: Record<IdeaKind, string> = {
   idea: "border-[var(--w-bronze)]/50 text-[var(--w-bronze-dark)] dark:text-[var(--w-bronze-light)]",
@@ -23,6 +24,7 @@ const IDEA_STYLE: Record<IdeaKind, string> = {
 /** One item: preview, summary, and ideas with → Note / → Task. */
 export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onChange: (item: VaultItem) => void; onDeleted: () => void }) {
   const fileUrl = `/api/projects/${item.projectId}/vault/${item.id}/file`;
+  const paths = usePaths();
   const Icon = KIND_ICONS[item.kind];
   const [title, setTitle] = useState(item.title);
   const [busyIdea, setBusyIdea] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {sent?.noteId ? (
                           <Button size="xs" variant="ghost" asChild>
-                            <Link href={`/p/${item.projectId}?building=library&note=${sent.noteId}`} scroll={false}><CheckIcon /> In notes</Link>
+                            <Link href={`${paths.project(item.projectId)}?building=library&note=${sent.noteId}`} scroll={false}><CheckIcon /> In notes</Link>
                           </Button>
                         ) : (
                           <Button size="xs" variant="outline" disabled={busyIdea !== null} onClick={() => void promote(idea.id, "note")}>
@@ -174,7 +176,7 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                         )}
                         {sent?.taskId ? (
                           <Button size="xs" variant="ghost" asChild>
-                            <Link href={`/p/${item.projectId}?building=tasks`} scroll={false}><CheckIcon /> Task created</Link>
+                            <Link href={`${paths.project(item.projectId)}?building=tasks`} scroll={false}><CheckIcon /> Task created</Link>
                           </Button>
                         ) : (
                           <Button size="xs" variant="outline" disabled={busyIdea !== null} onClick={() => void promote(idea.id, "task")}>

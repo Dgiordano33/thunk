@@ -4,7 +4,8 @@ import { mkdir, rename, rmdir, stat } from "node:fs/promises";
 import { moveToGranary } from "./granary";
 import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
-import { getProject, getProjectByKey, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
+import { getProject, getProjectByKey, getProjectBySlug, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
+import { freshSlug, projectUrlSlug } from "@/lib/routes";
 import {
   deleteProjectRepo,
   deleteWorkspaceRepo,
@@ -37,7 +38,8 @@ export type WorkspaceContext = { project: Project; workspace: Workspace };
 /** Register (or refresh) the project opened from the directory `input`. Idempotent per detected root. */
 export async function addProject(input: string): Promise<Project> {
   const detected = await detectProject(input);
-  const created = await upsertProjectByKey({ name: detected.name, dataKey: projectSlug(detected.root) });
+  const dataKey = projectSlug(detected.root);
+  const created = (await getProjectByKey(dataKey)) ?? (await upsertProjectByKey({ name: detected.name, dataKey, slug: await freshProjectSlug(detected.name) }));
   const known = created.repos.find((r) => r.path === detected.root);
   const facts = { kind: detected.kind, remote: detected.remote, defaultBranch: detected.defaultBranch };
   if (known) await updateProjectRepo(known.id, facts);
@@ -54,6 +56,11 @@ async function freshDataKey(name: string) {
     const key = n === 1 ? base : `${base}-${n}`;
     if (!(await getProjectByKey(key)) && !(await stat(projectDir(key)).catch(() => null))) return key;
   }
+}
+
+/** A URL slug no project uses and no app route claims. */
+function freshProjectSlug(name: string) {
+  return freshSlug(projectUrlSlug(name), async (slug) => !!(await getProjectBySlug(slug)));
 }
 
 /** Reject specs that could never succeed before anything is created. Side-effect free. */
@@ -92,7 +99,7 @@ export async function addRepoFromSpec(projectId: string, spec: RepoSpec): Promis
  */
 export async function createProject(input: CreateProjectBody) {
   await preflightRepoSpecs(input.repos);
-  const created = await insertProject({ name: input.name, dataKey: await freshDataKey(input.name) });
+  const created = await insertProject({ name: input.name, dataKey: await freshDataKey(input.name), slug: await freshProjectSlug(input.name) });
   await ensureMemory(projectMemoryFile(created.dataKey), `# ${created.name} — project memory`);
   const main = await ensureMainWorkspace(created);
   const repos: RepoResult<ProjectRepo>[] = [];
@@ -363,6 +370,14 @@ export async function getWorkspaceContext(workspaceId: string): Promise<Workspac
   const project = await getProject(workspace.projectId);
   if (!project) return null;
   return { project, workspace };
+}
+
+/** The workspace at `/{projectSlug}/{workspaceSlug}`. */
+export async function getWorkspaceContextBySlugs(projectSlug: string, workspaceSlug: string): Promise<WorkspaceContext | null> {
+  const project = await getProjectBySlug(projectSlug);
+  if (!project) return null;
+  const workspace = await findWorkspace(project.id, { slug: workspaceSlug });
+  return workspace ? { project, workspace } : null;
 }
 
 /**

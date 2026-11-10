@@ -83,7 +83,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
     if (merging && !window.confirm(`${gitAction === "squash" ? "Squash" : "Merge"} committed workspace changes into ${into}?${cleanup ? " Then run the archive hook and delete this workspace and its sessions." : ""}`)) return;
     void act(async () => {
       const result = await api.workspaceGitAction(workspaceId, gitAction, merging && cleanup);
-      if (result.deleted) { router.push("/"); return; }
+      if (result.deleted) { router.push("/projects"); return; }
     });
   };
 

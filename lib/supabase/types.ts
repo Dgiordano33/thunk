@@ -615,6 +615,7 @@ export type Database = {
           name: string
           remote: string | null
           root: string | null
+          slug: string
           updated_at: string
         }
         Insert: {
@@ -626,6 +627,7 @@ export type Database = {
           name: string
           remote?: string | null
           root?: string | null
+          slug: string
           updated_at?: string
         }
         Update: {
@@ -637,6 +639,7 @@ export type Database = {
           name?: string
           remote?: string | null
           root?: string | null
+          slug?: string
           updated_at?: string
         }
         Relationships: []

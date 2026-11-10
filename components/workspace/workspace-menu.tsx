@@ -16,27 +16,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/client/api";
 import type { Workspace } from "@/lib/projects/types";
+import { projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 /** New note / archive / delete for a workspace. `openLink` is for the town panel: it adds "Open workspace" on top and drops "Save to project", which the panel header shows as its own button. */
-export function WorkspaceMenu({ workspace, label, className, openLink }: { workspace: Workspace; label: string; className?: string; openLink?: boolean }) {
+export function WorkspaceMenu({ project, workspace, label, className, openLink }: { project: { slug: string }; workspace: Workspace; label: string; className?: string; openLink?: boolean }) {
   const router = useRouter();
   const [harvest, setHarvest] = useState<{ data: HarvestData; action: HarvestAction } | null>(null);
   const pathname = usePathname();
-  const viewing = pathname.startsWith(`/w/${workspace.id}`);
+  const base = workspacePath(project, workspace);
+  const viewing = pathname === base || pathname.startsWith(`${base}/`);
   const isMain = workspace.slug === "main";
   const archived = workspace.status === "archived";
 
   // Leaving the sidebar: step out to the project if we're looking at it.
   const done = () => {
-    if (viewing) router.push(`/p/${workspace.projectId}`);
+    if (viewing) router.push(projectPath(project));
     router.refresh();
   };
 
   const toggleArchive = async () => {
     try {
       await api.updateWorkspace(workspace.id, { status: archived ? "active" : "archived" });
-      if (!archived) router.push(`/p/${workspace.projectId}?harvest=${workspace.id}`);
+      if (!archived) router.push(`${projectPath(project)}?harvest=${workspace.id}`);
       else done();
     } catch (err) {
       window.alert((err as Error).message);
@@ -79,7 +81,7 @@ export function WorkspaceMenu({ workspace, label, className, openLink }: { works
       <DropdownMenuContent align="start" className="w-52">
         {openLink && !viewing && <>
           <DropdownMenuItem asChild>
-            <Link href={`/w/${workspace.id}`}><ExternalLinkIcon /> Open workspace</Link>
+            <Link href={base}><ExternalLinkIcon /> Open workspace</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>}

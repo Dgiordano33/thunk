@@ -2,7 +2,7 @@
 
 import { SaveIcon } from "lucide-react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,10 +76,11 @@ export function HarvestButton({ workspaceId, label, variant = "outline" }: { wor
   </>;
 }
 
-export function ArchivedHarvestOffer({ workspaceId, label, projectId }: { workspaceId: string; label: string; projectId: string }) {
+export function ArchivedHarvestOffer({ workspaceId, label }: { workspaceId: string; label: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   return <div role="status" className="fixed bottom-16 right-4 z-50 flex items-center gap-3 rounded border bg-background p-3 text-sm shadow-lg">
     {label} archived. <HarvestButton workspaceId={workspaceId} label={label} />
-    <Button size="sm" variant="ghost" onClick={() => router.replace(`/p/${projectId}`)}>Dismiss</Button>
+    <Button size="sm" variant="ghost" onClick={() => router.replace(pathname)}>Dismiss</Button>
   </div>;
 }

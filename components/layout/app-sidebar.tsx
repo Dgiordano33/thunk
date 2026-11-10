@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
+import { isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
@@ -30,9 +31,11 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   const taskCounts = useTaskCounts();
   const sessions = useAmbient((s) => s.sessions);
   const pathname = usePathname();
-  const [, section, activeId] = pathname.split("/");
-  const activeProjectId = section === "p" ? activeId : undefined;
-  const activeWorkspaceId = section === "w" ? activeId : undefined;
+  const [, section, workspaceSlug] = pathname.split("/");
+  // Within a project, the town (/{project}) highlights the project and its pages (/{project}/{workspace}/…) the workspace.
+  const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === section) : undefined;
+  const activeProjectId = activeProject && !workspaceSlug ? activeProject.id : undefined;
+  const activeWorkspaceId = workspaceSlug ? activeProject?.workspaces.find((w) => w.slug === workspaceSlug)?.id : undefined;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   useNotesEvents();
   const rev = useNotesFeed((s) => s.rev);
@@ -48,7 +51,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   return (
     <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col">
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <Link href="/" className="flex items-center">
+        <Link href={PROJECTS_PATH} className="flex items-center">
           <span className="sr-only">Thunk</span>
           <Logo className="h-7 w-auto" />
         </Link>
@@ -73,7 +76,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <h2 className="text-muted-foreground text-xs font-medium">Projects</h2>
         <Button size="icon-xs" variant="ghost" aria-label="Add project" asChild>
-          <Link href="/">
+          <Link href={PROJECTS_PATH}>
             <PlusIcon />
           </Link>
         </Button>
@@ -104,13 +107,13 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                   >
                     <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
                   </button>
-                  <Link href={`/p/${p.id}`} title={p.repos.map((r) => r.path).join("\n") || p.name} className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
+                  <Link href={projectPath(p)} title={p.repos.map((r) => r.path).join("\n") || p.name} className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
                     <ProjectIcon className="text-muted-foreground size-4 shrink-0" />
                     <span className="truncate text-[13px] font-medium">{p.name}</span>
                   </Link>
                   {(noteCounts.get(p.id) ?? 0) > 0 && (
                     <Link
-                      href={`/p/${p.id}?building=library`}
+                      href={`${projectPath(p)}?building=library`}
                       title={`${noteCounts.get(p.id)} notes`}
                       aria-label={`${p.name} notes (${noteCounts.get(p.id)})`}
                       className="text-muted-foreground hover:text-foreground hidden shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums group-hover:flex focus-visible:flex"
@@ -120,10 +123,11 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     </Link>
                   )}
                   {(notificationCounts[p.id] ?? 0) > 0 && <Link href={`/inbox?projectId=${p.id}`} aria-label={`${notificationCounts[p.id]} notifications need attention`} className="px-1 text-xs text-amber-600">! {notificationCounts[p.id]}</Link>}
-                  {openTasks > 0 && <Link href={`/p/${p.id}?building=tasks`} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
+                  {openTasks > 0 && <Link href={`${projectPath(p)}?building=tasks`} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
                   <NewWorkspaceButton
                     compact
                     projectId={p.id}
+                    projectSlug={p.slug}
                     projectName={p.name}
                     repos={p.repos}
                     className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-100"
@@ -137,7 +141,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                       return (
                       <li key={w.id} className="group/ws relative flex items-center pr-8">
                         <Link
-                          href={`/w/${w.id}`}
+                          href={workspacePath(p, w)}
                           title={
                             isLocalWorkspace(w)
                               ? `Local: works directly in ${w.cwd}, no worktree`
@@ -158,7 +162,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                             <span className={cn("size-2 shrink-0 rounded-full", activity === "Running" ? "bg-sky-500" : "bg-amber-500")} role="img" aria-label={activity} title={activity} />
                           )}
                         </Link>
-                        {(tasks?.byWorkspace[w.id] ?? 0) > 0 && <Link href={`/w/${w.id}?tab=tasks`} aria-label={`${workspaceDisplayName(w)} open tasks (${tasks?.byWorkspace[w.id]})`} title="Open tasks" className="text-muted-foreground hover:text-foreground mr-2 flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{tasks?.byWorkspace[w.id]}</Link>}
+                        {(tasks?.byWorkspace[w.id] ?? 0) > 0 && <Link href={`${workspacePath(p, w)}?tab=tasks`} aria-label={`${workspaceDisplayName(w)} open tasks (${tasks?.byWorkspace[w.id]})`} title="Open tasks" className="text-muted-foreground hover:text-foreground mr-2 flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{tasks?.byWorkspace[w.id]}</Link>}
                           {w.sessionCount > 0 && (
                             <span
                               className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums group-hover/ws:invisible group-has-[[data-state=open]]/ws:invisible"
@@ -169,6 +173,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                             </span>
                           )}
                         <WorkspaceMenu
+                          project={p}
                           workspace={w}
                           label={workspaceDisplayName(w)}
                           className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/ws:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"

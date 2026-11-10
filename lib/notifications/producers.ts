@@ -5,6 +5,7 @@ import { projectEvents } from "@/lib/projects/events";
 import { notify, resolveWhere } from "./service";
 import { sessionNotification } from "./session";
 import { notifyStuckSession, sessionIsStuck } from "./stuck";
+import { hrefForWorkspace } from "@/lib/routes.server";
 const g = globalThis as typeof globalThis & { __thunkNotificationsInstalled?: boolean };
 export function ensureNotificationProducers() {
   if (g.__thunkNotificationsInstalled) return;
@@ -28,8 +29,8 @@ export function ensureNotificationProducers() {
   onSessionCreated(watchNotifications);
   for (const live of listLiveSessions()) watchNotifications(live);
   for (const event of ["run_failed", "setup_failed"] as const) projectEvents().on(event, (e) => {
-    void notify({ projectId: e.projectId, workspaceId: e.workspaceId, kind: "script_failed", urgency: "info", subjectKey: `script:${e.workspaceId}:${crypto.randomUUID()}`,
-      title: `${event === "setup_failed" ? "Setup" : "Run"} script exited with code ${e.exitCode}`, detail: e.tail, href: `/w/${e.workspaceId}` }).catch((err) => console.error("[thunk] script notification failed", err));
+    void hrefForWorkspace(e.workspaceId).then((href) => notify({ projectId: e.projectId, workspaceId: e.workspaceId, kind: "script_failed", urgency: "info", subjectKey: `script:${e.workspaceId}:${crypto.randomUUID()}`,
+      title: `${event === "setup_failed" ? "Setup" : "Run"} script exited with code ${e.exitCode}`, detail: e.tail, href })).catch((err) => console.error("[thunk] script notification failed", err));
   });
   // Persisted requests from a previous server process no longer have a live resolver.
   void (async () => {

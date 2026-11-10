@@ -1,18 +1,20 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 import { CommentsPanel } from "@/components/comments/comments-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { SessionMeta } from "@/lib/agent/types";
 import { useUi } from "@/lib/store/ui-store";
 import { WorkspaceConsole } from "./workspace-console";
 import { WorkspacePanel } from "./workspace-panel";
+import { WorkspaceBaseProvider } from "./route-context";
 
 /** Session tabs and the open page on the left; workspace-wide panel (or the open session's comments) over the workspace console on the right. */
 export function WorkspaceShell({
   hasGit,
   workspaceId,
   projectId,
+  base,
   sessions,
   tabs,
   children,
@@ -20,15 +22,18 @@ export function WorkspaceShell({
   hasGit: boolean;
   workspaceId: string;
   projectId: string;
+  /** The workspace page URL, `/{project}/{workspace}`. */
+  base: string;
   sessions: SessionMeta[];
   tabs: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const { session } = useParams<{ session?: string }>();
   const commentsOpen = useUi((s) => s.commentsOpen);
-  const showComments = commentsOpen && pathname.includes("/s/");
+  const showComments = commentsOpen && !!session;
 
   return (
+    <WorkspaceBaseProvider value={base}>
     <ResizablePanelGroup orientation="horizontal" className="h-full">
       <ResizablePanel defaultSize="70" minSize="45">
         <div className="flex h-full flex-col">
@@ -46,5 +51,6 @@ export function WorkspaceShell({
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
+    </WorkspaceBaseProvider>
   );
 }

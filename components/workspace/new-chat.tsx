@@ -18,6 +18,7 @@ import { MODE_LABELS } from "@/components/session/labels";
 import { PROVIDER_LABELS, permissionModesFor, providerOf } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
+import { useWorkspaceBase } from "./route-context";
 
 /** A blank chat. The session is only created when the first message is sent. */
 export function NewChat({
@@ -34,6 +35,7 @@ export function NewChat({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const models = useModels();
   const [model, setModel] = useState(defaultModel);
   const provider = providerOf(model);
@@ -70,7 +72,7 @@ export function NewChat({
             setSubmitting(true);
             try {
               const { id } = await api.createSession({ workspaceId, model, permissionMode: mode, prompt: text, images: files });
-              router.push(`/w/${workspaceId}/s/${id}`);
+              router.push(`${base}/${id}`);
               router.refresh();
             } catch (err) {
               setError((err as Error).message);

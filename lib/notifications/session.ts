@@ -2,11 +2,12 @@ import type { LiveSession } from "@/lib/agent/session-registry";
 import type { HarnessEvent } from "@/lib/agent/types";
 import { notify, resolveBySubject, resolveWhere } from "./service";
 import type { Notification } from "./types";
+import { hrefForSession } from "@/lib/routes.server";
 
 export async function sessionNotification(live: LiveSession, e: HarnessEvent & { advice?: string }) {
   const sessionId = live.id;
   const base = { projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
-    href: `/w/${live.meta.workspaceId}/s/${sessionId}` };
+    href: await hrefForSession(live.meta.workspaceId, sessionId) };
   if (e.type === "ask_question" && e.routedTo) return;
   if (e.type === "question_escalated") {
     const asked = live.events.findLast((q) => q.type === "ask_question" && q.requestId === e.requestId);

@@ -19,9 +19,11 @@ import { permissionModesFor, providerOf } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
+import { useWorkspaceBase } from "@/components/workspace/route-context";
 
 export function PromptBox() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const models = useModels();
   const sessionId = useSession((s) => s.sessionId!);
   const meta = useSession((s) => s.meta);
@@ -64,7 +66,7 @@ export function PromptBox() {
               onValueChange={(value) => {
                 // A session can't change runtimes: the other provider's models open a new chat here.
                 if (providerOf(value) === provider) void control({ action: "setModel", value });
-                else if (meta) router.push(`/w/${meta.workspaceId}/new?model=${encodeURIComponent(value)}`);
+                else if (meta) router.push(`${base}/new?model=${encodeURIComponent(value)}`);
               }}
               disabled={!live}
             />

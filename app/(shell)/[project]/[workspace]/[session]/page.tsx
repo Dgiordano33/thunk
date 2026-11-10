@@ -6,17 +6,21 @@ import type { PersistedDocument } from "@/lib/documents/types";
 import { loadDocuments } from "@/lib/supabase/repo/documents";
 import { loadEvents } from "@/lib/supabase/repo/messages";
 import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { getWorkspaceContextBySlugs } from "@/lib/projects";
+import { hrefForSession } from "@/lib/routes.server";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: PageProps<"/w/[id]/s/[sid]">) {
-  const { sid } = await params;
+export async function generateMetadata({ params }: PageProps<"/[project]/[workspace]/[session]">) {
+  const { session: sid } = await params;
   const title = liveMeta(sid)?.title ?? (await getSessionRow(sid).catch(() => null))?.title;
   return { title: title ? `${title} · Thunk` : "Thunk" };
 }
 
-export default async function SessionPage({ params }: PageProps<"/w/[id]/s/[sid]">) {
-  const { id, sid } = await params;
+export default async function SessionPage({ params }: PageProps<"/[project]/[workspace]/[session]">) {
+  const { project, workspace, session: sid } = await params;
+  const ctx = await getWorkspaceContextBySlugs(project, workspace);
+  if (!ctx) notFound();
 
   let meta: SessionMeta | null = liveMeta(sid);
   if (!meta) {
@@ -24,7 +28,7 @@ export default async function SessionPage({ params }: PageProps<"/w/[id]/s/[sid]
     if (row) meta = { ...row, live: false };
   }
   if (!meta) notFound();
-  if (meta.workspaceId !== id) redirect(`/w/${meta.workspaceId}/s/${sid}`);
+  if (meta.workspaceId !== ctx.workspace.id) redirect(await hrefForSession(meta.workspaceId, sid));
 
   // Persisted history first; the SSE stream replays anything newer by seq.
   const [events, documents] = await Promise.all([

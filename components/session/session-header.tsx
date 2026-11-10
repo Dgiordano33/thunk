@@ -10,6 +10,7 @@ import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/store/session-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
+import { usePaths } from "@/components/layout/paths-context";
 
 const STATUS_LABEL: Record<string, string> = {
   starting: "Starting",
@@ -112,6 +113,7 @@ function CommentsToggle() {
 /** "Routine · <name>", linking to the routine in its town's Workshop (or marked deleted). */
 function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: Extract<SessionMeta["origin"], { kind: "routine" }> }) {
   const [deleted, setDeleted] = useState(false);
+  const paths = usePaths();
   useEffect(() => {
     let alive = true;
     api.getRoutine(origin.routineId).then(
@@ -130,7 +132,7 @@ function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: Extract<Ses
     );
   return (
     <Badge variant="outline" className="h-5 max-w-48 gap-1 text-[11px]" asChild>
-      <Link href={`/p/${meta.projectId}?building=workshop&routine=${origin.routineId}`} title="Started by a routine">
+      <Link href={`${paths.project(meta.projectId)}?building=workshop&routine=${origin.routineId}`} title="Started by a routine">
         <HourglassIcon /> <span className="truncate">Routine · {origin.routineName}</span>
       </Link>
     </Badge>

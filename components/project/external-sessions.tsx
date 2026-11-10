@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import type { ExternalSession } from "@/lib/projects";
 import type { Workspace } from "@/lib/projects/types";
+import { sessionPath } from "@/lib/routes";
 
 const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
@@ -15,7 +16,7 @@ const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
  * Claude Code sessions found on disk for this project (terminal, Conductor, desktop).
  * Importing resumes the transcript inside a Thunk workspace: the one whose cwd matches, else main.
  */
-export function ExternalSessions({ sessions, workspaces }: { sessions: ExternalSession[]; workspaces: Workspace[] }) {
+export function ExternalSessions({ projectSlug, sessions, workspaces }: { projectSlug: string; sessions: ExternalSession[]; workspaces: Workspace[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export function ExternalSessions({ sessions, workspaces }: { sessions: ExternalS
         resumeSdkSessionId: s.sdkSessionId,
         title: s.title.slice(0, 120),
       });
-      router.push(`/w/${ws.id}/s/${id}`);
+      router.push(sessionPath({ slug: projectSlug }, ws, id));
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
