@@ -10,7 +10,9 @@ export default async function WorkspaceIndex({ params, searchParams }: PageProps
   const { project, workspace } = await params;
   const ctx = await getWorkspaceContextBySlugs(project, workspace);
   if (!ctx) notFound();
-  const suffix = (await searchParams).tab === "tasks" ? "?tab=tasks" : "";
+  // Carry the right-panel tab through, e.g. a link straight to the workspace's tasks or files.
+  const { tab } = await searchParams;
+  const suffix = typeof tab === "string" && /^[a-z]+$/.test(tab) ? `?tab=${tab}` : "";
   const [latest] = await listSessions({ workspaceId: ctx.workspace.id, limit: 1 });
   redirect((latest ? sessionPath(ctx.project, ctx.workspace, latest.id) : newChatPath(ctx.project, ctx.workspace)) + suffix);
 }

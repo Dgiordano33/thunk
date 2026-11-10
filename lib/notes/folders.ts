@@ -1,6 +1,7 @@
 import "server-only";
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { z } from "zod";
 import { HttpError } from "@/lib/api/errors";
 import { readLifecycleConfig } from "@/lib/projects/lifecycle-config";
 import type { Project, RepoFolder } from "@/lib/projects/types";
@@ -47,6 +48,19 @@ export async function reconcileDeclaredFolders<T extends Project>(project: T): P
   return added ? { ...project, repoFolders: folders } : project;
 }
 
+/** Note ids a repo notebook shows, or null for every Markdown file in its folder. */
+export const FilesBody = z.array(z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i)).min(1).max(1000).nullable();
+
+const NOTE_FILE = /^[a-z0-9][a-z0-9_-]{0,63}\.md$/i;
+
+/** The note ids (file names without `.md`) a folder could show, sorted by name. */
+export async function listFolderNoteIds(notesDir: string) {
+  return (await readdir(notesDir, { withFileTypes: true }))
+    .filter((f) => f.isFile() && NOTE_FILE.test(f.name) && f.name !== "memory.md")
+    .map((f) => f.name.slice(0, -3))
+    .sort((a, b) => a.localeCompare(b));
+}
+
 export async function suggestRepoFolders(project: Project) {
   const candidates = [];
   for (const repo of project.repos) {
@@ -54,7 +68,7 @@ export async function suggestRepoFolders(project: Project) {
       if (project.repoFolders.some((f) => f.repoId === repo.id && f.path === folderPath)) continue;
       try {
         const { notesDir } = await resolveRepoFolder(project, { repoId: repo.id, path: folderPath });
-        const count = (await readdir(notesDir, { withFileTypes: true })).filter((f) => f.isFile() && /^[a-z0-9][a-z0-9_-]{0,63}\.md$/i.test(f.name) && f.name !== "memory.md").length;
+        const count = (await listFolderNoteIds(notesDir)).length;
         if (count) candidates.push({ repoId: repo.id, repoName: repo.name, path: folderPath, count });
       } catch { /* Missing or unsafe folders are not suggestions. */ }
     }

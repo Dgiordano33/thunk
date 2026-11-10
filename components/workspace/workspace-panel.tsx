@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon } from "lucide-react";
+import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon, RefreshCwIcon, SquarePenIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -20,6 +20,8 @@ import { WorkspaceTasks } from "./workspace-tasks";
 import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { WorkspaceNotes } from "./workspace-notes";
 import { useWorkspaceBase } from "./route-context";
+import { FileTree } from "./file-tree";
+import { filePagePath } from "@/lib/routes";
 
 const CHANGES_POLL_MS = 5000;
 
@@ -33,12 +35,15 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
   const pathname = usePathname();
   const router = useRouter();
   const requestedTab = params.get("tab") ?? "sessions";
-  const tab = !hasGit && ["changes", "checkpoints"].includes(requestedTab) ? "sessions" : requestedTab;
+  // `tab=changes` is the Files tab filtered to changed files; it falls back to all files without git.
+  const tab = !hasGit && requestedTab === "checkpoints" ? "sessions" : !hasGit && requestedTab === "changes" ? "files" : requestedTab;
+  const filesView = tab === "changes" ? "changed" : "all";
   const counts = useTaskCounts()[projectId];
   const openCount = (counts?.project ?? 0) + (counts?.byWorkspace[workspaceId] ?? 0);
   const [changes, setChanges] = useState<WorkspaceChanges | null | undefined>(undefined);
   // Every repo of a multi-repo workspace (in order); empty for single-repo workspaces.
   const [repos, setRepos] = useState<RepoChanges[]>([]);
+  const [treeRefresh, setTreeRefresh] = useState(0);
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
   const status = useSession((s) => s.status);
@@ -59,20 +64,26 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
 
   const fileCount = repos.length ? repos.reduce((n, r) => n + (r.changes?.files.length ?? 0), 0) : (changes?.files.length ?? 0);
 
+  const setTab = (value: string) => {
+    const query = new URLSearchParams(params.toString());
+    query.set("tab", value);
+    router.replace(`${pathname}?${query}`, { scroll: false });
+  };
+  const tabValue = tab === "changes" ? "files" : tab;
+
   return (
-    <Tabs value={["sessions", "artifacts", "changes", "tasks", "notes", "checkpoints"].includes(tab) ? tab : "sessions"} onValueChange={(value) => {
-      const query = new URLSearchParams(params.toString());
-      query.set("tab", value);
-      router.replace(`${pathname}?${query}`, { scroll: false });
+    <Tabs value={["sessions", "artifacts", "files", "tasks", "notes", "checkpoints"].includes(tabValue) ? tabValue : "sessions"} onValueChange={(value) => {
+      // Reopening Files keeps whichever view (all or changed) was last picked.
+      setTab(value === "files" && filesView === "changed" ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
       <div className="flex h-11 shrink-0 items-end overflow-x-auto border-b px-2">
         <TabsList variant="line" className="h-full">
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          {hasGit && <TabsTrigger value="changes">
-            Changes
+          <TabsTrigger value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
+            Files
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
-          </TabsTrigger>}
+          </TabsTrigger>
           <TabsTrigger value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           {hasGit && <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>}
@@ -88,12 +99,42 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
           <Artifacts workspaceId={workspaceId} />
         </div>
       </TabsContent>
-      {hasGit && <TabsContent value="changes" className="min-h-0 flex-1">
-        {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
-        <div className="h-full overflow-y-auto">
-          <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
+      <TabsContent value="files" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
+          {hasGit && <div className="flex gap-1" role="radiogroup" aria-label="Files view">
+            {(["all", "changed"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={filesView === v}
+                onClick={() => setTab(v === "changed" ? "changes" : "files")}
+                className={cn(
+                  "rounded px-2 py-0.5 text-xs transition-colors",
+                  filesView === v ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v === "all" ? "All files" : `Changed${fileCount > 0 ? ` ${fileCount}` : ""}`}
+              </button>
+            ))}
+          </div>}
+          <button
+            type="button"
+            onClick={() => { setTreeRefresh((n) => n + 1); if (hasGit) void loadChanges(); }}
+            aria-label="Refresh files"
+            title="Refresh"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted ml-auto rounded p-1"
+          >
+            <RefreshCwIcon className="size-3.5" />
+          </button>
         </div>
-      </TabsContent>}
+        {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {filesView === "changed"
+            ? <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
+            : <FileTree workspaceId={workspaceId} changes={changes} repos={repos} refreshKey={`${status}:${fileCount}:${treeRefresh}`} />}
+        </div>
+      </TabsContent>
       {hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
       <TabsContent value="tasks" className="min-h-0 flex-1 overflow-y-auto"><WorkspaceTasks workspaceId={workspaceId} projectId={projectId} /></TabsContent>
       <TabsContent value="notes" className="min-h-0 flex-1">
@@ -248,6 +289,7 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
 };
 
 function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onRemove }: { workspaceId: string; repoId?: string; label: string; file: ChangedFile; comments: DiffComment[]; onAdd: (c: DiffComment) => void; onRemove: (id: string) => void }) {
+  const base = useWorkspaceBase();
   const [open, setOpen] = useState(false);
   const [diff, setDiff] = useState<string | null>(null);
   const slash = file.path.lastIndexOf("/");
@@ -267,7 +309,7 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
   }, [open, workspaceId, file, repoId]);
 
   return (
-    <li>
+    <li className="group/row relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -287,7 +329,19 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
           {file.additions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>}
           {file.deletions > 0 && <span className="ml-1 text-red-600 dark:text-red-400">-{file.deletions}</span>}
         </span>
+        {/* Room for the edit link, which sits over the row so it isn't nested in the button. */}
+        {file.status !== "D" && <span className="w-5 shrink-0" />}
       </button>
+      {file.status !== "D" && (
+        <Link
+          href={filePagePath(base, repoId ?? null, file.path, "changes")}
+          aria-label={`Edit ${file.path}`}
+          title="Open in editor"
+          className="text-muted-foreground hover:text-foreground hover:bg-background absolute top-1 right-2 rounded p-1 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+        >
+          <SquarePenIcon className="size-3.5" />
+        </Link>
+      )}
       {open && (
         <div className="bg-background mx-2 mb-2 overflow-x-auto rounded-md border">
           {diff === null ? <Loading /> : <ReviewDiff diff={diff} path={label} comments={comments} onAdd={onAdd} onRemove={onRemove} />}

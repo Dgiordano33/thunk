@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { RepoNotebooks } from "@/components/project/repo-notebooks";
+import { useState } from "react";
+import { RepoNotebooks, type RepoNotebookOption } from "@/components/project/repo-notebooks";
 import { ScopeNotes } from "@/components/notes/library";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { scopeKey, type NoteScope } from "@/lib/notes/types";
@@ -21,17 +22,26 @@ export function LibraryPanel({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const [repoNotebooks, setRepoNotebooks] = useState<RepoNotebookOption[]>([]);
   const ws = params.get("nws");
-  const scope: NoteScope = ws && workspaces.some((w) => w.id === ws) ? { kind: "workspaces", id: ws } : { kind: "projects", id: projectId };
+  const repo = params.get("nrf");
+  const scope: NoteScope = ws && workspaces.some((w) => w.id === ws)
+    ? { kind: "workspaces", id: ws }
+    // Trust the URL until the notebook list loads, so a freshly added notebook opens straight away.
+    : repo && (!repoNotebooks.length || repoNotebooks.some((r) => r.id === repo)) ? { kind: "repos", id: repo }
+    : { kind: "projects", id: projectId };
   const note = params.get("note");
 
-  const go = (next: { ws?: string | null; note?: string | null }) => {
+  const go = (next: { ws?: string | null; repo?: string | null; note?: string | null }) => {
     const q = new URLSearchParams(params.toString());
     q.set("building", "library");
     const nws = next.ws === undefined ? ws : next.ws;
+    const nrf = next.repo === undefined ? repo : next.repo;
     const nnote = next.note === undefined ? note : next.note;
     if (nws) q.set("nws", nws);
     else q.delete("nws");
+    if (nrf) q.set("nrf", nrf);
+    else q.delete("nrf");
     if (nnote) q.set("note", nnote);
     else q.delete("note");
     router.replace(`${pathname}?${q}`, { scroll: false });
@@ -50,7 +60,7 @@ export function LibraryPanel({
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-        <RepoNotebooks projectId={projectId} />
+        <RepoNotebooks projectId={projectId} onFolders={setRepoNotebooks} onOpen={(id) => go({ ws: null, repo: id, note: null })} />
         <ScopeNotes
           key={scopeKey(scope)}
           scope={scope}
@@ -58,7 +68,12 @@ export function LibraryPanel({
           onSelect={(id) => go({ note: id })}
           listHeader={
             <div className="border-b p-2">
-              <Select value={scope.kind === "projects" ? "project" : scope.id} onValueChange={(v) => go({ ws: v === "project" ? null : v, note: null })}>
+              <Select
+                value={scope.kind === "projects" ? "project" : scope.kind === "repos" ? `repo:${scope.id}` : scope.id}
+                onValueChange={(v) => v.startsWith("repo:")
+                  ? go({ ws: null, repo: v.slice(5), note: null })
+                  : go({ ws: v === "project" ? null : v, repo: null, note: null })}
+              >
                 <SelectTrigger size="sm" className="w-full text-xs" aria-label="Notebook">
                   <SelectValue />
                 </SelectTrigger>
@@ -66,6 +81,9 @@ export function LibraryPanel({
                   <SelectItem value="project">Project notes</SelectItem>
                   {workspaces.map((w) => (
                     <SelectItem key={w.id} value={w.id}>Workspace · {w.label}</SelectItem>
+                  ))}
+                  {repoNotebooks.map((r) => (
+                    <SelectItem key={r.id} value={`repo:${r.id}`}>Repo · {r.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

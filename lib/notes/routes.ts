@@ -4,6 +4,7 @@ import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { dirsForScope } from "./resolve";
 import { NoteConflictError, createNote, deleteNote, isNoteId, listNotes, metaOf, readNote, writeNote } from "./store";
 import { MEMORY_NOTE_ID, type NoteScopeKind } from "./types";
+import { getRepoFolder, setRepoFolderFiles } from "@/lib/supabase/repo/repo-folders";
 
 // Route handlers shared by /api/projects/[id]/notes and /api/workspaces/[id]/notes.
 
@@ -44,6 +45,11 @@ export function notesCollection(kind: NoteScopeKind) {
         if (err.code === "EEXIST") throw new HttpError(409, "A note with this filename already exists");
         throw err;
       });
+      // A notebook narrowed to picked files shows the files created through it too.
+      if (kind === "repos" && dirs.include && !dirs.include.includes(note.id)) {
+        const folder = await getRepoFolder(dirs.scope.id);
+        if (folder) await setRepoFolderFiles(folder.projectId, folder.id, [...dirs.include, note.id]);
+      }
       return Response.json({ note });
     }),
   };

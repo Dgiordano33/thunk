@@ -52,7 +52,7 @@ export async function dirsForScope(scope: NoteScope | { kind: NoteScopeKind; id:
 }
 
 export async function repoNoteDirs(project: Project, folder: RepoFolder): Promise<NoteDirs> {
-  return { scope: { kind: "repos", id: folder.id }, ...await resolveRepoFolder(project, folder) };
+  return { scope: { kind: "repos", id: folder.id }, ...await resolveRepoFolder(project, folder), ...(folder.files ? { include: folder.files } : {}) };
 }
 
 export async function repoDirsFor(project: Project): Promise<NoteDirs[]> {

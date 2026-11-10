@@ -154,3 +154,23 @@ test("repo watcher debounces a folder burst and reports external edits", async (
   assert.equal(events.length, 2);
   assert.deepEqual(await store.listNotes(await resolution.repoNoteDirs(project, folder)), []);
 });
+
+test("picked files narrow a notebook; picking all, or creating through it, keeps notes visible", async () => {
+  const { root, project, repoId } = await fixture();
+  await fs.writeFile(path.join(root, "docs", "plan.md"), "# Plan\n");
+  await fs.writeFile(path.join(root, "docs", "skip.md"), "# Skip\n");
+  const picker = require("../app/api/projects/[id]/repo-folders/files/route.ts");
+  const listed = await (await picker.POST(req("POST", { repoId, path: "docs" }), ctx({ id: project.id }))).json();
+  assert.deepEqual(listed.files.map((f) => [f.id, f.title]), [["board", "Board"], ["plan", "Plan"], ["skip", "Skip"]]);
+  const { folder } = await (await registration.POST(req("POST", { repoId, path: "docs", files: ["board", "plan"] }), ctx({ id: project.id }))).json();
+  assert.deepEqual(folder.files, ["board", "plan"]);
+  const notes = routes.notesCollection("repos");
+  const ids = async () => (await (await notes.GET(req("GET"), ctx({ id: folder.id }))).json()).notes.map((n) => n.id).sort();
+  assert.deepEqual(await ids(), ["board", "plan"]);
+  assert.equal((await routes.noteItem("repos").GET(req("GET"), ctx({ id: folder.id, noteId: "skip" }))).status, 404);
+  assert.equal((await notes.POST(req("POST", { id: "fresh", title: "Fresh" }), ctx({ id: folder.id }))).status, 200);
+  assert.deepEqual(await ids(), ["board", "fresh", "plan"]);
+  assert.equal((await removal.PATCH(req("PATCH", { files: null }), ctx({ id: project.id, folderId: folder.id }))).status, 200);
+  assert.deepEqual(await ids(), ["board", "fresh", "plan", "skip"]);
+  assert.equal((await removal.PATCH(req("PATCH", { files: [] }), ctx({ id: project.id, folderId: folder.id }))).status, 400);
+});
