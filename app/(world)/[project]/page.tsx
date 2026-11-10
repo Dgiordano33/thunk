@@ -45,12 +45,15 @@ export default async function TownPage({ params, searchParams }: PageProps<"/[pr
   const id = project.id;
   await ensureMainWorkspace(project);
 
-  const [workspaces, sessions, rows, vaultItems] = await Promise.all([
+  const [workspaces, rows, vaultItems] = await Promise.all([
     listWorkspaces(id),
-    listSessions({ projectId: id, limit: 500 }),
-    listSessionRows({ projectId: id, limit: 500 }).catch(() => []),
+    listSessionRows({ projectId: id, limit: 500 }).catch((err) => {
+      console.error("[thunk] list sessions failed", err);
+      return [];
+    }),
     listItems(vaultDirOf(project)).catch(() => []),
   ]);
+  const sessions = await listSessions({ projectId: id, limit: 500 }, rows);
   const active = workspaces.filter((w) => w.status === "active");
   const archived = workspaces.filter((w) => w.status === "archived");
   const activeIds = new Set(active.map((w) => w.id));

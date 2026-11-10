@@ -18,26 +18,36 @@ export async function deliveryNotifications(projectId: string, previous: Deliver
       subjectKey: kind === "ci_failed" ? `${key}:ci` : kind === "review_requested" ? `${key}:review` : `${key}:${e.id}`,
       title: `${NOTIFICATION_LABELS[kind]} · #${e.pr.number}`, detail: e.pr.title, href: e.previewUrl || e.pr.url });
   }
+  const subjects = new Set<string>();
+  const resolveSubjects = async () => {
+    const keys = [...subjects];
+    // Bound the PostgREST filter URL even for projects with many PRs.
+    for (let i = 0; i < keys.length; i += 100)
+      await resolveWhere({ projectId, subjectKeys: keys.slice(i, i + 100) });
+    subjects.clear();
+  };
   for (const s of snapshots) {
     const key = subject(s.pr.number);
     if (s.state !== "OPEN") {
-      for (const suffix of ["ci", "stuck", "review"]) await resolveBySubject(`${key}:${suffix}`);
+      for (const suffix of ["ci", "stuck", "review"]) subjects.add(`${key}:${suffix}`);
     } else {
-      if (!s.requests.length) await resolveBySubject(`${key}:review`);
-      if (s.checks.length && !s.checks.some((c) => c.state === "fail" || c.state === "pending")) await resolveBySubject(`${key}:ci`);
+      if (!s.requests.length) subjects.add(`${key}:review`);
+      if (s.checks.length && !s.checks.some((c) => c.state === "fail" || c.state === "pending")) subjects.add(`${key}:ci`);
     }
     const waiting = s.state === "OPEN" && s.checks.some((c) => c.state === "pending") && !s.checks.some((c) => c.state === "fail");
     let state = pending.get(key);
     if (!waiting || state && state.head !== s.pr.head) {
       pending.delete(key); state = undefined;
-      await resolveBySubject(`${key}:stuck`);
+      subjects.add(`${key}:stuck`);
     }
     if (!waiting) continue;
     if (!state) { state = { head: s.pr.head, since: now, notified: false }; pending.set(key, state); }
     // shortcut: CI age starts at first observation in this process, persist it if restart-spanning timing is needed.
     if (!state.notified && now - state.since > CI_STUCK_MS) {
+      await resolveSubjects();
       await notify({ projectId, kind: "ci_stuck", urgency: "action", subjectKey: `${key}:stuck`, title: `CI pending for over 30 minutes · #${s.pr.number}`, detail: s.pr.title, href: s.pr.url });
       state.notified = true;
     }
   }
+  await resolveSubjects();
 }

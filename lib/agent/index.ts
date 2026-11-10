@@ -2,7 +2,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
 import { loadEvents, maxSeq } from "@/lib/supabase/repo/messages";
-import { deleteSessionRow, getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
+import { deleteSessionRow, getSessionRow, listSessionRows, type SessionRow } from "@/lib/supabase/repo/sessions";
 import "./persist";
 import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
 import { deleteTranscripts } from "./transcripts";
@@ -104,8 +104,9 @@ export function liveMeta(id: string): SessionMeta | null {
 /** Live sessions merged over persisted ones, newest first. */
 export async function listSessions(
   opts: { workspaceId?: string; projectId?: string; limit?: number } = {},
+  persisted?: SessionRow[],
 ): Promise<SessionMeta[]> {
-  const rows = await listSessionRows(opts).catch((err) => {
+  const rows = persisted ?? await listSessionRows(opts).catch((err) => {
     console.error("[thunk] list sessions failed", err);
     return [];
   });

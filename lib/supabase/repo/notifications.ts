@@ -52,7 +52,7 @@ export async function listNotifications(opts: NotificationFilter = {}): Promise<
   if (error) throw error;
   return data.map(fromRow);
 }
-type Match = { subjectKey?: string; subjectPrefix?: string; sessionId?: string; runId?: string; workspaceId?: string; projectId?: string; kinds?: NotificationKind[]; ids?: string[] };
+type Match = { subjectKeys?: string[]; subjectKey?: string; subjectPrefix?: string; sessionId?: string; runId?: string; workspaceId?: string; projectId?: string; kinds?: NotificationKind[]; ids?: string[] };
 async function change(match: Match, status?: "resolved" | "dismissed", read = false): Promise<Notification[]> {
   const now = new Date().toISOString();
   const client = db();
@@ -60,7 +60,7 @@ async function change(match: Match, status?: "resolved" | "dismissed", read = fa
     const changed: Notification[] = [];
     for (const n of mem.values()) {
       if (status && n.status !== "open" || read && n.readAt) continue;
-      if (match.subjectPrefix && !n.subjectKey.startsWith(match.subjectPrefix) || match.subjectKey && n.subjectKey !== match.subjectKey || match.sessionId && n.sessionId !== match.sessionId || match.runId && n.runId !== match.runId || match.workspaceId && n.workspaceId !== match.workspaceId || match.projectId && n.projectId !== match.projectId || match.kinds && !match.kinds.includes(n.kind) || match.ids && !match.ids.includes(n.id)) continue;
+      if (match.subjectKeys && !match.subjectKeys.includes(n.subjectKey) || match.subjectPrefix && !n.subjectKey.startsWith(match.subjectPrefix) || match.subjectKey && n.subjectKey !== match.subjectKey || match.sessionId && n.sessionId !== match.sessionId || match.runId && n.runId !== match.runId || match.workspaceId && n.workspaceId !== match.workspaceId || match.projectId && n.projectId !== match.projectId || match.kinds && !match.kinds.includes(n.kind) || match.ids && !match.ids.includes(n.id)) continue;
       const next = { ...n, updatedAt: now, ...(status ? { status, resolvedAt: now } : {}), ...(read ? { readAt: now } : {}) };
       mem.set(n.id, next); changed.push(next);
     }
@@ -71,6 +71,7 @@ async function change(match: Match, status?: "resolved" | "dismissed", read = fa
   if (read) q = q.is("read_at", null);
   if (match.subjectPrefix) q = q.like("subject_key", `${match.subjectPrefix}%`);
   if (match.subjectKey) q = q.eq("subject_key", match.subjectKey);
+  if (match.subjectKeys) q = q.in("subject_key", match.subjectKeys);
   if (match.sessionId) q = q.eq("session_id", match.sessionId);
   if (match.runId) q = q.eq("run_id", match.runId);
   if (match.workspaceId) q = q.eq("workspace_id", match.workspaceId);
