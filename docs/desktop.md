@@ -16,7 +16,7 @@ You can copy the generated app to `/Applications` and launch it from Finder. The
 
 ## Updating
 
-Choose **Thunk → Check for Updates…**. Thunk fetches the latest `main` from `Dgiordano33/thunk`, builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock show that a build is running. You can continue using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
+Choose **Thunk → Check for Updates…**. A small dialog with a rotating hourglass shows the current step while Thunk fetches the latest `main` from `Dgiordano33/thunk`, builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock also show that a build is running. Close the progress dialog to keep using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
 
 The update replaces the app at its existing location, including an Applications copy. Your source checkout, desktop `.env`, and data are untouched. A failed build leaves the current app running. A failed replacement restores the previous app. The previous bundle is retained in a hidden `.thunk-previous-*` folder beside the app; `~/Library/Application Support/Thunk/previous-app.txt` records its path for recovery. You can remove those backup folders once satisfied with an update.
 
