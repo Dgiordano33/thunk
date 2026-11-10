@@ -7,7 +7,7 @@ import { listNotes } from "./store";
 import type { Note } from "./types";
 
 /** Cap on injected note text so a big notebook can't crowd out the conversation. */
-const INJECT_LIMIT = 24_000;
+export const INJECT_LIMIT = 24_000;
 
 export type SessionNotes = { projectDir: string; workspaceDir: string; project: Note[]; workspace: Note[]; repos: { label: string; dir: string; extra: boolean; notes: Note[] }[] };
 

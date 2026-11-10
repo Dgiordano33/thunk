@@ -41,7 +41,7 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
     const ws = targetWorkspace ?? task.workspaceId ?? workspaceId;
     if (!sessionId && !ws) { setDestination(workspaces[0]?.id ?? ""); setSending(task); return; }
     void run(task.id, async () => {
-      const result = await api.sendTask(task.id, sessionId ? { sessionId } : { workspaceId: ws });
+      const result = await api.sendTask(task.id, sessionId === "worker" ? { worker: true } : sessionId ? { sessionId } : { workspaceId: ws });
       setSending(null);
       router.push(`/w/${result.workspaceId}/s/${result.sessionId}`); router.refresh();
     });

@@ -1,3 +1,5 @@
+import { chiefTools } from "@/lib/workers/tools";
+import { CHIEF_DISALLOWED_TOOLS, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
@@ -101,11 +103,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
+        ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],
     }) },
+    ...(live.meta.origin?.kind === "chief" ? { disallowedTools: CHIEF_DISALLOWED_TOOLS } : {}),
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.
@@ -129,6 +133,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
         CANVAS_PROMPT,
         hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
+        teamPrompt(live.meta.origin),
       ].join("\n\n"),
     },
     // `env` replaces process.env entirely, so always spread it.

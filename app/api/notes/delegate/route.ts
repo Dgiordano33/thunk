@@ -1,0 +1,22 @@
+import { z } from "zod";
+import { handle, parseBody, HttpError } from "@/lib/api/http";
+import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getRepoFolder } from "@/lib/supabase/repo/repo-folders";
+import { openChief } from "@/lib/workers/service";
+import { noteBrief } from "@/lib/workers/notes";
+import { pushUserMessage } from "@/lib/agent";
+const Body = z.object({ scope: z.object({ kind: z.enum(["projects", "workspaces", "repos"]), id: z.uuid() }).strict(), noteId: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i) }).strict();
+export const POST = handle(async (req: Request) => {
+  const { scope, noteId } = await parseBody(req, Body);
+  const projectId = scope.kind === "projects" ? scope.id : scope.kind === "workspaces" ? (await getWorkspace(scope.id))?.projectId : (await getRepoFolder(scope.id))?.projectId;
+  if (!projectId) throw new HttpError(404, "Note scope not found");
+  const { getProject } = await import("@/lib/supabase/repo/projects");
+  const project = await getProject(projectId);
+  if (!project) throw new HttpError(404, "Project not found");
+  const id = scope.kind === "repos" ? `r:${scope.id}:${noteId}` : noteId;
+  const { note, brief } = await noteBrief(project, id);
+  if (note.scope.kind !== scope.kind || note.scope.id !== scope.id) throw new HttpError(404, "Note not found in this scope");
+  const chief = await openChief(projectId);
+  pushUserMessage(chief, `Delegate this note: ${note.path}\nSplit unchecked checklist items into separate tasks. Use noteId ${id} for every delegate call.\n\n${brief}`);
+  return Response.json({ sessionId: chief.id, workspaceId: chief.meta.workspaceId });
+});

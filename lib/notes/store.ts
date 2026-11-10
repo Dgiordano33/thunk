@@ -117,8 +117,8 @@ export function metaOf(note: Note): NoteMeta {
 
 export type NotePatch = Partial<NoteFlags> & { title?: string; markdown?: string; task?: NoteTaskPatch; expectedUpdatedAt?: string };
 
-export async function createNote(dirs: NoteDirs, input: { id?: string; title?: string; markdown?: string } & Partial<NoteFlags> = {}) {
-  const id = dirs.scope.kind === "repos" ? input.id : newNoteId();
+export async function createNote(dirs: NoteDirs, input: { id?: string; title?: string; markdown?: string } & Partial<NoteFlags> = {}, { keepId = false } = {}) {
+  const id = dirs.scope.kind === "repos" || keepId ? input.id : newNoteId();
   if (!id || !ID.test(id) || id.toLowerCase() === MEMORY_NOTE_ID) throw new Error("A valid filename (without .md) is required");
   const now = new Date().toISOString();
   const fm: NoteFrontmatter = {

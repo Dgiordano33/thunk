@@ -1,3 +1,5 @@
+import { chiefTools } from "@/lib/workers/tools";
+import { teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
@@ -174,10 +176,11 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     CANVAS_PROMPT,
     hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
+    teamPrompt(live.meta.origin),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...chiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;

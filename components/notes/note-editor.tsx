@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Loader2Icon } from "lucide-react";
@@ -57,6 +58,8 @@ export function NoteEditor({
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
 function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initial: Note; onDeleted?: () => void }) {
+  const router = useRouter();
+  const [delegating, setDelegating] = useState(false);
   const memory = initial.id === MEMORY_NOTE_ID;
   const [note, setNote] = useState(initial);
   const [title, setTitle] = useState(initial.title);
@@ -244,7 +247,13 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <NoteMetaBar note={note} onChange={patchFlags} onDelete={memory ? undefined : remove} />
+      <NoteMetaBar note={note} onChange={patchFlags} onDelete={memory ? undefined : remove}
+        delegateDisabled={delegating || save !== "saved" || Boolean(conflict) || broken}
+        onDelegate={memory ? undefined : () => {
+          setDelegating(true);
+          api.delegateNote(scope, note.id).then((r) => { router.push(`/w/${r.workspaceId}/s/${r.sessionId}`); router.refresh(); })
+            .catch((err: Error) => setSaveError(err.message)).finally(() => setDelegating(false));
+        }} />
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs">
           <span className="flex-1">This note changed on disk while you were editing (an agent may have updated it).</span>

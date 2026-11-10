@@ -43,10 +43,14 @@ export function NoteMetaBar({
   note,
   onChange,
   onDelete,
+  onDelegate,
+  delegateDisabled,
 }: {
   note: NoteMeta;
   onChange: (flags: Partial<NoteFlags>) => void;
   onDelete?: () => void;
+  onDelegate?: () => void;
+  delegateDisabled?: boolean;
 }) {
   const memory = note.id === MEMORY_NOTE_ID;
   const joined = note.tags.join(", ");
@@ -88,6 +92,7 @@ export function NoteMetaBar({
             aria-label="Tags"
             className="bg-background placeholder:text-muted-foreground focus-visible:ring-ring h-7 min-w-28 flex-1 rounded-md border px-2 text-[11px] outline-none focus-visible:ring-2"
           />
+          {onDelegate && <Button size="xs" variant="outline" disabled={delegateDisabled} onClick={onDelegate}>Delegate</Button>}
           {onDelete && (
             <Button size="icon-sm" variant="ghost" onClick={onDelete} aria-label="Delete note" title="Delete note">
               <Trash2Icon />

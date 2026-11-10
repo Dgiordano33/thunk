@@ -1,3 +1,4 @@
+import { ChiefPanel } from "@/components/project/chief-panel";
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
 import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, SproutIcon } from "lucide-react";
 import Link from "next/link";
@@ -53,6 +54,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
   archived: WorkspaceSummary[]; externalSessions: ExternalSession[]; workspaces: WorkspaceSummary[]; closeHref: string;
 }) {
   return <TownPanel eyebrow="Town center · project" title={project.name} closeHref={closeHref}>
+        <Section title="Chief"><ChiefPanel projectId={project.id} /></Section>
         <Section title="Project">
           <Stats
             rows={[
@@ -179,7 +181,7 @@ export function FieldPanel({
 }) {
   return (
     <TownPanel
-      eyebrow={`Field · ${workspaceName}${meta.origin?.kind === "routine" ? " · Routine" : ""}`}
+      eyebrow={`Field · ${workspaceName}${meta.origin?.kind === "routine" ? " · Routine" : meta.origin?.kind === "chief" ? " · Chief" : meta.origin?.kind === "worker" ? " · Worker" : ""}`}
       title={meta.title || "Untitled session"}
       closeHref={closeHref}
       wide

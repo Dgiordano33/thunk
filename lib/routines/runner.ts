@@ -1,17 +1,15 @@
+import { startWorkerSession, sendBrief } from "@/lib/workers/start";
+import { watchWorker } from "@/lib/workers/watch";
 import "server-only";
-import { closeSession, getSession, pushUserMessage, startSession, subscribe, type LiveSession } from "@/lib/agent";
-import type { HarnessEvent } from "@/lib/agent/types";
+import { closeSession, getSession, type LiveSession } from "@/lib/agent";
 import { createWorkspace, getWorkspaceContext, removeWorkspace, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { tryGit } from "@/lib/projects/git";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
-import { sessionConfigRoot } from "@/lib/projects/repos";
 import { prepareWorkspace } from "@/lib/projects/runtime";
 import type { Project, Workspace } from "@/lib/projects/types";
-import { expandCommand } from "@/lib/prompts/context";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { countRunsSince, insertRun, isSkip, startOfToday, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
-import { upsertSession } from "@/lib/supabase/repo/sessions";
 import { renderPrompt } from "./prompt";
 import { collectReport, writeRunNote } from "./report";
 import { routinesState as state, type ActiveRun } from "./state";
@@ -113,17 +111,19 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
     run = { ...run, workspaceId: workspace.id, status: "running", startedAt: new Date().toISOString() };
 
     const origin: SessionOrigin = { kind: "routine", routineId: routine.id, runId: run.id, routineName: routine.name, trigger };
-    live = await startSession({ workspaceId: workspace.id, model: routine.model, permissionMode: routine.permissionMode, title: routine.name, origin });
+    live = await startWorkerSession({ workspaceId: workspace.id, model: routine.model, permissionMode: routine.permissionMode, title: routine.name, origin });
     slot.sessionId = live.id;
     // The run row references the session; make sure it exists before linking (persistence upserts it again).
-    await upsertSession(live.meta);
     await updateRun(run.id, { sessionId: live.id });
     run = { ...run, sessionId: live.id };
     bail();
 
-    watch(live, routine, run, project, workspace, () => cancelled);
+    watchWorker(live, routine.maxRunMinutes, {
+      finish: (result) => finalize({ routine, run, project, workspace, ...result }),
+      status: (status) => updateRun(run.id, { status }),
+    }, () => cancelled);
     const prompt = renderPrompt(routine.prompt, trigger, payload);
-    pushUserMessage(live, prompt, { expandedContent: await expandCommand(prompt, sessionConfigRoot(ctx)) });
+    await sendBrief(live, prompt);
   } catch (err) {
     if (live) closeSession(live.id);
     await finalize({
@@ -137,60 +137,6 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
       costUsd: 0,
     });
   }
-}
-
-/** Follow the session's events and finalize the run when the agent finishes, errors, is closed or times out. */
-function watch(live: LiveSession, routine: Routine, run: RoutineRun, project: Project, workspace: Workspace, cancelled: () => string | null) {
-  let markdown = "";
-  let costUsd = 0;
-  let lastError: string | null = null;
-  let status: RunStatus = "running";
-  let done = false;
-
-  const finish = (final: RunStatus, error: string | null) => {
-    if (done) return;
-    done = true;
-    clearTimeout(timer);
-    unsubscribe();
-    void finalize({ routine, run, project, workspace, status: final, error, markdown, costUsd, sessionId: live.id }).catch((err) =>
-      console.error("[thunk] routine finalize failed", err),
-    );
-  };
-
-  const setStatus = (next: RunStatus) => {
-    if (done || next === status) return;
-    status = next;
-    void updateRun(run.id, { status: next }).catch((err) => console.error("[thunk] routine run update failed", err));
-  };
-
-  const onEvent = (e: HarnessEvent) => {
-    switch (e.type) {
-      case "turn_complete":
-        if (e.markdown) markdown = e.markdown;
-        break;
-      case "error":
-        lastError = e.message;
-        break;
-      case "result":
-        costUsd += e.costUsd || 0;
-        if (live.pending.size === 0) finish(e.isError ? "failed" : "succeeded", e.isError ? lastError ?? `Agent stopped: ${e.subtype}` : null);
-        break;
-      case "status":
-        if (e.state === "awaiting") setStatus("needs_attention");
-        else if (e.state === "running" && status === "needs_attention") setStatus("running");
-        else if (e.state === "error") finish("failed", lastError ?? "Session error");
-        else if (e.state === "closed") finish("cancelled", cancelled() ?? "Session closed before the run finished");
-        break;
-    }
-  };
-
-  const unsubscribe = subscribe(live, onEvent);
-  const timer = setTimeout(() => {
-    if (done) return;
-    void live.driver.interrupt().catch(() => {});
-    finish("failed", `Timed out after ${routine.maxRunMinutes} min`);
-  }, routine.maxRunMinutes * 60_000);
-  timer.unref?.();
 }
 
 type FinalizeInput = {

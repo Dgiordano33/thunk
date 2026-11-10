@@ -5,11 +5,16 @@ import { getTask } from "@/lib/supabase/repo/tasks";
 import { getSessionRow, upsertSession } from "@/lib/supabase/repo/sessions";
 import { getWorkspace } from "@/lib/supabase/repo/workspaces";
 import { patchTask, taskId } from "@/lib/tasks/service";
-const Body = z.object({ sessionId: z.uuid().optional(), workspaceId: z.uuid().optional() }).strict();
+const Body = z.object({ sessionId: z.uuid().optional(), workspaceId: z.uuid().optional(), worker: z.boolean().optional() }).strict();
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const task = await getTask(taskId((await ctx.params).id));
   if (!task) throw new HttpError(404, "Task not found");
   const body = await parseBody(req, Body);
+  if (body.worker) {
+    const { delegate } = await import("@/lib/workers/service");
+    if (body.sessionId || body.workspaceId) throw new HttpError(400, "Choose worker or a session/workspace destination");
+    return Response.json(await delegate(task.projectId, null, { taskId: task.id }));
+  }
   const session = body.sessionId ? getSession(body.sessionId)?.meta ?? await getSessionRow(body.sessionId) : null;
   if (body.sessionId && !session) throw new HttpError(404, "Session not found");
   if (session && body.workspaceId && session.workspaceId !== body.workspaceId) throw new HttpError(400, "Session and workspace disagree");

@@ -38,6 +38,8 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
 const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", json });
 
 export const api = {
+  openChief: (projectId: string, body: { fresh?: boolean; noteId?: string } = {}) => post<{ sessionId: string; workspaceId: string }>(`/api/projects/${projectId}/chief`, body),
+  delegateNote: (scope: import("@/lib/notes/types").NoteScope, noteId: string) => post<{ sessionId: string; workspaceId: string }>("/api/notes/delegate", { scope, noteId }),
   listNotifications: (query = "status=all&limit=500") => call<{ notifications: Notification[]; counts: NotificationCounts }>(`/api/notifications?${query}`),
   readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
   dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),
@@ -147,7 +149,7 @@ export const api = {
   createTask: (body: TaskInput) => post<{ task: Task }>("/api/tasks", body),
   patchTask: (id: string, body: TaskPatch) => call<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", json: body }),
   deleteTask: (id: string) => call(`/api/tasks/${id}`, { method: "DELETE" }),
-  sendTask: (id: string, body: { sessionId?: string; workspaceId?: string }) => post<{ sessionId: string; workspaceId: string }>(`/api/tasks/${id}/send`, body),
+  sendTask: (id: string, body: { sessionId?: string; workspaceId?: string; worker?: boolean }) => post<{ sessionId: string; workspaceId: string }>(`/api/tasks/${id}/send`, body),
   taskImportCount: (scope: NoteImportScope) => call<{ count: number; folders: string[] }>(`/api/tasks/import-notes?${new URLSearchParams(scope)}`),
   importNoteTasks: (scope: NoteImportScope) => post<{ imported: number }>("/api/tasks/import-notes", scope),
   // Routines

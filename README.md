@@ -115,3 +115,16 @@ Use the Tasks import banner to import unchecked items from repo boards into proj
 Apply `supabase/migrations/20261108200000_0007_repo_notebooks.sql` before using this version with Supabase. Memory-only mode needs no database migration. Repo notes are included in session indexes, note mentions, and the shared 24k-character injection budget. Agents in worktrees should edit their branch's copy; the Library reflects those edits after merge.
 
 The town map has one Town center per project, farmhouses for active workspaces, and fields for sessions. Closed or errored sessions become fallow fields. Archived workspaces remain accessible in the Town center panel.
+
+
+### Project chiefs and workers
+
+Open **Town center → Open the chief** to resume the project's coordinating session in `main`; **New chief** starts fresh using the same workspace memory. The chief delegates each task to a worker in a new Git worktree, with at most four active workers. Worker setup completes before its session starts. Workers retain their branches and workspaces for review; nothing merges automatically.
+
+Use **Delegate** on a saved note to ask the chief to split its unchecked checklist items into tasks. Each worker receives the note text (up to the existing 24k-character budget), its path, and the linked task. The task send menu also offers **New worktree**, which runs a worker without a chief. Delegation requires Git repositories; plain folders are excluded from default worker selection.
+
+Reports appear in the inbox and are pushed to the originating chief in 20-second batches. Questions and permission prompts still go to you. The daily project **Work log** records lifecycle milestones and decisions; `chief_log` lets the chief record outcomes and update its workspace plan without file-edit tools. The chief accepts successful task completion; workers without a chief complete their tasks directly.
+
+Apply `supabase/migrations/20261110010000_0010_worker_reports.sql` before using workers with Supabase. Report outboxes live under the project's `config/worker-reports` directory. On restart, live sessions regain watchers, persisted results are reported, and interrupted workers are marked blocked for inspection and continuation. Memory-only sessions and tasks still disappear on restart. Delivery is retryable; a crash between dispatching a message and persisting its receipt can repeat a report.
+
+Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write commands in permission checks. This is not an OS security boundary; shell patterns are incomplete and permission bypass can weaken them. Codex chiefs follow the coordination rule through their prompt. Workers time out after 60 minutes and keep their worktree.

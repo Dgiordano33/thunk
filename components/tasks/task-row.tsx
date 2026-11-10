@@ -26,7 +26,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
         <span className="rounded border px-1">{TASK_STATUS_LABELS[task.status]}</span>
         {task.priority > 0 && <span title={`${["None", "Low", "Medium", "High"][task.priority]} priority`} aria-label={`${["None", "Low", "Medium", "High"][task.priority]} priority`} className={`size-1.5 rounded-full ${["", "bg-sky-500", "bg-amber-500", "bg-red-500"][task.priority]}`} />}
-        {task.sessionId && <Link className="max-w-40 truncate hover:underline" href={workspaceId ? `/w/${workspaceId}/s/${task.sessionId}` : `/s/${task.sessionId}`}>{owner?.title || "Assigned session"}</Link>}
+        {task.sessionId && <Link className="max-w-40 truncate hover:underline" href={workspaceId ? `/w/${workspaceId}/s/${task.sessionId}` : `/s/${task.sessionId}`}>{owner?.origin?.kind === "worker" ? `Worker · ${owner.title || task.title}` : owner?.title || "Assigned session"}</Link>}
       </div>
     </div>
     <SendMenu compact label="Send" disabled={busy} sessions={sessions.filter((s) => s.live && (!task.workspaceId || s.workspaceId === task.workspaceId))} onPick={(id) => onSend(task, id)} />

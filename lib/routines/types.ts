@@ -85,7 +85,7 @@ export type RoutineSummary = Routine & {
 export type RoutineRunActivity = RoutineRun & { routineName: string; projectId: string; projectName: string };
 
 /** `trigger` is absent on sessions persisted before it was recorded. */
-export type SessionOrigin = { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger };
+export type { SessionOrigin } from "@/lib/agent/types";
 
 export const ROUTINE_SCHEDULE_PRESETS = [
   { id: "none", label: "No schedule", cron: null },

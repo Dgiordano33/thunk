@@ -9,7 +9,7 @@ import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { createClaudeDriver } from "./claude-driver";
 import { createCodexDriver } from "./codex/driver";
 import type { WorkspaceContext } from "@/lib/projects";
-import type { SessionOrigin } from "@/lib/routines/types";
+import type { SessionOrigin } from "@/lib/agent/types";
 import { providerOf, type HarnessEvent, type HarnessEventBody, type SessionMeta, type SessionState } from "./types";
 
 export type PendingRequest = {

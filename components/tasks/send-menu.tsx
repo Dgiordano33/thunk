@@ -33,6 +33,7 @@ export function SendMenu({
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="text-xs">Send to session</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onPick(null)}>New chat</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onPick("worker")}>New worktree</DropdownMenuItem>
         {sessions.length > 0 && <DropdownMenuSeparator />}
         {sessions.map((s) => (
           <DropdownMenuItem key={s.id} onSelect={() => onPick(s.id)}>

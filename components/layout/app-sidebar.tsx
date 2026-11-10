@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
+import { BotIcon, ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,7 +23,7 @@ import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
 import { cn } from "@/lib/utils";
 
-export type SidebarProject = ProjectSummary & { workspaces: WorkspaceSummary[] };
+export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
 
 export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   const notificationCounts = useNotifications((s) => s.counts.byProject);
@@ -148,7 +148,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                             w.id === activeWorkspaceId && "bg-sidebar-accent",
                           )}
                         >
-                          {w.branch ? (
+                          {(w.worker || sessions.some((s) => s.workspaceId === w.id && s.origin?.kind === "worker")) ? <BotIcon aria-label="Worker workspace" className="text-muted-foreground size-3.5 shrink-0" /> : w.branch ? (
                             <GitBranchIcon className="text-muted-foreground size-3.5 shrink-0" />
                           ) : (
                             <HouseIcon className="text-muted-foreground size-3.5 shrink-0" />
