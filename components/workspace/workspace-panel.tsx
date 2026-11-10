@@ -2,7 +2,7 @@
 
 import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,7 +31,6 @@ export function WorkspacePanel({ workspaceId, projectId, sessions, hasGit }: { w
 function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { workspaceId: string; projectId: string; sessions: SessionMeta[]; hasGit: boolean }) {
   const params = useSearchParams();
   const pathname = usePathname();
-  const router = useRouter();
   const requestedTab = params.get("tab") ?? "sessions";
   const tab = !hasGit && ["changes", "checkpoints"].includes(requestedTab) ? "sessions" : requestedTab;
   const counts = useTaskCounts()[projectId];
@@ -63,7 +62,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
     <Tabs value={["sessions", "artifacts", "changes", "tasks", "notes", "checkpoints"].includes(tab) ? tab : "sessions"} onValueChange={(value) => {
       const query = new URLSearchParams(params.toString());
       query.set("tab", value);
-      router.replace(`${pathname}?${query}`, { scroll: false });
+      window.history.replaceState(null, "", `${pathname}?${query}`);
     }} className="flex h-full flex-col gap-0">
       <div className="flex h-11 shrink-0 items-end overflow-x-auto border-b px-2">
         <TabsList variant="line" className="h-full">
