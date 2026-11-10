@@ -5,6 +5,8 @@ import type { RunStatus } from "@/lib/routines/types";
 export type WorkerResult = { status: RunStatus; error: string | null; markdown: string; costUsd: number; sessionId: string };
 export function watchWorker(live: LiveSession, maxMinutes: number, hooks: {
   waitForQueue?: boolean;
+  /** Stop the clock while a person owes an answer; answering starts a fresh window. */
+  pauseWhileAwaiting?: boolean;
   finish: (result: WorkerResult) => void | Promise<void>;
   status?: (status: RunStatus) => void | Promise<unknown>;
 }, cancelled: () => string | null = () => null) {
@@ -13,6 +15,7 @@ export function watchWorker(live: LiveSession, maxMinutes: number, hooks: {
   let lastError: string | null = null;
   let status: RunStatus = "running";
   let done = false;
+  let timer: ReturnType<typeof setTimeout>;
 
   const finish = (final: RunStatus, error: string | null) => {
     if (done) return;
@@ -43,21 +46,29 @@ export function watchWorker(live: LiveSession, maxMinutes: number, hooks: {
         if (live.pending.size === 0 && (!hooks.waitForQueue || !live.queuedMessages.length)) finish(e.isError ? "failed" : "succeeded", e.isError ? lastError ?? `Agent stopped: ${e.subtype}` : null);
         break;
       case "status":
-        if (e.state === "awaiting") setStatus("needs_attention");
-        else if (e.state === "running" && status === "needs_attention") setStatus("running");
+        if (e.state === "awaiting") {
+          setStatus("needs_attention");
+          if (hooks.pauseWhileAwaiting) clearTimeout(timer);
+        } else if (e.state === "running" && status === "needs_attention") {
+          setStatus("running");
+          if (hooks.pauseWhileAwaiting) startTimer();
+        }
         else if (e.state === "error") finish("failed", lastError ?? "Session error");
         else if (e.state === "closed") finish("cancelled", cancelled() ?? "Session closed before the run finished");
         break;
     }
   };
 
+  const startTimer = () => {
+    timer = setTimeout(() => {
+      if (done) return;
+      void live.driver.interrupt().catch(() => {});
+      finish("failed", `Timed out after ${maxMinutes} min`);
+    }, maxMinutes * 60_000);
+    timer.unref?.();
+  };
   const unsubscribe = subscribe(live, onEvent);
-  const timer = setTimeout(() => {
-    if (done) return;
-    void live.driver.interrupt().catch(() => {});
-    finish("failed", `Timed out after ${maxMinutes} min`);
-  }, maxMinutes * 60_000);
-  timer.unref?.();
+  startTimer();
   return () => { done = true; clearTimeout(timer); unsubscribe(); };
 }
 

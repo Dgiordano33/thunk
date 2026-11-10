@@ -13,8 +13,8 @@ export async function appendWorkLog(project: Project, entry: string) {
     const note = await readNote(dirs, id);
     const line = `- ${new Date().toISOString()} ${entry}\n`;
     return note
-      ? writeNote(dirs, id, { markdown: `${note.markdown}\n${line}`, expectedUpdatedAt: note.updatedAt })
-      : createNote(dirs, { id, title: `Work log ${date}`, markdown: line });
+      ? writeNote(dirs, id, { markdown: `${note.markdown.trimEnd()}\n${line}`, expectedUpdatedAt: note.updatedAt })
+      : createNote(dirs, { id, title: `Work log ${date}`, markdown: line }, { keepId: true });
   });
 }
 export async function saveChiefPlan(project: Project, plan: string) {

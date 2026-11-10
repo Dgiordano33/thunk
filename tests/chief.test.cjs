@@ -60,13 +60,13 @@ const mocks = {
     createTask: async (input) => { const task = { id: id(), status: "open", ...input }; tasks.set(task.id, task); return task; },
     patchTask: async (id, patch) => { const task = tasks.get(id); Object.assign(task, patch); return task; },
   },
-  "@/lib/supabase/repo/sessions": { upsertSession: async () => {} },
+  "@/lib/supabase/repo/sessions": { upsertSession: async () => {}, getSessionRow: async (id) => persisted.get(id)?.meta ?? null },
   "@/lib/supabase/repo/messages": { insertEvents: async () => {}, loadEvents: async (id) => sessions.get(id)?.events ?? persisted.get(id)?.events ?? [] },
   "@/lib/notifications/service": { notify: async (n) => notifications.push(n) },
   "@/lib/notes/resolve": { projectNoteDirs: () => ({ notesDir: tmp }), repoDirsFor: async () => [], workspaceNoteDirs: (_p, w) => ({ notesDir: w.id }) },
   "@/lib/notes/store": {
     readNote: async (dirs, id) => notes.get(`${dirs.notesDir}/${id}`) ?? null,
-    createNote: async (dirs, input) => { const note = { ...input, path: `${dirs.notesDir}/${input.id}`, updatedAt: id() }; notes.set(note.path, note); return note; },
+    createNote: async (dirs, input, { keepId = false } = {}) => { const note = { ...input, id: keepId ? input.id : id(), updatedAt: id() }; note.path = `${dirs.notesDir}/${note.id}`; notes.set(note.path, note); return note; },
     writeNote: async (dirs, id, patch) => { const note = notes.get(`${dirs.notesDir}/${id}`); assert.equal(patch.expectedUpdatedAt, note.updatedAt); Object.assign(note, patch, { updatedAt: crypto.randomUUID() }); return note; },
   },
   "@/lib/notes/prompt": { INJECT_LIMIT: 24_000 },
@@ -162,8 +162,9 @@ test("note brief round trip, direct worker completion and setup failure", async 
 
 test("work log serializes concurrent appends, memory uses explicit replacement", async () => {
   await Promise.all([logs.appendWorkLog(project, "one"), logs.appendWorkLog(project, "two")]);
-  const log = [...notes.values()].find((n) => n.title.startsWith("Work log"));
-  assert.match(log.markdown, /one[\s\S]*two/);
+  const logNotes = [...notes.values()].filter((n) => n.title.startsWith("Work log"));
+  assert.equal(logNotes.length, 1, "one note per day");
+  assert.match(logNotes[0].markdown, /one\n- [^\n]*two/);
   await logs.saveChiefPlan(project, "Plan for next chief");
   assert.equal(fs.readFileSync(path.join(tmp, "MEMORY.md"), "utf8"), "Plan for next chief");
 });
@@ -231,4 +232,64 @@ test("restart recovers detached results, reports interrupted work, and preserves
   assert.equal((await reports.savedReports(project, detached.id)).filter((r) => !r.delivered).length, 2);
   await reports.flushReports(chief.id);
   assert.match(chief.events.at(-1).content, /First undelivered[\s\S]*Second undelivered/);
+});
+
+test("reopening a finished worker neither arms a watcher nor changes its task", async () => {
+  const taskId = id();
+  const live = await agent.startSession({ workspaceId: main.id, origin: { kind: "worker", chiefSessionId: null, taskId } });
+  tasks.set(taskId, { id: taskId, projectId: project.id, sessionId: live.id, status: "done", title: "Finished" });
+  live.meta.status = "starting";
+  service.attachWorker(live);
+  live.meta.status = "idle";
+  emit(live, { type: "status", state: "closed" });
+  await tick();
+  assert.equal(tasks.get(taskId).status, "done");
+  assert.equal(await reports.savedReport(project, live.id), null);
+});
+
+test("an empty needs_person field does not block a finished worker", async () => {
+  const worker = await service.delegate(project.id, null, { title: "Blank field" });
+  finish(sessions.get(worker.sessionId), "```worker-summary\noutcome: done\nsummary: ok\nbranch: b\nneeds_person:\n```");
+  await until(async () => await reports.savedReport(project, worker.sessionId));
+  assert.equal(tasks.get(worker.taskId).status, "done");
+  assert.match((await reports.savedReport(project, worker.sessionId)).content, /status="done"/);
+});
+
+test("the chief cannot start a worker that bypasses permissions", async () => {
+  await assert.rejects(service.delegate(project.id, null, { title: "Escalate", permissionMode: "bypassPermissions" }));
+  assert.equal([...tasks.values()].some((t) => t.title === "Escalate"), false);
+});
+
+test("the timeout pauses while waiting on the person", async () => {
+  const { watchWorker } = load("@/lib/workers/watch");
+  const live = await agent.startSession({ workspaceId: main.id });
+  const completions = [];
+  watchWorker(live, 0.0002, { pauseWhileAwaiting: true, finish: (result) => completions.push(result) });
+  emit(live, { type: "status", state: "awaiting" });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(completions.length, 0);
+  emit(live, { type: "status", state: "running" });
+  await until(() => completions.length);
+  assert.match(completions[0].error, /Timed out/);
+});
+
+test("a deleted chief stops report retries", async () => {
+  const ghost = id();
+  const meta = { id: id(), origin: { kind: "worker", chiefSessionId: ghost, taskId: id() } };
+  await reports.queueReport(project, meta, 1, "<worker_report>Orphan</worker_report>");
+  await reports.flushReports(ghost);
+  assert.equal((await reports.savedReport(project, meta.id)).delivered, true);
+});
+
+test("a new chief takes over reports from running workers", async () => {
+  const old = await service.openChief(project.id);
+  const worker = await service.delegate(project.id, old.id, { title: "Handed over" });
+  const fresh = await service.openChief(project.id, true);
+  fresh.meta.createdAt = new Date(Date.now() + 60_000).toISOString();
+  const before = old.events.length;
+  finish(sessions.get(worker.sessionId), "Handover complete");
+  await until(async () => await reports.savedReport(project, worker.sessionId));
+  await reports.flushReports(old.id);
+  assert.match(fresh.events.find((e) => e.type === "user_message").content, /Handover complete/);
+  assert.equal(old.events.slice(before).some((e) => e.type === "user_message"), false);
 });

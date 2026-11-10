@@ -112,7 +112,7 @@ About two weeks. Phase 2 carries the risk (report-up and enforcement); run a rea
 
 ## Implementation notes
 
-The four phases are implemented. `chief_log` is the additional chief-only tool for note and workspace-memory writes, since Claude chiefs cannot use Edit or Write. Worker results use a durable file outbox and session-message receipts; report delivery may repeat across a crash between dispatch and receipt persistence. Interrupted sessions without a final result are marked blocked rather than silently restarted; message the worker to continue. Workers have a 60-minute timeout.
+The four phases are implemented. `chief_log` is the additional chief-only tool for note and workspace-memory writes, since Claude chiefs cannot use Edit or Write. Worker results use a durable file outbox and session-message receipts; report delivery may repeat across a crash between dispatch and receipt persistence. Interrupted sessions without a final result are marked blocked rather than silently restarted; message the worker to continue. Workers have a 60-minute timeout that pauses while they wait on the person. Reports go to the project's newest chief; a report whose chief was deleted stays in the inbox. The chief cannot start a worker in `bypassPermissions`.
 
 Supabase installations need migration `0010_worker_reports` to extend the existing notification-kind constraint. No tables or columns were added. Default delegation selects Git repositories only, so plain folders remain outside the worker's workspace.
 

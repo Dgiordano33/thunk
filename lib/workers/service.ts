@@ -15,7 +15,7 @@ import { watchWorker, type WorkerResult } from "./watch";
 import { collectReport } from "./report";
 import { appendWorkLog } from "./log";
 import { noteBrief } from "./notes";
-import { enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
+import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
 
 export const MAX_WORKERS_PER_PROJECT = 4;
 import { DelegateSchema } from "./schema";
@@ -123,8 +123,8 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const previous = await savedReport(ctx.project, meta.id);
     if (previous && previous.seq >= seq) { enqueue(reportFile(ctx.project, meta.id), previous); return; }
     const report = await collectReport({ ...ctx, markdown: result.markdown });
-    const needsPerson = /^needs_person:\s*(.*)$/im.exec(result.markdown)?.[1]?.trim();
-    const status = result.status === "cancelled" ? "cancelled" : result.status === "failed" || report.outcome === "failed" ? "failed" : report.outcome === "blocked" || needsPerson && !/^(none|false)$/i.test(needsPerson) ? "blocked" : "done";
+    const needsPerson = /^needs_person:[ \t]*(.*)$/im.exec(result.markdown)?.[1]?.trim().replace(/^(none|false|no|n\/a)\.?$/i, "");
+    const status = result.status === "cancelled" ? "cancelled" : result.status === "failed" || report.outcome === "failed" ? "failed" : report.outcome === "blocked" || needsPerson ? "blocked" : "done";
     const task = await getTask(meta.origin.taskId);
     const newerTurn = getSession(meta.id)?.events.some((e) => e.seq > seq && (e.type === "user_message" || e.type === "message_dequeued"));
     if (!newerTurn && task?.sessionId === meta.id && task.status !== "cancelled") await patchTask(task.id, { status: status === "cancelled" ? "cancelled" : status === "done" ? (meta.origin.chiefSessionId ? "in_progress" : "done") : "blocked" });
@@ -149,6 +149,7 @@ export function attachWorker(live: LiveSession) {
     cancelWatch?.();
     cancelWatch = watchWorker(live, 60, {
       waitForQueue: true,
+      pauseWhileAwaiting: true,
       finish: async (result) => {
         cancelWatch = undefined;
         await finishWorker(live.meta, result, live.seq);
@@ -159,7 +160,8 @@ export function attachWorker(live: LiveSession) {
         if (status === "needs_attention") {
           await appendWorkLog(live.ctx.project, `[worker] blocked: ${live.meta.title} · waiting for you`);
           if (origin.chiefSessionId) {
-            const chief = await resumeSession(origin.chiefSessionId);
+            const chiefId = await currentChiefId(origin.chiefSessionId);
+            const chief = chiefId ? await resumeSession(chiefId) : null;
             if (chief) pushUserMessage(chief, `<worker_waiting task="${origin.taskId}">Waiting for the person in /w/${live.meta.workspaceId}/s/${live.id}</worker_waiting>`);
           }
         }
@@ -169,7 +171,8 @@ export function attachWorker(live: LiveSession) {
   subscribe(live, (e) => {
     if ((e.type === "user_message" && !e.queued) || e.type === "message_dequeued") arm();
   });
-  if (["running", "awaiting", "starting"].includes(live.meta.status)) arm();
+  // Not "starting": every create and resume passes through it, including a finished worker reopened with no new turn.
+  if (["running", "awaiting"].includes(live.meta.status)) arm();
 }
 
 export async function recoverWorkers() {
