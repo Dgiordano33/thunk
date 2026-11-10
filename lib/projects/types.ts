@@ -64,6 +64,24 @@ export type Workspace = {
   updatedAt: string;
 };
 
+/** A top-level directory in the workspace file browser: one repo or folder checkout. */
+export type FileRoot = {
+  /** The repo id, or "workspace" when the workspace has no repos and the root is its cwd. */
+  id: string;
+  name: string;
+  cwd: string;
+  git: boolean;
+  /** The repo single-repo change views describe (see `anchorTarget`). */
+  anchor: boolean;
+};
+
+export type FileEntry = { name: string; path: string; kind: "dir" | "file"; ignored: boolean };
+
+/** A file opened in the editor. Binary and oversized files carry no content. */
+export type FileContent =
+  | { kind: "text"; content: string; version: string }
+  | { kind: "binary" | "too-large"; size: number; version: string };
+
 export type WorkspaceSummary = Workspace & { sessionCount: number };
 export type ProjectSummary = Project & { workspaceCount: number; sessionCount: number; lastActivityAt: string | null };
 

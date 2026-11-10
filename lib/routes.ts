@@ -5,6 +5,7 @@
 //   /{project}/{workspace}                  workspace → its latest session
 //   /{project}/{workspace}/new              new chat
 //   /{project}/{workspace}/{sessionId}      session
+//   /{project}/{workspace}/file?root=&path= a workspace file in the editor
 
 /** Top-level paths a project slug may never take: app pages, legacy redirects and framework paths. */
 export const RESERVED_SLUGS: readonly string[] = ["projects", "inbox", "notes", "routines", "vault", "mock", "api", "p", "w", "s", "new", "_next"];
@@ -36,6 +37,16 @@ export function workspacePath(project: Slugged, workspace: Slugged) {
 
 export function newChatPath(project: Slugged, workspace: Slugged) {
   return `${workspacePath(project, workspace)}/new`;
+}
+
+/**
+ * A workspace file open in the editor. `base` is the workspace page URL; without `root`, the primary repo.
+ * `tab` keeps the right panel on the tab it was showing.
+ */
+export function filePagePath(base: string, root: string | null, path: string, tab?: string | null) {
+  const query = new URLSearchParams(root ? { root, path } : { path });
+  if (tab) query.set("tab", tab);
+  return `${base}/file?${query}`;
 }
 
 export function sessionPath(project: Slugged, workspace: Slugged, sessionId: string) {

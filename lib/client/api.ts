@@ -14,6 +14,9 @@ import type { Routine, RoutineRun, RoutineSummary } from "@/lib/routines/types";
 import type { VaultItem } from "@/lib/vault/types";
 import type { Note, NoteFlags, NoteFolder, NoteMeta, NoteScopeKind } from "@/lib/notes/types";
 import type {
+  FileContent,
+  FileEntry,
+  FileRoot,
   Project,
   ProjectRepo,
   RepoChanges,
@@ -119,6 +122,25 @@ export const api = {
     ),
   workspacePr: (id: string, repoId?: string) =>
     call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr${repoId ? `?repo=${encodeURIComponent(repoId)}` : ""}`),
+  workspaceFileRoots: (id: string) => call<{ roots: FileRoot[] }>(`/api/workspaces/${id}/files`),
+  workspaceDirectory: (id: string, root: string, dir: string) =>
+    call<{ entries: FileEntry[] }>(`/api/workspaces/${id}/files?root=${encodeURIComponent(root)}&dir=${encodeURIComponent(dir)}`),
+  readWorkspaceFile: (id: string, root: string, path: string) =>
+    call<FileContent>(`/api/workspaces/${id}/files/content?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`),
+  workspaceFileVersion: (id: string, root: string, path: string) =>
+    call<{ version: string }>(`/api/workspaces/${id}/files/content?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}&versionOnly=1`),
+  /** Resolves with `conflict: true` and the disk content when the file changed since `baseVersion`. */
+  saveWorkspaceFile: async (id: string, root: string, path: string, body: { content: string; baseVersion: string; force?: boolean }) => {
+    const res = await fetch(`/api/workspaces/${id}/files/content?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) return data as Extract<FileContent, { kind: "text" }> & { conflict: true };
+    if (!res.ok) throw new Error(data.error ?? `${res.status} ${res.statusText}`);
+    return data as { conflict: false; version: string };
+  },
   workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
