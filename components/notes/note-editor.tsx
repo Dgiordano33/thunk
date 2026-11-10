@@ -10,6 +10,7 @@ import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import { editorExtensions } from "@/lib/editor/extensions";
+import { MemoryHeading } from "@/lib/editor/memory-heading";
 import { docToMarkdown } from "@/lib/editor/markdown";
 import { MEMORY_NOTE_ID, scopeKey, type Note, type NoteFlags, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed } from "@/lib/store/notes-store";
@@ -113,7 +114,7 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     timer.current = setTimeout(() => void flush(), SAVE_MS);
   }, [flush]);
 
-  const extensions = useMemo(() => editorExtensions({ placeholder: memory ? "Nothing remembered yet" : "Start writing…" }), [memory]);
+  const extensions = useMemo(() => [...editorExtensions({ placeholder: memory ? "Nothing remembered yet" : "Start writing…" }), ...(memory ? [MemoryHeading] : [])], [memory]);
   const editor = useEditor(
     {
       immediatelyRender: false,

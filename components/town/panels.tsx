@@ -1,6 +1,6 @@
 import { ChiefPanel } from "@/components/project/chief-panel";
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
-import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, SproutIcon } from "lucide-react";
+import { ArchiveIcon, ExternalLinkIcon, GitBranchIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
@@ -72,8 +72,8 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
           <Stats
             rows={[
               ["Rank", `${LEVEL_NAMES[level - 1]} (level ${level})`],
-              ["Farms", activeCount],
-              ["Fields", allFarmCount],
+              ["Workspaces", activeCount],
+              ["Sessions", allFarmCount],
               ["Total spend", usd(totalSpend)],
               ["Founded", relativeTime(project.createdAt)],
             ]}
@@ -113,7 +113,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
   });
   tabs.push({ value: "settings", label: "Settings", content: <Pane><ProjectSettings id={project.id} name={project.name} /></Pane> });
 
-  return <TownPanel eyebrow="Town center · project" title={project.name} closeHref={closeHref} medium>
+  return <TownPanel eyebrow="Project" title={project.name} closeHref={closeHref} medium>
     <PanelTabs tabs={tabs} />
   </TownPanel>;
 }
@@ -123,7 +123,10 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
 }) {
   const label = workspaceLabel(workspace);
   const base = `/p/${project.id}`;
-  return <TownPanel eyebrow="Farm · workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu workspace={workspace} label={label} />}>
+  return <TownPanel eyebrow="Workspace" title={label} closeHref={closeHref} actions={<>
+    <HarvestButton workspaceId={workspace.id} label={label} variant="ghost" />
+    <WorkspaceMenu workspace={workspace} label={label} openLink />
+  </>}>
       <Section title="Workspace">
         <WorkspaceDirectory id={workspace.id} cwd={workspace.cwd} />
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -143,24 +146,18 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" asChild>
-            <Link href={`/w/${workspace.id}/new`}><SproutIcon /> Sow a new field</Link>
-          </Button>
-          <Button size="sm" variant="outline" asChild>
-            <Link href={`/w/${workspace.id}`}><ExternalLinkIcon /> Open workspace</Link>
-          </Button>
-          <HarvestButton workspaceId={workspace.id} label={label} />
-        </div>
+        <Button size="sm" asChild>
+          <Link href={`/w/${workspace.id}/new`}><PlusIcon /> New session</Link>
+        </Button>
       </Section>
 
       {workspaceRepoTargets({ project, workspace }).length > 0 && <Section title="Delivery">
         <DeliveryPanel key={workspace.id} workspaceId={workspace.id} />
       </Section>}
 
-      <Section title={`Fields (${fields.length})`}>
+      <Section title={`Sessions (${fields.length})`}>
         {fields.length === 0 ? (
-          <p className="text-muted-foreground text-xs">No sessions yet. Sow a field to start one.</p>
+          <p className="text-muted-foreground text-xs">No sessions yet.</p>
         ) : (
           <ul className="flex flex-col">
             {fields.map((f) => (
@@ -175,7 +172,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
         )}
       </Section>
 
-      <Section title="Workspace notes">
+      <Section title="Notes">
         <TownNotes projectId={project.id} scope={{ kind: "workspaces", id: workspace.id }} />
       </Section>
 
@@ -198,7 +195,7 @@ export function FieldPanel({
 }) {
   return (
     <TownPanel
-      eyebrow={`Field · ${workspaceName}${meta.origin?.kind === "routine" ? " · Routine" : meta.origin?.kind === "chief" ? " · Chief" : meta.origin?.kind === "worker" ? " · Worker" : ""}`}
+      eyebrow={`Session · ${workspaceName}${meta.origin?.kind === "routine" ? " · Routine" : meta.origin?.kind === "chief" ? " · Chief" : meta.origin?.kind === "worker" ? " · Worker" : ""}`}
       title={meta.title || "Untitled session"}
       closeHref={closeHref}
       wide
