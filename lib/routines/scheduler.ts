@@ -9,7 +9,8 @@ import { pollDeliveryRoutines } from "./delivery-poll";
 import { pollPullRequests } from "./pr-poll";
 import { fire, isRunActive } from "./runner";
 import { routinesState as state } from "./state";
-import { onRunFailed } from "./triggers";
+import { subscribeTasks } from "@/lib/tasks/events";
+import { onRunFailed, onTaskEvent } from "./triggers";
 import type { Routine } from "./types";
 
 const TICK_MS = 30_000;
@@ -70,9 +71,11 @@ export function ensureScheduler() {
   // Point the long-lived timer and listeners at this module's code (matters after HMR).
   state.tick = tick;
   state.onRunFailed = (event) => void onRunFailed(event).catch((err) => console.error("[thunk] run_failed trigger", err));
+  state.onTaskEvent = (event) => void onTaskEvent(event).catch((err) => console.error("[thunk] task trigger", err));
   if (!state.listenersBound) {
     state.listenersBound = true;
     projectEvents().on("run_failed", (event) => state.onRunFailed(event));
+    subscribeTasks((event) => state.onTaskEvent(event));
   }
   if (state.timer) return;
   state.timer = setInterval(() => void state.tick(), TICK_MS);

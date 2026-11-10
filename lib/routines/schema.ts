@@ -4,6 +4,16 @@ import { PERMISSION_MODES } from "@/lib/agent/types";
 import { cronError, isValidTimezone } from "./cron";
 import { ROUTINE_EVENTS } from "./types";
 
+const noteRef = z.object({
+  scope: z.object({ kind: z.enum(["projects", "workspaces", "repos"]), id: z.string().min(1).max(100) }).strict(),
+  id: z.string().min(1).max(100),
+}).strict();
+
+export const RoutineContextSchema = z.object({
+  notes: z.array(noteRef).max(20, "Attach at most 20 notes"),
+  taskIds: z.array(z.uuid()).max(50, "Attach at most 50 tasks"),
+}).strict();
+
 const fields = {
   name: z.string().trim().min(1, "Name is required").max(80),
   prompt: z.string().trim().min(1, "Prompt is required").max(20_000),
@@ -14,6 +24,7 @@ const fields = {
   scheduleCron: z.string().trim().max(120).nullable(),
   scheduleTz: z.string().max(80).nullable(),
   events: z.array(z.enum(ROUTINE_EVENTS)),
+  context: RoutineContextSchema,
   webhookEnabled: z.boolean(),
   enabled: z.boolean(),
   catchUp: z.enum(["skip", "once"]),
@@ -43,6 +54,7 @@ export const RoutineInputSchema = z
     scheduleCron: fields.scheduleCron.default(null),
     scheduleTz: fields.scheduleTz.default(null),
     events: fields.events.default([]),
+    context: fields.context.default({ notes: [], taskIds: [] }),
     webhookEnabled: fields.webhookEnabled.default(false),
     enabled: fields.enabled.default(true),
     catchUp: fields.catchUp.default("skip"),

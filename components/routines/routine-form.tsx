@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ChevronRightIcon, CopyIcon, GitPullRequestIcon, Loader2Icon, RefreshCwIcon, TerminalSquareIcon, WebhookIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, CopyIcon, GitPullRequestIcon, ListTodoIcon, Loader2Icon, RefreshCwIcon, TerminalSquareIcon, WebhookIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ModelSelect } from "@/components/chat/model-select";
 import { MODE_LABELS } from "@/components/session/labels";
@@ -14,7 +14,8 @@ import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
 import { cronError, nextRuns } from "@/lib/routines/cron";
 import { PROMPT_PLACEHOLDERS } from "@/lib/routines/prompt";
-import { DELIVERY_ROUTINE_EVENTS, EVENT_LABELS, ROUTINE_SCHEDULE_PRESETS, type Routine, type RoutineEvent } from "@/lib/routines/types";
+import { DELIVERY_ROUTINE_EVENTS, EMPTY_ROUTINE_CONTEXT, EVENT_LABELS, ROUTINE_SCHEDULE_PRESETS, TASK_ROUTINE_EVENTS, type Routine, type RoutineContext, type RoutineEvent } from "@/lib/routines/types";
+import { ContextPicker } from "./context-picker";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +102,7 @@ export function RoutineForm({
   const [cron, setCron] = useState(routine?.scheduleCron ?? "");
   const [tz, setTz] = useState(routine?.scheduleTz ?? "");
   const [events, setEvents] = useState<RoutineEvent[]>(routine?.events ?? []);
+  const [context, setContext] = useState<RoutineContext>(routine?.context ?? EMPTY_ROUTINE_CONTEXT);
   const [webhook, setWebhook] = useState(Boolean(routine?.webhookToken));
   const [enabled, setEnabled] = useState(routine?.enabled ?? true);
   const [catchUp, setCatchUp] = useState(routine?.catchUp ?? "skip");
@@ -140,6 +142,7 @@ export function RoutineForm({
       scheduleCron: schedule,
       scheduleTz: schedule ? tz || null : null,
       events,
+      context,
       webhookEnabled: webhook,
       enabled,
       catchUp,
@@ -191,6 +194,10 @@ export function RoutineForm({
           className="font-mono text-xs"
           required
         />
+      </Field>
+
+      <Field label="Context" hint="Each run reads the current text of these notes and tasks into its brief, so edits you make between runs are picked up.">
+        <ContextPicker projectId={projectId} value={context} onChange={setContext} />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -317,6 +324,11 @@ export function RoutineForm({
             title={hasRemote ? "New delivery activity after the first poll; existing workspace targets match their branch" : "Needs a GitHub remote"}
             onClick={() => setEvents((current) => current.includes(event) ? current.filter((e) => e !== event) : [...current, event])}
           >{EVENT_LABELS[event]}</Chip>)}
+          {TASK_ROUTINE_EVENTS.map((event) => <Chip key={event}
+            on={events.includes(event)}
+            title={event === "task_created" ? "Someone (you or an agent) adds a task to this project. Tasks routines file don't count." : "A task in this project is marked done. Tasks routines complete don't count."}
+            onClick={() => setEvents((current) => current.includes(event) ? current.filter((e) => e !== event) : [...current, event])}
+          ><ListTodoIcon /> {EVENT_LABELS[event]}</Chip>)}
           <Chip on={webhook} onClick={() => setWebhook(!webhook)} title="POST to a local URL (git hook, cron, script)">
             <WebhookIcon /> Webhook
           </Chip>

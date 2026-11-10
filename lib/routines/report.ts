@@ -2,6 +2,9 @@ import "server-only";
 import { projectNoteDirs } from "@/lib/notes/resolve";
 import { createNote } from "@/lib/notes/store";
 import type { Project, Workspace } from "@/lib/projects/types";
+import { projectPath } from "@/lib/routes";
+import { TASK_STATUS_LABELS, type Task } from "@/lib/tasks/types";
+import type { KeptNote } from "./outputs";
 import { RUN_STATUS_LABELS, RUN_TRIGGER_LABELS, routineSlug, type Routine, type RoutineRun, type RunStatus } from "./types";
 
 export { collectReport } from "@/lib/workers/report";
@@ -22,8 +25,10 @@ export async function writeRunNote(opts: {
   workspaceKept: boolean;
   report: RunReport;
   error: string | null;
+  tasks?: { created: Task[]; updated: Task[] };
+  keptNotes?: KeptNote[];
 }) {
-  const { project, routine, run, status, workspace, workspaceKept, report, error } = opts;
+  const { project, routine, run, status, workspace, workspaceKept, report, error, tasks, keptNotes = [] } = opts;
   const started = run.startedAt ? new Date(run.startedAt) : new Date(run.createdAt);
   const date = started.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const d = report.diffStat;
@@ -38,7 +43,13 @@ export async function writeRunNote(opts: {
     ...(run.sessionId && workspace && workspaceKept ? [`- **Session:** [open](/w/${workspace.id}/s/${run.sessionId})`] : []),
     ...(error ? [`- **Error:** ${error}`] : []),
   ];
-  const markdown = [...lines, "", "## Summary", "", report.summary || "_The agent did not write a summary._", ""].join("\n");
+  const task = (t: Task) => `- ${t.title} · ${TASK_STATUS_LABELS[t.status]} · \`${t.id.slice(0, 8)}\``;
+  const outputs = [
+    ...(tasks?.created.length ? ["", "## Tasks filed", "", ...tasks.created.map(task)] : []),
+    ...(tasks?.updated.length ? ["", "## Tasks worked on", "", ...tasks.updated.map(task)] : []),
+    ...(keptNotes.length ? ["", "## Notes written", "", ...keptNotes.map((n) => `- [${n.title}](${projectPath(project)}?building=library&note=${n.id})`)] : []),
+  ];
+  const markdown = [...lines, "", "## Summary", "", report.summary || "_The agent did not write a summary._", ...outputs, ""].join("\n");
   return createNote(projectNoteDirs(project), {
     title: `${routine.name} — ${date}`,
     tags: ["routine", routineSlug(routine.name)],

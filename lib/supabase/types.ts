@@ -314,6 +314,7 @@ export type Database = {
           catch_up: string
           created_at: string
           enabled: boolean
+          context: Json
           events: string[]
           id: string
           last_run_at: string | null
@@ -337,6 +338,7 @@ export type Database = {
           catch_up?: string
           created_at?: string
           enabled?: boolean
+          context?: Json
           events?: string[]
           id?: string
           last_run_at?: string | null
@@ -360,6 +362,7 @@ export type Database = {
           catch_up?: string
           created_at?: string
           enabled?: boolean
+          context?: Json
           events?: string[]
           id?: string
           last_run_at?: string | null

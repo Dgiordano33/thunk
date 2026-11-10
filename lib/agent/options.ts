@@ -105,7 +105,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       tools: [
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
-        ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine" }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],
     }) },
