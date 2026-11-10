@@ -13,6 +13,7 @@ export function TownPanel({
   eyebrow,
   closeHref,
   wide,
+  medium,
   compact,
   escapable = true,
   actions,
@@ -22,6 +23,8 @@ export function TownPanel({
   eyebrow?: string;
   closeHref: string;
   wide?: boolean;
+  /** Between the default and `wide`, for tabbed panels. */
+  medium?: boolean;
   /** Size to the content instead of filling the screen height. */
   compact?: boolean;
   /** Chat uses Esc to interrupt a turn, so it opts out of Esc-to-close. */
@@ -47,7 +50,7 @@ export function TownPanel({
       className={cn(
         "absolute top-20 right-4 z-30 flex",
         !compact && (process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4"),
-        wide ? "w-[min(720px,calc(100vw-2rem))]" : "w-[min(460px,calc(100vw-2rem))]",
+        wide ? "w-[min(720px,calc(100vw-2rem))]" : medium ? "w-[min(560px,calc(100vw-2rem))]" : "w-[min(460px,calc(100vw-2rem))]",
       )}
     >
       <CivPanel className={cn("w-full", !compact && "h-full")} bodyClassName="flex h-full min-h-0 flex-col">

@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
-import { SettingsMenu } from "@/components/ambient/settings-menu";
 import { AddProjectForm } from "@/components/home/add-project-form";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { CivPanel } from "./civ-panel";
@@ -20,11 +19,10 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount, notifi
         </CivPanel>
         <CivPanel className="pointer-events-auto" bodyClassName="flex items-center gap-1 p-1">
           <AmbientHub projects={projects} variant="hud" />
-          <SettingsMenu projects={projects} className="border-0 p-0" />
           {home && <AddProjectForm />}
         </CivPanel>
       </div>
-      <CivToolbar cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} vaultCount={vaultCount} notificationCount={notificationCount} />
+      <CivToolbar projects={projects} cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} vaultCount={vaultCount} notificationCount={notificationCount} />
     </>
   );
 }

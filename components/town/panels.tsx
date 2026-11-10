@@ -21,6 +21,7 @@ import { WorkspaceDirectory } from "@/components/workspace/workspace-directory";
 import { DeliveryPanel } from "./delivery-panel";
 import { ProjectSettings } from "./project-settings";
 import { TownNotes } from "./town-notes";
+import { PanelTabs, type PanelTab } from "./panel-tabs";
 import { TownPanel } from "./town-panel";
 import type { TownField } from "./town-view";
 
@@ -33,6 +34,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       {children}
     </section>
   );
+}
+
+function Pane({ children }: { children: React.ReactNode }) {
+  return <div className="px-4 py-4">{children}</div>;
+}
+
+function Count({ n }: { n: number }) {
+  return <span className="text-muted-foreground tabular-nums">{n}</span>;
 }
 
 function Stats({ rows }: { rows: [string, React.ReactNode][] }) {
@@ -53,8 +62,12 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
   project: Project; level: CityLevel; allFarmCount: number; totalSpend: number; activeCount: number;
   archived: WorkspaceSummary[]; externalSessions: ExternalSession[]; workspaces: WorkspaceSummary[]; closeHref: string;
 }) {
-  return <TownPanel eyebrow="Town center · project" title={project.name} closeHref={closeHref}>
-        <Section title="Chief"><ChiefPanel projectId={project.id} /></Section>
+  const tabs: PanelTab[] = [
+    { value: "chief", label: "Chief", content: <Pane><ChiefPanel projectId={project.id} /></Pane> },
+    {
+      value: "overview",
+      label: "Overview",
+      content: <>
         <Section title="Project">
           <Stats
             rows={[
@@ -73,32 +86,36 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
           <ProjectRepos project={project} />
           {project.repos.length === 0 && workspaces.filter((w) => w.slug === "main").map((w) => <WorkspaceDirectory key={w.id} id={w.id} cwd={w.cwd} />)}
         </Section>
-          <Section title="Project notes">
-            <TownNotes projectId={project.id} scope={{ kind: "projects", id: project.id }} />
-          </Section>
-          {archived.length > 0 && (
-            <Section title="Archived">
-              <ul className="flex flex-col">
-                {archived.map((w) => (
-                  <li key={w.id}>
-                    <Link href={`/w/${w.id}`} className="text-muted-foreground hover:bg-muted flex items-center gap-2 px-1 py-1 text-xs">
-                      <ArchiveIcon className="size-3" /> {workspaceLabel(w)}
-                    </Link>
-                    <WorkspaceMenu workspace={w} label={workspaceLabel(w)} />
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          {externalSessions.length > 0 && (
-            <Section title="Wandering settlers">
-              <ExternalSessions sessions={externalSessions} workspaces={workspaces} />
-            </Section>
-          )}
-          <Section title="Settings">
-            <ProjectSettings id={project.id} name={project.name} />
-          </Section>
-    </TownPanel>;
+      </>,
+    },
+    { value: "notes", label: "Notes", content: <Pane><TownNotes projectId={project.id} scope={{ kind: "projects", id: project.id }} /></Pane> },
+  ];
+  if (externalSessions.length > 0) tabs.push({
+    value: "settlers",
+    label: <>Settlers <Count n={externalSessions.length} /></>,
+    content: <Pane><ExternalSessions sessions={externalSessions} workspaces={workspaces} /></Pane>,
+  });
+  if (archived.length > 0) tabs.push({
+    value: "archived",
+    label: <>Archived <Count n={archived.length} /></>,
+    content: <Pane>
+      <ul className="flex flex-col">
+        {archived.map((w) => (
+          <li key={w.id}>
+            <Link href={`/w/${w.id}`} className="text-muted-foreground hover:bg-muted flex items-center gap-2 px-1 py-1 text-xs">
+              <ArchiveIcon className="size-3" /> {workspaceLabel(w)}
+            </Link>
+            <WorkspaceMenu workspace={w} label={workspaceLabel(w)} />
+          </li>
+        ))}
+      </ul>
+    </Pane>,
+  });
+  tabs.push({ value: "settings", label: "Settings", content: <Pane><ProjectSettings id={project.id} name={project.name} /></Pane> });
+
+  return <TownPanel eyebrow="Town center · project" title={project.name} closeHref={closeHref} medium>
+    <PanelTabs tabs={tabs} />
+  </TownPanel>;
 }
 
 export function FarmPanel({ project, workspace, fields, closeHref }: {

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+  <title>Updating Thunk</title>
+  <style>
+    :root { color-scheme: light dark; --paper: #f7f3e9; --ink: #382d23; --muted: #756855; --bronze: #966735; --line: #dbc9ab; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+    .titlebar { height: 44px; -webkit-app-region: drag; }
+    main { padding: 8px 32px 28px; text-align: center; }
+    .seal { display: grid; place-items: center; width: 76px; height: 76px; margin: 0 auto 22px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bronze) 7%, var(--paper)); border-radius: 22px; box-shadow: 0 3px 0 var(--line); }
+    svg { width: 36px; height: 36px; color: var(--bronze); animation: turn 2.8s cubic-bezier(.77, 0, .175, 1) infinite; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; letter-spacing: -.4px; }
+    p { margin: 0; color: var(--muted); }
+    .hint { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; }
+    button { margin-top: 16px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+    button:hover { background: color-mix(in srgb, var(--bronze) 12%, var(--paper)); }
+    button:active { background: color-mix(in srgb, var(--bronze) 20%, var(--paper)); }
+    button:focus-visible { outline: 2px solid var(--bronze); outline-offset: 3px; }
+    @keyframes turn { 0%, 25% { transform: rotate(0); } 65%, 100% { transform: rotate(180deg); } }
+    @media (prefers-color-scheme: dark) { :root { --paper: #27241f; --ink: #f1e7d5; --muted: #b8ab96; --bronze: #d1ac73; --line: #514432; } }
+    @media (prefers-reduced-motion: reduce) { svg { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="titlebar" aria-hidden="true"></div>
+  <main aria-labelledby="heading">
+    <div class="seal" aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none" shape-rendering="crispEdges">
+        <path d="M6 3h20v3H6zm0 23h20v3H6z" fill="currentColor"/>
+        <path d="M9 6v5l7 5-7 5v5m14-20v5l-7 5 7 5v5" stroke="currentColor" stroke-width="2"/>
+        <path d="M11 9h10l-5 4zm5 10 5 5H11z" fill="currentColor" opacity=".65"/>
+      </svg>
+    </div>
+    <div role="status" aria-live="polite" aria-atomic="true">
+      <h1 id="heading">A little refresh for Thunk</h1>
+      <p id="status">Checking for updates…</p>
+    </div>
+    <p class="hint">This can take a few minutes.<br>We’ll ask before restarting.</p>
+    <button type="button" id="background" autofocus>Continue working</button>
+  </main>
+  <script src="update.js"></script>
+</body>
+</html>

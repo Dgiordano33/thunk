@@ -24,7 +24,7 @@ function run(command, args, { cwd, env, log, signal }) {
   });
 }
 
-async function prepareUpdate({ target, revision, env, logFile, signal }) {
+async function prepareUpdate({ target, revision, env, logFile, signal, onProgress = () => {} }) {
   accessSync(path.dirname(target), constants.W_OK);
   const work = realpathSync(mkdtempSync(path.join(tmpdir(), "thunk-update-")));
   const log = openSync(logFile, "w", 0o600);
@@ -36,8 +36,11 @@ async function prepareUpdate({ target, revision, env, logFile, signal }) {
     const latest = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, env: options.env, encoding: "utf8", timeout: 10000 }).trim();
     if (latest === revision) return null;
     options.cwd = source;
+    onProgress("Downloading what’s new…");
     await run("npm", ["ci", "--include=dev"], options);
+    onProgress("Building your update…");
     await run("npm", ["run", "desktop:pack"], options);
+    onProgress("Verifying your update…");
     const built = path.join(source, "dist-desktop", process.arch === "arm64" ? "mac-arm64" : "mac", "Thunk.app");
     await run("node", ["scripts/smoke-desktop.mjs", path.join(built, "Contents/Resources/backend")], options);
     await run("codesign", ["--verify", "--deep", "--strict", built], options);

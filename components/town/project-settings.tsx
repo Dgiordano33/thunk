@@ -4,16 +4,18 @@ import { Loader2Icon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ProjectConfig } from "./project-config";
 import { api } from "@/lib/client/api";
 
-/** Rename or forget a project. Forgetting leaves files, worktrees and memory on disk. */
+/** Rename or delete a project. Forgetting leaves files, worktrees and memory on disk. */
 export function ProjectSettings({ id, name }: { id: string; name: string }) {
   const router = useRouter();
   const [value, setValue] = useState(name);
   const [pending, setPending] = useState<"rename" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmName, setConfirmName] = useState("");
 
   const rename = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -31,7 +33,7 @@ export function ProjectSettings({ id, name }: { id: string; name: string }) {
   };
 
   const remove = async () => {
-    if (!window.confirm(`Remove "${name}" from Thunk? Its sessions stop and its records are deleted. Files, worktrees and memory on disk are left alone.`)) return;
+    if (confirmName.trim() !== name) return;
     setPending("remove");
     setError(null);
     try {
@@ -55,10 +57,40 @@ export function ProjectSettings({ id, name }: { id: string; name: string }) {
           Rename
         </Button>
       </form>
-      <Button type="button" size="sm" variant="ghost" className="text-destructive self-start" onClick={remove} disabled={pending !== null}>
-        {pending === "remove" ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
-        Remove project
-      </Button>
+      <section className="border-destructive/40 mt-2 flex flex-col gap-2 border p-3">
+        <h4 className="pixel text-destructive text-xs tracking-widest uppercase">Danger zone</h4>
+        <p className="text-muted-foreground text-xs">
+          Deleting stops this project&apos;s sessions and removes its workspaces, sessions, notes and routines from Thunk. Files, worktrees and memory on disk are left alone.
+        </p>
+        <Dialog onOpenChange={(open) => !open && setConfirmName("")}>
+          <DialogTrigger asChild>
+            <Button type="button" size="sm" variant="destructive" className="self-start" disabled={pending !== null}>
+              <Trash2Icon />
+              Delete project
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete {name}?</DialogTitle>
+              <DialogDescription>
+                This can&apos;t be undone. Running sessions stop and the project&apos;s records are deleted. Type the project name to confirm.
+              </DialogDescription>
+            </DialogHeader>
+            <label htmlFor="confirm-project-name" className="sr-only">Project name</label>
+            <Input id="confirm-project-name" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder="Type the project name" autoComplete="off" className="h-8 text-sm" />
+            {error && <p role="alert" className="text-destructive text-xs">{error}</p>}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" size="sm" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="button" size="sm" variant="destructive" onClick={remove} disabled={confirmName.trim() !== name || pending !== null}>
+                {pending === "remove" ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
+                Delete project
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
       {error && <p role="alert" className="text-destructive text-xs">{error}</p>}
     </div>
   );

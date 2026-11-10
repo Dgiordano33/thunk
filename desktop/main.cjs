@@ -22,13 +22,32 @@ async function checkForUpdates(item) {
   window?.setProgressBar(2);
   const logFile = path.join(app.getPath("logs"), "update.log");
   let prepared;
+  let progressWindow;
+  const closeProgress = () => {
+    if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
+  };
   try {
+    progressWindow = new BrowserWindow({
+      parent: window || undefined, modal: true, title: "Updating Thunk",
+      width: 420, height: 390, resizable: false, minimizable: false, maximizable: false,
+      show: false, titleBarStyle: "hiddenInset", backgroundColor: "#f7f3e9",
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    });
+    await progressWindow.loadFile(path.join(__dirname, "update.html"));
+    if (quitting) return;
+    if (!progressWindow.isDestroyed()) progressWindow.show();
+    const onProgress = (message) => {
+      if (!progressWindow.isDestroyed()) {
+        void progressWindow.webContents.executeJavaScript(`document.getElementById("status").textContent = ${JSON.stringify(message)}`).catch(console.error);
+      }
+    };
     const root = path.join(process.resourcesPath, "backend");
     const { revision } = JSON.parse(readFileSync(path.join(root, "version.json"), "utf8"));
     const target = path.resolve(process.execPath, "../../..");
     // Only pass build essentials, not runtime database or agent credentials.
     const env = { HOME: app.getPath("home"), PATH: loginPath(), SHELL: process.env.SHELL || "/bin/zsh", TMPDIR: process.env.TMPDIR, LANG: process.env.LANG };
-    prepared = await prepareUpdate({ target, revision, env, logFile, signal: updateController.signal });
+    prepared = await prepareUpdate({ target, revision, env, logFile, signal: updateController.signal, onProgress });
+    closeProgress();
     if (quitting) return;
     window?.setProgressBar(-1);
     if (!prepared) {
@@ -53,8 +72,10 @@ async function checkForUpdates(item) {
     app.relaunch();
     app.quit();
   } catch (error) {
+    closeProgress();
     if (!quitting) dialog.showErrorBox("Update could not be built", `${error.message}\nYour current app has not been replaced.\n\nSee ${logFile}`);
   } finally {
+    closeProgress();
     if (prepared) rmSync(prepared.staging, { recursive: true, force: true });
     updateController = null;
     item.enabled = true;

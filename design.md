@@ -110,7 +110,9 @@ Town navigation replaces the homepage title with a “World” back link and pro
 
 - Top offset: 80px. Right inset: 16px.
 - Default width: `min(460px, calc(100vw - 2rem))`.
+- `medium` width: `min(560px, calc(100vw - 2rem))`, for tabbed panels like the town center.
 - `wide` width: `min(720px, calc(100vw - 2rem))`.
+- Panels with many sections use [PanelTabs](components/town/panel-tabs.tsx): a line-variant tab bar under the header, active tab in `?section=`, each tab scrolling on its own.
 - Default height fills the available space down to the bottom inset.
 - `compact` sizes the panel to its content, for short informational panels.
 - Header: 16px horizontal and 10px vertical padding, bottom border, optional eyebrow and actions, close control.
