@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { HarvestDialog, type HarvestAction } from "./harvest-dialog";
 import type { HarvestData } from "@/lib/projects/harvest";
-import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, GitMergeIcon, NotebookPenIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, ExternalLinkIcon, GitMergeIcon, NotebookPenIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +19,8 @@ import type { Workspace } from "@/lib/projects/types";
 import { projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
-/** New note / archive / delete for a sidebar workspace row. */
-export function WorkspaceMenu({ project, workspace, label, className }: { project: { slug: string }; workspace: Workspace; label: string; className?: string }) {
+/** New note / archive / delete for a workspace. `openLink` is for the town panel: it adds "Open workspace" on top and drops "Save to project", which the panel header shows as its own button. */
+export function WorkspaceMenu({ project, workspace, label, className, openLink }: { project: { slug: string }; workspace: Workspace; label: string; className?: string; openLink?: boolean }) {
   const router = useRouter();
   const [harvest, setHarvest] = useState<{ data: HarvestData; action: HarvestAction } | null>(null);
   const pathname = usePathname();
@@ -77,12 +78,20 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
           <EllipsisIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <DropdownMenuContent align="start" className="w-52">
+        {openLink && !viewing && <>
+          <DropdownMenuItem asChild>
+            <Link href={base}><ExternalLinkIcon /> Open workspace</Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>}
         <DropdownMenuItem onSelect={newNote}>
           <NotebookPenIcon /> New note
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => openHarvest("harvest")}>Harvest</DropdownMenuItem>
+        {!openLink && <DropdownMenuItem onSelect={() => openHarvest("harvest")} title="Copy this workspace's memory and notes into the project">
+          <SaveIcon /> Save to project…
+        </DropdownMenuItem>}
         <DropdownMenuItem onSelect={toggleArchive}>
           {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
           {archived ? "Unarchive" : "Archive"}

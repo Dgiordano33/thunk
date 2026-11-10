@@ -5,6 +5,8 @@ import { useMemo, useRef, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { MEMORY_NOTE_ID, type NoteMeta } from "@/lib/notes/types";
+import { matchesNoteView, noteFilters, type NoteFilter } from "@/lib/notes/views";
+import { NoteFilters } from "./note-filters";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,12 +41,11 @@ export function NoteList({
   contextOf?: (note: NoteMeta) => string;
 }) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<NoteFilter>("all");
   const listRef = useRef<HTMLUListElement>(null);
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!notes || !q) return notes;
-    return notes.filter((n) => `${n.title} ${n.excerpt} ${n.tags.join(" ")}`.toLowerCase().includes(q));
-  }, [notes, query]);
+    return notes?.filter((note) => matchesNoteView(note, query, filter)) ?? null;
+  }, [notes, query, filter]);
 
   const focusRow = (i: number) => listRef.current?.querySelectorAll<HTMLButtonElement>("[data-note-row]")[i]?.focus();
 
@@ -87,11 +88,13 @@ export function NoteList({
                   if (shown?.[0]) onSelect(keyOf(shown[0]));
                 }
               }}
+              maxLength={500}
               placeholder="Search notes"
               aria-label="Search notes"
               className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-xs outline-none"
             />
           </label>
+          <NoteFilters query={query} filter={filter} onChange={(nextQuery, nextFilter) => { setQuery(nextQuery); setFilter(nextFilter); }} />
           {createControl ??
             (onCreate && (
               <Button size="icon-sm" variant="outline" onClick={onCreate} aria-label="New note" title="New note (⌘N)">
@@ -100,12 +103,18 @@ export function NoteList({
             ))}
         </div>
       )}
+      {!compact && filter !== "all" && (
+        <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground">
+          <span>{noteFilters[filter]} · {shown?.length ?? 0}</span>
+          <Button size="xs" variant="ghost" onClick={() => { setQuery(""); setFilter("all"); }}>Clear</Button>
+        </div>
+      )}
       {shown === null ? (
         <div className="flex flex-col gap-1.5 p-2">
           {[0, 1, 2].map((i) => <div key={i} className="bg-muted/50 h-14 animate-pulse rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-6 text-center text-xs">{query ? "No matching notes." : emptyText}</p>
+        <p className="text-muted-foreground px-4 py-6 text-center text-xs">{query || filter !== "all" ? "No matching notes." : emptyText}</p>
       ) : (
         <ul ref={listRef} className="flex flex-col gap-1 overflow-y-auto p-2" onKeyDown={onKeyDown}>
           {shown.map((n) => (

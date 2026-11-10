@@ -9,6 +9,7 @@ import { CivPanel } from "@/components/world/civ-panel";
 import { IsoViewport } from "@/components/world/iso-viewport";
 import { TerrainLayer } from "@/components/world/terrain-layer";
 import { LegendButton } from "@/components/world/world-map";
+import { needsPerson } from "@/lib/agent/types";
 import type { ActivitySession } from "@/lib/ambient/types";
 import { DELIVERY_EVENT_LABELS, deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
@@ -62,7 +63,7 @@ export type TownSelection = { session?: string; ws?: string; building?: "center"
 /** The Vault building: where it stands and whether anything is being read or failed. */
 export type TownVault = Cell & { busy: boolean; failed: boolean };
 
-type Live = { status: ActivitySession["status"]; pending: number } | undefined;
+type Live = { status: ActivitySession["status"]; pending: number; waitingOn?: ActivitySession["waitingOn"] } | undefined;
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
 const ALERT = "pixel absolute left-1/2 flex size-5 -translate-x-1/2 items-center justify-center text-sm font-bold shadow-[2px_2px_0_#0005]";
@@ -103,7 +104,7 @@ export function TownView({
   const sessions = useAmbient((s) => s.sessions);
   const runs = useAmbient((s) => s.runs);
   const workshopAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
-  const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending }]));
+  const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending, waitingOn: s.waitingOn }]));
   const base = townHref;
   const { w, h } = mapSize(grid);
   const focus = { ...toIso(center.col, center.row, grid), z: 1.1 };
@@ -138,10 +139,10 @@ export function TownView({
               grid={grid}
               selected={selected.ws === ws.id}
               href={`${base}?ws=${ws.id}`}
-              attention={sessions.some((s) => s.workspaceId === ws.id && (s.pending > 0 || s.status === "awaiting" || s.status === "error"))}
+              attention={sessions.some((s) => s.workspaceId === ws.id && (s.pending > 0 || needsPerson(s) || s.status === "error"))}
             />
           ))}
-          <Building cell={center} grid={grid} name="Town center" href={`${base}?building=center`} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || s.status === "awaiting" || s.status === "error"))}>
+          <Building cell={center} grid={grid} name="Town center" href={`${base}?building=center`} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || needsPerson(s) || s.status === "error"))}>
             <TownCenterSprite />
           </Building>
           <Building
@@ -242,7 +243,7 @@ const Farm = memo(function Farm({
   const { x, y } = toIso(farm.col, farm.row, grid);
   const fallow = live ? live.status === "closed" || live.status === "error" : farm.fallow;
   const running = !fallow && (live?.status === "running" || live?.status === "starting");
-  const alert = !fallow && live && (live.pending > 0 || live.status === "awaiting" || live.status === "error");
+  const alert = !fallow && live && (live.pending > 0 || needsPerson(live) || live.status === "error");
   const status = fallow ? "Fallow · session closed" : alert ? (live.status === "error" ? "Session error" : "Needs you") : running ? "Working" : live ? "Idle" : "Resting";
   return (
     <HoverCard openDelay={150} closeDelay={60}>

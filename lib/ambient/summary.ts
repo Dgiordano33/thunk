@@ -4,7 +4,8 @@ import type { ActivitySession, UsageEntry, UsageSummary } from "./types";
 export function noticeFor(event: HarnessEvent): string | null {
   switch (event.type) {
     case "permission_request": return "Needs permission";
-    case "ask_question": return "Has a question";
+    case "ask_question": return event.routedTo ? "Asked the chief" : "Has a question";
+    case "question_escalated": return "Has a question";
     case "plan_proposed": return "Plan ready for review";
     case "result": return event.isError ? "Turn failed" : "Turn finished";
     case "error": return "Session error";
@@ -14,7 +15,7 @@ export function noticeFor(event: HarnessEvent): string | null {
 
 export function workspaceActivity(sessions: ActivitySession[], workspaceId: string) {
   const rows = sessions.filter((s) => s.workspaceId === workspaceId);
-  if (rows.some((s) => s.pending > 0 || s.status === "awaiting")) return "Needs attention";
+  if (rows.some((s) => s.pending > 0 || (s.status === "awaiting" && s.waitingOn !== "chief"))) return "Needs attention";
   if (rows.some((s) => s.status === "error")) return "Session error";
   if (rows.some((s) => s.status === "running" || s.status === "starting")) return "Running";
   return null;

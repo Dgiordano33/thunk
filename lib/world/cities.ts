@@ -1,4 +1,5 @@
 // How a project reads as a city on the home map. Pure; no server imports.
+import type { WaitingOn } from "../agent/types";
 import type { ProjectSummary } from "../projects/types";
 
 export type CityLevel = 1 | 2 | 3 | 4 | 5;
@@ -32,9 +33,9 @@ export function cityHue(id: string): number {
 export type CityActivity = "Needs attention" | "Session error" | "Running" | null;
 
 /** Live state across a project's sessions, most urgent first. Mirrors `workspaceActivity`. */
-export function cityActivity(sessions: { projectId: string; status: string; pending: number }[], projectId: string): CityActivity {
+export function cityActivity(sessions: { projectId: string; status: string; pending: number; waitingOn?: WaitingOn }[], projectId: string): CityActivity {
   const rows = sessions.filter((s) => s.projectId === projectId);
-  if (rows.some((s) => s.pending > 0 || s.status === "awaiting")) return "Needs attention";
+  if (rows.some((s) => s.pending > 0 || (s.status === "awaiting" && s.waitingOn !== "chief"))) return "Needs attention";
   if (rows.some((s) => s.status === "error")) return "Session error";
   if (rows.some((s) => s.status === "running" || s.status === "starting")) return "Running";
   return null;

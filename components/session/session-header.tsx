@@ -30,6 +30,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   if (!meta) return null;
 
   const live = meta.live && connection !== "not_live";
+  const chiefOwns = status === "awaiting" && meta.waitingOn === "chief";
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
@@ -42,16 +43,16 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
           variant="outline"
           className={cn(
             "h-5 gap-1.5 text-[11px]",
-            status === "awaiting" && "border-amber-500/50 text-amber-700 dark:text-amber-400",
+            status === "awaiting" && !chiefOwns && "border-amber-500/50 text-amber-700 dark:text-amber-400",
           )}
         >
           <span
             className={cn(
               "size-1.5 rounded-full",
-              status === "running" ? "animate-pulse bg-amber-500" : status === "awaiting" ? "bg-amber-500" : "bg-emerald-500",
+              status === "running" ? "animate-pulse bg-amber-500" : status === "awaiting" ? (chiefOwns ? "bg-sky-500" : "bg-amber-500") : "bg-emerald-500",
             )}
           />
-          {STATUS_LABEL[status] ?? status}
+          {chiefOwns ? "Asking the chief" : STATUS_LABEL[status] ?? status}
         </Badge>
       ) : (
         <Badge variant="secondary" className="h-5 text-[11px]">

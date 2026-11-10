@@ -1,5 +1,6 @@
 "use client";
 
+import { SaveIcon } from "lucide-react";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" showCloseButton={!busy}>
-      <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Keep what this farm learned. Memory and notes left behind are preserved in the granary when deleted.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Copy what this workspace learned into the project: its task log into project memory, and chosen notes into project notes. Anything left behind is kept in the granary when the workspace is deleted.</DialogDescription></DialogHeader>
       {action === "merge" && <p className="text-sm">Merge committed changes into the local default branch, run the archive hook, then delete the worktree and sessions.</p>}
       {action === "delete" && <p className="text-sm">{hasGit ? "Delete this workspace, its sessions and worktree. Worktree deletion requires committed changes merged into the default branch." : "Delete this workspace and its sessions. Shared folders and non-empty scratch folders are kept."}</p>}
       <fieldset disabled={busy || harvested} className="space-y-4">
@@ -61,16 +62,16 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
   </Dialog>;
 }
 
-export function HarvestButton({ workspaceId, label }: { workspaceId: string; label: string }) {
+export function HarvestButton({ workspaceId, label, variant = "outline" }: { workspaceId: string; label: string; variant?: "outline" | "ghost" }) {
   const router = useRouter();
   const [data, setData] = useState<HarvestData | null>(null);
   const [busy, setBusy] = useState(false);
   return <>
-    <Button size="sm" variant="outline" disabled={busy} title="Keep what this farm learned" onClick={async () => {
+    <Button size="sm" variant={variant} className={variant === "ghost" ? "text-xs" : undefined} disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
       setBusy(true);
       try { setData(await api.getHarvest(workspaceId)); } catch (err) { window.alert((err as Error).message); }
       finally { setBusy(false); }
-    }}>Harvest</Button>
+    }}><SaveIcon /> Save to project</Button>
     {data && <HarvestDialog workspaceId={workspaceId} label={label} data={data} action="harvest" onClose={() => setData(null)} onComplete={() => router.refresh()} />}
   </>;
 }

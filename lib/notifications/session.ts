@@ -4,10 +4,17 @@ import { notify, resolveBySubject, resolveWhere } from "./service";
 import type { Notification } from "./types";
 import { hrefForSession } from "@/lib/routes.server";
 
-export async function sessionNotification(live: LiveSession, e: HarnessEvent) {
+export async function sessionNotification(live: LiveSession, e: HarnessEvent & { advice?: string }) {
   const sessionId = live.id;
   const base = { projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
     href: await hrefForSession(live.meta.workspaceId, sessionId) };
+  if (e.type === "ask_question" && e.routedTo) return;
+  if (e.type === "question_escalated") {
+    const asked = live.events.findLast((q) => q.type === "ask_question" && q.requestId === e.requestId);
+    if (asked?.type !== "ask_question") return;
+    const advice = [e.recommendation && `Chief recommends: ${e.recommendation}`, e.reason].filter(Boolean).join("\n");
+    return sessionNotification(live, { ...asked, routedTo: undefined, advice });
+  }
   if (e.type === "permission_request" || e.type === "ask_question" || e.type === "plan_proposed") {
     const kind = e.type === "permission_request" ? "permission" : e.type === "ask_question" ? "question" : "plan";
     const actions: Notification["actions"] = [];
@@ -19,7 +26,7 @@ export async function sessionNotification(live: LiveSession, e: HarnessEvent) {
     }
     await notify({ ...base, kind, urgency: "action", subjectKey: `session:${sessionId}:req:${e.requestId}`,
       title: e.type === "permission_request" ? e.title || `Allow ${e.toolName}?` : e.type === "ask_question" ? e.questions.map((q) => q.question).join(" · ") : "Plan ready for review",
-      detail: e.type === "permission_request" ? e.description ?? e.decisionReason ?? JSON.stringify(e.input) : e.type === "plan_proposed" ? e.plan : null, actions });
+      detail: e.type === "permission_request" ? e.description ?? e.decisionReason ?? JSON.stringify(e.input) : e.type === "plan_proposed" ? e.plan : e.advice ?? null, actions });
   } else if (e.type === "permission_resolved" || e.type === "question_resolved" || e.type === "plan_resolved") {
     await resolveBySubject(`session:${sessionId}:req:${e.requestId}`);
   } else if (e.type === "result" && live.meta.origin?.kind !== "routine" && live.meta.origin?.kind !== "worker") {

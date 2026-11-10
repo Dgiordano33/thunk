@@ -23,7 +23,7 @@ export function ensureNotificationProducers() {
     sessions.add(live);
     subscribe(live, (event) => {
       if (stuck.delete(live.id)) queue(live.id, () => resolveWhere({ sessionId: live.id, kinds: ["session_stuck"] }));
-      if (["permission_request", "ask_question", "plan_proposed", "permission_resolved", "question_resolved", "plan_resolved", "result", "error", "status"].includes(event.type)) queue(live.id, () => sessionNotification(live, event));
+      if (["permission_request", "ask_question", "plan_proposed", "permission_resolved", "question_resolved", "question_escalated", "plan_resolved", "result", "error", "status"].includes(event.type)) queue(live.id, () => sessionNotification(live, event));
     });
   }
   onSessionCreated(watchNotifications);

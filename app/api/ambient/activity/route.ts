@@ -30,7 +30,8 @@ export const GET = handle(async () => {
       live: !live.driver.isClosed,
       projectName: live.ctx.project.name,
       workspaceName: live.ctx.workspace.name,
-      pending: live.pending.size,
+      // Questions a chief is handling don't need the person.
+      pending: [...live.pending.values()].filter((p) => p.routedTo !== "chief").length,
       notice: event ? { seq: event.seq, message: noticeFor(event)! } : null,
     };
   });

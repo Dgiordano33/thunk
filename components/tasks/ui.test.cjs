@@ -23,6 +23,7 @@ function load(file, mocks = {}) {
 const types = load("../../lib/tasks/types.ts");
 test("lists every status in order, sorts positions, and collapses completed tasks", () => {
   const { TaskList } = load("task-list.tsx", {
+    "@/lib/agent/types": load("../../lib/agent/types.ts", { "@/lib/prompts/schema": {} }),
     "@/lib/tasks/types": types,
     "./task-row": { TaskRow: ({ task }) => React.createElement("li", null, task.title) },
   });
