@@ -3,7 +3,8 @@
 import { FolderGit2Icon, FolderPlusIcon, GitForkIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client/api";
-import { repoNameFromUrl, type RepoSpec } from "@/lib/projects/repo-spec";
+import type { RepoSpec } from "@/lib/projects/repo-spec";
+import { repoNameFromUrl } from "@/lib/projects/repo-name";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PARENT, Field, FolderPicker } from "./form-fields";
 

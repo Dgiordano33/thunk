@@ -120,3 +120,27 @@ test("fallow fields keep soil and fences but have no crop pixels", () => {
   assert.match(render(true), /var\(--w-soil\)/);
   assert.match(render(true), /oklch\(0.62 0.12 120\)/);
 });
+
+test("terrain reuses forest variants and keeps SVG references unique across maps", () => {
+  const terrain = load("../../lib/world/terrain.ts");
+  const { TerrainLayer } = load("../world/terrain-layer.tsx", { "@/lib/world/terrain": terrain });
+  const variants = [0, 0.329, 0.33, 0.659, 0.66, 1];
+  const tiles = [variants.map((variant, col) => ({ col, row: 0, kind: "forest", variant }))];
+  const grid = { cols: variants.length, rows: 1 };
+  const html = renderToStaticMarkup(React.createElement(React.Fragment, null,
+    React.createElement(TerrainLayer, { tiles, grid }),
+    React.createElement(TerrainLayer, { tiles, grid }),
+  ));
+  const ids = [...html.matchAll(/<g[^>]* id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(ids.length, 6);
+  assert.equal(new Set(ids).size, 6, "Separate maps must not reference each other's definitions");
+  const uses = [...html.matchAll(/<use href="#([^"]+)" x="([^"]+)" y="([^"]+)"/g)];
+  assert.equal(uses.length, 12);
+  uses.forEach((match, i) => {
+    const col = i % variants.length;
+    assert.equal(match[1], ids[Math.floor(i / variants.length) * 3 + Math.floor(col / 2)]);
+    const { x, y } = terrain.toIso(col, 0, grid);
+    assert.equal(Number(match[2]), x);
+    assert.equal(Number(match[3]), y);
+  });
+});

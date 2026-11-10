@@ -31,9 +31,4 @@ export type RepoResult<Repo> =
   | { index: number; status: "added"; repo: Repo }
   | { index: number; status: "failed"; error: string };
 
-/** Repo name from a GitHub URL or `owner/repo` shorthand. */
-export function repoNameFromUrl(url: string) {
-  const name = url.trim().replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop();
-  if (!name) throw new Error(`Can't read a repo name from ${url}`);
-  return name;
-}
+export { repoNameFromUrl } from "./repo-name";

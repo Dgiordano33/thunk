@@ -1,13 +1,12 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export type PanelTab = { value: string; label: React.ReactNode; content: React.ReactNode };
 
 /** Horizontal section nav for a town panel. The active tab lives in `?section=` so reloads and links keep it. */
 export function PanelTabs({ tabs }: { tabs: PanelTab[] }) {
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const requested = params.get("section");
@@ -19,7 +18,7 @@ export function PanelTabs({ tabs }: { tabs: PanelTab[] }) {
       onValueChange={(next) => {
         const query = new URLSearchParams(params.toString());
         query.set("section", next);
-        router.replace(`${pathname}?${query}`, { scroll: false });
+        window.history.replaceState(null, "", `${pathname}?${query}`);
       }}
       className="flex h-full flex-col gap-0"
     >
