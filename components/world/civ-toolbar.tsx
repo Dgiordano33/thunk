@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { SettingsMenu } from "@/components/ambient/settings-menu";
+import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { useNotifications } from "@/lib/store/notifications-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
@@ -24,7 +26,7 @@ function Mark({ className }: { className?: string }) {
 }
 
 /** Civ-style command menu, bottom-left: an orb that opens into Projects, Notes, Routines and the Vault. */
-export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount, notificationCount }: { cityCount: number; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
+export function CivToolbar({ projects, cityCount, noteCount, routineCount, vaultCount, notificationCount }: { projects: SidebarProject[]; cityCount: number; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
   const count = useNotifications((s) => s.loaded ? s.counts.action : notificationCount);
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
@@ -90,6 +92,7 @@ export function CivToolbar({ cityCount, noteCount, routineCount, vaultCount, not
                   </Link>
                 );
               })}
+              <SettingsMenu projects={projects} />
             </CivPanel>
           </motion.nav>
         )}
