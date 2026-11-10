@@ -16,7 +16,11 @@ export type Project = {
   updatedAt: string;
 };
 
-export type RepoFolder = { id: string; projectId: string; repoId: string; path: string; label: string };
+export type RepoFolder = {
+  id: string; projectId: string; repoId: string; path: string; label: string;
+  /** Note ids (file names without `.md`) the notebook shows; null shows every Markdown file in the folder. */
+  files: string[] | null;
+};
 
 export type ProjectRepo = {
   id: string;

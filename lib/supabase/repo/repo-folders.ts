@@ -4,9 +4,9 @@ import { db } from "../server";
 
 const g = globalThis as typeof globalThis & { __thunkRepoFolders?: Map<string, RepoFolder> };
 const mem = (g.__thunkRepoFolders ??= new Map());
-type Row = { id: string; project_id: string; repo_id: string; path: string; label: string };
-const columns = "id, project_id, repo_id, path, label";
-const fromRow = (r: Row): RepoFolder => ({ id: r.id, projectId: r.project_id, repoId: r.repo_id, path: r.path, label: r.label });
+type Row = { id: string; project_id: string; repo_id: string; path: string; label: string; files: string[] | null };
+const columns = "id, project_id, repo_id, path, label, files";
+const fromRow = (r: Row): RepoFolder => ({ id: r.id, projectId: r.project_id, repoId: r.repo_id, path: r.path, label: r.label, files: r.files ?? null });
 
 export async function listRepoFolders(projectId: string): Promise<RepoFolder[]> {
   const client = db();
@@ -40,24 +40,39 @@ export async function listAllRepoFolders(): Promise<Map<string, RepoFolder[]>> {
   return byProject;
 }
 
-export async function insertRepoFolder(input: Omit<RepoFolder, "id">): Promise<RepoFolder> {
+export async function insertRepoFolder(input: Omit<RepoFolder, "id" | "files"> & { files?: string[] | null }): Promise<RepoFolder> {
   const client = db();
   if (!client) {
     const existing = [...mem.values()].find((f) => f.projectId === input.projectId && f.repoId === input.repoId && f.path === input.path);
     if (existing) return existing;
-    const folder = { ...input, id: crypto.randomUUID() };
+    const folder = { ...input, files: input.files ?? null, id: crypto.randomUUID() };
     mem.set(folder.id, folder);
     return folder;
   }
   const existing = (await listRepoFolders(input.projectId)).find((f) => f.repoId === input.repoId && f.path === input.path);
   if (existing) return existing;
-  const { data, error } = await client.from("project_repo_folders").insert({ project_id: input.projectId, repo_id: input.repoId, path: input.path, label: input.label }).select(columns).single();
+  const { data, error } = await client.from("project_repo_folders").insert({ project_id: input.projectId, repo_id: input.repoId, path: input.path, label: input.label, files: input.files ?? null }).select(columns).single();
   if (error?.code === "23505") {
     const folder = (await listRepoFolders(input.projectId)).find((f) => f.repoId === input.repoId && f.path === input.path);
     if (folder) return folder;
   }
   if (error) throw error;
   return fromRow(data!);
+}
+
+/** Narrow a notebook to some files, or pass null to show the whole folder. */
+export async function setRepoFolderFiles(projectId: string, id: string, files: string[] | null): Promise<RepoFolder | null> {
+  const client = db();
+  if (!client) {
+    const folder = mem.get(id);
+    if (folder?.projectId !== projectId) return null;
+    const next = { ...folder, files };
+    mem.set(id, next);
+    return next;
+  }
+  const { data, error } = await client.from("project_repo_folders").update({ files }).eq("project_id", projectId).eq("id", id).select(columns).maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data) : null;
 }
 
 export async function deleteRepoFolder(projectId: string, id: string) {

@@ -126,7 +126,9 @@ export const api = {
   putMemory: (scope: "projects" | "workspaces", id: string, content: string, expectedContent: string) =>
     call(`/api/${scope}/${id}/memory`, { method: "PUT", json: { content, expectedContent } }),
   listRepoFolders: (id: string) => call<{ folders: import("@/lib/projects/types").RepoFolder[] }>(`/api/projects/${id}/repo-folders`),
-  addRepoFolder: (id: string, body: { repoId?: string | null; path: string; label?: string }) => post(`/api/projects/${id}/repo-folders`, body),
+  addRepoFolder: (id: string, body: { repoId?: string | null; path: string; label?: string; files?: string[] | null }) => post<{ folder: import("@/lib/projects/types").RepoFolder }>(`/api/projects/${id}/repo-folders`, body),
+  setRepoFolderFiles: (id: string, folderId: string, files: string[] | null) => call(`/api/projects/${id}/repo-folders/${folderId}`, { method: "PATCH", json: { files } }),
+  listRepoFolderFiles: (id: string, body: { repoId: string; path: string }) => post<{ files: { id: string; title: string; updatedAt: string }[] }>(`/api/projects/${id}/repo-folders/files`, body),
   removeRepoFolder: (id: string, folderId: string) => call(`/api/projects/${id}/repo-folders/${folderId}`, { method: "DELETE" }),
   suggestRepoFolders: (id: string) => post<{ candidates: { repoId: string | null; repoName: string; path: string; count: number }[] }>(`/api/projects/${id}/repo-folders/suggest`, {}),
   // Notes (project or workspace scope). Memory is the note with id "memory".
