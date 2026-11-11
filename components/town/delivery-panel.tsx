@@ -28,7 +28,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
   return <div className="space-y-3 text-xs">
     <ul className="space-y-2">
       {rows.map((row) => {
-        const repo = delivery?.repos.find((r) => r.repoId === row.id);
+        const repo = delivery?.repos?.find((r) => r.repoId === row.id);
         const status = repo?.status;
         const branch = status ? status.branch : row.branch;
         const isGit = row.kind === "worktree" || row.kind === "checkout";
