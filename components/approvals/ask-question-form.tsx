@@ -63,7 +63,7 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
   };
 
   return (
-    <div className="flex flex-col gap-5 rounded-xl border border-sky-500/40 bg-sky-500/5 p-4">
+    <div className="flex flex-col gap-5 rounded-lg border border-sky-500/40 bg-sky-500/5 p-4">
       {req.routedTo === "chief" && !req.escalation && <p className="text-muted-foreground text-xs">Sent to the chief. It answers or asks you within 10 minutes; you can also answer now.</p>}
       {req.escalation && <p className="text-xs">{req.escalation.recommendation ? <><span className="font-medium">Chief recommends:</span> {req.escalation.recommendation}</> : req.escalation.reason}</p>}
       {req.questions.map((q) => (

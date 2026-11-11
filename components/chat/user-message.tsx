@@ -31,7 +31,7 @@ export function UserMessage({ item }: { item: Extract<TimelineItem, { kind: "use
   }
 
   return (
-    <div className="bg-secondary text-secondary-foreground max-w-[80%] self-end rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+    <div className="bg-secondary text-secondary-foreground max-w-[80%] self-end rounded-lg px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
       {item.queued && <div className="text-muted-foreground mb-1 text-xs">Queued</div>}
       {item.images?.map((image, i) => (
         // eslint-disable-next-line @next/next/no-img-element

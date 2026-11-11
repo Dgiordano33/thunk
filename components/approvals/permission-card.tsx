@@ -83,7 +83,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
   }
 
   return (
-    <div className={cn("rounded-xl border border-amber-500/40 bg-amber-500/5 p-4")}>
+    <div className={cn("rounded-lg border border-amber-500/40 bg-amber-500/5 p-4")}>
       <div className="mb-3 flex items-start gap-2">
         <ShieldAlertIcon className="mt-0.5 size-4 text-amber-600 dark:text-amber-400" />
         <div className="min-w-0">

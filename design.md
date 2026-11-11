@@ -200,3 +200,5 @@ Avoid introducing a second palette, a replacement frame, or pixel-styled body te
 - Check long names, empty states, small viewports, and content overflow.
 - Keep unavailable features explicitly labeled and use current legends and status meanings.
 - Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing application code, as required by `AGENTS.md`.
+
+The workspace shell opts into the moonlit palette through `.moonlit`. Chat, documents, and code retain Geist and monospace on normal surfaces.

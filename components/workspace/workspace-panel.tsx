@@ -75,17 +75,17 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
       // Reopening Files keeps whichever view (all or changed) was last picked.
       setTab(value === "files" && filesView === "changed" ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
-      <div className="flex h-11 shrink-0 items-end overflow-x-auto border-b px-2">
+      <div className="flex h-10 shrink-0 items-end overflow-x-auto border-b px-3">
         <TabsList variant="line" className="h-full">
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
+          <TabsTrigger className="pixel text-xs" value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="artifacts">Artifacts</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
             Files
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>
-          <TabsTrigger value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          {hasGit && <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>}
+          <TabsTrigger className="pixel text-xs" value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="notes">Notes</TabsTrigger>
+          {hasGit && <TabsTrigger className="pixel text-xs" value="checkpoints">Checkpoints</TabsTrigger>}
         </TabsList>
       </div>
       <TabsContent value="sessions" className="min-h-0 flex-1">
@@ -99,7 +99,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
         </div>
       </TabsContent>
       <TabsContent value="files" className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
+        <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
           {hasGit && <div className="flex gap-1" role="radiogroup" aria-label="Files view">
             {(["all", "changed"] as const).map((v) => (
               <button
@@ -247,7 +247,7 @@ function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemov
   return (
     <section className={cn(multi && "border-b last:border-b-0")} aria-label={multi ? `Changes in ${repo.name}` : undefined}>
       <div className="flex items-baseline gap-2 px-4 pt-3 pb-2">
-        {multi && <span className="truncate text-sm font-semibold" title={repo.cwd}>{repo.name}</span>}
+        {multi && <span className="truncate pixel text-sm" title={repo.cwd}>{repo.name}</span>}
         <span className={cn("shrink-0 text-sm", multi ? "text-muted-foreground" : "font-medium")}>
           {changes.files.length} file{changes.files.length === 1 ? "" : "s"} changed
         </span>

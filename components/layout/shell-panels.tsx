@@ -4,7 +4,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 
 export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; children: React.ReactNode }) {
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-dvh">
+    <ResizablePanelGroup orientation="horizontal" className="moonlit bg-background h-dvh">
       <ResizablePanel defaultSize="17" minSize="12" maxSize="30">
         {sidebar}
       </ResizablePanel>

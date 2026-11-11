@@ -32,7 +32,7 @@ export function WorkspaceTabs({
   const branched = workspace.repos.filter((r) => r.branch);
 
   return (
-    <div className="flex h-11 shrink-0 items-stretch border-b">
+    <div className="flex h-10 shrink-0 items-stretch border-b">
       <nav className="flex min-w-0 flex-1 items-stretch overflow-x-auto" aria-label="Sessions">
         {sessions.map((s) => {
           const href = `${base}/${s.id}`;

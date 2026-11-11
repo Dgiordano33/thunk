@@ -33,8 +33,8 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   const chiefOwns = status === "awaiting" && meta.waitingOn === "chief";
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-      <h1 className="min-w-0 truncate text-sm font-medium">{meta.title || "Untitled session"}</h1>
+    <header className="flex h-10 shrink-0 items-center gap-3 border-b px-3">
+      <h1 className="min-w-0 truncate pixel text-base leading-tight">{meta.title || "Untitled session"}</h1>
       {meta.origin?.kind === "chief" && <Badge variant="outline">Chief</Badge>}
       {meta.origin?.kind === "worker" && <Badge variant="outline">Worker · {meta.title || meta.origin.taskId.slice(0, 8)}</Badge>}
       {meta.origin?.kind === "routine" && <RoutineBadge meta={meta} origin={meta.origin} />}
