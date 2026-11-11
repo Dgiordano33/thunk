@@ -3,6 +3,7 @@
 import { FileIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useShallow } from "zustand/react/shallow";
 import { useEffect } from "react";
 import { fileName } from "@/lib/projects/file-paths";
 import { filePagePath } from "@/lib/routes";
@@ -17,7 +18,7 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
   const hydrate = useOpenFiles((s) => s.hydrate);
   useEffect(() => hydrate(), [hydrate]);
   const all = useOpenFiles((s) => s.files);
-  const drafts = useOpenFiles((s) => s.drafts);
+  const drafts = useOpenFiles(useShallow((s) => Object.fromEntries(Object.keys(s.drafts).map((key) => [key, true]))));
   const files = all.filter((f) => f.workspaceId === workspaceId);
   const onFile = pathname === `${base}/file`;
   const isActive = (f: OpenFile) => onFile && params.get("path") === f.path && (!params.get("root") || params.get("root") === f.root);

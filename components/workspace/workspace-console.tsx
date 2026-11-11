@@ -40,26 +40,27 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
     else setError(results[0].reason.message);
     if (results[1].status === "fulfilled") setGit(results[1].value.git);
   }, [workspaceId]);
+  const fastPoll = open || !!state?.processes.some((p) => p.running);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (document.visibilityState === "visible") await refresh();
-      if (active) timer = setTimeout(poll, 3000);
+      if (active) timer = setTimeout(poll, fastPoll ? 3000 : 15000);
     };
     void poll();
     return () => { active = false; clearTimeout(timer); };
-  }, [refresh]);
+  }, [refresh, fastPoll]);
 
-  const act = async (action: () => Promise<unknown>) => {
+  const act = async (action: () => Promise<unknown>, refreshRoute = true) => {
     setBusy(true); setError("");
-    try { await action(); router.refresh(); }
+    try { await action(); if (refreshRoute) router.refresh(); }
     catch (err) { setError((err as Error).message); setOpen(true); }
     finally { setBusy(false); await refresh(); }
   };
   const start = (kind: Exclude<ProcessKind, "archive">) => {
     setTab(kind); setOpen(true);
-    void act(() => api.workspaceProcess(workspaceId, { action: kind }));
+    void act(() => api.workspaceProcess(workspaceId, { action: kind }), false);
   };
   const selectTab = (kind: ProcessKind | "preview") => {
     if (open && tab === kind) { setOpen(false); return; }
@@ -103,7 +104,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
         {(state?.setupError || error || conflicts.length > 0) && <span className="text-destructive text-xs">{conflicts.length ? `${conflicts.length} conflicts` : "Needs attention"}</span>}
         <span className="flex-1" />
         {open && tab !== "preview" && (selected?.running
-          ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }))}>
+          ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }), false)}>
               <SquareIcon className="size-3" /> {tab === "run" ? "Stop server" : "Stop"}
             </Button>
           : tab !== "archive" && <Button size="sm" variant="outline" disabled={blocked || (tab === "run" && !state?.scripts.run)} onClick={() => start(tab)}>

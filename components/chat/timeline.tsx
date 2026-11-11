@@ -26,7 +26,7 @@ export function Timeline() {
   const items = useSession((s) => s.items);
 
   return (
-    <Conversation className="min-h-0">
+    <Conversation initial="instant" resize="smooth" className="min-h-0">
       <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-6 pt-8 pb-16">
         {items.length === 0 ? (
           <ConversationEmptyState

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import type { SessionMeta, SessionState } from "@/lib/agent/types";
 import type { SessionOrigin } from "@/lib/agent/types";
@@ -82,13 +83,13 @@ export async function addSessionCost(id: string, costUsd: number) {
     .eq("id", id);
 }
 
-export async function getSessionRow(id: string): Promise<SessionRow | null> {
+export const getSessionRow = cache(async (id: string): Promise<SessionRow | null> => {
   const client = db();
   if (!client) return null;
   const { data, error } = await client.from("sessions").select(COLUMNS).eq("id", id).maybeSingle();
   if (error) throw error;
   return data ? toSession(data as unknown as Row) : null;
-}
+});
 
 export async function listSessionRows(opts: { workspaceId?: string; projectId?: string; limit?: number } = {}) {
   const client = db();

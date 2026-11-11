@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
 import { mkdir, rename, rmdir, stat } from "node:fs/promises";
@@ -373,12 +374,12 @@ export async function getWorkspaceContext(workspaceId: string): Promise<Workspac
 }
 
 /** The workspace at `/{projectSlug}/{workspaceSlug}`. */
-export async function getWorkspaceContextBySlugs(projectSlug: string, workspaceSlug: string): Promise<WorkspaceContext | null> {
+export const getWorkspaceContextBySlugs = cache(async (projectSlug: string, workspaceSlug: string): Promise<WorkspaceContext | null> => {
   const project = await getProjectBySlug(projectSlug);
   if (!project) return null;
   const workspace = await findWorkspace(project.id, { slug: workspaceSlug });
   return workspace ? { project, workspace } : null;
-}
+});
 
 /**
  * Convenience for the quick-start path: a bare directory becomes (project, workspace). A directory some

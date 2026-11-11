@@ -45,7 +45,8 @@ export function WorkspaceShell({
       <ResizablePanel defaultSize="30" minSize="20" maxSize="45">
         <div className="bg-sidebar/40 flex h-full flex-col">
           <div className="min-h-0 flex-1">
-            {showComments ? <CommentsPanel /> : <WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} />}
+            {showComments && <CommentsPanel />}
+            <div className={showComments ? "hidden" : "h-full"}><WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></div>
           </div>
           <WorkspaceConsole key={workspaceId} workspaceId={workspaceId} />
         </div>
