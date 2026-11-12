@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { PromptComposer } from "@/components/chat/prompt-composer";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -88,7 +90,7 @@ export function PromptBox() {
             </PromptInputSelect>
             {error && <span className="text-destructive truncate text-xs">{error}</span>}
           </PromptInputTools>
-          {running && <button type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</button>}
+          {running && <Button variant="ghost" size="xs" type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</Button>}
           <PromptInputSubmit
             disabled={!live || submitting}
             status={submitting ? "submitted" : "ready"}

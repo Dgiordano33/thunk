@@ -196,6 +196,9 @@ export async function workspaceChanges(dir: string, baseRef: string | null): Pro
       }),
   );
 
+  await Promise.all([...files.values()].map(async (file) => {
+    file.mtimeMs = (await stat(path.join(dir, file.path)).catch(() => null))?.mtimeMs ?? 0;
+  }));
   const list = [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
   return {
     base,

@@ -1,5 +1,7 @@
 "use client";
 
+import { WORLD_SELECTION } from "@/components/world/selection";
+
 import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -31,7 +33,7 @@ export function SessionsList({ sessions }: { sessions: SessionMeta[] }) {
         const busy = current && (status === "running" || status === "awaiting");
         const isOpen = open === s.id;
         return (
-          <li key={s.id} className={cn("bg-background rounded-lg border transition-colors", isOpen && "border-foreground/20")}>
+          <li key={s.id} className={cn("bg-background rounded-lg border transition-colors", isOpen && WORLD_SELECTION)}>
             <button
               type="button"
               aria-expanded={isOpen}

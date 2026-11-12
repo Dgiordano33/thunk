@@ -1,10 +1,12 @@
 "use client";
 
+import { CivPanel } from "@/components/world/civ-panel";
+import { PixelIcon } from "@/components/world/pixel-icon";
+
 import { AlertTriangleIcon } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { AskQuestionForm } from "@/components/approvals/ask-question-form";
@@ -26,13 +28,14 @@ export function Timeline() {
   const items = useSession((s) => s.items);
 
   return (
-    <Conversation className="min-h-0">
-      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-6 pt-8 pb-16">
+    <Conversation initial="instant" resize="smooth" className="min-h-0">
+      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-6 pt-8 pb-16">
         {items.length === 0 ? (
-          <ConversationEmptyState
-            title="Start the conversation"
-            description="Claude's replies arrive as documents you can edit and comment on."
-          />
+          <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5 text-center">
+            <PixelIcon name="scroll" className="mx-auto mb-3 size-8" />
+            <h2 className="pixel text-lg">Start the conversation</h2>
+            <p className="text-muted-foreground mt-2 text-sm">Replies arrive as documents you can edit and comment on.</p>
+          </CivPanel>
         ) : (
           items.map((item) => {
             switch (item.kind) {

@@ -1,8 +1,10 @@
 "use client";
 
+import { useDefaultLayout } from "react-resizable-panels";
+
 import { useParams } from "next/navigation";
 import { CommentsPanel } from "@/components/comments/comments-panel";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { panelLayoutStorage, ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { SessionMeta } from "@/lib/agent/types";
 import { useUi } from "@/lib/store/ui-store";
 import { WorkspaceConsole } from "./workspace-console";
@@ -28,24 +30,26 @@ export function WorkspaceShell({
   tabs: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-chat-layout", panelIds: ['chat', 'tools'], storage: panelLayoutStorage });
   const { session } = useParams<{ session?: string }>();
   const commentsOpen = useUi((s) => s.commentsOpen);
   const showComments = commentsOpen && !!session;
 
   return (
     <WorkspaceBaseProvider value={base}>
-    <ResizablePanelGroup orientation="horizontal" className="h-full">
-      <ResizablePanel defaultSize="70" minSize="45">
+    <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="h-full">
+      <ResizablePanel id="chat" defaultSize="70" minSize="45">
         <div className="flex h-full flex-col">
           {tabs}
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </div>
       </ResizablePanel>
       <ResizableHandle />
-      <ResizablePanel defaultSize="30" minSize="20" maxSize="45">
+      <ResizablePanel id="tools" defaultSize="30" minSize="20" maxSize="45">
         <div className="bg-sidebar/40 flex h-full flex-col">
           <div className="min-h-0 flex-1">
-            {showComments ? <CommentsPanel /> : <WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} />}
+            {showComments && <CommentsPanel />}
+            <div className={showComments ? "hidden" : "h-full"}><WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></div>
           </div>
           <WorkspaceConsole key={workspaceId} workspaceId={workspaceId} />
         </div>

@@ -1,6 +1,10 @@
 "use client";
 
-import { ChevronRightIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon, RefreshCwIcon, SquarePenIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+import { WORLD_SELECTION } from "@/components/world/selection";
+
+import { ChevronRightIcon, FileTextIcon, ListChecksIcon, MessageSquareIcon, RefreshCwIcon, SquarePenIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -50,7 +54,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
     () =>
       api
         .workspaceChanges(workspaceId)
-        .then((r) => { setChanges(r.changes); setRepos(r.repos ?? []); })
+        .then((r) => { setChanges((old) => JSON.stringify(old) === JSON.stringify(r.changes) ? old : r.changes); setRepos((old) => JSON.stringify(old) === JSON.stringify(r.repos ?? []) ? old : r.repos ?? []); })
         .catch(() => { setChanges(null); setRepos([]); }),
     [workspaceId],
   );
@@ -60,6 +64,10 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
     const t = setInterval(() => document.visibilityState === "visible" && void loadChanges(), CHANGES_POLL_MS);
     return () => clearInterval(t);
   }, [loadChanges, status, hasGit]);
+
+  useEffect(() => useSession.subscribe((next, previous) => {
+    if (next.status !== previous.status && next.status !== "running" && next.status !== "awaiting") setTreeRefresh((n) => n + 1);
+  }), []);
 
   const fileCount = repos.length ? repos.reduce((n, r) => n + (r.changes?.files.length ?? 0), 0) : (changes?.files.length ?? 0);
 
@@ -75,38 +83,37 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
       // Reopening Files keeps whichever view (all or changed) was last picked.
       setTab(value === "files" && filesView === "changed" ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
-      <div className="flex h-11 shrink-0 items-end overflow-x-auto border-b px-2">
+      <div className="flex h-10 shrink-0 items-end overflow-x-auto border-b px-3">
         <TabsList variant="line" className="h-full">
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
+          <TabsTrigger className="pixel text-xs" value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="artifacts">Artifacts</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
             Files
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>
-          <TabsTrigger value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          {hasGit && <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>}
+          <TabsTrigger className="pixel text-xs" value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
+          <TabsTrigger className="pixel text-xs" value="notes">Notes</TabsTrigger>
+          {hasGit && <TabsTrigger className="pixel text-xs" value="checkpoints">Checkpoints</TabsTrigger>}
         </TabsList>
       </div>
-      <TabsContent value="sessions" className="min-h-0 flex-1">
+      <TabsContent forceMount value="sessions" className="data-[state=inactive]:hidden min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <SessionsList sessions={sessions} />
         </div>
       </TabsContent>
-      <TabsContent value="artifacts" className="min-h-0 flex-1">
+      <TabsContent forceMount value="artifacts" className="data-[state=inactive]:hidden min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <Artifacts workspaceId={workspaceId} />
         </div>
       </TabsContent>
-      <TabsContent value="files" className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
-          {hasGit && <div className="flex gap-1" role="radiogroup" aria-label="Files view">
+      <TabsContent forceMount value="files" className="data-[state=inactive]:hidden flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
+          {hasGit && <div className="flex gap-1" role="group" aria-label="Files view">
             {(["all", "changed"] as const).map((v) => (
-              <button
+              <Button variant="ghost" size="xs"
                 key={v}
                 type="button"
-                role="radio"
-                aria-checked={filesView === v}
+                aria-pressed={filesView === v}
                 onClick={() => setTab(v === "changed" ? "changes" : "files")}
                 className={cn(
                   "rounded px-2 py-0.5 text-xs transition-colors",
@@ -114,10 +121,10 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
                 )}
               >
                 {v === "all" ? "All files" : `Changed${fileCount > 0 ? ` ${fileCount}` : ""}`}
-              </button>
+              </Button>
             ))}
           </div>}
-          <button
+          <Button variant="ghost" size="xs"
             type="button"
             onClick={() => { setTreeRefresh((n) => n + 1); if (hasGit) void loadChanges(); }}
             aria-label="Refresh files"
@@ -125,13 +132,13 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
             className="text-muted-foreground hover:text-foreground hover:bg-muted ml-auto rounded p-1"
           >
             <RefreshCwIcon className="size-3.5" />
-          </button>
+          </Button>
         </div>
         {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {filesView === "changed"
             ? <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
-            : <FileTree workspaceId={workspaceId} changes={changes} repos={repos} refreshKey={`${status}:${fileCount}:${treeRefresh}`} />}
+            : <FileTree workspaceId={workspaceId} changes={changes} repos={repos} refreshKey={`${fileCount}:${treeRefresh}`} />}
         </div>
       </TabsContent>
       {hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
@@ -182,7 +189,7 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
               }}
               className={cn(
                 "hover:bg-muted flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors",
-                a.id === activeDocumentId && here && "bg-muted",
+                a.id === activeDocumentId && here && WORLD_SELECTION,
               )}
             >
               <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
@@ -247,7 +254,7 @@ function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemov
   return (
     <section className={cn(multi && "border-b last:border-b-0")} aria-label={multi ? `Changes in ${repo.name}` : undefined}>
       <div className="flex items-baseline gap-2 px-4 pt-3 pb-2">
-        {multi && <span className="truncate text-sm font-semibold" title={repo.cwd}>{repo.name}</span>}
+        {multi && <span className="truncate pixel text-sm" title={repo.cwd}>{repo.name}</span>}
         <span className={cn("shrink-0 text-sm", multi ? "text-muted-foreground" : "font-medium")}>
           {changes.files.length} file{changes.files.length === 1 ? "" : "s"} changed
         </span>
@@ -305,7 +312,7 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
       .then((r) => { if (!cancelled) setDiff(r.diff); })
       .catch((err: Error) => { if (!cancelled) setDiff(`Couldn't load diff: ${err.message}`); });
     return () => { cancelled = true; };
-  }, [open, workspaceId, file, repoId]);
+  }, [open, workspaceId, file.path, file.status, file.additions, file.deletions, file.mtimeMs, repoId]);
 
   return (
     <li className="group/row relative">
@@ -353,7 +360,7 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
 function Loading() {
   return (
     <div className="text-muted-foreground flex justify-center p-6">
-      <Loader2Icon className="size-4 animate-spin" />
+      <div role="status" aria-label="Loading" className="w-full space-y-2 animate-pulse"><div className="bg-muted h-4 rounded" /><div className="bg-muted h-4 w-2/3 rounded" /></div>
     </div>
   );
 }

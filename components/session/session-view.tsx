@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PromptBox } from "@/components/chat/prompt-box";
 import { Timeline } from "@/components/chat/timeline";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
@@ -27,7 +27,7 @@ export function SessionView({
   // Bumped on resume: a terminated session is replaced server-side, so the stream must reconnect.
   const [connKey, setConnKey] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     useSession.getState().hydrate({ meta, events, documents });
     // Hydrate once per session; later server props are stale relative to the live stream.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,9 +38,19 @@ export function SessionView({
   useEffect(() => {
     if (!ready || !live) return;
     const store = useSession.getState();
+    let pending: HarnessEvent[] = [];
+    let frame: number | undefined;
+    const flush = () => {
+      frame = undefined;
+      useSession.getState().applyEvents(pending);
+      pending = [];
+    };
     const conn = connectSession(meta.id, {
       getLastSeq: () => useSession.getState().lastSeq,
-      onEvent: (e) => useSession.getState().applyEvent(e),
+      onEvent: (e) => {
+        pending.push(e);
+        if (frame === undefined) frame = requestAnimationFrame(flush);
+      },
       onState: (c) => {
         store.setConnection(c);
         if (c === "not_live") store.setMeta({ live: false });
@@ -49,6 +59,8 @@ export function SessionView({
     connRef.current = conn;
     return () => {
       conn.close();
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      flush();
       connRef.current = null;
     };
   }, [ready, live, meta.id, connKey]);

@@ -14,8 +14,8 @@ export function CommentsPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4">
-        <h2 className="text-sm font-medium">Comments</h2>
+      <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+        <h2 className="pixel text-sm">Comments</h2>
         {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}
         {doc && (
           <span className="text-muted-foreground truncate text-xs">
