@@ -1,3 +1,4 @@
+import { RESERVED_WORKSPACE_SLUGS } from "@/lib/routes";
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
 import { mkdir, rename, rmdir, stat } from "node:fs/promises";
@@ -246,7 +247,7 @@ async function createWorkspaceUnlocked(input: CreateWorkspaceInput): Promise<Wor
   for (let suffix = 1; ; suffix++) {
     slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
     branch = wantWorktrees ? (baseBranch ? `${baseBranch}${suffix === 1 ? "" : `-${suffix}`}` : `thunk/${slug}`) : null;
-    if (await findWorkspace(project.id, { slug })) continue;
+    if (RESERVED_WORKSPACE_SLUGS.includes(slug) || await findWorkspace(project.id, { slug })) continue;
     if (!repos.length && await stat(workspaceHomeDir(project.dataKey, slug)).catch(() => null)) continue;
     let occupied = false;
     if (branch) for (const repo of gitRepos) {

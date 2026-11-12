@@ -89,3 +89,5 @@ export function projectConnectorsFile(key: string) { return path.join(projectCon
 export function workspaceHomeDir(key: string, slug: string) {
   return slug === "main" ? projectHomeDir(key) : `${projectHomeDir(key)}--${slug}`;
 }
+
+export function projectBoardsDir(key: string) { return path.join(projectDir(key), 'boards', 'main'); }

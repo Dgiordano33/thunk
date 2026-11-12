@@ -143,6 +143,7 @@ export default async function TownPage({ params, searchParams }: PageProps<"/[pr
       fields={fields.filter(f => layout.fields[f.id])}
       center={layout.center}
       townHall={layout.townHall}
+      studio={layout.studio}
       library={layout.library}
       workshop={layout.workshop}
       vault={{ ...layout.vault, busy: vaultItems.some(isBusy), failed: vaultItems.some((i) => i.status === "failed") }}

@@ -23,7 +23,7 @@ async function recentRuns(): Promise<RoutineRunActivity[]> {
 
 export const GET = handle(async () => {
   ensureScheduler();
-  const sessions: ActivitySession[] = listLiveSessions().map((live) => {
+  const sessions: ActivitySession[] = listLiveSessions().filter(live => live.meta.origin?.kind !== "board").map((live) => {
     const event = live.events.findLast((e) => noticeFor(e) !== null);
     return {
       ...live.meta,

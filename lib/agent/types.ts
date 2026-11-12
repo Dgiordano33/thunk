@@ -1,6 +1,7 @@
 import type { PromptImage } from "@/lib/prompts/schema";
 import type { RunTrigger } from "@/lib/routines/types";
 export type SessionOrigin =
+  | { kind: "board" }
   | { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger }
   | { kind: "chief" }
   | { kind: "worker"; chiefSessionId: string | null; taskId: string };
@@ -48,6 +49,7 @@ export type Question = {
 export type PermissionSuggestion = Record<string, unknown>;
 
 export type HarnessEventBody =
+  | { type: "board_op"; boardId: string; op: import("@/lib/board/types").BoardOp }
   | {
       type: "init";
       sdkSessionId: string;
@@ -156,3 +158,5 @@ export type SessionMeta = {
   /** What started the session when it wasn't a person, e.g. a routine. */
   origin?: SessionOrigin | null;
 };
+
+export const isHiddenSession = (s: { origin?: SessionOrigin | null }) => s.origin?.kind === "board";

@@ -1,3 +1,4 @@
+import { BOARD_TOOL_NAMES } from "@/lib/board/tools";
 import { CHIEF_TOOL_NAMES, asksChiefFirst, chiefWriteCommand } from "@/lib/workers/prompt";
 import "server-only";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
@@ -17,7 +18,7 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
       return Promise.resolve({ behavior: "deny", message: "The chief coordinates work. Use delegate to edit code." });
     if (live.meta.origin?.kind === "chief" && CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
-    if ([...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
+    if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
 
     const requestId = crypto.randomUUID();

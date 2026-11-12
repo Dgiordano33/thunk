@@ -21,7 +21,8 @@
     "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
     "desktop:dev": "npm run desktop:prepare && electron desktop",
     "desktop:pack": "npm run desktop:prepare && electron-builder --config desktop/builder.cjs --mac --dir",
-    "test:desktop": "node --test desktop/*.test.cjs"
+    "test:desktop": "node --test desktop/*.test.cjs",
+    "test:board": "node --conditions=react-server --test tests/board.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.319",

@@ -1,4 +1,5 @@
 "use client";
+import { StudioSprite } from "./sprites";
 
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
@@ -78,6 +79,7 @@ export function TownView({
   fields,
   center,
   townHall,
+  studio,
   library,
   workshop,
   vault,
@@ -94,6 +96,7 @@ export function TownView({
   fields: TownField[];
   center: Cell;
   townHall: Cell;
+  studio: Cell;
   library: Cell;
   workshop: Cell;
   vault: TownVault;
@@ -145,6 +148,7 @@ export function TownView({
           <Building cell={center} grid={grid} name="Town center" href={`${base}?building=center`} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || needsPerson(s) || s.status === "error"))}>
             <TownCenterSprite />
           </Building>
+          <Building cell={studio} grid={grid} name="Canvas" href={`${base}/canvas`} selected={false} size={{ w: 80, h: 90 }} ground={30} blurb="Plan, discuss and draw with your agent."><StudioSprite /></Building>
           <Building
             cell={library}
             grid={grid}

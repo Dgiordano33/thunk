@@ -13,7 +13,7 @@ import { useNotifications, useNotificationsEvents } from "@/lib/store/notificati
 import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
-import { pathsFor, projectPath, workspacePath } from "@/lib/routes";
+import { canvasPath, pathsFor, projectPath, workspacePath } from "@/lib/routes";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -98,6 +98,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
   const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
   const navigation: SearchResult[] = projects.flatMap((p) => [
     { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: projectPath(p), kind: "Project" },
+    { id: `${p.id}:canvas`, label: "Canvas", detail: p.name, href: canvasPath(p), kind: "Project" },
     ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: workspacePath(p, w), kind: "Workspace" })),
   ]).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
 
