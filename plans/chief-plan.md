@@ -117,3 +117,17 @@ The four phases are implemented. `chief_log` is the additional chief-only tool f
 Supabase installations need migration `0010_worker_reports` to extend the existing notification-kind constraint. No tables or columns were added. Default delegation selects Git repositories only, so plain folders remain outside the worker's workspace.
 
 Validation includes the complete test suite, TypeScript, lint, production build, and an isolated live Claude smoke test: the chief called delegate three times, received three worktree reports in a batch, and accepted all three tasks with tasks_complete. The smoke workers read a fixture file; they did not modify or merge application code.
+
+## Follow-ups implemented
+
+These go beyond the four phases above, in the chief model rather than the lead-agent plan:
+
+- **Queue with dependencies.** `delegate` queues past the four-worker cap or until `dependsOn` tasks are done. The queue drains on worker finish, on task changes and at startup (`drainQueue`, `scheduleDrain`).
+- **Overlaps and integration.** `lib/workers/conflicts.ts` compares changed paths across open worker branches. `lib/workers/integrate.ts` trial-merges branches into an integration worktree and runs `scripts.test`.
+- **Scouts.** These are read-only workers in `main` (`origin.scout`), enforced like the chief on Claude and prompt-only on Codex.
+- **Races.** These are several workers on one task (`origin.raceId`), with the winner chosen by `workers_pick`.
+- **Stats.** Each task records cost, duration, rounds and models. `workers_history` summarizes them by model.
+- **Delegation plans.** These are `delegate_plan` items in the inbox (`delegation_plan` notification kind, migration `0013`).
+- **Cleanup.** `lib/workers/cleanup.ts` archives finished, merged, empty or race-losing worker workspaces every 10 minutes.
+
+All of this state is one locked file per project, `config/workers/state.json` (`lib/workers/state.ts`); no tables were added. The plan preview is a prompt rule, not enforced: a chief can still call `delegate` directly.

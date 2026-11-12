@@ -43,6 +43,7 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
     void run(task.id, async () => {
       const result = await api.sendTask(task.id, sessionId === "worker" ? { worker: true } : sessionId ? { sessionId } : { workspaceId: ws });
       setSending(null);
+      if (!result.href) { setError(`Queued: ${"reason" in result ? result.reason : "waiting for a worker slot"}. It starts on its own.`); return; }
       router.push(result.href); router.refresh();
     });
   };

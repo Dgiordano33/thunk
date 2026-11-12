@@ -15,7 +15,7 @@
     "test:routines": "node --conditions=react-server --test tests/routines.test.cjs",
     "test:vault": "node --conditions=react-server --test tests/vault.test.cjs",
     "test:multi-repo": "node --conditions=react-server --test tests/multi-repo.test.cjs",
-    "test": "npm run test:lib && node --conditions=react-server --test tests/*.test.cjs && node --test components/tasks/ui.test.cjs components/inbox/ui.test.cjs",
+    "test": "npm run test:lib && node --conditions=react-server --test $(find tests -maxdepth 1 -name '*.test.cjs' ! -name 'panel-layout.test.cjs') && node --test tests/panel-layout.test.cjs components/tasks/ui.test.cjs components/inbox/ui.test.cjs",
     "test:lib": "node --test lib/*.test.mjs lib/*/*.test.mjs",
     "test:notifications": "node --conditions=react-server --test tests/notifications.test.cjs && node --test components/inbox/ui.test.cjs",
     "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
