@@ -4,7 +4,8 @@ import path from "node:path";
 import { z } from "zod";
 
 const Config = z.object({
-  scripts: z.object({ setup: z.string().optional(), run: z.string().optional(), archive: z.string().optional() }).default({}),
+  // `test` is what an integration check runs after trial-merging worker branches.
+  scripts: z.object({ setup: z.string().optional(), run: z.string().optional(), archive: z.string().optional(), test: z.string().optional() }).default({}),
   notebooks: z.array(z.string().min(1)).optional(),
   filesToCopy: z.array(z.string().min(1)).optional(),
 });

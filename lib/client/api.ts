@@ -173,7 +173,7 @@ export const api = {
   createTask: (body: TaskInput) => post<{ task: Task }>("/api/tasks", body),
   patchTask: (id: string, body: TaskPatch) => call<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", json: body }),
   deleteTask: (id: string) => call(`/api/tasks/${id}`, { method: "DELETE" }),
-  sendTask: (id: string, body: { sessionId?: string; workspaceId?: string; worker?: boolean }) => post<{ sessionId: string; workspaceId: string; href: string }>(`/api/tasks/${id}/send`, body),
+  sendTask: (id: string, body: { sessionId?: string; workspaceId?: string; worker?: boolean }) => post<{ sessionId: string; workspaceId: string; href: string } | { taskId: string; queued: true; reason: string; href: null }>(`/api/tasks/${id}/send`, body),
   taskImportCount: (scope: NoteImportScope) => call<{ count: number; folders: string[] }>(`/api/tasks/import-notes?${new URLSearchParams(scope)}`),
   importNoteTasks: (scope: NoteImportScope) => post<{ imported: number }>("/api/tasks/import-notes", scope),
   // Routines
