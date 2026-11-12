@@ -4,7 +4,7 @@ import { useDefaultLayout } from "react-resizable-panels";
 
 import { useParams } from "next/navigation";
 import { CommentsPanel } from "@/components/comments/comments-panel";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { panelLayoutStorage, ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { SessionMeta } from "@/lib/agent/types";
 import { useUi } from "@/lib/store/ui-store";
 import { WorkspaceConsole } from "./workspace-console";
@@ -30,7 +30,7 @@ export function WorkspaceShell({
   tabs: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-chat-layout", panelIds: ['chat', 'tools'] });
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-chat-layout", panelIds: ['chat', 'tools'], storage: panelLayoutStorage });
   const { session } = useParams<{ session?: string }>();
   const commentsOpen = useUi((s) => s.commentsOpen);
   const showComments = commentsOpen && !!session;

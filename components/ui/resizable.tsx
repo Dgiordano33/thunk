@@ -3,6 +3,19 @@
 import { cn } from "cn"
 import * as ResizablePrimitive from "react-resizable-panels"
 
+export const panelLayoutStorage: ResizablePrimitive.LayoutStorage = {
+  getItem(key) {
+    try {
+      return typeof window === "undefined" ? null : window.localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  setItem(key, value) {
+    if (typeof window !== "undefined") window.localStorage.setItem(key, value)
+  },
+}
+
 function ResizablePanelGroup({
   className,
   ...props
