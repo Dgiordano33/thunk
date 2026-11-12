@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
 import { createWorkspace, ensureMainWorkspace, getWorkspaceContext } from "@/lib/projects";
 import { getProject } from "@/lib/supabase/repo/projects";
+import { getWorkspace } from "@/lib/supabase/repo/workspaces";
 import { getTask, listTasks } from "@/lib/supabase/repo/tasks";
 import { createTask, patchTask } from "@/lib/tasks/service";
 import { withFileLock } from "@/lib/notes/file-write";
@@ -50,9 +51,15 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     }
     if (listLiveSessions().filter((s) => s.meta.projectId === projectId && s.meta.origin?.kind === "worker" && ["starting", "running", "awaiting"].includes(s.meta.status)).length >= MAX_WORKERS_PER_PROJECT)
       throw new Error("Four workers are active; wait for a report before delegating again.");
+    if (args.workspaceId && args.repoIds) throw new Error("Choose workspaceId or repoIds, not both");
+    const target = args.workspaceId ? await getWorkspace(args.workspaceId) : null;
+    if (args.workspaceId && (!target || target.projectId !== projectId)) throw new Error("Workspace not found in this project");
+    if (target?.status === "archived") throw new Error("Workspace is archived");
+    if (target && listLiveSessions().some((s) => s.meta.workspaceId === target.id && s.meta.origin?.kind === "worker" && ["starting", "running", "awaiting"].includes(s.meta.status)))
+      throw new Error("Workspace already has an active worker; message it or wait for its report");
     if (args.repoIds?.some((id) => !project.repos.some((r) => r.id === id))) throw new Error("Repository does not belong to project");
     const selected = project.repos.filter((r) => args.repoIds ? args.repoIds.includes(r.id) : r.kind === "repo");
-    if (!selected.length || selected.some((r) => r.kind !== "repo")) throw new Error("Delegation needs a Git repository for an isolated worktree");
+    if (!target && (!selected.length || selected.some((r) => r.kind !== "repo"))) throw new Error("Delegation needs a Git repository for an isolated worktree");
     let task = args.taskId ? await getTask(args.taskId) : null;
     if (args.taskId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
     const owner = task?.sessionId && getSession(task.sessionId);
@@ -63,7 +70,7 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id})`);
     let live: LiveSession | null = null;
     try {
-      const workspace = await createWorkspace({ projectId, name: `${routineSlug(task.title)}-${crypto.randomUUID().slice(0, 8)}`, repoIds: selected.map((r) => r.id), worktree: true, setup: "await" });
+      const workspace = target ?? await createWorkspace({ projectId, name: `${routineSlug(task.title)}-${crypto.randomUUID().slice(0, 8)}`, repoIds: selected.map((r) => r.id), worktree: true, setup: "await" });
       live = await startWorkerSession({ workspaceId: workspace.id, title: task.title, model: args.model, permissionMode: args.permissionMode ?? "default", origin: { kind: "worker", chiefSessionId, taskId: task.id } });
       await patchTask(task.id, { workspaceId: workspace.id, sessionId: live.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
       attachWorker(live);
