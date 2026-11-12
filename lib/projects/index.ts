@@ -6,7 +6,7 @@ import { moveToGranary } from "./granary";
 import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
 import { getProject, getProjectByKey, getProjectBySlug, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
-import { freshSlug, projectUrlSlug } from "@/lib/routes";
+import { freshSlug, projectUrlSlug, RESERVED_WORKSPACE_SLUGS } from "@/lib/routes";
 import {
   deleteProjectRepo,
   deleteWorkspaceRepo,
@@ -247,7 +247,7 @@ async function createWorkspaceUnlocked(input: CreateWorkspaceInput): Promise<Wor
   for (let suffix = 1; ; suffix++) {
     slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
     branch = wantWorktrees ? (baseBranch ? `${baseBranch}${suffix === 1 ? "" : `-${suffix}`}` : `thunk/${slug}`) : null;
-    if (await findWorkspace(project.id, { slug })) continue;
+    if (RESERVED_WORKSPACE_SLUGS.includes(slug) || await findWorkspace(project.id, { slug })) continue;
     if (!repos.length && await stat(workspaceHomeDir(project.dataKey, slug)).catch(() => null)) continue;
     let occupied = false;
     if (branch) for (const repo of gitRepos) {

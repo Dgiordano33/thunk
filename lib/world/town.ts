@@ -31,6 +31,7 @@ export type TownLayout = {
   library: Cell;
   workshop: Cell;
   vault: Cell;
+  studio: Cell;
   /** Farm per session id. Sessions that don't fit (oldest first) are counted in `overflow`. */
   fields: Record<string, Cell>;
   overflow: Record<string, number>;
@@ -82,12 +83,13 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
   const library = { col: center.col - 2, row: center.row + 1 };
   const workshop = { col: center.col + 1, row: center.row - 2 };
   // Behind the center, far enough back that its nameplate clears the center's banner.
+  const studio = { col: center.col + 3, row: center.row - 3 };
   const vault = { col: center.col - 4, row: center.row - 3 };
   // Off to the front-right, so it doesn't cover the center's nameplate.
   const townHall = { col: center.col + 4, row: center.row + 1 };
 
   const key = (c: Cell) => `${c.col},${c.row}`;
-  const reserved = new Set([key(library), key(workshop), key(vault), key(townHall)]);
+  const reserved = new Set([key(studio), key(library), key(workshop), key(vault), key(townHall)]);
   for (const d of [{ col: 0, row: 0 }, ...ring(1), ...ring(2)]) reserved.add(key({ col: mid + d.col, row: mid + d.row }));
   for (const { cell } of farmhouses) for (const d of [{ col: 0, row: 0 }, ...ring(1)]) reserved.add(key({ col: cell.col + d.col, row: cell.row + d.row }));
   const roads = new Set<string>();
@@ -138,10 +140,10 @@ export function layoutTown(seed: string, workspaces: WorkspaceInput[], sessions:
       tile.kind = "plains";
     });
   }
-  for (const c of [...farmhouses.map((x) => x.cell), center, library, workshop, vault, townHall]) {
+  for (const c of [...farmhouses.map((x) => x.cell), center, library, workshop, vault, townHall, studio]) {
     const tile = tiles[c.row]?.[c.col];
     if (tile) tile.kind = "grass";
   }
 
-  return { grid, tiles, center, townHall, farmhouses, library, workshop, vault, fields, overflow };
+  return { grid, tiles, center, townHall, farmhouses, library, workshop, vault, studio, fields, overflow };
 }

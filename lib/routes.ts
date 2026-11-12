@@ -85,3 +85,6 @@ export function pathsFor(projects: ProjectTree[]) {
     },
   };
 }
+
+export const RESERVED_WORKSPACE_SLUGS = ["canvas"];
+export const canvasPath = (project: Slugged) => `/${project.slug}/canvas`;

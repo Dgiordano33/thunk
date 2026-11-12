@@ -103,7 +103,7 @@ export function liveMeta(id: string): SessionMeta | null {
 
 /** Live sessions merged over persisted ones, newest first. */
 export async function listSessions(
-  opts: { workspaceId?: string; projectId?: string; limit?: number } = {},
+  opts: { workspaceId?: string; projectId?: string; limit?: number; includeHidden?: boolean } = {},
   persisted?: SessionRow[],
 ): Promise<SessionMeta[]> {
   const rows = persisted ?? await listSessionRows(opts).catch((err) => {
@@ -117,12 +117,12 @@ export async function listSessions(
     if (opts.projectId && live.meta.projectId !== opts.projectId) continue;
     byId.set(live.id, { ...live.meta, live: true });
   }
-  return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, opts.limit ?? 50);
+  return [...byId.values()].filter(s => opts.includeHidden || s.origin?.kind !== "board").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, opts.limit ?? 50);
 }
 
 /** Every session (live or persisted) in a workspace or project, so callers can clean up after deleting it. */
 export function allSessions(opts: { workspaceId?: string; projectId?: string }) {
-  return listSessions({ ...opts, limit: 10_000 });
+  return listSessions({ ...opts, includeHidden: true, limit: 10_000 });
 }
 
 /** Stop a session, drop its history and delete its SDK transcript. */

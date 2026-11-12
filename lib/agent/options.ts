@@ -1,3 +1,5 @@
+import { boardTools, boardPrompt } from "@/lib/board/tools";
+import { projectBoardsDir } from "@/lib/projects/paths";
 import { chiefTools } from "@/lib/workers/tools";
 import { CHIEF_DISALLOWED_TOOLS, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
@@ -99,10 +101,11 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree && anchor ? { projectConfigRoot: anchor.path } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // The other repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
+    additionalDirectories: [...(live.meta.origin?.kind === "board" ? [projectBoardsDir(project.dataKey)] : []), projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
     mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
+        ...boardTools(live).map(t => tool(t.name, t.description, t.schema, t.handler)),
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
@@ -130,7 +133,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       type: "preset",
       preset: "claude_code",
       append: [
-        CANVAS_PROMPT,
+        live.meta.origin?.kind === "board" ? boardPrompt : CANVAS_PROMPT,
         hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
         teamPrompt(live.meta.origin),

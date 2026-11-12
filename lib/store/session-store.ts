@@ -158,6 +158,7 @@ function setDocStatus(s: SessionData, id: string | undefined, status: DocumentSt
 /** Pure event reducer: (state, event) → patch. Shared by live SSE and Supabase hydration. */
 function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
   switch (e.type) {
+    case "board_op": return {};
     case "init":
       return s.meta
         ? { meta: { ...s.meta, sdkSessionId: e.sdkSessionId, model: e.model, permissionMode: e.permissionMode } }

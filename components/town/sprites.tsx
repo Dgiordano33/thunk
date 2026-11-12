@@ -261,3 +261,5 @@ export function FarmhouseSprite({ hue, running = false }: { hue: number; running
     {running && <g className="motion-safe:animate-pulse">{r(20, 1, 3, 2, STONE)}{r(22, -2, 4, 2, STONE)}</g>}
   </Pixels>;
 }
+
+export function StudioSprite() { return <svg viewBox="0 0 80 90" aria-hidden="true"><path d="M40 6 L15 86 M40 6 L65 86 M20 65 H60" stroke="#885b38" strokeWidth="6"/><rect x="17" y="20" width="46" height="43" rx="2" fill="#fff5d9" stroke="#885b38" strokeWidth="3"/><path d="M22 55 L35 38 L45 48 L56 31" fill="none" stroke="#5e9c88" strokeWidth="5"/><circle cx="30" cy="30" r="5" fill="#e7b654"/></svg>; }

@@ -93,10 +93,10 @@ export function buildRevisionPayload(input: RevisionInput): { payload: string; s
   return { payload: parts.join("\n"), stat: { ...stat, comments: comments.length } };
 }
 
-function ensureNl(s: string) {
+export function ensureNl(s: string) {
   return s.endsWith("\n") ? s : `${s}\n`;
 }
 
-function escapeXml(s: string) {
+export function escapeXml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
