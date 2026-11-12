@@ -1,6 +1,6 @@
 import "server-only";
 import { emitTask } from "@/lib/tasks/events";
-import { OPEN_TASK_STATUSES, type Task, type TaskCounts, type TaskStatus } from "@/lib/tasks/types";
+import { OPEN_TASK_STATUSES, type Task, type TaskCounts, type TaskEvent, type TaskStatus } from "@/lib/tasks/types";
 import type { Tables, TablesUpdate } from "../types";
 import { db } from "../server";
 type Row = Tables<"tasks">;
@@ -47,8 +47,8 @@ const g = globalThis as typeof globalThis & { __thunkMemTasks?: Map<string, Task
 const mem = (g.__thunkMemTasks ??= new Map());
 export type NewTask = Pick<Task, "projectId" | "title"> & Partial<Omit<Task, "projectId" | "title" | "createdAt" | "updatedAt" | "completedAt" | "position">>;
 const closed = (status: TaskStatus) => status === "done" || status === "cancelled";
-function changed(task: Task, kind: "changed" | "removed" = "changed") {
-  emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind });
+function changed(task: Task, kind: "changed" | "removed" = "changed", transition?: TaskEvent["transition"]) {
+  emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind, ...(transition ? { transition } : {}) });
 }
 const insertQueues = (g.__thunkTaskInserts ??= new Map());
 // Position is max + 1, so inserts in one scope run in turn. Thunk is a single server process.
@@ -77,13 +77,13 @@ async function insertTaskNow(input: NewTask): Promise<Task> {
   if (!client) {
     if (mem.has(task.id)) throw Object.assign(new Error("Task already exists"), { code: "23505" });
     mem.set(task.id, task);
-    changed(task);
+    changed(task, "changed", "created");
     return task;
   }
   const { data, error } = await client.from("tasks").insert({ ...taskToRow(task), project_id: task.projectId, title: task.title }).select(COLUMNS).single();
   if (error) throw error;
   const result = toTask(data as Row);
-  changed(result);
+  changed(result, "changed", "created");
   return result;
 }
 export async function getTask(id: string): Promise<Task | null> {
@@ -110,7 +110,7 @@ export async function updateTask(id: string, patch: Partial<Omit<Task, "id" | "p
     result = toTask(data as Row);
   }
   if (before.workspaceId !== result.workspaceId) changed(before, "removed");
-  changed(result);
+  changed(result, "changed", before.status !== "done" && result.status === "done" ? "completed" : undefined);
   return result;
 }
 export async function deleteTask(id: string): Promise<void> {

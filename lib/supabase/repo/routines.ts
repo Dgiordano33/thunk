@@ -7,7 +7,7 @@ import type {
   RunStatus,
   RunTrigger,
 } from "@/lib/routines/types";
-import { OPEN_RUN_STATUSES } from "@/lib/routines/types";
+import { OPEN_RUN_STATUSES, type RoutineContext } from "@/lib/routines/types";
 import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
 import { getProject } from "./projects";
@@ -24,6 +24,7 @@ type Row = {
   schedule_cron: string | null;
   schedule_tz: string | null;
   events: string[];
+  context: Json;
   webhook_token: string | null;
   enabled: boolean;
   catch_up: string;
@@ -57,9 +58,15 @@ type RunRow = {
 };
 
 const COLUMNS =
-  "id, project_id, name, prompt, model, permission_mode, target_kind, target_workspace_id, schedule_cron, schedule_tz, events, webhook_token, enabled, catch_up, max_runs_per_day, max_run_minutes, trigger_state, last_run_at, next_run_at, created_at, updated_at";
+  "id, project_id, name, prompt, model, permission_mode, target_kind, target_workspace_id, schedule_cron, schedule_tz, events, context, webhook_token, enabled, catch_up, max_runs_per_day, max_run_minutes, trigger_state, last_run_at, next_run_at, created_at, updated_at";
 const RUN_COLUMNS =
   "id, routine_id, session_id, workspace_id, trigger_source, trigger_payload, status, started_at, finished_at, cost_usd, summary, diff_stat, pr_url, note_id, error, created_at, updated_at";
+
+/** Rows from before migration 0013 (or hand-edited ones) may lack either list. */
+function toContext(raw: Json | undefined): RoutineContext {
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Partial<RoutineContext>;
+  return { notes: Array.isArray(c.notes) ? c.notes : [], taskIds: Array.isArray(c.taskIds) ? c.taskIds : [] };
+}
 
 function toRoutine(r: Row): Routine {
   return {
@@ -74,6 +81,7 @@ function toRoutine(r: Row): Routine {
     scheduleCron: r.schedule_cron,
     scheduleTz: r.schedule_tz,
     events: (r.events ?? []) as RoutineEvent[],
+    context: toContext(r.context),
     webhookToken: r.webhook_token,
     enabled: r.enabled,
     catchUp: r.catch_up as Routine["catchUp"],
@@ -120,6 +128,7 @@ function routineToRow(p: Partial<Routine>): TablesUpdate<"routines"> {
   if (p.scheduleCron !== undefined) row.schedule_cron = p.scheduleCron;
   if (p.scheduleTz !== undefined) row.schedule_tz = p.scheduleTz;
   if (p.events !== undefined) row.events = p.events;
+  if (p.context !== undefined) row.context = p.context as unknown as Json;
   if (p.webhookToken !== undefined) row.webhook_token = p.webhookToken;
   if (p.enabled !== undefined) row.enabled = p.enabled;
   if (p.catchUp !== undefined) row.catch_up = p.catchUp;

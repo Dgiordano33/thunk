@@ -6,6 +6,7 @@ import { gitRepos } from "@/lib/projects/repos";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { getRoutine, insertRoutine, updateRoutine } from "@/lib/supabase/repo/routines";
 import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { validateRoutineContext } from "./context";
 import type { z } from "zod";
 import type { RoutineInputSchema, RoutinePatchSchema } from "./schema";
 import { scheduleFields } from "./scheduler";
@@ -13,7 +14,7 @@ import type { Routine } from "./types";
 
 export const mintWebhookToken = () => randomBytes(24).toString("base64url");
 
-type Settings = Pick<Routine, "projectId" | "model" | "permissionMode" | "targetKind" | "targetWorkspaceId">;
+type Settings = Pick<Routine, "projectId" | "model" | "permissionMode" | "targetKind" | "targetWorkspaceId" | "context">;
 
 /** Checks the schema can't do alone: the project, the target workspace, and the model's permission modes. */
 async function validate(r: Settings) {
@@ -28,6 +29,7 @@ async function validate(r: Settings) {
   }
   if (!permissionModesFor(providerOf(r.model)).includes(r.permissionMode as never))
     throw new HttpError(400, `${r.permissionMode} isn't available for ${r.model}`);
+  await validateRoutineContext(project, r.context);
 }
 
 export async function createRoutine(input: z.output<typeof RoutineInputSchema>): Promise<Routine> {

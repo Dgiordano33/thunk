@@ -1,11 +1,13 @@
 // Shared between server and client. Keep free of server-only imports.
 import type { ChangedFile } from "@/lib/projects/types";
+import type { NoteScope } from "@/lib/notes/types";
 
 /** Where a run happens: an existing workspace, or a fresh worktree created per run. */
 export type RoutineTargetKind = "workspace" | "ephemeral";
 
 export const DELIVERY_ROUTINE_EVENTS = ["ci_failed", "review_requested", "deploy_ready"] as const;
-export const ROUTINE_EVENTS = ["pr_opened", "run_failed", ...DELIVERY_ROUTINE_EVENTS] as const;
+export const TASK_ROUTINE_EVENTS = ["task_created", "task_completed"] as const;
+export const ROUTINE_EVENTS = ["pr_opened", "run_failed", ...DELIVERY_ROUTINE_EVENTS, ...TASK_ROUTINE_EVENTS] as const;
 export type RoutineEvent = (typeof ROUTINE_EVENTS)[number];
 
 export const RUN_TRIGGERS = ["manual", "cron", "webhook", ...ROUTINE_EVENTS] as const;
@@ -27,6 +29,14 @@ export type RoutineTriggerState = {
   prSeen?: (string | number)[];
 };
 
+/** A note the routine always reads: project, workspace or repo notebook. */
+export type RoutineNoteRef = { scope: NoteScope; id: string };
+
+/** Notes and tasks attached to a routine. Each run reads their current content into its brief. */
+export type RoutineContext = { notes: RoutineNoteRef[]; taskIds: string[] };
+
+export const EMPTY_ROUTINE_CONTEXT: RoutineContext = { notes: [], taskIds: [] };
+
 export type Routine = {
   id: string;
   projectId: string;
@@ -39,6 +49,7 @@ export type Routine = {
   scheduleCron: string | null;
   scheduleTz: string | null;
   events: RoutineEvent[];
+  context: RoutineContext;
   /** Null when the webhook is disabled. */
   webhookToken: string | null;
   enabled: boolean;
@@ -115,6 +126,8 @@ export const RUN_TRIGGER_LABELS: Record<RunTrigger, string> = {
   ci_failed: "CI failed",
   review_requested: "Review requested",
   deploy_ready: "Deploy ready",
+  task_created: "Task created",
+  task_completed: "Task completed",
 };
 
 export const EVENT_LABELS: Record<RoutineEvent, string> = {
@@ -123,6 +136,8 @@ export const EVENT_LABELS: Record<RoutineEvent, string> = {
   ci_failed: "CI fails",
   review_requested: "A review is requested",
   deploy_ready: "A deployment is ready",
+  task_created: "A task is created",
+  task_completed: "A task is completed",
 };
 
 export const MAX_CONCURRENT_RUNS = 3;

@@ -11,6 +11,7 @@ type SchedulerState = {
   /** Reassigned on every module load so the interval and listeners always call fresh code after HMR. */
   tick: () => Promise<void>;
   onRunFailed: (event: import("@/lib/projects/events").RunFailedEvent) => void;
+  onTaskEvent: (event: import("@/lib/tasks/types").TaskEvent) => void;
   listenersBound: boolean;
   /** Keyed by routine id: one active run per routine. */
   active: Map<string, ActiveRun>;
@@ -28,6 +29,7 @@ export const routinesState: SchedulerState = (g.__thunkRoutines ??= {
   booted: false,
   tick: async () => {},
   onRunFailed: () => {},
+  onTaskEvent: () => {},
   listenersBound: false,
   active: new Map(),
   lastFired: new Map(),

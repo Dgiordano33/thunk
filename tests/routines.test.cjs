@@ -296,3 +296,25 @@ test("manual starts enforce daily and concurrent limits, reserving before async 
   await assert.rejects(runner.startRun(routines[0], "manual"), (e) => e.status === 409);
   routinesState.active.clear();
 });
+
+test("task events fill task placeholders", () => {
+  const payload = { task: { id: "t-1", title: "Flaky login test", body: "Fails on CI" } };
+  assert.equal(prompt.renderPrompt("Fix {{event.task.title}} ({{event.task.id}}): {{event.task.body}} on {{event.type}}", "task_created", payload), "Fix Flaky login test (t-1): Fails on CI on task_created");
+  assert.ok(prompt.PROMPT_PLACEHOLDERS.includes("{{event.task.id}}"));
+});
+
+test("routine context defaults to empty and only accepts note refs and task UUIDs", () => {
+  const base = { projectId: "p", name: "n", prompt: "do it", model: "m" };
+  assert.deepEqual(RoutineInputSchema.parse(base).context, { notes: [], taskIds: [] });
+  const context = { notes: [{ scope: { kind: "projects", id: "p" }, id: "abc123" }], taskIds: ["aaaaaaaa-1111-4111-8111-111111111111"] };
+  assert.deepEqual(RoutineInputSchema.parse({ ...base, context }).context, context);
+  assert.equal(RoutinePatchSchema.safeParse({ context: { notes: [], taskIds: ["nope"] } }).success, false);
+  assert.equal(RoutinePatchSchema.safeParse({ context: { notes: [{ scope: { kind: "elsewhere", id: "p" }, id: "x" }], taskIds: [] } }).success, false);
+  assert.equal(RoutinePatchSchema.safeParse({ events: ["task_created", "task_completed"] }).success, true);
+});
+
+test("routine system prompt points filed work at the project and at attached context", () => {
+  const text = prompt.routineSystemPrompt({ kind: "routine", routineId: "r", runId: "x", routineName: "Triage", trigger: "task_created" });
+  assert.match(text, /project scope/);
+  assert.match(text, /Context for this run/);
+});

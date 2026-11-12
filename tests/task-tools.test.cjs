@@ -92,6 +92,18 @@ test("create fixes scope and provenance; malformed inputs and forged scope field
   assert.equal((await call("tasks_list", {}, { ...ctx, projectId: otherWorkspace })).isError, true);
 });
 
+test("routine sessions file project-level tasks marked as routine work, and list every workspace by default", async () => {
+  const routineCtx = { ...ctx, routine: true };
+  assert.equal((await call("tasks_create", { title: "Found during the run" }, routineCtx)).isError, false);
+  assert.equal(writes[0].workspaceId, null); assert.equal(writes[0].createdBy, "routine"); assert.equal(writes[0].createdInSessionId, sessionId);
+  assert.equal((await call("tasks_create", { title: "Here", scope: "workspace" }, routineCtx)).isError, false);
+  assert.equal(writes[1].workspaceId, workspaceId);
+  const listed = text(await call("tasks_list", {}, routineCtx));
+  assert.match(listed, /Sibling job/); assert.match(listed, /Project job/); assert.doesNotMatch(listed, /Secret job/);
+  assert.equal((await call("tasks_create", { title: "Interactive" })).isError, false);
+  assert.equal(writes[2].workspaceId, workspaceId); assert.equal(writes[2].createdBy, "agent");
+});
+
 test("updates/completions cannot cross projects; claims cannot cross workspaces", async () => {
   for (const name of ["tasks_update", "tasks_complete"])
     for (const id of [rows[3].id, "dddddddd"])

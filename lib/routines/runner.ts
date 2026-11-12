@@ -10,6 +10,8 @@ import { prepareWorkspace } from "@/lib/projects/runtime";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { getProject } from "@/lib/supabase/repo/projects";
 import { countRunsSince, insertRun, isSkip, startOfToday, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
+import { renderRoutineContext } from "./context";
+import { keepRunOutputs, runTasks, type KeptNote } from "./outputs";
 import { renderPrompt } from "./prompt";
 import { collectReport, writeRunNote } from "./report";
 import { routinesState as state, type ActiveRun } from "./state";
@@ -122,7 +124,8 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
       finish: (result) => finalize({ routine, run, project, workspace, ...result }),
       status: (status) => updateRun(run.id, { status }),
     }, () => cancelled);
-    const prompt = renderPrompt(routine.prompt, trigger, payload);
+    const context = await renderRoutineContext({ project, context: routine.context, trigger, payload });
+    const prompt = [renderPrompt(routine.prompt, trigger, payload), context].filter(Boolean).join("\n\n---\n\n");
     await sendBrief(live, prompt);
   } catch (err) {
     if (live) closeSession(live.id);
@@ -167,6 +170,11 @@ async function finalize(input: FinalizeInput) {
     // A fresh worktree whose successful run produced nothing is removed; anything else, failures included, is kept (archived) for review.
     const ephemeral = routine.targetKind === "ephemeral" && workspace && workspace.slug !== "main";
     const nothing = report && (report.diffStat?.files ?? 0) === 0 && !report.prUrl;
+    // Read before cleanup: removing the workspace deletes its sessions, which clears the tasks' session links.
+    const tasks = project ? await runTasks(project.id, input.run.sessionId).catch(() => undefined) : undefined;
+    let keptNotes: KeptNote[] = [];
+    if (ephemeral && project)
+      keptNotes = await keepRunOutputs(project, workspace).then((r) => r.notes, (err) => (console.error("[thunk] routine outputs not kept", err), []));
     let workspaceKept = true;
     if (ephemeral) {
       if (status === "succeeded" && nothing) {
@@ -184,7 +192,7 @@ async function finalize(input: FinalizeInput) {
     const run = { ...input.run, costUsd, status };
     let noteId: string | null = null;
     if (project && report)
-      noteId = await writeRunNote({ project, routine, run, status, workspace, workspaceKept, report, error })
+      noteId = await writeRunNote({ project, routine, run, status, workspace, workspaceKept, report, error, tasks, keptNotes })
         .then((n) => n.id)
         .catch((err) => (console.error("[thunk] routine note failed", err), null));
 

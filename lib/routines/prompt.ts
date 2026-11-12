@@ -2,7 +2,7 @@
 import type { RunTrigger, SessionOrigin } from "./types";
 
 /** Placeholders a routine prompt may use; shown as help text in the form. */
-export const PROMPT_PLACEHOLDERS = ["{{event.type}}", "{{event.pr.url}}", "{{event.pr.title}}", "{{event.exitCode}}", "{{event.pr.branch}}", "{{event.previewUrl}}", "{{payload}}"];
+export const PROMPT_PLACEHOLDERS = ["{{event.type}}", "{{event.pr.url}}", "{{event.pr.title}}", "{{event.exitCode}}", "{{event.pr.branch}}", "{{event.previewUrl}}", "{{event.task.id}}", "{{event.task.title}}", "{{event.task.body}}", "{{payload}}"];
 
 type Payload = Record<string, unknown> | null | undefined;
 
@@ -39,6 +39,8 @@ This session was started by the routine **${origin.routineName}**${origin.trigge
 - Prefer finishing the task without asking questions. Make reasonable assumptions and state them in the report. Ask only if continuing would be unsafe or destructive.
 - Never force-push, rewrite published history, or delete branches you did not create.
 - If you change code, commit it on the current branch with a clear message. Open a pull request only if the routine's instructions ask for one.
+- Anything you file should outlive this run. Create tasks at project scope (the default here) and write notes in the Project notes folder so they appear in the Library. When the run has its own fresh worktree, notes and tasks left in it are moved to the project when the run ends.
+- If the brief has a "Context for this run" section, those notes and tasks were attached by the person on purpose: work from them, and update them (task status, note content) when your work changes what they say.
 - End your final message with exactly one fenced block in this format, and nothing after it:
 
 \`\`\`${SUMMARY_FENCE}
