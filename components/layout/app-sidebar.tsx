@@ -1,5 +1,7 @@
 "use client";
 
+import { WORLD_SELECTION } from "@/components/world/selection";
+
 import { BotIcon, ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -74,7 +76,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
       </div>
 
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
-        <h2 className="text-muted-foreground text-xs font-medium">Projects</h2>
+        <h2 className="text-muted-foreground pixel text-[11px] tracking-widest uppercase">Projects</h2>
         <Button size="icon-xs" variant="ghost" aria-label="Add project" asChild>
           <Link href={PROJECTS_PATH}>
             <PlusIcon />
@@ -95,7 +97,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                 <div
                   className={cn(
                     "group hover:bg-sidebar-accent flex items-center gap-1 rounded-md pr-1 transition-colors",
-                    p.id === activeProjectId && "bg-sidebar-accent",
+                    p.id === activeProjectId && WORLD_SELECTION,
                   )}
                 >
                   <button
@@ -149,7 +151,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                           }
                           className={cn(
                             "hover:bg-sidebar-accent flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-1 pl-8 transition-colors",
-                            w.id === activeWorkspaceId && "bg-sidebar-accent",
+                            w.id === activeWorkspaceId && WORLD_SELECTION,
                           )}
                         >
                           {(w.worker || sessions.some((s) => s.workspaceId === w.id && s.origin?.kind === "worker")) ? <BotIcon aria-label="Worker workspace" className="text-muted-foreground size-3.5 shrink-0" /> : w.branch ? (

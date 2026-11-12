@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { FileIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +10,7 @@ import { useEffect } from "react";
 import { fileName } from "@/lib/projects/file-paths";
 import { filePagePath } from "@/lib/routes";
 import { fileKey, useOpenFiles, type OpenFile } from "@/lib/store/open-files-store";
+import { lineTabIndicator } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 /** Files opened from the tree, as tabs after the workspace's sessions. A dot marks unsaved edits. */
@@ -40,21 +43,23 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
     return (
       <div
         key={fileKey(f)}
+        data-active={active}
         className={cn(
           "group/tab text-muted-foreground hover:text-foreground relative flex max-w-56 min-w-0 shrink-0 items-center transition-colors",
-          active && "text-foreground after:bg-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full",
+          lineTabIndicator, "after:h-0.5 after:inset-x-0 after:bottom-0",
         )}
       >
         <Link
           href={filePagePath(base, f.root, f.path, params.get("tab"))}
-          aria-current={active ? "page" : undefined}
+          data-active={active}
+              aria-current={active ? "page" : undefined}
           title={f.path}
           className="flex min-w-0 items-center gap-2 self-stretch pr-1 pl-4 text-[13px]"
         >
           <FileIcon className="size-3.5 shrink-0" />
           <span className="truncate">{fileName(f.path)}</span>
         </Link>
-        <button
+        <Button variant="ghost" size="xs"
           type="button"
           onClick={() => close(f)}
           aria-label={`Close ${fileName(f.path)}${dirty ? " (unsaved changes)" : ""}`}
@@ -64,7 +69,7 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
           {/* The unsaved dot turns into the close cross on hover. */}
           {dirty && <span className="bg-foreground/70 size-1.5 rounded-full group-hover/tab:hidden" />}
           <XIcon className={cn("size-3", dirty ? "hidden group-hover/tab:block" : "opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100", active && !dirty && "opacity-100")} />
-        </button>
+        </Button>
       </div>
     );
   });

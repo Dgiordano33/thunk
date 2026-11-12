@@ -86,6 +86,7 @@ export type WorkspaceSummary = Workspace & { sessionCount: number };
 export type ProjectSummary = Project & { workspaceCount: number; sessionCount: number; lastActivityAt: string | null };
 
 export type ChangedFile = {
+  mtimeMs?: number;
   path: string;
   /** git name-status letter: A, M, D, R…; "U" for untracked. */
   status: string;

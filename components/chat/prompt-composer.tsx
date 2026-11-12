@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PaperclipIcon, XIcon } from "lucide-react";
 import { PromptInput, PromptInputBody, PromptInputTextarea, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { api } from "@/lib/client/api";
 import { ImagesSchema, type PromptImage } from "@/lib/prompts/schema";
 import { completionAt, fuzzyMatch } from "@/lib/prompts/complete";
 
+type PromptContext = Awaited<ReturnType<typeof api.promptContext>>;
+const contextCache = new Map<string, PromptContext>();
+const EMPTY_CONTEXT: PromptContext = { files: [], commands: [], notes: [] };
+
 function Images({ disabled }: { disabled?: boolean }) {
   const attachments = usePromptInputAttachments();
   return <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
-    <button type="button" disabled={disabled} onClick={attachments.openFileDialog} aria-label="Attach images" className="text-muted-foreground hover:text-foreground rounded p-1"><PaperclipIcon className="size-4" /></button>
+    <Button variant="ghost" size="icon-xs" type="button" disabled={disabled} onClick={attachments.openFileDialog} aria-label="Attach images" className="text-muted-foreground hover:text-foreground rounded p-1"><PaperclipIcon className="size-4" /></Button>
     {attachments.files.map((file) => <div key={file.id} className="relative">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={file.url} alt={file.filename ?? "Attached image"} className="size-14 rounded object-cover" />
-      <button type="button" onClick={() => attachments.remove(file.id)} aria-label={`Remove ${file.filename ?? "image"}`} className="bg-background absolute -top-1 -right-1 rounded-full"><XIcon className="size-3.5" /></button>
+      <Button variant="ghost" size="icon-xs" type="button" onClick={() => attachments.remove(file.id)} aria-label={`Remove ${file.filename ?? "image"}`} className="bg-background absolute -top-1 -right-1 rounded-full"><XIcon className="size-3.5" /></Button>
     </div>)}
   </div>;
 }
@@ -29,7 +35,12 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
 }) {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [context, setContext] = useState<{ files: string[]; commands: string[]; notes: { title: string; path: string }[] }>({ files: [], commands: [], notes: [] });
+  const [context, setContext] = useState<PromptContext>(() => contextCache.get(workspaceId) ?? EMPTY_CONTEXT);
+  const [contextWorkspace, setContextWorkspace] = useState(workspaceId);
+  if (contextWorkspace !== workspaceId) {
+    setContextWorkspace(workspaceId);
+    setContext(contextCache.get(workspaceId) ?? EMPTY_CONTEXT);
+  }
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -40,17 +51,20 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
 
   useEffect(() => {
     let active = true;
-    api.promptContext(workspaceId).then((data) => { if (active) setContext(data); }).catch((err: Error) => { if (active) setError(err.message); });
+    api.promptContext(workspaceId).then((data) => { contextCache.set(workspaceId, data); if (active) setContext(data); }).catch((err: Error) => { if (active) setError(err.message); });
     return () => { active = false; };
   }, [workspaceId]);
 
   const token = dismissed ? null : completionAt(text, cursor);
   // Notes show as "note:<title>" under @ and insert their file path.
-  const notePaths = new Map<string, string>();
-  for (const n of context.notes) {
-    const label = `note:${n.title}`;
-    notePaths.set(notePaths.has(label) ? `${label} · ${n.path.split("/").pop()}` : label, n.path);
-  }
+  const notePaths = useMemo(() => {
+    const paths = new Map<string, string>();
+    for (const n of context.notes) {
+      const label = `note:${n.title}`;
+      paths.set(paths.has(label) ? `${label} · ${n.path.split("/").pop()}` : label, n.path);
+    }
+    return paths;
+  }, [context.notes]);
   const choices = token ? (token.kind === "@" ? [...notePaths.keys(), ...context.files] : context.commands)
     .filter((value) => fuzzyMatch(value, token.query)).sort((a, b) => Number(!a.toLowerCase().includes(token.query.toLowerCase())) - Number(!b.toLowerCase().includes(token.query.toLowerCase())) || a.localeCompare(b)).slice(0, 8) : [];
   const choose = (choice: string) => {
@@ -76,7 +90,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
     <PromptInputBody>
       <Images disabled={disabled} />
       {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files and notes" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">
-        {choices.map((choice, i) => <button key={choice} id={`prompt-choice-${i}`} type="button" role="option" aria-selected={i === selected} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(choice)} className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${i === selected ? "bg-accent" : ""}`}>{token?.kind}{choice}</button>)}
+        {choices.map((choice, i) => <Button variant="ghost" size="xs" key={choice} id={`prompt-choice-${i}`} type="button" role="option" aria-selected={i === selected} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(choice)} className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${i === selected ? "bg-accent" : ""}`}>{token?.kind}{choice}</Button>)}
       </div>}
       <PromptInputTextarea ref={textarea} autoFocus={autoFocus} disabled={disabled} placeholder={placeholder} value={text}
         aria-label="Message" aria-autocomplete="list" aria-controls={choices.length ? "prompt-completions" : undefined} aria-activedescendant={choices.length ? `prompt-choice-${selected}` : undefined}

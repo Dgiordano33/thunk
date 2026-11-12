@@ -23,3 +23,15 @@ test('batch publishes once and rejects stale and foreign events', () => {
   assert.equal(updates, 1);
   unsubscribe();
 });
+test('batch matches individual event reduction', () => {
+  const before = useSession.getState();
+  const events = [
+    { sessionId: 'a', seq: 3, type: 'status', state: 'running' },
+    { sessionId: 'a', seq: 4, type: 'status', state: 'idle' },
+  ];
+  events.forEach((event) => useSession.getState().applyEvent(event));
+  const expected = useSession.getState();
+  useSession.setState(before, true);
+  useSession.getState().applyEvents(events);
+  assert.deepEqual(useSession.getState(), expected);
+});

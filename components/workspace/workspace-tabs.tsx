@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
+import { lineTabIndicator } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { OpenFileTabs } from "./open-file-tabs";
 import { PrButton } from "./pr-button";
@@ -44,12 +45,12 @@ export function WorkspaceTabs({
             <Link
               key={s.id}
               href={href}
+              data-active={active}
               aria-current={active ? "page" : undefined}
               title={(current ? meta?.title : s.title) || "Untitled"}
               className={cn(
                 "text-muted-foreground hover:text-foreground relative flex max-w-56 min-w-0 shrink-0 items-center gap-2 px-4 text-[13px] transition-colors",
-                active &&
-                  "text-foreground after:bg-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full",
+                lineTabIndicator, "after:h-0.5 after:inset-x-0 after:bottom-0",
               )}
             >
               <span

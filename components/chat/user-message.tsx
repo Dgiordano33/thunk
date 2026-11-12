@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { ChevronRightIcon, FilePenLineIcon } from "lucide-react";
 import { useState } from "react";
 import { plural } from "@/components/canvas/revision-bar";
@@ -12,7 +14,7 @@ export function UserMessage({ item }: { item: Extract<TimelineItem, { kind: "use
   if (item.revision) {
     return (
       <div className="self-end">
-        <button
+        <Button variant="ghost" size="xs"
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs transition-colors"
@@ -20,7 +22,7 @@ export function UserMessage({ item }: { item: Extract<TimelineItem, { kind: "use
           <FilePenLineIcon className="size-3.5" />
           Sent revisions · {plural(item.revision.edits, "edit")} · {plural(item.revision.comments, "comment")}
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
-        </button>
+        </Button>
         {open && (
           <pre className="bg-muted mt-2 max-h-80 max-w-2xl overflow-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">
             {item.content}
