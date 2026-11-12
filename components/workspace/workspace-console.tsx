@@ -40,26 +40,27 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
     else setError(results[0].reason.message);
     if (results[1].status === "fulfilled") setGit(results[1].value.git);
   }, [workspaceId]);
+  const fastPoll = open || !!state?.processes.some((p) => p.running);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (document.visibilityState === "visible") await refresh();
-      if (active) timer = setTimeout(poll, 3000);
+      if (active) timer = setTimeout(poll, fastPoll ? 3000 : 15000);
     };
     void poll();
     return () => { active = false; clearTimeout(timer); };
-  }, [refresh]);
+  }, [refresh, fastPoll]);
 
-  const act = async (action: () => Promise<unknown>) => {
+  const act = async (action: () => Promise<unknown>, refreshRoute = true) => {
     setBusy(true); setError("");
-    try { await action(); router.refresh(); }
+    try { await action(); if (refreshRoute) router.refresh(); }
     catch (err) { setError((err as Error).message); setOpen(true); }
     finally { setBusy(false); await refresh(); }
   };
   const start = (kind: Exclude<ProcessKind, "archive">) => {
     setTab(kind); setOpen(true);
-    void act(() => api.workspaceProcess(workspaceId, { action: kind }));
+    void act(() => api.workspaceProcess(workspaceId, { action: kind }), false);
   };
   const selectTab = (kind: ProcessKind | "preview") => {
     if (open && tab === kind) { setOpen(false); return; }
@@ -93,7 +94,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
         {KINDS.map((kind) => {
           const proc = state?.processes.find((p) => p.kind === kind);
           if (kind === "archive" && !proc) return null;
-          return <Button key={kind} size="sm" variant={open && tab === kind ? "secondary" : "ghost"} onClick={() => selectTab(kind)} aria-pressed={open && tab === kind}>
+          return <Button className="pixel text-xs" key={kind} size="sm" variant={open && tab === kind ? "secondary" : "ghost"} onClick={() => selectTab(kind)} aria-pressed={open && tab === kind}>
             {kind === "shell" && <TerminalIcon className="size-3.5" />}
             {LABELS[kind]}
             {proc && <span className={proc.running ? "text-emerald-600 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"} title={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span>}
@@ -103,7 +104,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
         {(state?.setupError || error || conflicts.length > 0) && <span className="text-destructive text-xs">{conflicts.length ? `${conflicts.length} conflicts` : "Needs attention"}</span>}
         <span className="flex-1" />
         {open && tab !== "preview" && (selected?.running
-          ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }))}>
+          ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => api.workspaceProcess(workspaceId, { action: "stop", kind: selected.kind }), false)}>
               <SquareIcon className="size-3" /> {tab === "run" ? "Stop server" : "Stop"}
             </Button>
           : tab !== "archive" && <Button size="sm" variant="outline" disabled={blocked || (tab === "run" && !state?.scripts.run)} onClick={() => start(tab)}>
@@ -163,7 +164,7 @@ function WorkspaceTerminal({ workspaceId, process: proc, empty }: { workspaceId:
     void (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
       if (disposed || !host.current) return;
-      const terminal = new Terminal({ fontSize: 12, fontFamily: "Menlo, monospace", cursorBlink: true, scrollback: 3000, theme: { background: "#111113", foreground: "#eeeeee" } });
+      const terminal = new Terminal({ fontSize: 12, fontFamily: getComputedStyle(host.current).getPropertyValue("--font-mono") + ", monospace", cursorBlink: true, scrollback: 3000, theme: { background: getComputedStyle(host.current).backgroundColor, foreground: getComputedStyle(host.current).color } });
       const fit = new FitAddon();
       terminal.loadAddon(fit);
       terminal.open(host.current);
@@ -199,8 +200,8 @@ function WorkspaceTerminal({ workspaceId, process: proc, empty }: { workspaceId:
     })().catch((err) => setError(err.message));
     return () => { disposed = true; teardown(); };
   }, [workspaceId, empty]);
-  return <div className="relative min-h-0 flex-1 bg-[#111113] p-2">
+  return <div className="relative min-h-0 flex-1 bg-background p-2">
     {error && <p role="alert" className="absolute top-1 right-2 z-10 bg-red-950 p-1 text-xs text-white">{error}</p>}
-    <div ref={host} className="h-full w-full" aria-label="Workspace terminal" />
+    <div ref={host} className="bg-background text-foreground h-full w-full" aria-label="Workspace terminal" />
   </div>;
 }

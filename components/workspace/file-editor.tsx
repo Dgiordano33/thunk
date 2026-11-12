@@ -115,7 +115,7 @@ export function FileEditor({ workspaceId, root, rootLabel, path }: { workspaceId
   const slash = path.lastIndexOf("/");
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-3 border-b px-4">
+      <div className="flex h-10 shrink-0 items-center gap-3 border-b px-3">
         <p className="flex min-w-0 flex-1 items-center text-[13px]" title={path}>
           {rootLabel && <span className="text-muted-foreground shrink-0">{rootLabel}:&nbsp;</span>}
           <span className="text-muted-foreground truncate">{slash >= 0 ? path.slice(0, slash + 1) : ""}</span>
@@ -159,7 +159,7 @@ export function FileEditor({ workspaceId, root, rootLabel, path }: { workspaceId
 
 function Banner({ tone, children }: { tone: "warn"; children: React.ReactNode }) {
   return (
-    <div role="status" className={cn("flex shrink-0 items-center gap-2 border-b px-4 py-2 text-xs", tone === "warn" && "bg-amber-500/10 text-amber-700 dark:text-amber-300")}>
+    <div role="status" className={cn("flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs", tone === "warn" && "bg-amber-500/10 text-amber-700 dark:text-amber-300")}>
       <AlertTriangleIcon className="size-3.5 shrink-0" />
       {children}
     </div>

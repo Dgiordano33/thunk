@@ -85,6 +85,7 @@ type SessionData = {
 type Actions = {
   hydrate: (input: { meta: SessionMeta; events: HarnessEvent[]; documents: PersistedDocument[] }) => void;
   applyEvent: (e: HarnessEvent) => void;
+  applyEvents: (events: HarnessEvent[]) => void;
   setConnection: (c: ConnectionState) => void;
   setMeta: (patch: Partial<SessionMeta>) => void;
   setActiveDocument: (id: string | null) => void;
@@ -396,10 +397,15 @@ export const useSession = create<SessionStore>()((set, get) => ({
     set({ ...s, documents: docs, requests });
   },
 
-  applyEvent: (e) => {
-    const s = get();
-    if (e.sessionId !== s.sessionId || e.seq <= s.lastSeq) return;
-    set({ ...reduce(s, e), lastSeq: e.seq });
+  applyEvent: (e) => get().applyEvents([e]),
+  applyEvents: (events) => {
+    const previous = get();
+    let next = previous;
+    for (const e of events) {
+      if (e.sessionId !== next.sessionId || e.seq <= next.lastSeq) continue;
+      next = { ...next, ...reduce(next, e), lastSeq: e.seq };
+    }
+    if (next !== previous) set(next);
   },
 
   setConnection: (connection) => set({ connection }),

@@ -29,7 +29,7 @@ const chrome = EditorView.theme({
   ".cm-tooltip": { backgroundColor: "var(--popover)", color: "var(--popover-foreground)", border: "1px solid var(--border)" },
 });
 
-const isDark = () => document.documentElement.classList.contains("dark");
+const isDark = () => document.documentElement.matches(".dark, :has(.world, .moonlit)");
 // basicSetup's default highlighting is a fallback, so the dark style wins whenever it's present.
 const highlightFor = (dark: boolean) => (dark ? syntaxHighlighting(oneDarkHighlightStyle) : []);
 

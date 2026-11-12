@@ -14,8 +14,6 @@ import {
 import { cn } from "@/lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
@@ -321,19 +319,31 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = { cjk, code };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, ...props }: MessageResponseProps) => {
+    const [plugins, setPlugins] = useState<MessageResponseProps["plugins"]>(streamdownPlugins);
+    const [pluginError, setPluginError] = useState(false);
+    useEffect(() => {
+      let active = true;
+      Promise.all([import("@streamdown/math"), import("@streamdown/mermaid")])
+        .then(([{ math }, { mermaid }]) => { if (active) setPlugins({ ...streamdownPlugins, math, mermaid }); })
+        .catch(() => { if (active) setPluginError(true); });
+      return () => { active = false; };
+    }, []);
+    return <>
+    {pluginError && <p role="status" className="text-muted-foreground text-xs">Math and diagram rendering unavailable. Showing source text.</p>}
     <Streamdown
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
-      plugins={streamdownPlugins}
+      plugins={plugins}
       {...props}
     />
-  ),
+    </>;
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating

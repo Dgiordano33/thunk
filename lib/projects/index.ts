@@ -1,4 +1,4 @@
-import { RESERVED_WORKSPACE_SLUGS } from "@/lib/routes";
+import { cache } from "react";
 import "server-only";
 import { listSessions as sdkListSessions } from "@anthropic-ai/claude-agent-sdk";
 import { mkdir, rename, rmdir, stat } from "node:fs/promises";
@@ -6,7 +6,7 @@ import { moveToGranary } from "./granary";
 import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
 import { getProject, getProjectByKey, getProjectBySlug, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
-import { freshSlug, projectUrlSlug } from "@/lib/routes";
+import { freshSlug, projectUrlSlug, RESERVED_WORKSPACE_SLUGS } from "@/lib/routes";
 import {
   deleteProjectRepo,
   deleteWorkspaceRepo,
@@ -374,12 +374,12 @@ export async function getWorkspaceContext(workspaceId: string): Promise<Workspac
 }
 
 /** The workspace at `/{projectSlug}/{workspaceSlug}`. */
-export async function getWorkspaceContextBySlugs(projectSlug: string, workspaceSlug: string): Promise<WorkspaceContext | null> {
+export const getWorkspaceContextBySlugs = cache(async (projectSlug: string, workspaceSlug: string): Promise<WorkspaceContext | null> => {
   const project = await getProjectBySlug(projectSlug);
   if (!project) return null;
   const workspace = await findWorkspace(project.id, { slug: workspaceSlug });
   return workspace ? { project, workspace } : null;
-}
+});
 
 /**
  * Convenience for the quick-start path: a bare directory becomes (project, workspace). A directory some
