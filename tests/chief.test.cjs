@@ -57,7 +57,7 @@ const mocks = {
   "@/lib/projects/repos": { sessionConfigRoot: () => tmp },
   "@/lib/prompts/context": { expandCommand: async (s) => s },
   "@/lib/supabase/repo/projects": { getProject: async (id) => id === project.id ? project : null },
-  "@/lib/supabase/repo/workspaces": { listWorkspaces: async () => [...workspaces.values()] },
+  "@/lib/supabase/repo/workspaces": { getWorkspace: async (id) => workspaces.get(id) ?? null, listWorkspaces: async () => [...workspaces.values()] },
   "@/lib/supabase/repo/tasks": { getTask: async (id) => tasks.get(id), listTasks: async () => [...tasks.values()] },
   "@/lib/tasks/service": {
     createTask: async (input) => { const task = { id: id(), status: "open", ...input }; tasks.set(task.id, task); return task; },
@@ -354,4 +354,41 @@ test("a session waiting only on its chief does not need the person", () => {
   assert.equal(needsPerson({ status: "awaiting", waitingOn: null }), true);
   assert.equal(needsPerson({ status: "awaiting" }), true);
   assert.equal(needsPerson({ status: "running", waitingOn: null }), false);
+});
+
+test("delegation reuses existing workspaces, validates targets and serializes competing assignments", async () => {
+  for (const live of sessions.values()) agent.closeSession(live.id);
+  const chief = await service.openChief(project.id);
+  const target = { ...main, id: id(), status: "active", cwd: path.join(tmp, "existing"), branch: "feature/existing" };
+  const other = { ...target, id: id(), cwd: path.join(tmp, "other") };
+  const foreign = { ...target, id: id(), projectId: id() };
+  const archived = { ...target, id: id(), status: "archived" };
+  for (const workspace of [target, other, foreign, archived]) workspaces.set(workspace.id, workspace);
+  const beforeTasks = tasks.size;
+  await assert.rejects(service.delegate(project.id, chief.id, { workspaceId: id() }), /Workspace not found in this project/);
+  await assert.rejects(service.delegate(project.id, chief.id, { workspaceId: foreign.id }), /Workspace not found in this project/);
+  await assert.rejects(service.delegate(project.id, chief.id, { workspaceId: archived.id }), /Workspace is archived/);
+  await assert.rejects(service.delegate(project.id, chief.id, { workspaceId: target.id, repoIds: [project.repos[0].id] }), /Choose workspaceId or repoIds/);
+  assert.equal(tasks.size, beforeTasks, "invalid targets create no tasks");
+
+  const beforeWorkspaces = workspaceInputs.length;
+  const results = await Promise.allSettled(["First", "Competing"].map((title) => service.delegate(project.id, chief.id, { title, workspaceId: target.id })));
+  assert.equal(results[0].status, "fulfilled");
+  assert.equal(results[1].status, "rejected");
+  assert.match(results[1].reason.message, /Workspace already has an active worker/);
+  const worker = results[0].value;
+  const second = await service.delegate(project.id, chief.id, { title: "Other workspace", workspaceId: other.id });
+  assert.equal(workspaceInputs.length, beforeWorkspaces, "existing targets create no worktrees");
+  assert.equal(worker.workspaceId, target.id);
+  assert.equal(second.workspaceId, other.id);
+  assert.equal(tasks.get(worker.taskId).workspaceId, target.id);
+  assert.equal(sessions.get(worker.sessionId).ctx.workspace, target, "keeps the existing checkout and branch");
+  finish(sessions.get(worker.sessionId));
+  finish(sessions.get(second.sessionId));
+  await until(async () => await reports.savedReport(project, second.sessionId));
+  const followup = await service.delegate(project.id, chief.id, { title: "Next task", workspaceId: target.id });
+  assert.equal(followup.workspaceId, target.id, "a finished worker does not block reuse");
+  finish(sessions.get(followup.sessionId));
+  await until(async () => await reports.savedReport(project, followup.sessionId));
+  await reports.flushReports(chief.id);
 });
