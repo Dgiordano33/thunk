@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, TypeIcon } from 'lucide-react';
 import { NeedsYouTray } from './needs-you-tray';
+import { itemLabel } from './board-item';
 import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
 import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
@@ -50,6 +51,7 @@ export function BoardView({ projectId, slug, name, initial }: {
         // One store write per gesture: every card that moved, with the one dragged unstacked.
         onPositionsChange: (next, { active }) => useBoard.getState().editMany(movePatches(useBoard.getState().cards, next, active)),
         group: key => stackGroup(useBoard.getState().cards, key),
+        label: key => { if (key === OUTLINE) return 'Focus outline'; const c = useBoard.getState().cards.find(x => x.id === key); return c ? itemLabel(c) : 'Item'; },
         boxes,
         // A card's edge sets its width; the outline's handles redefine the focus as what sits inside.
         onBoxesChange: (next, { active }) => {

@@ -31,6 +31,8 @@ export type BoardOptions = {
     /** The ids in the focus, which a Shift-drag rectangle adds to. Controlled. */
     selected?: string[];
     onSelectedChange?: (value: string[], details: ChangeDetails<'lasso'>) => void;
+    /** What a card or the outline is called in what screen readers hear, like "Notes moved to 300, 200." */
+    label?: (key: string) => string;
 };
 export type { ResizeHandle };
 
@@ -46,7 +48,7 @@ const background = (event: Event, root: HTMLElement, world: HTMLElement | undefi
 
 export const board = definePrimitive({
     name: 'board',
-    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback', selected: 'value', onSelectedChange: 'callback' },
+    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', label: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback', selected: 'value', onSelectedChange: 'callback' },
     controlled: ['positions', 'boxes', 'selected'],
     state: (options: BoardOptions) => ({
         viewport: options.defaultViewport ?? { x: 0, y: 0, zoom: 1 },
@@ -80,11 +82,13 @@ export const board = definePrimitive({
             maxZoom: () => MAX_ZOOM,
         });
         const group = (key: string) => context.options().group?.(key) ?? [key];
+        const label = (key: string) => context.options().label?.(key);
         const move = createMove(context, {
             key: 'positions',
             draft: 'moving',
             set: (value, details) => change('positions', value, { ...details, active }),
             group,
+            label,
             scale: () => viewport.get().zoom,
         });
         let sized: string | undefined;
@@ -94,6 +98,7 @@ export const board = definePrimitive({
             set: (value, details) => change('boxes', value, { ...details, active: sized }),
             min: key => key === OUTLINE ? { width: MIN_OUTLINE, height: MIN_OUTLINE } : { width: MIN_WIDTH, height: 1 },
             max: key => key === OUTLINE ? undefined : { width: MAX_WIDTH, height: Number.MAX_SAFE_INTEGER },
+            label,
             scale: () => viewport.get().zoom,
         });
         const lasso = createLasso(context, {
