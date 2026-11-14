@@ -141,7 +141,7 @@ const Swatch = ({ i }: { i: number }) => <span className="size-2 shrink-0 rounde
 function Plot({ spec, layout, width, title, overlay }: { spec: ChartSpec; layout: Layout; width: number; title: string; overlay: React.ReactNode }) {
     const [hover, setHover] = useState<number | null>(null);
     const rows = spec.rows ?? [], series = spec.series ?? [], unit = spec.unit, n = rows.length;
-    const svg = (body: React.ReactNode, label: string) => <svg data-plot width={width} height={layout.height} viewBox={`0 0 ${width} ${layout.height}`} className="block text-[11px]" role="img" aria-label={`${title}: ${label}. Open Data for the values.`}>{body}{overlay}</svg>;
+    const svg = (body: React.ReactNode, label: string) => <svg data-plot width={width} height={layout.height} viewBox={`0 0 ${width} ${layout.height}`} className="block h-auto w-full text-[11px]" role="img" aria-label={`${title}: ${label}. Open Data for the values.`}>{body}{overlay}</svg>;
     const named = series.map(s => s.label ?? s.key).join(', ');
 
     if (layout.kind === 'pie') {
