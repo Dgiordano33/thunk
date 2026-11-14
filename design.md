@@ -192,6 +192,15 @@ The current `.doc-prose` style in `app/globals.css` provides the document baseli
 
 Avoid introducing a second palette, a replacement frame, or pixel-styled body text for new editor screens. Keep bronze and parchment as meaningful accents around the work.
 
+### Canvas board interactions
+
+The Canvas board (`components/board/`) builds its gestures and controls on UI SDK (`@ui-sdk/core`, `@ui-sdk/react`, pinned to an exact beta). Keep every SDK call in two files so a beta change touches only them:
+
+- `board-primitive.ts` defines the `board` primitive: pan and zoom (`createViewport`, 20%–200%), card moves (`createMove`, with stacked cards following), card widths and the focus outline (one `createResize`, the outline under the `@focus` key), and Shift-drag selection (`createLasso`). Gestures run on drafts and live styles, so a drag renders nothing until the drop, which writes the store once.
+- `board-ui.tsx` styles UI SDK parts with `buttonVariants`: `BoardButton`, `BoardToolbar`, `BoardToggle`, `BoardSegmented`, `Hint` (a tooltip with its shortcut, used in place of `title`) and `Confirm` (a top-layer popover).
+
+`use-board-primitive.tsx` connects the primitive to React; `lib/board/interaction.ts` holds the pure store mappings and is unit-tested. The zustand store stays the only durable state: the primitive is fed positions, boxes and focus ids, and reports changes back. Inside the world, size screen-constant chrome with `calc(Npx / var(--canvas-zoom))` rather than reading the zoom in React. The TipTap bubble menu and freehand drawing remain custom.
+
 ## Checks when extending the design
 
 - Reuse `CivPanel`, `TownPanel`, `IsoViewport`, `TerrainLayer`, `PixelIcon`, and existing UI primitives where their roles match.

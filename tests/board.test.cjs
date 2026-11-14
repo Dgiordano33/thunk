@@ -198,3 +198,27 @@ test('chart refresh runs the confirmed command in the workspace and refuses a ch
   await assert.rejects(refreshChart({},d,c.id,'echo nope; exit 3'),e=>e.status===422);
   const doc=await store.addCard(d,{markdown:'x'});await assert.rejects(refreshChart({},d,doc.id,'true'),/no source/);
 });
+test('interaction helpers: positions, stacks, move patches, widths, lasso, outline and culling',()=>{
+  const {positionsOf,boxesOf,stackGroup,movePatches,widthPatch,lassoFocus,outlineFocus,visibleIds,OUTLINE}=require('../lib/board/interaction.ts');
+  const card=(id,x,y,extra={})=>({id,x,y,width:100,height:50,kind:'doc',below:null,...extra});
+  const a=card('a',0,0),b=card('b',0,70,{below:'a'}),c=card('c',0,140,{below:'b'}),d=card('d',500,0);
+  assert.deepEqual(positionsOf([a,d]),{a:{x:0,y:0},d:{x:500,y:0}});
+  assert.deepEqual(positionsOf([a,d],{keys:['a'],from:{a:{x:9,y:9}}}),{a:{x:9,y:9},d:{x:500,y:0}});
+  const boxes=boxesOf([a,card('p',0,0,{prompt:true}),card('w',0,0,{kind:'drawing'})],{x:1,y:2,width:3,height:4});
+  assert.deepEqual(Object.keys(boxes),['a',OUTLINE]);assert.deepEqual(boxesOf([a],null),{a:{x:0,y:0,width:100,height:50}});
+  assert.deepEqual(stackGroup([a,b,c,d],'a'),['a','b','c']);assert.deepEqual(stackGroup([a,b,c,d],'b'),['b','c']);
+  assert.deepEqual(stackGroup([card('x',0,0,{below:'y'}),card('y',0,0,{below:'x'})],'x'),['x','y']);
+  // Only the active card is unstacked; followers keep `below`; missing ids and unmoved cards are ignored.
+  assert.deepEqual(movePatches([a,b,c,d],{b:{x:10,y:80},c:{x:10,y:150},d:{x:500,y:0},gone:{x:1,y:1}},'b'),{b:{x:10,y:80,below:null},c:{x:10,y:150}});
+  assert.deepEqual(movePatches([a],{a:{x:5,y:5}},'a'),{a:{x:5,y:5}});
+  assert.deepEqual(widthPatch(80.4),{width:120});assert.deepEqual(widthPatch(5000),{width:2000});assert.deepEqual(widthPatch(300.6),{width:301});
+  assert.deepEqual(lassoFocus({anchorId:null,rect:null,add:['a'],remove:['b','d']},['a','b','c'],['a']),{add:['a','b','c'],remove:['d']});
+  // Cards already in focus through the anchor's cluster are not pinned into `add`.
+  assert.deepEqual(lassoFocus({anchorId:'x',rect:null,add:[],remove:[]},['x','y','c'],['x','y']),{add:['c'],remove:[]});
+  const f=outlineFocus([a,d],{anchorId:'d',rect:null,add:['x'],remove:['y']},{x:-10,y:-10,width:200,height:100});
+  assert.deepEqual(f,{rect:{x:-10,y:-10,width:200,height:100},fixed:true,add:[],remove:[],anchorId:null});
+  assert.equal(outlineFocus([a],{anchorId:'a',rect:null,add:[],remove:[]},{x:0,y:0,width:200,height:200}).anchorId,'a');
+  const view={left:0,top:0,right:400,bottom:300};
+  assert.deepEqual(visibleIds([a,d],view,1),['a']);assert.deepEqual(visibleIds([a,d],view,.39),[]);
+  assert.deepEqual(visibleIds([card('e',400,0)],view,1),[]);assert.deepEqual(visibleIds([card('e',399,0)],view,1),['e']);
+});
