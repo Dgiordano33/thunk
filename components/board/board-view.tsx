@@ -1,7 +1,7 @@
 'use client';
 import { flattenChart, flattenDrawing, flattenImage } from "@/lib/board/flatten.client";
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, TypeIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NeedsYouTray } from './needs-you-tray';
@@ -13,6 +13,7 @@ import { useSession } from '@/lib/store/session-store';
 import { connectSession } from '@/lib/client/sse';
 import { getEditor } from '@/lib/editor/registry';
 import { extendDrawing } from '@/lib/board/drawing';
+import { movePatches, positionsOf, stackGroup } from '@/lib/board/interaction';
 import { MAX_IMAGES, attachments, isFocus, pendingOf, visualKey, type Scope } from '@/lib/board/pending';
 import type { Card, Snapshot } from '@/lib/board/types';
 
@@ -40,7 +41,14 @@ export function BoardView({ projectId, slug, name, initial }: {
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
     const base = `/api/projects/${projectId}/board`;
     const space = useRef(false);
-    const handle = useBoardPrimitive(initial.board.viewport, base, fail, { panning: () => space.current });
+    const positions = useMemo(() => positionsOf(cards), [cards]);
+    const handle = useBoardPrimitive(initial.board.viewport, base, fail, {
+        panning: () => space.current,
+        positions,
+        // One store write per gesture: every card that moved, with the one dragged unstacked.
+        onPositionsChange: (next, { active }) => useBoard.getState().editMany(movePatches(useBoard.getState().cards, next, active)),
+        group: key => stackGroup(useBoard.getState().cards, key),
+    });
     const [sessionId, setSessionId] = useState(initial.board.agent?.sessionId), [activity, setActivity] = useState(''), [busy, setBusy] = useState(false), [deferred, setDeferred] = useState(false);
     const [tool, setTool] = useState<Tool>('write');
     const focusIds = useFocusIds();

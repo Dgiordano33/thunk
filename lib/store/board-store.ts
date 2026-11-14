@@ -29,6 +29,8 @@ export const useBoard = create<{
     quiet: string | null;
     init: (s: Snapshot) => void;
     edit: (id: string, p: Partial<Card>) => void;
+    /** Several cards' edits, settled once, like a gesture that moved a group. */
+    editMany: (patches: Record<string, Partial<Card>>) => void;
     merge: (c: Card) => void;
     /** Adds a block locally, without a server round trip. */
     draft: (c: Card) => void;
@@ -44,6 +46,13 @@ export const useBoard = create<{
     board: null, cards: [], dirty: {}, drafts: {}, error: null, focus: emptyFocus, quiet: null,
     init: s => set({ ...s, dirty: {}, drafts: {}, error: null, focus: emptyFocus }),
     edit: (id, p) => set(s => !s.cards.some(c => c.id === id) ? {} : settle(s.cards.map(c => c.id === id ? { ...c, ...p } : c), { ...s.dirty, [id]: { ...s.dirty[id], ...p } })),
+    editMany: patches => set(s => {
+        const ids = Object.keys(patches).filter(id => s.cards.some(c => c.id === id));
+        if (!ids.length) return {};
+        const dirty = { ...s.dirty };
+        for (const id of ids) dirty[id] = { ...dirty[id], ...patches[id] };
+        return settle(s.cards.map(c => patches[c.id] ? { ...c, ...patches[c.id] } : c), dirty);
+    }),
     merge: c => set(s => { const old = s.cards.find(x => x.id === c.id); if (old && old.rev >= c.rev)
         return {}; const local = s.dirty[c.id];
         if (local && !Object.keys(local).every(k => GEOMETRY.has(k)))

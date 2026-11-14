@@ -66,8 +66,14 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         return () => { stop(); unsub(); observer.disconnect(); cancelAnimationFrame(frame); };
     }, [handle]);
     const [initialTransform] = useState(() => { const v = handle.api.viewport.get(); return `translate(${v.x}px,${v.y}px) scale(${v.zoom})`; });
-    const state = useRef({ ids, tool, onSend, onRemove, setTool });
-    useEffect(() => { state.current = { ids, tool, onSend, onRemove, setTool }; });
+    const state = useRef({ ids, tool, onSend, onRemove, onRevert, setTool });
+    useEffect(() => { state.current = { ids, tool, onSend, onRemove, onRevert, setTool }; });
+    // Stable callbacks, so a memoized card only re-renders when its own props change.
+    const [item] = useState(() => ({
+        remove: (c: Card) => state.current.onRemove(c),
+        mention: (s: MentionScope) => state.current.onSend(s),
+        revert: (c: Card, keep: boolean) => state.current.onRevert(c, keep),
+    }));
 
     useEffect(() => {
         // Capture phase so ⌘↵ wins over the editor's own Mod-Enter binding. ⌘↵ opens the prompt bar for the focus; ⇧⌘↵ always sends everything pending.
@@ -207,7 +213,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             const below = b.y >= a.y + a.height;
             return <line key={`${e.source}-${e.target}`} x1={below ? a.x + 16 : a.x + a.width} y1={below ? a.y + a.height + 4 : a.y + 16} x2={below ? b.x + 16 : b.x} y2={below ? b.y - 4 : b.y + 16} stroke="currentColor" opacity=".35" markerEnd="url(#arrow)"/>;
         })}</svg>
-        {shown && <div aria-hidden={!outline} className={cn('pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03]', !live && 'transition-[left,top,width,height] duration-150 ease-out')} style={{ left: shown.x, top: shown.y, width: shown.width, height: shown.height, borderWidth: 2 / view.zoom }}>
+        {shown && <div aria-hidden={!outline} className={cn('pointer-events-none absolute rounded-2xl in-data-moving:invisible border-2 border-primary/40 bg-primary/[0.03]', !live && 'transition-[left,top,width,height] duration-150 ease-out')} style={{ left: shown.x, top: shown.y, width: shown.width, height: shown.height, borderWidth: 2 / view.zoom }}>
           {outline && !live && handles.map(h => <div key={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)} onPointerDown={startOutline(h)}/>)}
           {outline && !live && !open && <button type="button" title="Ask about this group" className="pointer-events-auto absolute top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button>}
           {outline && !live && open && <form className="pointer-events-auto absolute top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
@@ -221,7 +227,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             <p className="mt-1.5 px-1 text-xs text-muted-foreground">↵ send · empty ↵ sends the group as-is · esc close</p>
           </form>}
         </div>}
-        {cards.map(c => <BoardItem key={c.id} card={c} base={base} zoom={view.zoom} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={onRemove} onMention={(s: MentionScope) => onSend(s)} onRevert={onRevert}/>)}
+        {cards.map(c => <BoardItem key={c.id} card={c} base={base} zoom={view.zoom} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert}/>)}
         {stroke && <svg className="pointer-events-none absolute overflow-visible text-foreground" width="1" height="1" aria-hidden="true"><polyline points={stroke.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </BoardWorld>
       {tool === 'draw' && <div aria-label="Drawing surface: drag to draw, Escape to stop" className="absolute inset-0 z-10 cursor-crosshair" onPointerDown={drawDown} onPointerMove={drawMove} onPointerUp={drawUp} onPointerCancel={() => { drawing.current = null; setStroke(null); }}/>}

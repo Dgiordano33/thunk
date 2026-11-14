@@ -43,3 +43,13 @@ export function BoardRoot({ handle, ...props }: { handle: BoardHandle } & PartPr
 export function BoardWorld(props: PartProps<'div'>) {
     return usePart(board, 'world', {}, props, 'div');
 }
+
+/** A card's own element, keyed by its id. */
+export function BoardCard({ value, ...props }: { value: string } & PartProps<'article'>) {
+    return usePart(board, 'card', { value }, props, 'article');
+}
+
+/** Drags the card `value`; arrows nudge it. */
+export function BoardGrip({ value, ...props }: { value: string } & PartProps<'button'>) {
+    return usePart(board, 'grip', { value }, props, 'button');
+}
