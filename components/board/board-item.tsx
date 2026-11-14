@@ -107,7 +107,7 @@ export const BoardItem = memo(function BoardItem({ card: c, base, visible, selec
           <BoardToggle size="xs" pressed={tool === 'draw'} onPressedChange={on => setTool(on ? 'draw' : 'none')}><PencilIcon aria-hidden="true"/>Draw</BoardToggle>
         </>}
         {plotted && <BoardToggle size="xs" pressed={showData} onPressedChange={setShowData}><TableIcon aria-hidden="true"/>Data</BoardToggle>}
-        {c.chartSource && <Confirm title="Confirm refresh" open={confirming} onOpenChange={(open, details) => {
+        {c.chartSource && <Confirm title="Confirm refresh" hint={`Re-run: ${c.chartSource.command}${c.chartSource.refreshedAt ? `\nLast refreshed ${new Date(c.chartSource.refreshedAt).toLocaleString()}` : ''}`} open={confirming} onOpenChange={(open, details) => {
             // An approved command runs straight away; only a first run asks.
             if (open && c.chartSource?.approved) { details.cancel(); void refresh(); return; }
             setConfirming(open);

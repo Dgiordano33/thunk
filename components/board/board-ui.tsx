@@ -65,17 +65,19 @@ export function Hint({ label, shortcut, side = 'top', children }: { label: React
 
 /**
  * A small confirmation anchored to its trigger. It opens in the top layer, so the canvas's transform never
- * scales or clips it. `onOpenChange` can cancel an open, like when there is nothing to confirm.
+ * scales or clips it. `onOpenChange` can cancel an open, like when there is nothing to confirm. `hint` is the
+ * trigger's tooltip, which stays available after the confirmation is no longer asked for.
  */
-export function Confirm({ open, onOpenChange, trigger, title, children }: {
+export function Confirm({ open, onOpenChange, trigger, hint, title, children }: {
     open: boolean;
+    hint?: ReactNode;
     onOpenChange: ComponentProps<typeof Popover>['onOpenChange'];
     trigger: ReactElement<Record<string, unknown>>;
     title: ReactNode;
     children: ReactNode;
 }) {
     return <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger render={trigger}/>
+      {hint ? <Hint label={hint}><PopoverTrigger render={trigger}/></Hint> : <PopoverTrigger render={trigger}/>}
       <PopoverContent side="bottom" align="end" sideOffset={6} data-scroll className="z-50 w-80 rounded-lg border bg-popover p-2.5 text-xs text-popover-foreground shadow-md">
         <PopoverTitle className="sr-only">{title}</PopoverTitle>
         {children}

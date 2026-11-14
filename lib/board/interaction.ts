@@ -69,10 +69,14 @@ export function movePatches(cards: Pick<Card, 'id' | 'x' | 'y' | 'below'>[], nex
 /** A card width from a resize: whole pixels, kept within bounds. */
 export const widthPatch = (width: number): Pick<Card, 'width'> => ({ width: Math.round(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, width))) });
 
-/** The focus after a Shift-drag rectangle: what it touched joins the focus, and is no longer excluded from it. */
-export function lassoFocus(focus: Focus, keys: string[]): Partial<Focus> {
-    const hit = new Set(keys);
-    return { add: [...new Set([...focus.add, ...keys])], remove: focus.remove.filter(id => !hit.has(id)) };
+/**
+ * The focus after a Shift-drag rectangle. `keys` is the selection it ends with: the focus before (`inFocus`) plus
+ * what it touched. Only cards not already in focus join `add`, so cards in it through the anchor's cluster stay
+ * there for that reason alone and leave when moved away; a joining card is no longer excluded.
+ */
+export function lassoFocus(focus: Focus, keys: string[], inFocus: string[]): Partial<Focus> {
+    const before = new Set(inFocus), joined = keys.filter(id => !before.has(id)), hit = new Set(joined);
+    return { add: [...new Set([...focus.add, ...joined])], remove: focus.remove.filter(id => !hit.has(id)) };
 }
 
 /** The focus after resizing its outline: exactly what sits inside, keeping the anchor only if it still does. */

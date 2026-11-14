@@ -212,7 +212,9 @@ test('interaction helpers: positions, stacks, move patches, widths, lasso, outli
   assert.deepEqual(movePatches([a,b,c,d],{b:{x:10,y:80},c:{x:10,y:150},d:{x:500,y:0},gone:{x:1,y:1}},'b'),{b:{x:10,y:80,below:null},c:{x:10,y:150}});
   assert.deepEqual(movePatches([a],{a:{x:5,y:5}},'a'),{a:{x:5,y:5}});
   assert.deepEqual(widthPatch(80.4),{width:120});assert.deepEqual(widthPatch(5000),{width:2000});assert.deepEqual(widthPatch(300.6),{width:301});
-  assert.deepEqual(lassoFocus({anchorId:null,rect:null,add:['a'],remove:['b','d']},['b','c']),{add:['a','b','c'],remove:['d']});
+  assert.deepEqual(lassoFocus({anchorId:null,rect:null,add:['a'],remove:['b','d']},['a','b','c'],['a']),{add:['a','b','c'],remove:['d']});
+  // Cards already in focus through the anchor's cluster are not pinned into `add`.
+  assert.deepEqual(lassoFocus({anchorId:'x',rect:null,add:[],remove:[]},['x','y','c'],['x','y']),{add:['c'],remove:[]});
   const f=outlineFocus([a,d],{anchorId:'d',rect:null,add:['x'],remove:['y']},{x:-10,y:-10,width:200,height:100});
   assert.deepEqual(f,{rect:{x:-10,y:-10,width:200,height:100},fixed:true,add:[],remove:[],anchorId:null});
   assert.equal(outlineFocus([a],{anchorId:'a',rect:null,add:[],remove:[]},{x:0,y:0,width:200,height:200}).anchorId,'a');

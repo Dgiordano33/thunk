@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/store/board-store';
 import { bounds, focusIds, type Rect } from '@/lib/board/focus';
@@ -59,17 +59,22 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     const pointer = useRef<Point>({ x: 40, y: 40 }), world = useRef<HTMLDivElement>(null);
     /** A background press that hasn't moved yet: released in place, it creates a text block. */
     const click = useRef<Point | null>(null);
-    // Which cards are on screen, re-read at most once a frame and only re-rendered when the set changes.
+    // Which cards are on screen. Read before paint on mount and whenever the cards change, so a card never renders
+    // static first and saves its static height; while panning or zooming, at most once a frame, re-rendering only
+    // when the set changes.
     const [shownIds, setShownIds] = useState<string[]>([]);
-    useEffect(() => {
+    const readShown = useRef(() => {});
+    useLayoutEffect(() => {
         let frame = 0;
-        const read = () => { frame = 0; const next = visibleIds(useBoard.getState().cards, handle.api.viewport.visible(), handle.api.viewport.get().zoom); setShownIds(ids => sameIds(ids, next) ? ids : next); };
+        const read = () => { cancelAnimationFrame(frame); frame = 0; const next = visibleIds(useBoard.getState().cards, handle.api.viewport.visible(), handle.api.viewport.get().zoom); setShownIds(ids => sameIds(ids, next) ? ids : next); };
+        readShown.current = read;
         read();
-        const stop = handle.instance.subscribe(() => { frame ||= requestAnimationFrame(read); }), unsub = useBoard.subscribe((s, before) => { if (s.cards !== before.cards) frame ||= requestAnimationFrame(read); });
+        const stop = handle.instance.subscribe(() => { frame ||= requestAnimationFrame(read); });
         const observer = new ResizeObserver(() => { frame ||= requestAnimationFrame(read); });
         if (ref.current) observer.observe(ref.current);
-        return () => { stop(); unsub(); observer.disconnect(); cancelAnimationFrame(frame); };
+        return () => { stop(); observer.disconnect(); cancelAnimationFrame(frame); };
     }, [handle]);
+    useLayoutEffect(() => readShown.current(), [cards]);
     const [initialTransform] = useState(() => { const v = handle.api.viewport.get(); return `translate(${v.x}px,${v.y}px) scale(${v.zoom})`; });
     const state = useRef({ ids, tool, onSend, onRemove, onRevert, setTool });
     useEffect(() => { state.current = { ids, tool, onSend, onRemove, onRevert, setTool }; });
@@ -122,7 +127,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (e.button !== 0 || !(background(e) || space.current)) return;
         setAsking(false);
-        e.currentTarget.focus({ preventScroll: true });
+        e.currentTarget.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
         if (!e.shiftKey || space.current) click.current = { x: e.clientX, y: e.clientY };
     };
     const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -164,7 +169,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     };
     const count = `${ids.length} ${ids.length === 1 ? 'item' : 'items'}`;
 
-    return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none select-none', tool === 'write' && 'cursor-text')}
+    return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset', tool === 'write' && 'cursor-text')}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { click.current = null; }}
       onPaste={e => { if (e.clipboardData.files.length && !editableTarget(e.target)) { e.preventDefault(); onUpload(e.clipboardData.files, pointer.current); } }}
       onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onUpload(e.dataTransfer.files, toWorld(e.clientX, e.clientY)); }}>
