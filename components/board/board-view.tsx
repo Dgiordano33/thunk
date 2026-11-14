@@ -6,7 +6,7 @@ import { PencilIcon, TypeIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NeedsYouTray } from './needs-you-tray';
 import { BoardSurface, useFocusIds, type Tool } from './board-surface';
-import { useViewport } from './use-viewport';
+import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
 import { boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
 import { useBoardPersistence } from '@/lib/client/use-board-persistence';
 import { useSession } from '@/lib/store/session-store';
@@ -39,8 +39,8 @@ export function BoardView({ projectId, slug, name, initial }: {
     const router = useRouter();
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
     const base = `/api/projects/${projectId}/board`;
-    const viewport = useViewport(initial.board.viewport, base, fail);
-    const { view, setView } = viewport;
+    const space = useRef(false);
+    const handle = useBoardPrimitive(initial.board.viewport, base, fail, { panning: () => space.current });
     const [sessionId, setSessionId] = useState(initial.board.agent?.sessionId), [activity, setActivity] = useState(''), [busy, setBusy] = useState(false), [deferred, setDeferred] = useState(false);
     const [tool, setTool] = useState<Tool>('write');
     const focusIds = useFocusIds();
@@ -171,7 +171,7 @@ export function BoardView({ projectId, slug, name, initial }: {
     catch (e) {
         fail(e);
     } };
-    const center = () => viewport.toWorld((viewport.ref.current?.getBoundingClientRect().left ?? 0) + viewport.size.width / 2, (viewport.ref.current?.getBoundingClientRect().top ?? 0) + viewport.size.height / 3);
+    const center = () => { const v = handle.api.viewport.visible(); return { x: (v.left + v.right) / 2, y: v.top + (v.bottom - v.top) / 3 }; };
     const count = board ? pendingOf(board, cards).cards.length + board.tombstones.length : 0;
     const focused = focusIds.length > 0;
     const quiet = useBoard(s => s.quiet !== null && s.quiet === s.focus.anchorId);
@@ -185,10 +185,15 @@ export function BoardView({ projectId, slug, name, initial }: {
       </div>
       <Button size="sm" variant="outline" onClick={() => createDoc(center())}>Add text</Button>
       <label className="cursor-pointer text-sm">Add image<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files)
-        void upload(e.target.files, center()); e.target.value = ''; }}/></label><Button size="sm" variant="outline" onClick={() => setView({ x: 0, y: 0, zoom: 1 })}>Reset view</Button><span className="text-xs text-muted-foreground">{Math.round(view.zoom * 100)}%</span></header>
+        void upload(e.target.files, center()); e.target.value = ''; }}/></label><Button size="sm" variant="outline" onClick={() => handle.api.viewport.setViewport({ x: 0, y: 0, zoom: 1 })}>Reset view</Button><ZoomLabel board={handle}/></header>
     {error && <div role="alert" className="z-30 bg-destructive/10 p-3 text-sm">{error} <Button size="xs" onClick={() => useBoard.setState({ error: null })}>Dismiss</Button></div>}
-    <BoardSurface base={base} viewport={viewport} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert}/>
+    <BoardSurface base={base} board={handle} space={space} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert}/>
     <footer className="z-20 flex items-center gap-3 border-t bg-background p-3"><p className="flex-1 truncate text-xs" aria-live="polite">{activity || 'Click anywhere to write, drop an image, or press D to draw. Drag the background to pan; pinch to zoom.'}</p><span className="text-sm">{focused && !quiet ? `${focusIds.length} in focus · ` : ''}{count} pending</span>{focused && <Button onClick={() => void send({ focus: focusIds })}>Send focus</Button>}<Button variant={focused ? 'outline' : 'default'} onClick={() => void send()} disabled={!count} title="Send every pending edit, comment and deletion on the canvas">{later ? 'Send all after this turn' : 'Send all'} <kbd className="text-[10px] opacity-70">{focused ? '⇧⌘↵' : '⌘↵'}</kbd></Button></footer>
     {sessionId && <NeedsYouTray />}
   </div>;
+}
+
+/** The zoom as a percentage; re-renders on its own as the view changes. */
+function ZoomLabel({ board }: { board: BoardHandle }) {
+    return <span className="text-xs text-muted-foreground tabular-nums">{Math.round(useView(board).zoom * 100)}%</span>;
 }

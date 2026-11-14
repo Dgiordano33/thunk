@@ -6,10 +6,10 @@ import { bounds, focusIds, intersecting, within, type Rect } from '@/lib/board/f
 import type { MentionScope, Scope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
 import { BoardItem } from './board-item';
-import type { useViewport } from './use-viewport';
+import { BoardRoot, BoardWorld, useView, type BoardHandle } from './use-board-primitive';
+import { sameIds, visibleIds } from '@/lib/board/interaction';
 
 type Point = { x: number; y: number };
-type Viewport = ReturnType<typeof useViewport>;
 export type Tool = 'write' | 'draw';
 
 /** World-space padding between the focus outline and the items it wraps. */
@@ -27,9 +27,11 @@ const editableTarget = (t: EventTarget | null) => t instanceof HTMLElement && ([
 const rectFrom = (a: Point, b: Point): Rect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) });
 const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by });
 
-export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert }: {
+export function BoardSurface({ base, board: handle, space, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert }: {
     base: string;
-    viewport: Viewport;
+    board: BoardHandle;
+    /** Whether Space is held, which pans from anywhere. */
+    space: React.RefObject<boolean>;
     tool: Tool;
     setTool: (t: Tool) => void;
     onCreateDoc: (p: Point) => void;
@@ -39,7 +41,8 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
     onSend: (scope?: Scope) => void;
     onRevert: (c: Card, keep: boolean) => Promise<void>;
 }) {
-    const { ref, view, setView, size, toWorld } = viewport;
+    const view = useView(handle), toWorld = handle.api.viewport.toCanvas;
+    const ref = useRef<HTMLDivElement>(null);
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), anchorId = useBoard(s => s.focus.anchorId), quiet = useBoard(s => s.quiet !== null && s.quiet === s.focus.anchorId);
     const ids = useFocusIds();
     const outline = useMemo(() => { const b = quiet ? null : bounds(cards, ids); return b && grow(b, PAD); }, [cards, ids, quiet]);
@@ -47,8 +50,22 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
     // The prompt bar under the focus outline: ⌘↵ opens it, ↵ sends the group with what was typed.
     const [asking, setAsking] = useState(false), [ask, setAsk] = useState('');
     const open = asking && ids.length > 0;
-    const space = useRef(false), pointer = useRef<Point>({ x: 40, y: 40 }), world = useRef<HTMLDivElement>(null);
-    const press = useRef<{ kind: 'pan' | 'marquee' | 'outline'; x: number; y: number; ox: number; oy: number; start: Point; rect?: Rect; edges?: string; moved: boolean } | null>(null);
+    const pointer = useRef<Point>({ x: 40, y: 40 }), world = useRef<HTMLDivElement>(null);
+    const press = useRef<{ kind: 'marquee' | 'outline'; x: number; y: number; start: Point; rect?: Rect; edges?: string; moved: boolean } | null>(null);
+    /** A background press that hasn't moved yet: released in place, it creates a text block. */
+    const click = useRef<Point | null>(null);
+    // Which cards are on screen, re-read at most once a frame and only re-rendered when the set changes.
+    const [shownIds, setShownIds] = useState<string[]>([]);
+    useEffect(() => {
+        let frame = 0;
+        const read = () => { frame = 0; const next = visibleIds(useBoard.getState().cards, handle.api.viewport.visible(), handle.api.viewport.get().zoom); setShownIds(ids => sameIds(ids, next) ? ids : next); };
+        read();
+        const stop = handle.instance.subscribe(() => { frame ||= requestAnimationFrame(read); }), unsub = useBoard.subscribe((s, before) => { if (s.cards !== before.cards) frame ||= requestAnimationFrame(read); });
+        const observer = new ResizeObserver(() => { frame ||= requestAnimationFrame(read); });
+        if (ref.current) observer.observe(ref.current);
+        return () => { stop(); unsub(); observer.disconnect(); cancelAnimationFrame(frame); };
+    }, [handle]);
+    const [initialTransform] = useState(() => { const v = handle.api.viewport.get(); return `translate(${v.x}px,${v.y}px) scale(${v.zoom})`; });
     const state = useRef({ ids, tool, onSend, onRemove, setTool });
     useEffect(() => { state.current = { ids, tool, onSend, onRemove, setTool }; });
 
@@ -86,27 +103,31 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
         window.addEventListener('keyup', up);
         window.addEventListener('blur', up);
         return () => { window.removeEventListener('keydown', capture, true); window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', up); };
-    }, []);
+    }, [space]);
 
     const background = (e: React.PointerEvent) => e.target === e.currentTarget || e.target === world.current;
+    // Runs before the primitive's own press handler, which pans; preventing the default here keeps it from panning.
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (e.button !== 0 || !(background(e) || space.current)) return;
-        const start = toWorld(e.clientX, e.clientY);
-        press.current = { kind: e.shiftKey && !space.current ? 'marquee' : 'pan', x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, start, moved: false };
-        e.currentTarget.setPointerCapture(e.pointerId);
-        e.preventDefault();
         setAsking(false);
-        if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+        e.currentTarget.focus({ preventScroll: true });
+        if (e.shiftKey && !space.current) {
+            press.current = { kind: 'marquee', x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            return;
+        }
+        click.current = { x: e.clientX, y: e.clientY };
     };
     const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         pointer.current = toWorld(e.clientX, e.clientY);
+        if (click.current && Math.hypot(e.clientX - click.current.x, e.clientY - click.current.y) >= CLICK_SLOP) click.current = null;
         const p = press.current;
         if (!p) return;
         const dx = e.clientX - p.x, dy = e.clientY - p.y;
         if (Math.hypot(dx, dy) >= CLICK_SLOP) p.moved = true;
         if (!p.moved) return;
-        if (p.kind === 'pan') setView(v => ({ ...v, x: p.ox + dx, y: p.oy + dy }));
-        else if (p.kind === 'marquee') setLive(rectFrom(p.start, pointer.current));
+        if (p.kind === 'marquee') setLive(rectFrom(p.start, pointer.current));
         else if (p.rect && p.edges) {
             const r = p.rect, wx = dx / view.zoom, wy = dy / view.zoom;
             let { x, y, width, height } = r;
@@ -118,10 +139,11 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
         }
     };
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (click.current && !space.current && tool === 'write') onCreateDoc(toWorld(e.clientX, e.clientY));
+        click.current = null;
         const p = press.current;
         press.current = null;
         if (!p) return;
-        if (p.kind === 'pan' && !p.moved && !space.current && tool === 'write') onCreateDoc(toWorld(e.clientX, e.clientY));
         if (p.kind === 'marquee' && live) {
             // Shift-drag adds whatever it touches.
             const { focus, cards } = useBoard.getState(), hit = intersecting(cards, live);
@@ -138,14 +160,14 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
         if (!outline) return;
         e.stopPropagation();
         e.preventDefault();
-        press.current = { kind: 'outline', x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, start: toWorld(e.clientX, e.clientY), rect: outline, edges, moved: false };
+        press.current = { kind: 'outline', x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), rect: outline, edges, moved: false };
         ref.current?.setPointerCapture(e.pointerId);
     };
 
     const drawing = useRef<Point[] | null>(null);
     const drawDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.button !== 0) return;
-        if (space.current) return onPointerDown(e);
+        // While Space is held the press bubbles to the canvas, which pans.
+        if (e.button !== 0 || space.current) return;
         e.stopPropagation();
         e.preventDefault();
         drawing.current = [toWorld(e.clientX, e.clientY)];
@@ -174,11 +196,11 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
     const shown = live ?? outline;
     const count = `${ids.length} ${ids.length === 1 ? 'item' : 'items'}`;
 
-    return <div ref={ref} className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none', tool === 'write' && 'cursor-text')}
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { press.current = null; setLive(null); }}
+    return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none', tool === 'write' && 'cursor-text')}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { press.current = null; click.current = null; setLive(null); }}
       onPaste={e => { if (e.clipboardData.files.length && !editableTarget(e.target)) { e.preventDefault(); onUpload(e.clipboardData.files, pointer.current); } }}
       onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onUpload(e.dataTransfer.files, toWorld(e.clientX, e.clientY)); }}>
-      <div ref={world} className="absolute inset-0 origin-top-left" style={{ transform: `translate3d(${view.x}px,${view.y}px,0) scale(${view.zoom})`, transformOrigin: '0 0' }}>
+      <BoardWorld ref={world} className="absolute inset-0 origin-top-left" style={{ transform: initialTransform, transformOrigin: '0 0' }}>
         <svg className="pointer-events-none absolute overflow-visible text-muted-foreground" width="1" height="1" aria-hidden="true"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="currentColor"/></marker></defs>{board?.edges.map(e => {
             const a = cards.find(c => c.id === e.source), b = cards.find(c => c.id === e.target);
             if (!a || !b) return null;
@@ -199,12 +221,9 @@ export function BoardSurface({ base, viewport, tool, setTool, onCreateDoc, onDra
             <p className="mt-1.5 px-1 text-xs text-muted-foreground">↵ send · empty ↵ sends the group as-is · esc close</p>
           </form>}
         </div>}
-        {cards.map(c => {
-            const visible = view.zoom >= .4 && c.x * view.zoom + view.x < size.width && (c.x + c.width) * view.zoom + view.x > 0 && c.y * view.zoom + view.y < size.height && (c.y + c.height) * view.zoom + view.y > 0;
-            return <BoardItem key={c.id} card={c} base={base} zoom={view.zoom} visible={visible || c.id === anchorId} selected={c.id === anchorId} onRemove={onRemove} onMention={(s: MentionScope) => onSend(s)} onRevert={onRevert}/>;
-        })}
+        {cards.map(c => <BoardItem key={c.id} card={c} base={base} zoom={view.zoom} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={onRemove} onMention={(s: MentionScope) => onSend(s)} onRevert={onRevert}/>)}
         {stroke && <svg className="pointer-events-none absolute overflow-visible text-foreground" width="1" height="1" aria-hidden="true"><polyline points={stroke.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
-      </div>
+      </BoardWorld>
       {tool === 'draw' && <div aria-label="Drawing surface: drag to draw, Escape to stop" className="absolute inset-0 z-10 cursor-crosshair" onPointerDown={drawDown} onPointerMove={drawMove} onPointerUp={drawUp} onPointerCancel={() => { drawing.current = null; setStroke(null); }}/>}
-    </div>;
+    </BoardRoot>;
 }
