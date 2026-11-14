@@ -10,6 +10,7 @@ import type { Project, Workspace } from "./types";
 
 const exec = promisify(execFile);
 // shortcut: snapshots retain files only; add index/history rewind if that becomes part of the review flow.
+// Submodules are recorded as their commit pointer only: their contents are neither snapshotted nor touched on rewind.
 export type Checkpoint = { id: string; sessionId: string; messageId: string; label: string; createdAt: string; head: string };
 async function temporaryIndex<T>(cwd: string, fn: (run: (args: string[]) => Promise<string>) => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "thunk-index-"));
@@ -30,9 +31,6 @@ async function assertSupported(cwd: string) {
     throw new Error("Checkpoints do not support sparse or assume-unchanged files");
   }
   if (await git(cwd, ["ls-files", "--unmerged"])) throw new Error("Resolve Git conflicts before using checkpoints");
-  if ((await git(cwd, ["ls-files", "--stage"])).split("\n").some((line) => line.startsWith("160000 "))) {
-    throw new Error("Checkpoints do not support repositories containing submodules");
-  }
   for (const name of ["MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD"]) {
     const file = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-path", name]);
     if (await stat(file).catch(() => null)) throw new Error("Finish the Git operation before using checkpoints");

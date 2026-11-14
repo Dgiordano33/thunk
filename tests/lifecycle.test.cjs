@@ -325,6 +325,22 @@ test("snapshots include newly staged ignored files without changing staging", as
   assert.equal(git(cwd, "show", ":forced"), "staged content");
 });
 
+test("checkpoints work in repositories with submodules and leave submodule contents alone", async (t) => {
+  const { cwd, ctx } = await repo(t);
+  const { cwd: lib } = await fixture(t);
+  git(lib, "init", "-b", "main"); await fs.writeFile(path.join(lib, "lib.txt"), "v1"); git(lib, "add", "."); git(lib, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "lib");
+  git(cwd, "-c", "protocol.file.allow=always", "submodule", "add", lib, "vendor/lib"); await commit(cwd, "submodule\n");
+  const subHead = git(path.join(cwd, "vendor/lib"), "rev-parse", "HEAD");
+  await fs.writeFile(path.join(cwd, "file"), "before turn\n");
+  const cp = await captureCheckpoint(cwd, ctx.workspace.id, "s", "m", "with submodule");
+  await fs.writeFile(path.join(cwd, "file"), "after turn\n");
+  await fs.writeFile(path.join(cwd, "vendor/lib/lib.txt"), "edited in submodule");
+  await restoreCheckpoint(cwd, ctx.workspace.id, cp.id);
+  assert.equal(await fs.readFile(path.join(cwd, "file"), "utf8"), "before turn\n");
+  assert.equal(await fs.readFile(path.join(cwd, "vendor/lib/lib.txt"), "utf8"), "edited in submodule");
+  assert.equal(git(path.join(cwd, "vendor/lib"), "rev-parse", "HEAD"), subHead);
+});
+
 test("checkpoints refuse index flags that could hide working-tree edits", async (t) => {
   const { cwd, ctx } = await repo(t);
   git(cwd, "update-index", "--assume-unchanged", "file");

@@ -22,7 +22,7 @@ import { listItems } from "@/lib/vault/store";
 import { vaultPrompt, vaultTools } from "@/lib/vault/tools";
 import type { VaultItem } from "@/lib/vault/types";
 import { buildCanUseTool } from "./permissions";
-import type { LiveSession } from "./session-registry";
+import { emit, type LiveSession } from "./session-registry";
 import type { AgentProvider } from "./types";
 
 export const CANVAS_PROMPT = `
@@ -105,7 +105,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
-        ...boardTools(live).map(t => tool(t.name, t.description, t.schema, t.handler)),
+        ...boardTools(live, emit).map(t => tool(t.name, t.description, t.schema, t.handler)),
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine" }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
