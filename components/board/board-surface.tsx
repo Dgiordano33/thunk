@@ -2,12 +2,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/store/board-store';
-import { bounds, focusIds, intersecting, within, type Rect } from '@/lib/board/focus';
+import { bounds, focusIds, intersecting, type Rect } from '@/lib/board/focus';
 import type { MentionScope, Scope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
 import { BoardItem } from './board-item';
-import { BoardRoot, BoardWorld, useView, type BoardHandle } from './use-board-primitive';
-import { sameIds, visibleIds } from '@/lib/board/interaction';
+import { BoardHandle, BoardOutline, BoardRoot, BoardWorld, useView, type BoardHandle as Handle } from './use-board-primitive';
+import type { ResizeHandle } from './board-primitive';
+import { OUTLINE, sameIds, visibleIds } from '@/lib/board/interaction';
 
 type Point = { x: number; y: number };
 export type Tool = 'write' | 'draw';
@@ -23,13 +24,19 @@ export function useFocusIds() {
     return useMemo(() => focusIds(cards, focus), [cards, focus]);
 }
 
+/** The focus outline in world space: the focus's bounds plus padding, hidden while a new block is first typed. */
+export function useOutline(ids: string[]): Rect | null {
+    const cards = useBoard(s => s.cards), quiet = useBoard(s => s.quiet !== null && s.quiet === s.focus.anchorId);
+    return useMemo(() => { const b = quiet ? null : bounds(cards, ids); return b && grow(b, PAD); }, [cards, ids, quiet]);
+}
+
 const editableTarget = (t: EventTarget | null) => t instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable);
 const rectFrom = (a: Point, b: Point): Rect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) });
 const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by });
 
 export function BoardSurface({ base, board: handle, space, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert }: {
     base: string;
-    board: BoardHandle;
+    board: Handle;
     /** Whether Space is held, which pans from anywhere. */
     space: React.RefObject<boolean>;
     tool: Tool;
@@ -43,15 +50,14 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
 }) {
     const view = useView(handle), toWorld = handle.api.viewport.toCanvas;
     const ref = useRef<HTMLDivElement>(null);
-    const cards = useBoard(s => s.cards), board = useBoard(s => s.board), anchorId = useBoard(s => s.focus.anchorId), quiet = useBoard(s => s.quiet !== null && s.quiet === s.focus.anchorId);
-    const ids = useFocusIds();
-    const outline = useMemo(() => { const b = quiet ? null : bounds(cards, ids); return b && grow(b, PAD); }, [cards, ids, quiet]);
+    const cards = useBoard(s => s.cards), board = useBoard(s => s.board), anchorId = useBoard(s => s.focus.anchorId);
+    const ids = useFocusIds(), outline = useOutline(ids);
     const [live, setLive] = useState<Rect | null>(null), [stroke, setStroke] = useState<Point[] | null>(null);
     // The prompt bar under the focus outline: ⌘↵ opens it, ↵ sends the group with what was typed.
     const [asking, setAsking] = useState(false), [ask, setAsk] = useState('');
     const open = asking && ids.length > 0;
     const pointer = useRef<Point>({ x: 40, y: 40 }), world = useRef<HTMLDivElement>(null);
-    const press = useRef<{ kind: 'marquee' | 'outline'; x: number; y: number; start: Point; rect?: Rect; edges?: string; moved: boolean } | null>(null);
+    const press = useRef<{ x: number; y: number; start: Point; moved: boolean } | null>(null);
     /** A background press that hasn't moved yet: released in place, it creates a text block. */
     const click = useRef<Point | null>(null);
     // Which cards are on screen, re-read at most once a frame and only re-rendered when the set changes.
@@ -118,7 +124,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         setAsking(false);
         e.currentTarget.focus({ preventScroll: true });
         if (e.shiftKey && !space.current) {
-            press.current = { kind: 'marquee', x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), moved: false };
+            press.current = { x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), moved: false };
             e.currentTarget.setPointerCapture(e.pointerId);
             e.preventDefault();
             return;
@@ -133,16 +139,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         const dx = e.clientX - p.x, dy = e.clientY - p.y;
         if (Math.hypot(dx, dy) >= CLICK_SLOP) p.moved = true;
         if (!p.moved) return;
-        if (p.kind === 'marquee') setLive(rectFrom(p.start, pointer.current));
-        else if (p.rect && p.edges) {
-            const r = p.rect, wx = dx / view.zoom, wy = dy / view.zoom;
-            let { x, y, width, height } = r;
-            if (p.edges.includes('w')) { x = r.x + Math.min(wx, r.width - 40); width = r.width - (x - r.x); }
-            if (p.edges.includes('e')) width = Math.max(40, r.width + wx);
-            if (p.edges.includes('n')) { y = r.y + Math.min(wy, r.height - 40); height = r.height - (y - r.y); }
-            if (p.edges.includes('s')) height = Math.max(40, r.height + wy);
-            setLive({ x, y, width, height });
-        }
+        setLive(rectFrom(p.start, pointer.current));
     };
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         if (click.current && !space.current && tool === 'write') onCreateDoc(toWorld(e.clientX, e.clientY));
@@ -150,26 +147,13 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         const p = press.current;
         press.current = null;
         if (!p) return;
-        if (p.kind === 'marquee' && live) {
+        if (live) {
             // Shift-drag adds whatever it touches.
             const { focus, cards } = useBoard.getState(), hit = intersecting(cards, live);
             useBoard.getState().setFocus({ add: [...new Set([...focus.add, ...hit])], remove: focus.remove.filter(id => !hit.includes(id)) });
         }
-        if (p.kind === 'outline' && live) {
-            // Resizing the outline redefines the focus as exactly what sits inside it, so it can shrink as well as grow.
-            const { focus, cards } = useBoard.getState(), inside = within(cards, live);
-            useBoard.getState().setFocus({ rect: live, fixed: true, add: [], remove: [], anchorId: focus.anchorId && inside.includes(focus.anchorId) ? focus.anchorId : null });
-        }
         setLive(null);
     };
-    const startOutline = (edges: string) => (e: React.PointerEvent) => {
-        if (!outline) return;
-        e.stopPropagation();
-        e.preventDefault();
-        press.current = { kind: 'outline', x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), rect: outline, edges, moved: false };
-        ref.current?.setPointerCapture(e.pointerId);
-    };
-
     const drawing = useRef<Point[] | null>(null);
     const drawDown = (e: React.PointerEvent<HTMLDivElement>) => {
         // While Space is held the press bubbles to the canvas, which pans.
@@ -194,12 +178,11 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         setStroke(null);
     };
 
-    const handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+    const handles: ResizeHandle[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
     const handleStyle = (h: string): React.CSSProperties => {
         const s = 12 / view.zoom, half = -s / 2;
-        return { width: h.length === 1 && 'ns'.includes(h) ? undefined : s, height: h.length === 1 && 'ew'.includes(h) ? undefined : s, top: h.includes('n') ? half : h.includes('s') ? undefined : s, bottom: h.includes('s') ? half : h.includes('n') ? undefined : s, left: h.includes('w') ? half : h.includes('e') ? undefined : s, right: h.includes('e') ? half : h.includes('w') ? undefined : s, cursor: `${h === 'n' || h === 's' ? 'ns' : h === 'e' || h === 'w' ? 'ew' : h === 'ne' || h === 'sw' ? 'nesw' : 'nwse'}-resize` };
+        return { width: h.length === 1 && 'ns'.includes(h) ? undefined : s, height: h.length === 1 && 'ew'.includes(h) ? undefined : s, top: h.includes('n') ? half : h.includes('s') ? undefined : s, bottom: h.includes('s') ? half : h.includes('n') ? undefined : s, left: h.includes('w') ? half : h.includes('e') ? undefined : s, right: h.includes('e') ? half : h.includes('w') ? undefined : s };
     };
-    const shown = live ?? outline;
     const count = `${ids.length} ${ids.length === 1 ? 'item' : 'items'}`;
 
     return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none', tool === 'write' && 'cursor-text')}
@@ -213,10 +196,11 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             const below = b.y >= a.y + a.height;
             return <line key={`${e.source}-${e.target}`} x1={below ? a.x + 16 : a.x + a.width} y1={below ? a.y + a.height + 4 : a.y + 16} x2={below ? b.x + 16 : b.x} y2={below ? b.y - 4 : b.y + 16} stroke="currentColor" opacity=".35" markerEnd="url(#arrow)"/>;
         })}</svg>
-        {shown && <div aria-hidden={!outline} className={cn('pointer-events-none absolute rounded-2xl in-data-moving:invisible border-2 border-primary/40 bg-primary/[0.03]', !live && 'transition-[left,top,width,height] duration-150 ease-out')} style={{ left: shown.x, top: shown.y, width: shown.width, height: shown.height, borderWidth: 2 / view.zoom }}>
-          {outline && !live && handles.map(h => <div key={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)} onPointerDown={startOutline(h)}/>)}
-          {outline && !live && !open && <button type="button" title="Ask about this group" className="pointer-events-auto absolute top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button>}
-          {outline && !live && open && <form className="pointer-events-auto absolute top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
+        {live && <div aria-hidden="true" className="pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03]" style={{ left: live.x, top: live.y, width: live.width, height: live.height, borderWidth: 2 / view.zoom }}/>}
+        {outline && !live && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 2 / view.zoom }}>
+          {handles.map(h => <BoardHandle key={h} box={OUTLINE} handle={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)}/>)}
+          {!open && <button type="button" title="Ask about this group" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button>}
+          {open && <form className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
             onSubmit={e => { e.preventDefault(); onSend({ focus: ids, ...(ask.trim() ? { prompt: ask.trim() } : {}) }); setAsk(''); setAsking(false); }}>
             <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 shadow-lg">
               <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium">{count}</span>
@@ -226,8 +210,8 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             </div>
             <p className="mt-1.5 px-1 text-xs text-muted-foreground">↵ send · empty ↵ sends the group as-is · esc close</p>
           </form>}
-        </div>}
-        {cards.map(c => <BoardItem key={c.id} card={c} base={base} zoom={view.zoom} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert}/>)}
+        </BoardOutline>}
+        {cards.map(c => <BoardItem key={c.id} card={c} base={base} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert}/>)}
         {stroke && <svg className="pointer-events-none absolute overflow-visible text-foreground" width="1" height="1" aria-hidden="true"><polyline points={stroke.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </BoardWorld>
       {tool === 'draw' && <div aria-label="Drawing surface: drag to draw, Escape to stop" className="absolute inset-0 z-10 cursor-crosshair" onPointerDown={drawDown} onPointerMove={drawMove} onPointerUp={drawUp} onPointerCancel={() => { drawing.current = null; setStroke(null); }}/>}

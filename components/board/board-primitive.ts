@@ -1,7 +1,8 @@
-import { createChange, createMove, createViewport, definePrimitive, live, type ChangeDetails, type MoveDraft, type MovePoint, type MoveReason, type Viewport, type ViewportReason } from '@ui-sdk/core';
+import { createChange, createMove, createResize, createViewport, definePrimitive, live, type ChangeDetails, type MoveDraft, type MovePoint, type MoveReason, type ResizeBox, type ResizeDraft, type ResizeHandle, type ResizeReason, type Viewport, type ViewportReason } from '@ui-sdk/core';
+import { MAX_WIDTH, MIN_OUTLINE, MIN_WIDTH, OUTLINE } from '@/lib/board/interaction';
 
 /**
- * The canvas interaction layer: pan and zoom, and moving cards. Every UI SDK behavior the canvas uses lives here,
+ * The canvas interaction layer: pan and zoom, moving cards, resizing them and the focus outline. Every UI SDK behavior the canvas uses lives here,
  * so a beta API change touches one file.
  */
 
@@ -22,7 +23,12 @@ export type BoardOptions = {
     onPositionsChange?: (value: Record<string, MovePoint>, details: ChangeDetails<MoveReason> & { active?: string }) => void;
     /** The cards that move with the one pressed, like those stacked under it. */
     group?: (key: string) => string[];
+    /** Each resizable card's box, and the focus outline's under OUTLINE. Controlled. */
+    boxes?: Record<string, ResizeBox>;
+    /** `active` is the box that changed. */
+    onBoxesChange?: (value: Record<string, ResizeBox>, details: ChangeDetails<ResizeReason> & { active?: string }) => void;
 };
+export type { ResizeHandle };
 
 const arrows: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
@@ -30,14 +36,17 @@ const background = (event: Event, root: HTMLElement, world: HTMLElement | undefi
 
 export const board = definePrimitive({
     name: 'board',
-    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback' },
-    controlled: ['positions'],
+    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback' },
+    controlled: ['positions', 'boxes'],
     state: (options: BoardOptions) => ({
         viewport: options.defaultViewport ?? { x: 0, y: 0, zoom: 1 },
         positions: options.positions ?? {},
         moving: null as MoveDraft | null,
+        boxes: options.boxes ?? {},
+        sizing: null as ResizeDraft | null,
     }),
-    live: ['viewport', 'moving'],
+    sync: options => options.boxes ? { boxes: options.boxes } : {},
+    live: ['viewport', 'moving', 'sizing'],
     api: context => {
         const change = createChange(context), { store } = context;
         // Positions follow the options, except a card being dragged keeps where it started, so a remote
@@ -66,9 +75,34 @@ export const board = definePrimitive({
             group,
             scale: () => viewport.get().zoom,
         });
+        let sized: string | undefined;
+        const resize = createResize(context, {
+            boxes: state => state.boxes,
+            draft: 'sizing',
+            set: (value, details) => change('boxes', value, { ...details, active: sized }),
+            min: key => key === OUTLINE ? { width: MIN_OUTLINE, height: MIN_OUTLINE } : { width: MIN_WIDTH, height: 1 },
+            max: key => key === OUTLINE ? undefined : { width: MAX_WIDTH, height: Number.MAX_SAFE_INTEGER },
+            scale: () => viewport.get().zoom,
+        });
         return {
             viewport,
             move,
+            resize,
+            /** Drags a handle on a card's edge or the focus outline. */
+            size(event: PointerEvent, key: string, handle: ResizeHandle, el: HTMLElement) {
+                if (context.options().panning?.()) return;
+                sized = key;
+                resize.pointerdown(event, key, handle, el);
+                event.preventDefault();
+            },
+            /** Left and right on a card's width handle change its width by NUDGE, or LARGE_NUDGE with Shift. */
+            widen(event: KeyboardEvent, key: string) {
+                const arrow = arrows[event.key];
+                if (!arrow?.[0] || event.altKey || event.metaKey || event.ctrlKey) return;
+                event.preventDefault();
+                sized = key;
+                resize.resizeBy(key, 'e', arrow[0] * (event.shiftKey ? LARGE_NUDGE : NUDGE), 0, { reason: 'resize-key', event });
+            },
             /** Drags a card, and what is stacked under it, by its grip. */
             grab(event: PointerEvent, key: string, el: HTMLElement) {
                 if (context.options().panning?.()) return;
@@ -117,7 +151,23 @@ export const board = definePrimitive({
         /** A card, keyed by its id. A drag moves it with `translate` until the drop commits. */
         card: slot<{ value: string }>({
             props: { value: 'string' },
-            live: live((state, { api, key }) => ({ style: api.move.style(state, key), 'data-dragging': api.move.dragging(state, key) ? '' : undefined })),
+            live: live((state, { api, key }) => ({
+                style: [api.move.style(state, key), api.resize.style(state, key)].filter(Boolean).join(';') || undefined,
+                'data-dragging': api.move.dragging(state, key) ? '' : undefined,
+            })),
+        }),
+        /** The focus outline; a drag of its handles sets `--resize-*` until the drop. */
+        outline: slot({
+            live: live((state, { api }) => ({ style: api.resize.style(state, OUTLINE), 'data-resizing': api.resize.dragging(state, OUTLINE) ? '' : undefined })),
+        }),
+        /** A resize handle, keyed `${box}:${handle}`: a card's width edge or one of the outline's eight. */
+        handle: slot<{ value: string; box: string; handle: ResizeHandle }>({
+            props: { value: 'string', box: 'string', handle: 'string' },
+            attrs: (_state, { props, api }) => api.resize.handleAttrs(props.handle),
+            on: {
+                pointerdown: (event, { el, api, props }) => { if (el) api.size(event, props.box, props.handle, el); },
+                keydown: (event, { api, props }) => { if (props.box !== OUTLINE) api.widen(event, props.box); },
+            },
         }),
         /** The handle that drags a card, keyed by the card's id. */
         grip: slot<{ value: string }>({

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, TypeIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NeedsYouTray } from './needs-you-tray';
-import { BoardSurface, useFocusIds, type Tool } from './board-surface';
+import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
 import { boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
 import { useBoardPersistence } from '@/lib/client/use-board-persistence';
@@ -13,7 +13,7 @@ import { useSession } from '@/lib/store/session-store';
 import { connectSession } from '@/lib/client/sse';
 import { getEditor } from '@/lib/editor/registry';
 import { extendDrawing } from '@/lib/board/drawing';
-import { movePatches, positionsOf, stackGroup } from '@/lib/board/interaction';
+import { OUTLINE, boxesOf, movePatches, outlineFocus, positionsOf, stackGroup, widthPatch } from '@/lib/board/interaction';
 import { MAX_IMAGES, attachments, isFocus, pendingOf, visualKey, type Scope } from '@/lib/board/pending';
 import type { Card, Snapshot } from '@/lib/board/types';
 
@@ -41,17 +41,25 @@ export function BoardView({ projectId, slug, name, initial }: {
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
     const base = `/api/projects/${projectId}/board`;
     const space = useRef(false);
-    const positions = useMemo(() => positionsOf(cards), [cards]);
+    const focusIds = useFocusIds(), outline = useOutline(focusIds);
+    const positions = useMemo(() => positionsOf(cards), [cards]), boxes = useMemo(() => boxesOf(cards, outline), [cards, outline]);
     const handle = useBoardPrimitive(initial.board.viewport, base, fail, {
         panning: () => space.current,
         positions,
         // One store write per gesture: every card that moved, with the one dragged unstacked.
         onPositionsChange: (next, { active }) => useBoard.getState().editMany(movePatches(useBoard.getState().cards, next, active)),
         group: key => stackGroup(useBoard.getState().cards, key),
+        boxes,
+        // A card's edge sets its width; the outline's handles redefine the focus as what sits inside.
+        onBoxesChange: (next, { active }) => {
+            const box = active && next[active], { cards, focus, edit, setFocus } = useBoard.getState();
+            if (!box) return;
+            if (active === OUTLINE) setFocus(outlineFocus(cards, focus, box));
+            else edit(active, widthPatch(box.width));
+        },
     });
     const [sessionId, setSessionId] = useState(initial.board.agent?.sessionId), [activity, setActivity] = useState(''), [busy, setBusy] = useState(false), [deferred, setDeferred] = useState(false);
     const [tool, setTool] = useState<Tool>('write');
-    const focusIds = useFocusIds();
     const deferredRef = useRef(false), sendRef = useRef<(scope?: Scope) => Promise<void>>(async () => { });
     useEffect(() => { useBoard.getState().init(initial); }, [initial]);
     useBoardPersistence(projectId);

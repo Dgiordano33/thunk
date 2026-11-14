@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePart, usePrimitive, type PartProps, type PrimitiveHandle } from '@ui-sdk/react/primitive';
 import { boardRequest } from '@/lib/store/board-store';
-import { board, type BoardOptions, type Viewport } from './board-primitive';
+import { board, type BoardOptions, type ResizeHandle, type Viewport } from './board-primitive';
 
 export type BoardHandle = PrimitiveHandle<typeof board>;
 
@@ -52,4 +52,19 @@ export function BoardCard({ value, ...props }: { value: string } & PartProps<'ar
 /** Drags the card `value`; arrows nudge it. */
 export function BoardGrip({ value, ...props }: { value: string } & PartProps<'button'>) {
     return usePart(board, 'grip', { value }, props, 'button');
+}
+
+/** The focus outline's frame. */
+export function BoardOutline(props: PartProps<'div'>) {
+    return usePart(board, 'outline', {}, props, 'div');
+}
+
+/** A resize handle on `box`: a card id, or the focus outline. */
+export function BoardHandle({ box, handle, ...props }: { box: string; handle: ResizeHandle } & PartProps<'div'>) {
+    return usePart(board, 'handle', { value: `${box}:${handle}`, box, handle }, props, 'div');
+}
+
+/** The handle on a card's right edge that changes its width; arrows step it. */
+export function BoardWidthHandle({ box, ...props }: { box: string } & PartProps<'button'>) {
+    return usePart(board, 'handle', { value: `${box}:e`, box, handle: 'e' }, props, 'button');
 }

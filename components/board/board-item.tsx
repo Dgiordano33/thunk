@@ -14,7 +14,7 @@ import { anchorRow, type ChartAnchor } from '@/lib/board/chart';
 import { MENTION, mentions } from '@/lib/board/agent-mention';
 import type { MentionScope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
-import { BoardCard, BoardGrip } from './use-board-primitive';
+import { BoardCard, BoardGrip, BoardWidthHandle } from './use-board-primitive';
 
 /** Accessible name for an item: the first line of its text, falling back to the stored title. */
 export const itemLabel = (c: Card) => c.kind === 'doc' ? c.markdown.split('\n').map(l => l.replace(/^[#>\-*\s\d.[\]x]+/, '').trim()).find(Boolean)?.slice(0, 80) || c.title || 'Text' : c.title || (c.kind === 'image' ? 'Image' : c.kind === 'chart' ? 'Chart' : 'Drawing');
@@ -24,10 +24,9 @@ const measured = new Set<string>();
 
 type Thread = { quote: string; id?: string; x?: number; y?: number; anchor?: ChartAnchor };
 
-export const BoardItem = memo(function BoardItem({ card: c, base, zoom, visible, selected, onRemove, onMention, onRevert }: {
+export const BoardItem = memo(function BoardItem({ card: c, base, visible, selected, onRemove, onMention, onRevert }: {
     card: Card;
     base: string;
-    zoom: number;
     visible: boolean;
     selected: boolean;
     onRemove: (c: Card) => void;
@@ -38,7 +37,6 @@ export const BoardItem = memo(function BoardItem({ card: c, base, zoom, visible,
     const [thread, setThread] = useState<Thread | null>(null), [review, setReview] = useState(false), [tool, setTool] = useState<'none' | 'pin' | 'draw'>('none'), [showData, setShowData] = useState(false);
     // Refresh: `confirming` shows the command before its first run; `refreshing` covers the run itself.
     const [confirming, setConfirming] = useState(false), [refreshing, setRefreshing] = useState(false);
-    const drag = useRef<{ x: number; ox: number } | null>(null);
     const drawing = useRef<{ x: number; y: number }[] | null>(null);
     const edit = (p: Partial<Card>) => useBoard.getState().edit(c.id, p);
     const latest = () => useBoard.getState().cards.find(x => x.id === c.id) ?? c;
@@ -63,23 +61,6 @@ export const BoardItem = memo(function BoardItem({ card: c, base, zoom, visible,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [c.id, c.kind, visible]);
 
-    const startDrag = (e: React.PointerEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        drag.current = { x: e.clientX, ox: c.width };
-        e.currentTarget.setPointerCapture(e.pointerId);
-    };
-    const moveDrag = (e: React.PointerEvent) => {
-        const d = drag.current;
-        if (d) edit({ width: Math.round(Math.max(120, Math.min(2000, d.ox + (e.clientX - d.x) / zoom))) });
-    };
-    const endDrag = () => { drag.current = null; };
-    const nudge = (e: React.KeyboardEvent) => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        const delta = (e.shiftKey ? 50 : 10) * (e.key === 'ArrowRight' ? 1 : -1);
-        edit({ width: Math.max(120, Math.min(2000, c.width + delta)) });
-    };
 
     const addComment = (body: string) => {
         if (!thread) return;
@@ -110,7 +91,7 @@ export const BoardItem = memo(function BoardItem({ card: c, base, zoom, visible,
     };
     const handle = 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100';
 
-    return <BoardCard value={c.id} ref={ref} data-card data-id={c.id} aria-label={label} className={cn('group absolute', c.kind !== 'doc' && 'cursor-default rounded-md', selected && 'outline-1 outline-offset-4 outline-primary/50 outline focus-within:outline-none')} style={{ left: c.x, top: c.y, width: c.width, height: c.kind === 'drawing' ? c.height : undefined }}
+    return <BoardCard value={c.id} ref={ref} data-card data-id={c.id} aria-label={label} className={cn('group absolute', c.kind !== 'doc' && 'cursor-default rounded-md', selected && 'outline-1 outline-offset-4 outline-primary/50 outline focus-within:outline-none')} style={{ left: c.x, top: c.y, width: `var(--resize-width, ${c.width}px)`, height: c.kind === 'drawing' ? c.height : undefined }}
       onPointerDownCapture={e => {
           if (e.button !== 0) return;
           if (e.shiftKey && !editing()) {
@@ -130,7 +111,7 @@ export const BoardItem = memo(function BoardItem({ card: c, base, zoom, visible,
         {!c.prompt && <Button size="xs" variant="ghost" onClick={() => setThread({ quote: '' })}><MessageSquarePlusIcon/>Comment</Button>}
         <Button size="xs" variant="ghost" aria-label={`Delete ${label}`} onClick={() => onRemove(c)}><Trash2Icon/></Button>
       </div>
-      {c.kind !== 'drawing' && !c.prompt && <button aria-label={`Resize ${label}`} title="Drag to change width" className={cn('absolute -right-3 top-0 bottom-0 w-2 cursor-ew-resize touch-none rounded bg-primary/0 hover:bg-primary/20', handle)} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={nudge}/>}
+      {c.kind !== 'drawing' && !c.prompt && <BoardWidthHandle box={c.id} type="button" aria-label={`Resize ${label}`} title="Drag to change width" className={cn('absolute -right-3 top-0 bottom-0 w-2 rounded bg-primary/0 hover:bg-primary/20', handle)}/>}
 
       {c.prompt && <div className="inline-flex max-w-full cursor-default items-start gap-2 rounded-2xl border bg-background py-1.5 pr-3.5 pl-2.5 text-sm shadow-xs"><CornerDownRightIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true"/><span className="min-w-0 whitespace-pre-wrap break-words">{c.markdown}</span></div>}
 
