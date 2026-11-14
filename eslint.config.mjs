@@ -9,6 +9,10 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     ".context/**",
+    // Browser tests: their dev server's build and their reports.
+    ".next-e2e/**",
+    "test-results/**",
+    "playwright-report/**",
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",

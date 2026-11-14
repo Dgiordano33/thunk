@@ -10,6 +10,7 @@
     "postinstall": "node scripts/prepare-pty.mjs",
     "test:lifecycle": "node --conditions=react-server --test tests/lifecycle.test.cjs",
     "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
     "test:tasks": "node --conditions=react-server --test tests/tasks.test.cjs tests/task-tools.test.cjs && node --test components/tasks/ui.test.cjs",
     "test:notes": "node --conditions=react-server --test tests/notes.test.cjs tests/repo-notebooks.test.cjs tests/note-views.test.cjs",
     "test:routines": "node --conditions=react-server --test tests/routines.test.cjs",
@@ -76,6 +77,7 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

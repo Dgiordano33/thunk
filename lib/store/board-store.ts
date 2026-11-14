@@ -107,3 +107,6 @@ export function flushAll(projectId: string): Promise<void> {
     });
     return saving;
 }
+// Browser tests drive the store directly, like an agent edit arriving mid-gesture. Only in their dev server.
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_THUNK_E2E === '1')
+    (window as unknown as { __thunkBoard: typeof useBoard }).__thunkBoard = useBoard;
