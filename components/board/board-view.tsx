@@ -13,7 +13,7 @@ import { useSession } from '@/lib/store/session-store';
 import { connectSession } from '@/lib/client/sse';
 import { getEditor } from '@/lib/editor/registry';
 import { extendDrawing } from '@/lib/board/drawing';
-import { OUTLINE, boxesOf, movePatches, outlineFocus, positionsOf, stackGroup, widthPatch } from '@/lib/board/interaction';
+import { OUTLINE, boxesOf, lassoFocus, movePatches, outlineFocus, positionsOf, stackGroup, widthPatch } from '@/lib/board/interaction';
 import { MAX_IMAGES, attachments, isFocus, pendingOf, visualKey, type Scope } from '@/lib/board/pending';
 import type { Card, Snapshot } from '@/lib/board/types';
 
@@ -57,6 +57,8 @@ export function BoardView({ projectId, slug, name, initial }: {
             if (active === OUTLINE) setFocus(outlineFocus(cards, focus, box));
             else edit(active, widthPatch(box.width));
         },
+        selected: focusIds,
+        onSelectedChange: keys => { const { focus, setFocus } = useBoard.getState(); setFocus(lassoFocus(focus, keys)); },
     });
     const [sessionId, setSessionId] = useState(initial.board.agent?.sessionId), [activity, setActivity] = useState(''), [busy, setBusy] = useState(false), [deferred, setDeferred] = useState(false);
     const [tool, setTool] = useState<Tool>('write');

@@ -1,8 +1,9 @@
-import { createChange, createMove, createResize, createViewport, definePrimitive, live, type ChangeDetails, type MoveDraft, type MovePoint, type MoveReason, type ResizeBox, type ResizeDraft, type ResizeHandle, type ResizeReason, type Viewport, type ViewportReason } from '@ui-sdk/core';
+import { createChange, createLasso, createMove, createResize, createViewport, definePrimitive, live, type ChangeDetails, type LassoDraft, type MoveDraft, type MovePoint, type MoveReason, type ResizeBox, type ResizeDraft, type ResizeHandle, type ResizeReason, type Viewport, type ViewportReason } from '@ui-sdk/core';
 import { MAX_WIDTH, MIN_OUTLINE, MIN_WIDTH, OUTLINE } from '@/lib/board/interaction';
 
 /**
- * The canvas interaction layer: pan and zoom, moving cards, resizing them and the focus outline. Every UI SDK behavior the canvas uses lives here,
+ * The canvas interaction layer: pan and zoom, moving cards, resizing them and the focus outline, and
+ * Shift-drag selection. Every UI SDK behavior the canvas uses lives here,
  * so a beta API change touches one file.
  */
 
@@ -27,6 +28,9 @@ export type BoardOptions = {
     boxes?: Record<string, ResizeBox>;
     /** `active` is the box that changed. */
     onBoxesChange?: (value: Record<string, ResizeBox>, details: ChangeDetails<ResizeReason> & { active?: string }) => void;
+    /** The ids in the focus, which a Shift-drag rectangle adds to. Controlled. */
+    selected?: string[];
+    onSelectedChange?: (value: string[], details: ChangeDetails<'lasso'>) => void;
 };
 export type { ResizeHandle };
 
@@ -36,17 +40,19 @@ const background = (event: Event, root: HTMLElement, world: HTMLElement | undefi
 
 export const board = definePrimitive({
     name: 'board',
-    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback' },
-    controlled: ['positions', 'boxes'],
+    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback', selected: 'value', onSelectedChange: 'callback' },
+    controlled: ['positions', 'boxes', 'selected'],
     state: (options: BoardOptions) => ({
         viewport: options.defaultViewport ?? { x: 0, y: 0, zoom: 1 },
         positions: options.positions ?? {},
         moving: null as MoveDraft | null,
         boxes: options.boxes ?? {},
         sizing: null as ResizeDraft | null,
+        selected: options.selected ?? [],
+        lasso: null as LassoDraft | null,
     }),
-    sync: options => options.boxes ? { boxes: options.boxes } : {},
-    live: ['viewport', 'moving', 'sizing'],
+    sync: options => ({ ...(options.boxes ? { boxes: options.boxes } : {}), ...(options.selected ? { selected: options.selected } : {}) }),
+    live: ['viewport', 'moving', 'sizing', 'lasso'],
     api: context => {
         const change = createChange(context), { store } = context;
         // Positions follow the options, except a card being dragged keeps where it started, so a remote
@@ -84,10 +90,17 @@ export const board = definePrimitive({
             max: key => key === OUTLINE ? undefined : { width: MAX_WIDTH, height: Number.MAX_SAFE_INTEGER },
             scale: () => viewport.get().zoom,
         });
+        const lasso = createLasso(context, {
+            slot: 'card',
+            draft: 'lasso',
+            selected: () => store.get().selected,
+            set: (keys, details) => change('selected', keys, details),
+        });
         return {
             viewport,
             move,
             resize,
+            lasso,
             /** Drags a handle on a card's edge or the focus outline. */
             size(event: PointerEvent, key: string, handle: ResizeHandle, el: HTMLElement) {
                 if (context.options().panning?.()) return;
@@ -126,24 +139,30 @@ export const board = definePrimitive({
                     return;
                 viewport.wheel(event);
             },
-            /** A press on empty canvas, or anywhere while panning, drags the view. */
+            /** A press on empty canvas, or anywhere while panning, drags the view; with Shift it draws a selection. */
             press(event: PointerEvent, root: HTMLElement) {
                 const panning = context.options().panning?.() ?? false;
                 if (!panning && !background(event, root, context.element('world')))
                     return;
-                viewport.pointerdown(event);
+                if (event.shiftKey && !panning) lasso.pointerdown(event, root);
+                else viewport.pointerdown(event);
             },
         };
     },
     slots: slot => ({
         root: slot({
-            live: live(state => ({ 'data-moving': state.moving ? '' : undefined })),
+            live: live(state => ({ 'data-moving': state.moving ? '' : undefined, 'data-lassoing': state.lasso ? '' : undefined })),
             on: {
                 wheel: (event, { api }) => api.wheel(event),
                 pointerdown: (event, { el, api }) => { if (el) api.press(event, el); },
                 // Zoom keys only when the canvas itself has focus, so typing in a card never zooms.
                 keydown: (event, { el, api }) => { if (event.target === el) api.viewport.keydown(event); },
             },
+        }),
+        /** The Shift-drag rectangle, in screen space over the world; hidden until one is drawn. */
+        lasso: slot({
+            attrs: () => ({ 'aria-hidden': 'true' }),
+            live: live((state, { api }) => ({ style: api.lasso.style(state) })),
         }),
         world: slot({
             live: live((state, { api }) => ({ style: api.viewport.style(state) })),

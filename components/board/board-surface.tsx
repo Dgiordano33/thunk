@@ -2,11 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/store/board-store';
-import { bounds, focusIds, intersecting, type Rect } from '@/lib/board/focus';
+import { bounds, focusIds, type Rect } from '@/lib/board/focus';
 import type { MentionScope, Scope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
 import { BoardItem } from './board-item';
-import { BoardHandle, BoardOutline, BoardRoot, BoardWorld, useView, type BoardHandle as Handle } from './use-board-primitive';
+import { BoardHandle, BoardLasso, BoardOutline, BoardRoot, BoardWorld, useView, type BoardHandle as Handle } from './use-board-primitive';
 import type { ResizeHandle } from './board-primitive';
 import { OUTLINE, sameIds, visibleIds } from '@/lib/board/interaction';
 
@@ -31,7 +31,6 @@ export function useOutline(ids: string[]): Rect | null {
 }
 
 const editableTarget = (t: EventTarget | null) => t instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable);
-const rectFrom = (a: Point, b: Point): Rect => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) });
 const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by });
 
 export function BoardSurface({ base, board: handle, space, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert }: {
@@ -52,12 +51,11 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     const ref = useRef<HTMLDivElement>(null);
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), anchorId = useBoard(s => s.focus.anchorId);
     const ids = useFocusIds(), outline = useOutline(ids);
-    const [live, setLive] = useState<Rect | null>(null), [stroke, setStroke] = useState<Point[] | null>(null);
+    const [stroke, setStroke] = useState<Point[] | null>(null);
     // The prompt bar under the focus outline: ⌘↵ opens it, ↵ sends the group with what was typed.
     const [asking, setAsking] = useState(false), [ask, setAsk] = useState('');
     const open = asking && ids.length > 0;
     const pointer = useRef<Point>({ x: 40, y: 40 }), world = useRef<HTMLDivElement>(null);
-    const press = useRef<{ x: number; y: number; start: Point; moved: boolean } | null>(null);
     /** A background press that hasn't moved yet: released in place, it creates a text block. */
     const click = useRef<Point | null>(null);
     // Which cards are on screen, re-read at most once a frame and only re-rendered when the set changes.
@@ -118,41 +116,20 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     }, [space]);
 
     const background = (e: React.PointerEvent) => e.target === e.currentTarget || e.target === world.current;
-    // Runs before the primitive's own press handler, which pans; preventing the default here keeps it from panning.
+    // Runs before the primitive's own press handler, which pans, or with Shift draws a selection rectangle.
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (e.button !== 0 || !(background(e) || space.current)) return;
         setAsking(false);
         e.currentTarget.focus({ preventScroll: true });
-        if (e.shiftKey && !space.current) {
-            press.current = { x: e.clientX, y: e.clientY, start: toWorld(e.clientX, e.clientY), moved: false };
-            e.currentTarget.setPointerCapture(e.pointerId);
-            e.preventDefault();
-            return;
-        }
-        click.current = { x: e.clientX, y: e.clientY };
+        if (!e.shiftKey || space.current) click.current = { x: e.clientX, y: e.clientY };
     };
     const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         pointer.current = toWorld(e.clientX, e.clientY);
         if (click.current && Math.hypot(e.clientX - click.current.x, e.clientY - click.current.y) >= CLICK_SLOP) click.current = null;
-        const p = press.current;
-        if (!p) return;
-        const dx = e.clientX - p.x, dy = e.clientY - p.y;
-        if (Math.hypot(dx, dy) >= CLICK_SLOP) p.moved = true;
-        if (!p.moved) return;
-        setLive(rectFrom(p.start, pointer.current));
     };
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         if (click.current && !space.current && tool === 'write') onCreateDoc(toWorld(e.clientX, e.clientY));
         click.current = null;
-        const p = press.current;
-        press.current = null;
-        if (!p) return;
-        if (live) {
-            // Shift-drag adds whatever it touches.
-            const { focus, cards } = useBoard.getState(), hit = intersecting(cards, live);
-            useBoard.getState().setFocus({ add: [...new Set([...focus.add, ...hit])], remove: focus.remove.filter(id => !hit.includes(id)) });
-        }
-        setLive(null);
     };
     const drawing = useRef<Point[] | null>(null);
     const drawDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -185,8 +162,8 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     };
     const count = `${ids.length} ${ids.length === 1 ? 'item' : 'items'}`;
 
-    return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none', tool === 'write' && 'cursor-text')}
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { press.current = null; click.current = null; setLive(null); }}
+    return <BoardRoot handle={handle} ref={ref} tabIndex={0} aria-label="Canvas" className={cn('relative flex-1 overflow-hidden bg-muted/30 touch-none outline-none select-none', tool === 'write' && 'cursor-text')}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { click.current = null; }}
       onPaste={e => { if (e.clipboardData.files.length && !editableTarget(e.target)) { e.preventDefault(); onUpload(e.clipboardData.files, pointer.current); } }}
       onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onUpload(e.dataTransfer.files, toWorld(e.clientX, e.clientY)); }}>
       <BoardWorld ref={world} className="absolute inset-0 origin-top-left" style={{ transform: initialTransform, transformOrigin: '0 0' }}>
@@ -196,8 +173,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             const below = b.y >= a.y + a.height;
             return <line key={`${e.source}-${e.target}`} x1={below ? a.x + 16 : a.x + a.width} y1={below ? a.y + a.height + 4 : a.y + 16} x2={below ? b.x + 16 : b.x} y2={below ? b.y - 4 : b.y + 16} stroke="currentColor" opacity=".35" markerEnd="url(#arrow)"/>;
         })}</svg>
-        {live && <div aria-hidden="true" className="pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03]" style={{ left: live.x, top: live.y, width: live.width, height: live.height, borderWidth: 2 / view.zoom }}/>}
-        {outline && !live && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 2 / view.zoom }}>
+        {outline && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible in-data-lassoing:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 2 / view.zoom }}>
           {handles.map(h => <BoardHandle key={h} box={OUTLINE} handle={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)}/>)}
           {!open && <button type="button" title="Ask about this group" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button>}
           {open && <form className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
@@ -214,6 +190,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         {cards.map(c => <BoardItem key={c.id} card={c} base={base} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert}/>)}
         {stroke && <svg className="pointer-events-none absolute overflow-visible text-foreground" width="1" height="1" aria-hidden="true"><polyline points={stroke.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </BoardWorld>
+      <BoardLasso className="rounded-md border border-primary/60 bg-primary/10"/>
       {tool === 'draw' && <div aria-label="Drawing surface: drag to draw, Escape to stop" className="absolute inset-0 z-10 cursor-crosshair" onPointerDown={drawDown} onPointerMove={drawMove} onPointerUp={drawUp} onPointerCancel={() => { drawing.current = null; setStroke(null); }}/>}
     </BoardRoot>;
 }

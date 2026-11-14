@@ -68,3 +68,8 @@ export function BoardHandle({ box, handle, ...props }: { box: string; handle: Re
 export function BoardWidthHandle({ box, ...props }: { box: string } & PartProps<'button'>) {
     return usePart(board, 'handle', { value: `${box}:e`, box, handle: 'e' }, props, 'button');
 }
+
+/** The Shift-drag selection rectangle. Render it always; it hides itself. */
+export function BoardLasso(props: PartProps<'div'>) {
+    return usePart(board, 'lasso', {}, props, 'div');
+}
