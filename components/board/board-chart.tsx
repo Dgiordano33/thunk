@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useRef, useState } from 'react';
 import { PlusIcon, XIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoardButton } from './board-ui';
 import { MAX_SLICES, anchorRow, formatValue, niceTicks, parseChart, type ChartAnchor, type ChartRow, type ChartSpec } from '@/lib/board/chart';
 import type { Stroke } from '@/lib/board/types';
 
@@ -253,7 +253,7 @@ function Table({ spec, onEdit }: { spec: ChartSpec; onEdit?: (next: ChartSpec) =
         </table>
       </div>
       {onEdit && <div className="flex items-center gap-2 border-t px-2 py-1">
-        <Button size="xs" variant="ghost" onClick={addRow}><PlusIcon/>Row</Button>
+        <BoardButton size="xs" variant="ghost" onClick={addRow}><PlusIcon aria-hidden="true"/>Row</BoardButton>
         <span role="status" className="text-xs text-destructive">{error}</span>
       </div>}
     </div>;

@@ -3,8 +3,8 @@ import { flattenChart, flattenDrawing, flattenImage } from "@/lib/board/flatten.
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, TypeIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { NeedsYouTray } from './needs-you-tray';
+import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
 import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
 import { boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
@@ -40,7 +40,7 @@ export function BoardView({ projectId, slug, name, initial }: {
     const router = useRouter();
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
     const base = `/api/projects/${projectId}/board`;
-    const space = useRef(false);
+    const space = useRef(false), imageInput = useRef<HTMLInputElement>(null);
     const focusIds = useFocusIds(), outline = useOutline(focusIds);
     const positions = useMemo(() => positionsOf(cards), [cards]), boxes = useMemo(() => boxesOf(cards, outline), [cards, outline]);
     const handle = useBoardPrimitive(initial.board.viewport, base, fail, {
@@ -196,17 +196,21 @@ export function BoardView({ projectId, slug, name, initial }: {
     const later = deferred || busy;
 
     return <div className="relative flex h-full flex-col">
-    <header className="z-20 flex items-center gap-3 border-b bg-background p-3"><Button variant="ghost" onClick={() => void flushAll(projectId).then(() => router.push(`/${slug}`)).catch(fail)}>← {name}</Button><h1 className="font-semibold">Canvas</h1>
-      <div role="radiogroup" aria-label="Tool" className="flex gap-0.5 rounded-md border p-0.5">
-        <Button size="sm" role="radio" aria-checked={tool === 'write'} variant={tool === 'write' ? 'secondary' : 'ghost'} onClick={() => setTool('write')} title="Write: click anywhere to type"><TypeIcon/>Write</Button>
-        <Button size="sm" role="radio" aria-checked={tool === 'draw'} variant={tool === 'draw' ? 'secondary' : 'ghost'} onClick={() => setTool('draw')} title="Draw (D); Esc to stop"><PencilIcon/>Draw <kbd className="text-[10px] text-muted-foreground">D</kbd></Button>
-      </div>
-      <Button size="sm" variant="outline" onClick={() => createDoc(center())}>Add text</Button>
-      <label className="cursor-pointer text-sm">Add image<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files)
-        void upload(e.target.files, center()); e.target.value = ''; }}/></label><Button size="sm" variant="outline" onClick={() => handle.api.viewport.setViewport({ x: 0, y: 0, zoom: 1 })}>Reset view</Button><ZoomLabel board={handle}/></header>
-    {error && <div role="alert" className="z-30 bg-destructive/10 p-3 text-sm">{error} <Button size="xs" onClick={() => useBoard.setState({ error: null })}>Dismiss</Button></div>}
+    <header className="z-20 flex items-center gap-3 border-b bg-background p-3"><BoardButton variant="ghost" onClick={() => void flushAll(projectId).then(() => router.push(`/${slug}`)).catch(fail)}>← {name}</BoardButton><h1 className="font-semibold">Canvas</h1>
+      <BoardSegmented<Tool> aria-label="Tool" value={tool} onValueChange={v => v && setTool(v)} items={[
+          { value: 'write', label: <><TypeIcon aria-hidden="true"/>Write</>, hint: 'Write: click anywhere to type' },
+          { value: 'draw', label: <><PencilIcon aria-hidden="true"/>Draw</>, hint: 'Draw; Esc to stop', shortcut: 'd' },
+      ]}/>
+      <BoardToolbar aria-label="Canvas" className="gap-2">
+        <BoardToolbarButton size="sm" variant="outline" onClick={() => createDoc(center())}>Add text</BoardToolbarButton>
+        <BoardToolbarButton size="sm" variant="outline" onClick={() => imageInput.current?.click()}>Add image</BoardToolbarButton>
+        <BoardToolbarButton size="sm" variant="outline" onClick={() => handle.api.viewport.setViewport({ x: 0, y: 0, zoom: 1 })}>Reset view</BoardToolbarButton>
+      </BoardToolbar>
+      <input ref={imageInput} className="sr-only" tabIndex={-1} aria-hidden="true" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files) void upload(e.target.files, center()); e.target.value = ''; }}/>
+      <ZoomLabel board={handle}/></header>
+    {error && <div role="alert" className="z-30 bg-destructive/10 p-3 text-sm">{error} <BoardButton size="xs" onClick={() => useBoard.setState({ error: null })}>Dismiss</BoardButton></div>}
     <BoardSurface base={base} board={handle} space={space} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert}/>
-    <footer className="z-20 flex items-center gap-3 border-t bg-background p-3"><p className="flex-1 truncate text-xs" aria-live="polite">{activity || 'Click anywhere to write, drop an image, or press D to draw. Drag the background to pan; pinch to zoom.'}</p><span className="text-sm">{focused && !quiet ? `${focusIds.length} in focus · ` : ''}{count} pending</span>{focused && <Button onClick={() => void send({ focus: focusIds })}>Send focus</Button>}<Button variant={focused ? 'outline' : 'default'} onClick={() => void send()} disabled={!count} title="Send every pending edit, comment and deletion on the canvas">{later ? 'Send all after this turn' : 'Send all'} <kbd className="text-[10px] opacity-70">{focused ? '⇧⌘↵' : '⌘↵'}</kbd></Button></footer>
+    <footer className="z-20 flex items-center gap-3 border-t bg-background p-3"><p className="flex-1 truncate text-xs" aria-live="polite">{activity || 'Click anywhere to write, drop an image, or press D to draw. Drag the background to pan; pinch to zoom.'}</p><span className="text-sm">{focused && !quiet ? `${focusIds.length} in focus · ` : ''}{count} pending</span>{focused && <Hint label="Send what's in the focus" shortcut="mod+enter"><BoardButton onClick={() => void send({ focus: focusIds })}>Send focus</BoardButton></Hint>}<Hint label="Send every pending edit, comment and deletion on the canvas" shortcut={focused ? 'shift+mod+enter' : 'mod+enter'}><BoardButton variant={focused ? 'outline' : 'default'} onClick={() => void send()} disabled={!count} focusableWhenDisabled>{later ? 'Send all after this turn' : 'Send all'}</BoardButton></Hint></footer>
     {sessionId && <NeedsYouTray />}
   </div>;
 }

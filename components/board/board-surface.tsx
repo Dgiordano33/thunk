@@ -8,6 +8,7 @@ import type { Card } from '@/lib/board/types';
 import { BoardItem } from './board-item';
 import { BoardHandle, BoardLasso, BoardOutline, BoardRoot, BoardWorld, useView, type BoardHandle as Handle } from './use-board-primitive';
 import type { ResizeHandle } from './board-primitive';
+import { Hint } from './board-ui';
 import { OUTLINE, sameIds, visibleIds } from '@/lib/board/interaction';
 
 type Point = { x: number; y: number };
@@ -94,7 +95,8 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         };
         const down = (e: KeyboardEvent) => {
             const typing = editableTarget(e.target);
-            if (e.code === 'Space' && !typing) { space.current = true; e.preventDefault(); return; }
+            // Space on a focused button presses it; anywhere else it holds the pan.
+            if (e.code === 'Space' && !typing && !(e.target instanceof HTMLElement && e.target.closest('button'))) { space.current = true; e.preventDefault(); return; }
             if (e.key === 'Escape') {
                 if (state.current.tool === 'draw') return state.current.setTool('write');
                 if (typing) { if ((e.target as HTMLElement).isContentEditable) (e.target as HTMLElement).blur(); return; }
@@ -175,7 +177,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
         })}</svg>
         {outline && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible in-data-lassoing:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 2 / view.zoom }}>
           {handles.map(h => <BoardHandle key={h} box={OUTLINE} handle={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)}/>)}
-          {!open && <button type="button" title="Ask about this group" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button>}
+          {!open && <Hint label="Ask about this group" shortcut="mod+enter"><button type="button" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button></Hint>}
           {open && <form className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
             onSubmit={e => { e.preventDefault(); onSend({ focus: ids, ...(ask.trim() ? { prompt: ask.trim() } : {}) }); setAsk(''); setAsking(false); }}>
             <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 shadow-lg">
