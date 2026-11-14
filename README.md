@@ -17,6 +17,7 @@ npm run dev
 - **Auth:** set `ANTHROPIC_API_KEY`, or leave it empty to use your local `claude` login.
 - **Persistence:** with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, projects, workspaces, sessions, documents, and comments survive restarts and sessions can be resumed (SDK `resume`). Without them, they live in memory. Schema: `supabase/migrations/`.
 - **Memory and notes files:** always on disk under `~/.thunk` (override with `THUNK_DATA_DIR`), with or without Supabase.
+- **Browser tests:** `npx playwright install chromium` once, then `npm run test:e2e`. They start their own dev server (port 4517, build dir `.next-e2e`) with in-memory projects and a temp data dir, so they run beside your dev server without touching your data.
 
 ## Hierarchy
 

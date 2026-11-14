@@ -201,6 +201,10 @@ The Canvas board (`components/board/`) builds its gestures and controls on UI SD
 
 `use-board-primitive.tsx` connects the primitive to React; `lib/board/interaction.ts` holds the pure store mappings and is unit-tested. The zustand store stays the only durable state: the primitive is fed positions, boxes and focus ids, and reports changes back. Inside the world, size screen-constant chrome with `calc(Npx / var(--canvas-zoom))` rather than reading the zoom in React. The TipTap bubble menu and freehand drawing remain custom.
 
+A card is placed by `left: var(--hold-x, <x>)` / `top: var(--hold-y, <y>)`: while it is dragged the primitive sets those to where the drag started, so a remote edit (an agent's board_op) that moves it, or restacks it, can't move it under the pointer. Window-level canvas keys yield to popups: an Escape that closes a tooltip, popover or dialog does nothing else, and Delete only acts when focus is on the canvas. On coarse pointers the picked card shows its grip, toolbar and width handle, since there is no hover.
+
+`e2e/` covers these interactions in a browser (`npm run test:e2e`): stacks, chart and image cards, the outline, touch, edits landing mid-gesture, and keyboard. Run it after bumping UI SDK.
+
 ## Checks when extending the design
 
 - Reuse `CivPanel`, `TownPanel`, `IsoViewport`, `TerrainLayer`, `PixelIcon`, and existing UI primitives where their roles match.
