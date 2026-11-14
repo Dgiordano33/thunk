@@ -6,7 +6,7 @@ import { bounds, focusIds, type Rect } from '@/lib/board/focus';
 import type { MentionScope, Scope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
 import { BoardItem } from './board-item';
-import { BoardHandle, BoardLasso, BoardOutline, BoardRoot, BoardWorld, useView, type BoardHandle as Handle } from './use-board-primitive';
+import { BoardHandle, BoardLasso, BoardOutline, BoardRoot, BoardWorld, type BoardHandle as Handle } from './use-board-primitive';
 import type { ResizeHandle } from './board-primitive';
 import { Hint } from './board-ui';
 import { OUTLINE, sameIds, visibleIds } from '@/lib/board/interaction';
@@ -48,7 +48,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     onSend: (scope?: Scope) => void;
     onRevert: (c: Card, keep: boolean) => Promise<void>;
 }) {
-    const view = useView(handle), toWorld = handle.api.viewport.toCanvas;
+    const toWorld = handle.api.viewport.toCanvas;
     const ref = useRef<HTMLDivElement>(null);
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), anchorId = useBoard(s => s.focus.anchorId);
     const ids = useFocusIds(), outline = useOutline(ids);
@@ -159,7 +159,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
 
     const handles: ResizeHandle[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
     const handleStyle = (h: string): React.CSSProperties => {
-        const s = 12 / view.zoom, half = -s / 2;
+        const s = 'calc(12px / var(--canvas-zoom, 1))', half = 'calc(-6px / var(--canvas-zoom, 1))';
         return { width: h.length === 1 && 'ns'.includes(h) ? undefined : s, height: h.length === 1 && 'ew'.includes(h) ? undefined : s, top: h.includes('n') ? half : h.includes('s') ? undefined : s, bottom: h.includes('s') ? half : h.includes('n') ? undefined : s, left: h.includes('w') ? half : h.includes('e') ? undefined : s, right: h.includes('e') ? half : h.includes('w') ? undefined : s };
     };
     const count = `${ids.length} ${ids.length === 1 ? 'item' : 'items'}`;
@@ -175,10 +175,10 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             const below = b.y >= a.y + a.height;
             return <line key={`${e.source}-${e.target}`} x1={below ? a.x + 16 : a.x + a.width} y1={below ? a.y + a.height + 4 : a.y + 16} x2={below ? b.x + 16 : b.x} y2={below ? b.y - 4 : b.y + 16} stroke="currentColor" opacity=".35" markerEnd="url(#arrow)"/>;
         })}</svg>
-        {outline && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible in-data-lassoing:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 2 / view.zoom }}>
+        {outline && <BoardOutline className="group/outline pointer-events-none absolute rounded-2xl border-2 border-primary/40 bg-primary/[0.03] transition-[left,top,width,height] duration-150 ease-out in-data-moving:invisible in-data-lassoing:invisible data-resizing:transition-none" style={{ left: `var(--resize-x, ${outline.x}px)`, top: `var(--resize-y, ${outline.y}px)`, width: `var(--resize-width, ${outline.width}px)`, height: `var(--resize-height, ${outline.height}px)`, borderWidth: 'calc(2px / var(--canvas-zoom, 1))' }}>
           {handles.map(h => <BoardHandle key={h} box={OUTLINE} handle={h} aria-hidden="true" className="pointer-events-auto absolute" style={handleStyle(h)}/>)}
-          {!open && <Hint label="Ask about this group" shortcut="mod+enter"><button type="button" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ transform: `scale(${1 / view.zoom})` }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button></Hint>}
-          {open && <form className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full left-0 mt-2 origin-top-left cursor-default" style={{ transform: `scale(${1 / view.zoom})`, width: Math.max(360, outline.width * view.zoom) }} onPointerDown={e => e.stopPropagation()}
+          {!open && <Hint label="Ask about this group" shortcut="mod+enter"><button type="button" className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full right-0 mt-2 origin-top-right whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm" style={{ scale: 'calc(1 / var(--canvas-zoom, 1))' }} onPointerDown={e => e.stopPropagation()} onClick={() => setAsking(true)}>{count} · ⌘↵</button></Hint>}
+          {open && <form className="pointer-events-auto absolute group-data-resizing/outline:hidden top-full left-0 mt-2 origin-top-left cursor-default" style={{ scale: 'calc(1 / var(--canvas-zoom, 1))', width: `max(360px, calc(${outline.width}px * var(--canvas-zoom, 1)))` }} onPointerDown={e => e.stopPropagation()}
             onSubmit={e => { e.preventDefault(); onSend({ focus: ids, ...(ask.trim() ? { prompt: ask.trim() } : {}) }); setAsk(''); setAsking(false); }}>
             <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 shadow-lg">
               <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium">{count}</span>
