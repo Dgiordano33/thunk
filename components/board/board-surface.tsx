@@ -87,7 +87,11 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
 
     useEffect(() => {
         // Capture phase so ⌘↵ wins over the editor's own Mod-Enter binding. ⌘↵ opens the prompt bar for the focus; ⇧⌘↵ always sends everything pending.
+        // An Escape that closes a tooltip, popover or dialog is that popup's alone: noted here, before the popup
+        // handles it, so the canvas doesn't also leave Draw or clear the focus.
+        let popupEscape: KeyboardEvent | null = null;
         const capture = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && document.querySelector('[role="tooltip"], [role="dialog"], [role="alertdialog"], [role="menu"]')) popupEscape = e;
             if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
             const t = e.target as HTMLElement;
             if (['INPUT', 'TEXTAREA'].includes(t.tagName)) return;
@@ -103,13 +107,15 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             // Space on a focused button presses it; anywhere else it holds the pan.
             if (e.code === 'Space' && !typing && !(e.target instanceof HTMLElement && e.target.closest('button'))) { space.current = true; e.preventDefault(); return; }
             if (e.key === 'Escape') {
+                if (popupEscape === e) return;
                 if (state.current.tool === 'draw') return state.current.setTool('write');
                 if (typing) { if ((e.target as HTMLElement).isContentEditable) (e.target as HTMLElement).blur(); return; }
                 return useBoard.getState().clearFocus();
             }
             if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
             if (e.key === 'd' || e.key === 'D') { e.preventDefault(); state.current.setTool(state.current.tool === 'draw' ? 'write' : 'draw'); }
-            if (e.key === 'Delete' || e.key === 'Backspace') {
+            // Delete acts on the canvas, not on a header or footer control that happens to have focus.
+            if ((e.key === 'Delete' || e.key === 'Backspace') && (e.target === document.body || (e.target instanceof Node && !!ref.current?.contains(e.target)))) {
                 const { cards, focus } = useBoard.getState(), selected = cards.find(c => c.id === focus.anchorId);
                 if (selected) { e.preventDefault(); state.current.onRemove(selected); }
             }

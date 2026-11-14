@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, TypeIcon } from 'lucide-react';
 import { NeedsYouTray } from './needs-you-tray';
+import { itemLabel } from './board-item';
 import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
 import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
@@ -50,6 +51,7 @@ export function BoardView({ projectId, slug, name, initial }: {
         // One store write per gesture: every card that moved, with the one dragged unstacked.
         onPositionsChange: (next, { active }) => useBoard.getState().editMany(movePatches(useBoard.getState().cards, next, active)),
         group: key => stackGroup(useBoard.getState().cards, key),
+        label: key => { if (key === OUTLINE) return 'Focus outline'; const c = useBoard.getState().cards.find(x => x.id === key); return c ? itemLabel(c) : 'Item'; },
         boxes,
         // A card's edge sets its width; the outline's handles redefine the focus as what sits inside.
         onBoxesChange: (next, { active }) => {
@@ -110,8 +112,14 @@ export function BoardView({ projectId, slug, name, initial }: {
                     setBusy(false); }, onEvent: e => {
                     useSession.getState().applyEvent(e);
                     if (e.type === 'board_op') {
-                        useBoard.getState().merge(e.op.card);
-                        void boardRequest(base).then((s: Snapshot) => useBoard.setState({ board: s.board })).catch(fail);
+                        // The session replays every past op on connect, including cards since deleted or never saved;
+                        // only a card the board still has is shown, at its current revision.
+                        const id = e.op.card.id;
+                        void boardRequest(base).then((s: Snapshot) => {
+                            useBoard.setState({ board: s.board });
+                            const saved = s.cards.find(c => c.id === id);
+                            if (saved) useBoard.getState().merge(saved);
+                        }).catch(fail);
                     }
                     if (e.type === 'turn_complete')
                         setActivity(e.markdown);

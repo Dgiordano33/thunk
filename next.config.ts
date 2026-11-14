@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Browser tests run their own dev server beside yours; Next allows one dev server per build directory.
+  ...(process.env.THUNK_DIST_DIR ? { distDir: process.env.THUNK_DIST_DIR } : {}),
   outputFileTracingExcludes: {
     "/*": ["./build/**/*", "./dist-desktop/**/*", "./.context/**/*", "./.git/**/*", "./desktop/**/*"],
   },

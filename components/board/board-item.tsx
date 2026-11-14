@@ -89,9 +89,10 @@ export const BoardItem = memo(function BoardItem({ card: c, base, visible, selec
             setRefreshing(false);
         }
     };
-    const handle = 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100';
+    // Shown on hover or focus; a touch screen has no hover, so there the picked card shows them.
+    const handle = cn('opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100', selected && 'pointer-coarse:opacity-100');
 
-    return <BoardCard value={c.id} ref={ref} data-card data-id={c.id} aria-label={label} className={cn('group absolute select-text', c.kind !== 'doc' && 'cursor-default rounded-md', selected && 'outline-1 outline-offset-4 outline-primary/50 outline focus-within:outline-none')} style={{ left: c.x, top: c.y, width: `var(--resize-width, ${c.width}px)`, height: c.kind === 'drawing' ? c.height : undefined }}
+    return <BoardCard value={c.id} ref={ref} data-card data-id={c.id} aria-label={label} className={cn('group absolute select-text', c.kind !== 'doc' && 'cursor-default rounded-md', selected && 'outline-1 outline-offset-4 outline-primary/50 outline focus-within:outline-none')} style={{ left: `var(--hold-x, ${c.x}px)`, top: `var(--hold-y, ${c.y}px)`, width: `var(--resize-width, ${c.width}px)`, height: c.kind === 'drawing' ? c.height : undefined }}
       onPointerDownCapture={e => {
           if (e.button !== 0) return;
           if (e.shiftKey && !editing()) {

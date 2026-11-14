@@ -31,16 +31,24 @@ export type BoardOptions = {
     /** The ids in the focus, which a Shift-drag rectangle adds to. Controlled. */
     selected?: string[];
     onSelectedChange?: (value: string[], details: ChangeDetails<'lasso'>) => void;
+    /** What a card or the outline is called in what screen readers hear, like "Notes moved to 300, 200." */
+    label?: (key: string) => string;
 };
 export type { ResizeHandle };
 
 const arrows: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
+/** Where a dragged card started, which `positions` keeps for it until the drop. */
+const held = (state: { positions: Record<string, MovePoint> }, key: string, dragging: boolean) => {
+    const at = dragging ? state.positions[key] : undefined;
+    return at && `--hold-x:${at.x}px;--hold-y:${at.y}px`;
+};
+
 const background = (event: Event, root: HTMLElement, world: HTMLElement | undefined) => event.target === root || (!!world && event.target === world);
 
 export const board = definePrimitive({
     name: 'board',
-    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback', selected: 'value', onSelectedChange: 'callback' },
+    options: { defaultViewport: 'value', onViewportChange: 'callback', panning: 'callback', label: 'callback', positions: 'value', onPositionsChange: 'callback', group: 'callback', boxes: 'value', onBoxesChange: 'callback', selected: 'value', onSelectedChange: 'callback' },
     controlled: ['positions', 'boxes', 'selected'],
     state: (options: BoardOptions) => ({
         viewport: options.defaultViewport ?? { x: 0, y: 0, zoom: 1 },
@@ -74,11 +82,13 @@ export const board = definePrimitive({
             maxZoom: () => MAX_ZOOM,
         });
         const group = (key: string) => context.options().group?.(key) ?? [key];
+        const label = (key: string) => context.options().label?.(key);
         const move = createMove(context, {
             key: 'positions',
             draft: 'moving',
             set: (value, details) => change('positions', value, { ...details, active }),
             group,
+            label,
             scale: () => viewport.get().zoom,
         });
         let sized: string | undefined;
@@ -88,6 +98,7 @@ export const board = definePrimitive({
             set: (value, details) => change('boxes', value, { ...details, active: sized }),
             min: key => key === OUTLINE ? { width: MIN_OUTLINE, height: MIN_OUTLINE } : { width: MIN_WIDTH, height: 1 },
             max: key => key === OUTLINE ? undefined : { width: MAX_WIDTH, height: Number.MAX_SAFE_INTEGER },
+            label,
             scale: () => viewport.get().zoom,
         });
         const lasso = createLasso(context, {
@@ -167,11 +178,15 @@ export const board = definePrimitive({
         world: slot({
             live: live((state, { api }) => ({ style: api.viewport.style(state) })),
         }),
-        /** A card, keyed by its id. A drag moves it with `translate` until the drop commits. */
+        /**
+         * A card, keyed by its id. A drag moves it with `translate` until the drop commits. While it is dragged it
+         * also holds where it started (`--hold-x/y`, read by the card's left and top), so a remote change to its
+         * position, or to the card it is stacked under, doesn't move it under the pointer.
+         */
         card: slot<{ value: string }>({
             props: { value: 'string' },
             live: live((state, { api, key }) => ({
-                style: [api.move.style(state, key), api.resize.style(state, key)].filter(Boolean).join(';') || undefined,
+                style: [api.move.style(state, key), api.resize.style(state, key), held(state, key, api.move.dragging(state, key))].filter(Boolean).join(';') || undefined,
                 'data-dragging': api.move.dragging(state, key) ? '' : undefined,
             })),
         }),
