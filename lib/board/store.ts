@@ -5,7 +5,9 @@ import path from 'node:path';
 import { withFileLock, readOptional } from '@/lib/notes/file-write';
 import { HttpError } from '@/lib/api/errors';
 import type { Board, Card, Snapshot } from './types';
-import { placement } from './placement';
+import { GAP, estimateHeight, placement } from './placement';
+/** Card fields that only describe layout: saving them never conflicts with content edits. */
+export const GEOMETRY = new Set(['x', 'y', 'width', 'height', 'below']);
 export const validId = (id: string) => /^[a-zA-Z0-9_-]{1,80}$/.test(id);
 export function cardFile(dir: string, id: string) { if (!validId(id))
     throw new HttpError(400, 'Invalid card id'); return path.join(dir, 'cards', `${id}.json`); }
@@ -36,8 +38,16 @@ export async function snapshot(dir: string): Promise<Snapshot> {
 export async function saveCard(dir: string, card: Card) { card.rev++; await atomic(cardFile(dir, card.id), JSON.stringify(card)); return card; }
 export async function addCard(dir: string, input: Partial<Card>, sourceId?: string, direction: 'right' | 'below' = 'right') {
     const { cards, board } = await snapshot(dir);
-    if (sourceId && !cards.some(c => c.id === sourceId)) throw new HttpError(404, 'Source card not found');
-    const card: Card = { id: crypto.randomUUID(), rev: 0, kind: 'doc', title: 'Untitled', width: 420, height: 320, author: 'user', markdown: '', baselineMarkdown: '', comments: [], strokes: [], sentAt: null, ...placement(cards, cards.find(c => c.id === sourceId), input.width ?? 420, direction), ...input };
+    const source = sourceId ? cards.find(c => c.id === sourceId) : undefined;
+    if (sourceId && !source) throw new HttpError(404, 'Source card not found');
+    if (input.id !== undefined && (!validId(input.id) || cards.some(c => c.id === input.id))) throw new HttpError(409, 'Card id unavailable');
+    const width = input.width ?? (input.kind && input.kind !== 'doc' ? 420 : 900);
+    const height = input.height ?? (!input.kind || input.kind === 'doc' ? estimateHeight(input.markdown ?? '', width) : 320);
+    const positioned = input.x !== undefined && input.y !== undefined;
+    const at = positioned ? { x: input.x!, y: input.y! } : placement(cards, source, width, direction, height);
+    // Stacked only when it landed flush under the source; the client then keeps it there as the source's height changes.
+    const below = source && !positioned && direction === 'below' && at.x === source.x && at.y === source.y + source.height + GAP ? source.id : undefined;
+    const card: Card = { id: crypto.randomUUID(), rev: 0, kind: 'doc', title: 'Untitled', width, height, author: 'user', markdown: '', baselineMarkdown: '', comments: [], strokes: [], sentAt: null, ...input, ...at, ...(below ? { below } : {}) };
     await saveCard(dir, card);
     if (sourceId) {
         board.edges.push({ source: sourceId, target: card.id });
@@ -45,9 +55,20 @@ export async function addCard(dir: string, input: Partial<Card>, sourceId?: stri
     }
     return card;
 }
+/** A hand edit to a chart keeps what the agent last saw, so the next send carries a diff; editing it back clears that. */
+function trackChartEdit(before: Card, next: Card) {
+    if (before.kind !== 'chart')
+        throw new HttpError(400, 'Not a chart');
+    const baseline = before.baselineChart ?? before.chart;
+    if (!baseline || JSON.stringify(baseline) === JSON.stringify(next.chart))
+        delete next.baselineChart;
+    else
+        next.baselineChart = baseline;
+}
 export async function patchCard(dir: string, id: string, baseRev: number, patch: Partial<Card>) {
-    return lock(dir, async () => { const card = await readCard(dir, id); if (card.rev !== baseRev)
-        throw new HttpError(409, 'Card changed. Reload before saving; local changes are preserved.'); const next = { ...card, ...patch }; if (patch.markdown !== undefined)
+    return lock(dir, async () => { const card = await readCard(dir, id); if (card.rev !== baseRev && !Object.keys(patch).every(k => GEOMETRY.has(k)))
+        throw new HttpError(409, 'Card changed. Reload before saving; local changes are preserved.'); const next = { ...card, ...patch }; if (patch.chart !== undefined)
+        trackChartEdit(card, next); if (patch.markdown !== undefined)
         next.comments = reanchor(next.markdown, next.comments); return saveCard(dir, next); });
 }
 export async function assetBytes(dir: string, card: Card) { if (!card.asset || path.basename(card.asset) !== card.asset)
