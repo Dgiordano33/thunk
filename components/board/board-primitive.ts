@@ -36,6 +36,12 @@ export type { ResizeHandle };
 
 const arrows: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
+/** Where a dragged card started, which `positions` keeps for it until the drop. */
+const held = (state: { positions: Record<string, MovePoint> }, key: string, dragging: boolean) => {
+    const at = dragging ? state.positions[key] : undefined;
+    return at && `--hold-x:${at.x}px;--hold-y:${at.y}px`;
+};
+
 const background = (event: Event, root: HTMLElement, world: HTMLElement | undefined) => event.target === root || (!!world && event.target === world);
 
 export const board = definePrimitive({
@@ -167,11 +173,15 @@ export const board = definePrimitive({
         world: slot({
             live: live((state, { api }) => ({ style: api.viewport.style(state) })),
         }),
-        /** A card, keyed by its id. A drag moves it with `translate` until the drop commits. */
+        /**
+         * A card, keyed by its id. A drag moves it with `translate` until the drop commits. While it is dragged it
+         * also holds where it started (`--hold-x/y`, read by the card's left and top), so a remote change to its
+         * position, or to the card it is stacked under, doesn't move it under the pointer.
+         */
         card: slot<{ value: string }>({
             props: { value: 'string' },
             live: live((state, { api, key }) => ({
-                style: [api.move.style(state, key), api.resize.style(state, key)].filter(Boolean).join(';') || undefined,
+                style: [api.move.style(state, key), api.resize.style(state, key), held(state, key, api.move.dragging(state, key))].filter(Boolean).join(';') || undefined,
                 'data-dragging': api.move.dragging(state, key) ? '' : undefined,
             })),
         }),
