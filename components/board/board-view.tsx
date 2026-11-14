@@ -110,8 +110,14 @@ export function BoardView({ projectId, slug, name, initial }: {
                     setBusy(false); }, onEvent: e => {
                     useSession.getState().applyEvent(e);
                     if (e.type === 'board_op') {
-                        useBoard.getState().merge(e.op.card);
-                        void boardRequest(base).then((s: Snapshot) => useBoard.setState({ board: s.board })).catch(fail);
+                        // The session replays every past op on connect, including cards since deleted or never saved;
+                        // only a card the board still has is shown, at its current revision.
+                        const id = e.op.card.id;
+                        void boardRequest(base).then((s: Snapshot) => {
+                            useBoard.setState({ board: s.board });
+                            const saved = s.cards.find(c => c.id === id);
+                            if (saved) useBoard.getState().merge(saved);
+                        }).catch(fail);
                     }
                     if (e.type === 'turn_complete')
                         setActivity(e.markdown);
