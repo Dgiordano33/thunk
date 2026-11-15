@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { confirm } from "@/components/confirm";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { toast } from "sonner";
+import { Hint } from "@/components/hint";
 
 /** Files opened from the tree, as tabs after the workspace's sessions. A dot marks unsaved edits. */
 export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base: string }) {
@@ -78,17 +79,18 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
           <FileIcon className="size-3.5 shrink-0" />
           <span className="truncate">{fileName(f.path)}</span>
         </Link>
+        <Hint label={dirty ? "Unsaved changes · Close" : "Close"} side="bottom">
         <Button variant="ghost" size="xs"
           type="button"
           onClick={() => void close(f)}
           aria-label={`Close ${fileName(f.path)}${dirty ? " (unsaved changes)" : ""}`}
-          title={dirty ? "Unsaved changes" : "Close"}
           className="hover:bg-muted mr-2 grid size-5 shrink-0 place-items-center rounded"
         >
           {/* The unsaved dot turns into the close cross on hover. */}
           {dirty && <span className="bg-foreground/70 size-1.5 rounded-full group-hover/tab:hidden" />}
           <XIcon className={cn("size-3", dirty ? "hidden group-hover/tab:block" : "opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100", active && !dirty && "opacity-100")} />
         </Button>
+        </Hint>
       </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">

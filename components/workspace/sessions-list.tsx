@@ -13,6 +13,7 @@ import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 import { useWorkspaceBase } from "./route-context";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Hint } from "@/components/hint";
 
 /** Every session in the workspace; the expanded card shows that session's details (live for the open one). */
 export function SessionsList({ sessions }: { sessions: SessionMeta[] }) {
@@ -52,9 +53,11 @@ export function SessionsList({ sessions }: { sessions: SessionMeta[] }) {
                   {s.origin?.kind === "chief" && <span className="text-muted-foreground text-[10px]">Chief</span>}
                   {s.origin?.kind === "worker" && <span className="text-muted-foreground text-[10px]">Worker</span>}
                   {s.origin?.kind === "routine" && (
-                    <span title={`Started by the routine ${s.origin.routineName}`} className="shrink-0">
-                      <PixelIcon name="hourglass" className="size-3.5" />
-                    </span>
+                    <Hint label={`Started by the routine ${s.origin.routineName}`}>
+                      <span role="img" aria-label={`Started by the routine ${s.origin.routineName}`} className="shrink-0">
+                        <PixelIcon name="hourglass" className="size-3.5" />
+                      </span>
+                    </Hint>
                   )}
                   <span className="block truncate text-[13px] font-medium">{session.title || "Untitled session"}</span>
                 </span>

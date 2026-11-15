@@ -28,6 +28,7 @@ import { FileTree } from "./file-tree";
 import { filePagePath } from "@/lib/routes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Hint } from "@/components/hint";
 
 const CHANGES_POLL_MS = 5000;
 
@@ -126,15 +127,16 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
               </Button>
             ))}
           </div>}
+          <Hint label="Refresh files">
           <Button variant="ghost" size="xs"
             type="button"
             onClick={() => { setTreeRefresh((n) => n + 1); if (hasGit) void loadChanges(); }}
             aria-label="Refresh files"
-            title="Refresh"
             className="text-muted-foreground hover:text-foreground hover:bg-muted ml-auto rounded p-1"
           >
             <RefreshCwIcon className="size-3.5" />
           </Button>
+          </Hint>
         </div>
         {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -208,13 +210,15 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
                 </p>
               </div>
               {a.openComments > 0 && (
+                <Hint label={`${a.openComments} open comment${a.openComments === 1 ? "" : "s"}`}>
                 <span
                   className="text-muted-foreground mt-0.5 flex shrink-0 items-center gap-1 text-[11px]"
-                  title={`${a.openComments} open comment${a.openComments === 1 ? "" : "s"}`}
+                  aria-label={`${a.openComments} open comment${a.openComments === 1 ? "" : "s"}`}
                 >
                   <MessageSquareIcon className="size-3" />
                   {a.openComments}
                 </span>
+                </Hint>
               )}
             </Link>
           </li>
@@ -330,9 +334,11 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
           <span className="text-muted-foreground truncate">{dir}</span>
           <span className="shrink-0">{name}</span>
         </span>
-        <span className={cn("w-3 shrink-0 text-center font-mono text-[11px]", st.className)} title={st.label}>
-          {file.status}
-        </span>
+        <Hint label={st.label}>
+          <span className={cn("w-3 shrink-0 text-center font-mono text-[11px]", st.className)} aria-label={st.label}>
+            {file.status}
+          </span>
+        </Hint>
         <span className="w-16 shrink-0 text-right font-mono text-[11px]">
           {file.additions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>}
           {file.deletions > 0 && <span className="ml-1 text-red-600 dark:text-red-400">-{file.deletions}</span>}
@@ -341,14 +347,15 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
         {file.status !== "D" && <span className="w-5 shrink-0" />}
       </button>
       {file.status !== "D" && (
+        <Hint label="Open in editor">
         <Link
           href={filePagePath(base, repoId ?? null, file.path, "changes")}
           aria-label={`Edit ${file.path}`}
-          title="Open in editor"
           className="text-muted-foreground hover:text-foreground hover:bg-background absolute top-1 right-2 rounded p-1 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
         >
           <SquarePenIcon className="size-3.5" />
         </Link>
+        </Hint>
       )}
       {open && (
         <div className="bg-background mx-2 mb-2 overflow-x-auto rounded-md border">

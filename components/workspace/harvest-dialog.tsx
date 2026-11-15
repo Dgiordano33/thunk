@@ -11,6 +11,7 @@ import type { HarvestData } from "@/lib/projects/harvest";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Hint } from "@/components/hint";
 
 export type HarvestAction = "harvest" | "delete" | "merge";
 
@@ -70,11 +71,13 @@ export function HarvestButton({ workspaceId, label }: { workspaceId: string; lab
   const [data, setData] = useState<HarvestData | null>(null);
   const [busy, setBusy] = useState(false);
   return <>
-    <Button size="sm" variant="outline" disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
+    <Hint label="Copy this workspace’s memory and notes into the project">
+    <Button size="sm" variant="outline" disabled={busy} onClick={async () => {
       setBusy(true);
       try { setData(await api.getHarvest(workspaceId)); } catch (err) { toast.error((err as Error).message); }
       finally { setBusy(false); }
     }}><SaveIcon /> Save to project</Button>
+    </Hint>
     {data && <HarvestDialog workspaceId={workspaceId} label={label} data={data} action="harvest" onClose={() => setData(null)} onComplete={() => router.refresh()} />}
   </>;
 }

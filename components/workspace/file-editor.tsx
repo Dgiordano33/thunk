@@ -9,6 +9,7 @@ import { useSession } from "@/lib/store/session-store";
 import { fileKey, useOpenFiles, type OpenFile } from "@/lib/store/open-files-store";
 import { cn } from "@/lib/utils";
 import { CodeEditor, type CodeEditorHandle } from "./code-editor";
+import { Hint } from "@/components/hint";
 
 /** How often an open file checks whether something else (usually an agent) changed it on disk. */
 const DISK_POLL_MS = 2500;
@@ -120,14 +121,16 @@ export function FileEditor({ workspaceId, root, rootLabel, path }: { workspaceId
           {rootLabel && <span className="text-muted-foreground shrink-0">{rootLabel}:&nbsp;</span>}
           <span className="text-muted-foreground truncate">{slash >= 0 ? path.slice(0, slash + 1) : ""}</span>
           <span className="shrink-0 font-medium">{path.slice(slash + 1)}</span>
-          {dirty && <span className="bg-foreground/70 ml-2 size-1.5 shrink-0 rounded-full" title="Unsaved changes" />}
+          {dirty && <Hint label="Unsaved changes"><span role="img" aria-label="Unsaved changes" className="bg-foreground/70 ml-2 size-1.5 shrink-0 rounded-full" /></Hint>}
         </p>
         {saveError && <span role="alert" className="text-destructive truncate text-xs">{saveError}</span>}
         {!saveError && savedAt && !dirty && <span className="text-muted-foreground text-xs">Saved</span>}
         {loaded?.kind === "text" && (
-          <Button size="sm" variant={dirty ? "default" : "outline"} disabled={!dirty || saving} onClick={() => void save()} title="Save (⌘S)">
-            {saving && <Loader2Icon className="size-3.5 animate-spin" />}Save
-          </Button>
+          <Hint label="Save" keys="⌘S">
+            <Button size="sm" variant={dirty ? "default" : "outline"} disabled={!dirty || saving} onClick={() => void save()}>
+              {saving && <Loader2Icon className="size-3.5 animate-spin" />}Save
+            </Button>
+          </Hint>
         )}
       </div>
 
