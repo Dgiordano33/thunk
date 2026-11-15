@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import { WORLD_SELECTION } from "@/components/world/selection";
 
 import { BotIcon, ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
@@ -23,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
-import { isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
+import { projectSlugFromPath, isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
@@ -33,9 +35,10 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
   const taskCounts = useTaskCounts();
   const sessions = useAmbient((s) => s.sessions);
   const pathname = usePathname();
-  const [, section, workspaceSlug] = pathname.split("/");
+  const section = pathname.split("/")[1];
+  const workspaceSlug = pathname.startsWith("/projects/") ? undefined : pathname.split("/")[2];
   // Within a project, the town (/{project}) highlights the project and its pages (/{project}/{workspace}/…) the workspace.
-  const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === section) : undefined;
+  const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
   const activeProjectId = activeProject && !workspaceSlug ? activeProject.id : undefined;
   const activeWorkspaceId = workspaceSlug ? activeProject?.workspaces.find((w) => w.slug === workspaceSlug)?.id : undefined;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -115,7 +118,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                   </Link>
                   {(noteCounts.get(p.id) ?? 0) > 0 && (
                     <Link
-                      href={`${projectPath(p)}?building=library`}
+                      href={projectSectionPath(projectPath(p), "library")}
                       title={`${noteCounts.get(p.id)} notes`}
                       aria-label={`${p.name} notes (${noteCounts.get(p.id)})`}
                       className="text-muted-foreground hover:text-foreground hidden shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums group-hover:flex focus-visible:flex"
@@ -125,7 +128,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     </Link>
                   )}
                   {(notificationCounts[p.id] ?? 0) > 0 && <Link href={`/inbox?projectId=${p.id}`} aria-label={`${notificationCounts[p.id]} notifications need attention`} className="px-1 text-xs text-amber-600">! {notificationCounts[p.id]}</Link>}
-                  {openTasks > 0 && <Link href={`${projectPath(p)}?building=tasks`} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
+                  {openTasks > 0 && <Link href={projectSectionPath(projectPath(p), "tasks")} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
                   <NewWorkspaceButton
                     compact
                     projectId={p.id}

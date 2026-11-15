@@ -8,7 +8,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { memo, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { FileEntry, FileRoot, RepoChanges, WorkspaceChanges } from "@/lib/projects/types";
-import { filePagePath } from "@/lib/routes";
+import { filePagePath, filePathFromUrl } from "@/lib/routes";
 import { useOpenFiles } from "@/lib/store/open-files-store";
 import { cn } from "@/lib/utils";
 import { useWorkspaceBase } from "./route-context";
@@ -52,7 +52,7 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
   const base = useWorkspaceBase();
   const pathname = usePathname();
   const params = useSearchParams();
-  const route = useMemo(() => ({ base, path: pathname === `${base}/file` ? params.get("path") : null, root: params.get("root"), tab: params.get("tab") }), [base, pathname, params]);
+  const route = useMemo(() => ({ base, path: filePathFromUrl(base, pathname), root: params.get("root"), tab: params.get("tab") }), [base, pathname, params]);
   const [roots, setRoots] = useState<FileRoot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hydrate = useOpenFiles((s) => s.hydrate);

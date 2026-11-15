@@ -21,10 +21,10 @@ export function VaultPanel({ projectId, closeHref }: { projectId: string; closeH
 
   const select = (id: string | null) => {
     const q = new URLSearchParams(params.toString());
-    q.set("building", "vault");
+    q.delete("building");
     if (id) q.set("item", id);
     else q.delete("item");
-    router.replace(`${pathname}?${q}`, { scroll: false });
+    router.push(`${pathname}?${q}`, { scroll: false });
   };
 
   const onAdded = (items: VaultItem[]) => {

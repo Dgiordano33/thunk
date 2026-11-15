@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import { CheckIcon, DownloadIcon, ListTodoIcon, NotebookPenIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -167,7 +169,7 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {sent?.noteId ? (
                           <Button size="xs" variant="ghost" asChild>
-                            <Link href={`${paths.project(item.projectId)}?building=library&note=${sent.noteId}`} scroll={false}><CheckIcon /> In notes</Link>
+                            <Link href={projectSectionPath(paths.project(item.projectId), "library", { note: sent.noteId })} scroll={false}><CheckIcon /> In notes</Link>
                           </Button>
                         ) : (
                           <Button size="xs" variant="outline" disabled={busyIdea !== null} onClick={() => void promote(idea.id, "note")}>
@@ -176,7 +178,7 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                         )}
                         {sent?.taskId ? (
                           <Button size="xs" variant="ghost" asChild>
-                            <Link href={`${paths.project(item.projectId)}?building=tasks`} scroll={false}><CheckIcon /> Task created</Link>
+                            <Link href={projectSectionPath(paths.project(item.projectId), "tasks")} scroll={false}><CheckIcon /> Task created</Link>
                           </Button>
                         ) : (
                           <Button size="xs" variant="outline" disabled={busyIdea !== null} onClick={() => void promote(idea.id, "task")}>

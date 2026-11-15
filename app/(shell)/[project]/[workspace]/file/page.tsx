@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
-import { FileEditor } from "@/components/workspace/file-editor";
+import { notFound, redirect } from "next/navigation";
+import { filePagePath, workspacePath } from "@/lib/routes";
 import { getWorkspaceContextBySlugs } from "@/lib/projects";
 import { cleanRelativePath, fileName } from "@/lib/projects/file-paths";
 import { fileRoots } from "@/lib/projects/files";
@@ -27,14 +27,7 @@ export async function generateMetadata(props: Props) {
 export default async function FilePage(props: Props) {
   const found = await resolve(props);
   if (!found) notFound();
-  const { ctx, root, path, multiRoot } = found;
-  return (
-    <FileEditor
-      key={`${root.id}:${path}`}
-      workspaceId={ctx.workspace.id}
-      root={root.id}
-      rootLabel={multiRoot ? root.name : null}
-      path={path}
-    />
-  );
+  const { ctx, root, path } = found;
+  const query = await props.searchParams;
+  redirect(filePagePath(workspacePath(ctx.project, ctx.workspace), root.id, path, typeof query.tab === "string" ? query.tab : null));
 }

@@ -49,10 +49,10 @@ export function WorkshopRoutines({
 
   const go = (routine: string | null) => {
     const q = new URLSearchParams(params.toString());
-    q.set("building", "workshop");
+    q.delete("building");
     if (routine) q.set("routine", routine);
     else q.delete("routine");
-    router.replace(`${pathname}?${q}`, { scroll: false });
+    router.push(`${pathname}?${q}`, { scroll: false });
   };
 
   // The list carries everything the form needs, but fetch the full routine for a deep link before the list loads.

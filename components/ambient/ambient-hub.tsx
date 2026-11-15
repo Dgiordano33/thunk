@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import { SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,7 +26,7 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
 
 /** A run's session when it still exists, else the Workshop entry for its routine. */
 function runHref(run: RoutineRunActivity, paths: ReturnType<typeof pathsFor>) {
-  return run.sessionId && run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : `${paths.project(run.projectId)}?building=workshop&routine=${run.routineId}`;
+  return run.sessionId && run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : projectSectionPath(paths.project(run.projectId), "workshop", { routine: run.routineId });
 }
 
 /** Activity polling and ⌘K search. `hud` renders only a compact search button, for the world map. */

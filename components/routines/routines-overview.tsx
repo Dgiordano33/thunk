@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import Link from "next/link";
 import { relativeTime } from "@/components/session/labels";
 import { CivPanel } from "@/components/world/civ-panel";
@@ -37,7 +39,7 @@ export function RoutinesOverview({
             that owns them. Each city builds its own in its Workshop.
           </p>
           <Link
-            href={firstProjectId ? `${paths.project(firstProjectId)}?building=workshop&routine=new` : "/projects"}
+            href={firstProjectId ? projectSectionPath(paths.project(firstProjectId), "workshop", { routine: "new" }) : "/projects"}
             className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80"
           >
             {firstProjectId ? "Visit a Workshop →" : "← Found a city first"}
@@ -78,7 +80,7 @@ export function RoutinesOverview({
                 return (
                   <tr key={r.id} className={cn("hover:bg-muted/50 border-b last:border-b-0", !r.enabled && "opacity-70")}>
                     <td className="max-w-56 px-3 py-2">
-                      <Link href={`${paths.project(r.projectId)}?building=workshop&routine=${r.id}`} className="block truncate font-medium hover:underline">
+                      <Link href={projectSectionPath(paths.project(r.projectId), "workshop", { routine: r.id })} className="block truncate font-medium hover:underline">
                         {r.name}
                       </Link>
                     </td>

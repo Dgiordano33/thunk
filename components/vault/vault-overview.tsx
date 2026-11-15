@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -85,7 +87,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
             </SelectContent>
           </Select>
           {projectId && (
-            <Link href={`${paths.project(projectId)}?building=vault`} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Visit town →</Link>
+            <Link href={projectSectionPath(paths.project(projectId), "vault")} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Visit town →</Link>
           )}
         </header>
         {!projectId && (

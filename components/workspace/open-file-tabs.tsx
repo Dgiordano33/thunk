@@ -8,7 +8,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { useEffect } from "react";
 import { fileName } from "@/lib/projects/file-paths";
-import { filePagePath } from "@/lib/routes";
+import { filePagePath, filePathFromUrl } from "@/lib/routes";
 import { fileKey, useOpenFiles, type OpenFile } from "@/lib/store/open-files-store";
 import { lineTabIndicator } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,8 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
   const all = useOpenFiles((s) => s.files);
   const drafts = useOpenFiles(useShallow((s) => Object.fromEntries(Object.keys(s.drafts).map((key) => [key, true]))));
   const files = all.filter((f) => f.workspaceId === workspaceId);
-  const onFile = pathname === `${base}/file`;
-  const isActive = (f: OpenFile) => onFile && params.get("path") === f.path && (!params.get("root") || params.get("root") === f.root);
+  const activePath = filePathFromUrl(base, pathname);
+  const isActive = (f: OpenFile) => activePath === f.path && (!params.get("root") || params.get("root") === f.root);
 
   const close = (f: OpenFile) => {
     if (drafts[fileKey(f)] && !window.confirm(`Discard unsaved changes to ${fileName(f.path)}?`)) return;
