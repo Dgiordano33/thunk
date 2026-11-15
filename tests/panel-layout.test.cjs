@@ -20,8 +20,9 @@ function load(file, mocks = {}) {
   return mod.exports;
 }
 
-const resizable = load("../components/ui/resizable.tsx");
-test("both panel layouts render on the server without localStorage", () => {
+const panelLayout = load("../lib/panel-layout.ts");
+const resizable = load("../components/ui/resizable.tsx", { "@/lib/panel-layout": panelLayout });
+test("both panel layouts render on the server without a browser", () => {
   assert.equal(typeof window, "undefined");
   const { ShellPanels } = load("../components/layout/shell-panels.tsx", {
     "@/components/ui/resizable": resizable,
@@ -40,17 +41,29 @@ test("both panel layouts render on the server without localStorage", () => {
   }
 });
 
-test("layout storage preserves browser values and tolerates unavailable reads", (t) => {
-  const storage = resizable.panelLayoutStorage;
-  assert.equal(storage.getItem("layout"), null);
-  assert.doesNotThrow(() => storage.setItem("layout", "server"));
-  const values = new Map();
-  t.after(() => { delete globalThis.window; });
-  globalThis.window = {
-    localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) },
-  };
-  storage.setItem("layout", '{"sidebar":20,"content":80}');
-  assert.equal(storage.getItem("layout"), '{"sidebar":20,"content":80}');
-  Object.defineProperty(window, "localStorage", { get() { throw new Error("Storage blocked"); } });
-  assert.equal(storage.getItem("layout"), null);
+test("layouts are kept in cookies, read from the request on the server and document.cookie in the browser", (t) => {
+  const key = "react-resizable-panels:thunk-sidebar-layout";
+  const name = panelLayout.panelCookieName(key);
+  assert.equal(name, "react-resizable-panels_thunk-sidebar-layout");
+  assert.ok(name.startsWith(panelLayout.PANEL_COOKIE_PREFIX));
+  const saved = '{"sidebar,content":{"layout":[20,80]}}';
+
+  // Server render: only the request's cookies; writing is a no-op.
+  const server = resizable.panelLayoutStorage({ [name]: saved });
+  assert.equal(server.getItem(key), saved);
+  assert.equal(resizable.panelLayoutStorage().getItem(key), null);
+  assert.doesNotThrow(() => server.setItem(key, saved));
+  assert.deepEqual(panelLayout.panelCookies([{ name, value: saved }, { name: "other", value: "x" }]), { [name]: saved });
+
+  // Browser: a write is a cookie the next request carries; a read finds it again.
+  let jar = "theme=dark";
+  globalThis.document = { get cookie() { return jar; }, set cookie(c) { const [pair] = c.split(";"); jar = `${jar}; ${pair}`; } };
+  t.after(() => { delete globalThis.document; });
+  const browser = resizable.panelLayoutStorage();
+  assert.equal(browser.getItem(key), null);
+  browser.setItem(key, saved);
+  assert.match(jar, new RegExp(`${name}=`));
+  assert.equal(browser.getItem(key), saved);
+  jar = `${name}=%E0%A4%A`;
+  assert.equal(browser.getItem(key), null);
 });
