@@ -83,6 +83,8 @@ export function PlanetView({
 }) {
   const sessions = useAmbient((s) => s.sessions);
   const deliveries = useAmbient((s) => s.deliveries);
+  const runs = useAmbient((s) => s.runs);
+  const routineAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
   const live = new Map<string, Live>(liveOverride ? Object.entries(liveOverride) : sessions.map((s) => [s.id, s]));
   const toneOf = (id: string, closed: boolean): Tone => {
     const l = live.get(id);
@@ -113,7 +115,7 @@ export function PlanetView({
           <>
             <Orbits w={w} h={h} radii={layout.orbits} star={false} />
             <svg width={w} height={h} className="absolute inset-0" aria-hidden="true">
-              {moons.flatMap((m) =>
+              {moons.filter((m) => m.sessionCount > 0).flatMap((m) =>
                 SATELLITE_RINGS.map(({ r }) => (
                   <ellipse key={`${m.id}-${r}`} cx={m.x} cy={m.y} rx={r} ry={r * TILT} fill="none" stroke="var(--orbit)" strokeOpacity={0.5} strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
                 )),
@@ -140,7 +142,7 @@ export function PlanetView({
         }
         controls={<Legend />}
       >
-        <SectionDock sections={sections} />
+        <SectionDock sections={routineAttention ? sections.map((s) => (s.key === "routines" ? { ...s, attention: true } : s)) : sections} />
         {children}
       </IsoViewport>
     </div>
@@ -163,7 +165,7 @@ function Core({ projectId, name, x, y, href, selected, tone }: { projectId: stri
         <span className="absolute flex items-center justify-center">
           <Sphere r={r} palette={planetPalette(projectId)} light={LIGHT} bands ringed={false} />
         </span>
-        <span className={cn("absolute rounded-full ring-(--ring) ring-offset-4 ring-offset-(--void) group-focus-visible:ring-2", selected && "ring-2 ring-(--foreground)/70")} style={{ inset: -2 }} />
+        <span className={cn("absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-4", selected && "ring-2 ring-offset-4 ring-(--foreground)/70")} style={{ inset: -2 }} />
       </span>
       <span className="planet-label mt-3 flex flex-col items-center gap-1 whitespace-nowrap">
         <span className="text-base leading-5 font-semibold">{name}</span>
@@ -196,7 +198,7 @@ const Moon = memo(function Moon({ moon, href, selected, tone, cue, serving }: { 
             <span className="absolute flex items-center justify-center transition-transform duration-150 group-hover:scale-110">
               <Sphere r={r} palette={planetPalette(moon.id)} light={LIGHT} />
             </span>
-            <span className={cn("absolute rounded-full ring-(--ring) ring-offset-2 ring-offset-(--void) group-focus-visible:ring-2", selected && "ring-2 ring-(--foreground)/70")} style={{ inset: -3 }} />
+            <span className={cn("absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2", selected && "ring-2 ring-offset-2 ring-(--foreground)/70")} style={{ inset: -3 }} />
           </span>
           <span className="planet-label flex flex-col items-center gap-0.5 whitespace-nowrap" style={{ marginTop: moon.sessionCount ? LABEL_DROP - r : 6 }}>
             <span className="flex items-center gap-1.5 text-[13px] leading-4 font-medium">

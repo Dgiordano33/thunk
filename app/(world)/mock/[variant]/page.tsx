@@ -68,7 +68,7 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
     const ws = typeof query.ws === "string" ? query.ws : undefined;
     return (
       <>
-        <MockTheme variant={variant} dark={dark} />
+        <MockTheme variant={variant} dark={dark} look="space" />
         {planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} activity={ACTIVITY} />}
       </>
     );
@@ -85,7 +85,7 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
 
   return (
     <>
-      <MockTheme variant={variant} dark={dark} />
+      <MockTheme variant={variant} dark={dark} look="world" />
       <WorldMap tiles={tiles} cities={cities} />
     </>
   );

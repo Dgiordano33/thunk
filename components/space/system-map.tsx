@@ -103,11 +103,11 @@ const Planet = memo(function Planet({ planet, star, activity }: { planet: Placed
             <span className="absolute flex items-center justify-center transition-transform duration-150 group-hover:scale-110">
               <Sphere r={r} palette={planetPalette(project.id)} light={light} bands={level >= 3} ringed={level >= 4} dim={dormant} />
             </span>
-            <span className="absolute rounded-full ring-0 ring-(--ring) ring-offset-2 ring-offset-(--void) group-focus-visible:ring-2" style={{ inset: -4 }} />
+            <span className="absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2" style={{ inset: -4 }} />
           </span>
           <span className="planet-label mt-2 flex flex-col items-center gap-1 whitespace-nowrap">
             <span className={cn("text-[13px] leading-4 font-medium", dormant ? "text-muted-foreground" : "text-foreground")}>{project.name}</span>
-            {activity ? <StatusBadge activity={activity} /> : dormant ? <span className="text-muted-foreground text-[11px]">Idle {project.lastActivityAt ? relativeTime(project.lastActivityAt) : ""}</span> : null}
+            {activity ? <StatusBadge activity={activity} /> : dormant ? <span className="text-muted-foreground text-[11px]">{project.lastActivityAt ? `Idle ${relativeTime(project.lastActivityAt)}` : "No activity yet"}</span> : null}
           </span>
         </Link>
       </HoverCardTrigger>

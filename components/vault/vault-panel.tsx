@@ -37,8 +37,8 @@ export function VaultPanel({ projectId, closeHref }: { projectId: string; closeH
 
   return (
     <TownPanel
-      eyebrow="Vault"
-      title="Holdings"
+      eyebrow="Uploads"
+      title="Vault"
       closeHref={closeHref}
       wide
       actions={

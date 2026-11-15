@@ -23,11 +23,20 @@ import { getSessionRow, listSessionRows } from "@/lib/supabase/repo/sessions";
 import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
 import { cityHue, cityLevel } from "@/lib/world/cities";
 import { cropStage, layoutTown } from "@/lib/world/town";
+import { PlanetView, type PlanetMoon, type PlanetSatellite, type PlanetSection } from "@/components/space/planet-view";
+import { getLook } from "@/lib/look.server";
+import { projectNoteDirs } from "@/lib/notes/resolve";
+import { countNotes } from "@/lib/notes/store";
+import { listEnabledRoutines } from "@/lib/supabase/repo/routines";
+import { countOpenTasks } from "@/lib/supabase/repo/tasks";
+import { layoutPlanet, spendStep } from "@/lib/world/planet";
+import { projectSectionPath } from "@/lib/routes";
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 const BUILDINGS = ["center", "library", "workshop", "tasks", "vault"] as const;
 
-// A project up close: workspaces are farms, sessions are the fields around them.
+// A project up close. Solar-system look: the project is a planet, workspaces are moons, sessions their satellites.
+// Game look: workspaces are farms, sessions are the fields around them.
 // Section routes supply the building; query parameters retain workspace/session previews.
 export async function TownPage({ params, searchParams }: PageProps<"/[project]">) {
   const { project: slug } = await params;
@@ -37,13 +46,14 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   const id = project.id;
   await ensureMainWorkspace(project);
 
-  const [workspaces, rows, vaultItems] = await Promise.all([
+  const [workspaces, rows, vaultItems, look] = await Promise.all([
     listWorkspaces(id),
     listSessionRows({ projectId: id, limit: 500 }).catch((err) => {
       console.error("[thunk] list sessions failed", err);
       return [];
     }),
     listItems(vaultDirOf(project)).catch(() => []),
+    getLook(),
   ]);
   const sessions = await listSessions({ projectId: id, limit: 500 }, rows);
   const active = workspaces.filter((w) => w.status === "active");
@@ -124,6 +134,50 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     );
   }
 
+  const harvestOffers = archived.filter((w) => w.id === one(query.harvest)).map((w) => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />);
+
+  if (look === "space") {
+    const planet = layoutPlanet(active, townSessions);
+    const [noteCount, taskCounts, routines] = await Promise.all([
+      countNotes([projectNoteDirs(project)]).catch(() => undefined),
+      countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
+      listEnabledRoutines({ projectId: id }).catch(() => []),
+    ]);
+    const tasks = taskCounts[id];
+    const moons: PlanetMoon[] = planet.moons.flatMap(({ workspaceId, x, y }) => {
+      const ws = townWorkspaces.find((w) => w.id === workspaceId);
+      if (!ws) return [];
+      return [{ id: ws.id, label: ws.label, branch: ws.branch, hasGit: ws.hasGit, sessionCount: ws.sessionCount, overflow: planet.overflow[ws.id] ?? 0, lastActivityAt: ws.lastActivityAt, x, y }];
+    });
+    const satellites: PlanetSatellite[] = fields.flatMap((f) => {
+      const at = planet.satellites[f.id];
+      return at ? [{ id: f.id, workspaceId: f.workspaceId, title: f.title, model: f.model, createdAt: f.createdAt, costUsd: f.costUsd, step: spendStep(f.costUsd), closed: f.fallow, ...at }] : [];
+    });
+    const sections: PlanetSection[] = [
+      { key: "notes", label: "Notes", href: projectSectionPath(closeHref, "library"), count: noteCount, selected: selected.building === "library" },
+      { key: "tasks", label: "Tasks", href: projectSectionPath(closeHref, "tasks"), count: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, selected: selected.building === "tasks" },
+      { key: "routines", label: "Routines", href: projectSectionPath(closeHref, "workshop"), count: routines.length, selected: selected.building === "workshop" },
+      { key: "vault", label: "Vault", href: projectSectionPath(closeHref, "vault"), count: vaultItems.length, attention: vaultItems.some((i) => i.status === "failed"), selected: selected.building === "vault" },
+      { key: "canvas", label: "Canvas", href: `${closeHref}/canvas` },
+    ];
+    return (
+      <PlanetView
+        projectId={id}
+        projectName={project.name}
+        baseHref={closeHref}
+        overviewHref={projectSectionPath(closeHref, "center")}
+        layout={planet}
+        moons={moons}
+        satellites={satellites}
+        sections={sections}
+        selected={{ session: selected.session, ws: selected.ws, overview: selected.building === "center" }}
+      >
+        {panel}
+        {harvestOffers}
+      </PlanetView>
+    );
+  }
+
   return (
     <TownView
       projectId={id}
@@ -142,7 +196,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       selected={selected}
     >
       {panel}
-      {archived.filter(w => w.id === one(query.harvest)).map(w => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />)}
+      {harvestOffers}
     </TownView>
   );
 }

@@ -4,16 +4,17 @@ import { cn } from "cn"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-xs border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md world:rounded-xs border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "border-(--w-bronze) border-t-(--w-bronze-light) bg-(--w-bronze-dark) bg-linear-to-b from-(--w-soil) to-(--w-bronze-dark) text-(--w-snow) shadow-sm shadow-(--w-soil-dark)/40 inset-ring inset-ring-(--w-bronze-light)/20 hover:from-(--w-bronze-dark) hover:to-(--w-soil) active:shadow-none",
+          // Solar-system look: plain ink buttons. Game look (`world:`): the bronze-on-soil plate.
+          "bg-primary text-primary-foreground hover:bg-primary/85 world:border-(--w-bronze) world:border-t-(--w-bronze-light) world:bg-(--w-bronze-dark) world:bg-linear-to-b world:from-(--w-soil) world:to-(--w-bronze-dark) world:text-(--w-snow) world:shadow-sm world:shadow-(--w-soil-dark)/40 world:inset-ring world:inset-ring-(--w-bronze-light)/20 world:hover:from-(--w-bronze-dark) world:hover:to-(--w-soil) world:active:shadow-none",
         outline:
-          "border-(--w-bronze)/60 bg-background hover:bg-(--w-parchment) hover:text-(--w-parchment-ink) aria-expanded:bg-(--w-parchment) aria-expanded:text-(--w-parchment-ink)",
+          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground world:border-(--w-bronze)/60 world:bg-background world:hover:bg-(--w-parchment) world:hover:text-(--w-parchment-ink) world:aria-expanded:bg-(--w-parchment) world:aria-expanded:text-(--w-parchment-ink)",
         secondary:
-          "border-(--w-bronze)/40 bg-(--w-parchment) text-(--w-parchment-ink) hover:border-(--w-bronze) hover:bg-(--w-parchment)/80 aria-expanded:border-(--w-bronze) aria-expanded:bg-(--w-parchment) aria-expanded:text-(--w-parchment-ink)",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary world:border-(--w-bronze)/40 world:bg-(--w-parchment) world:text-(--w-parchment-ink) world:hover:border-(--w-bronze) world:hover:bg-(--w-parchment)/80 world:aria-expanded:border-(--w-bronze) world:aria-expanded:bg-(--w-parchment) world:aria-expanded:text-(--w-parchment-ink)",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:

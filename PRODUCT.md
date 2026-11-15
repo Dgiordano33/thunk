@@ -51,7 +51,7 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 
 - **Notifications / Inbox:** server-created records of requests and outcomes across projects. Action notifications resolve when their cause clears; informational updates resolve when read or dismissed.
 
-Use Project, Workspace, Session, Notes, Tasks, Routines, Vault, and Library. Within the map, projects appear as cities on the world map and as a town center up close, workspaces as farms, and sessions as fields. Closed sessions are fallow fields; archived workspaces are listed in the Town center. The Library building holds notes, the Workshop holds routines, the Town hall holds tasks, and the Vault building holds uploads.
+Use Project, Workspace, Session, Notes, Tasks, Routines, Vault, and Library everywhere outside the map itself, in both looks. The map has two looks (Settings → Look). In the default **Solar system** look, projects are planets, workspaces are moons and sessions are satellites; closed sessions are hollow; Notes, Tasks, Routines, Vault and Canvas are a plain section bar. In the **Game world** look, projects are cities on the world map and a town center up close, workspaces are farms and sessions are fields; closed sessions are fallow fields; the Library building holds notes, the Workshop routines, the Town hall tasks and the Vault building uploads. Game words appear only on the game map; panels use the plain terms. Archived workspaces are listed in the project overview.
 
 **Undecided**
 
