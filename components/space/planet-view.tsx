@@ -101,6 +101,7 @@ export function PlanetView({
   };
   const projectTone = moons.map((m) => moonTone(m.id));
   const coreTone: Tone = projectTone.includes("attention") ? "attention" : projectTone.includes("error") ? "error" : null;
+  // The core sits in the middle, so fitting the whole system on open also centres it.
   const { w, h, core } = layout;
   const link = (q: string) => `${baseHref}${baseHref.includes("?") ? "&" : "?"}${q}`;
 
@@ -110,7 +111,6 @@ export function PlanetView({
         width={w}
         height={h}
         label={`${projectName}: workspaces and sessions`}
-        focus={{ ...core, z: 1 }}
         stage={
           <>
             <Orbits w={w} h={h} radii={layout.orbits} star={false} />
