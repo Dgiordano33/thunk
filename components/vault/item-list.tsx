@@ -6,6 +6,8 @@ import { relativeTime } from "@/components/session/labels";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { VaultItem, VaultKind, VaultStatus } from "@/lib/vault/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 export const KIND_ICONS: Record<VaultKind, typeof FileIcon> = { image: ImageIcon, pdf: FileTextIcon, text: FileTextIcon, office: FileSpreadsheetIcon, other: FileIcon };
 
@@ -60,10 +62,10 @@ export function ItemList({ items, selectedId, onSelect, contextOf }: {
       </div>
       {shown === null ? (
         <div className="flex flex-col gap-1.5 p-2">
-          {[0, 1, 2].map((i) => <div key={i} className="bg-muted/50 h-14 animate-pulse rounded-lg" />)}
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-6 text-center text-xs">{query ? "Nothing matches." : "Nothing stored yet."}</p>
+        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query ? "Nothing matches." : "Nothing stored yet."}</EmptyDescription></Empty>
       ) : (
         <ul className="flex flex-col gap-1 overflow-y-auto p-2">
           {shown.map((item) => {

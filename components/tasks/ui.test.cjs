@@ -26,6 +26,7 @@ test("lists every status in order, sorts positions, and collapses completed task
     "@/lib/agent/types": load("../../lib/agent/types.ts", { "@/lib/prompts/schema": {} }),
     "@/lib/tasks/types": types,
     "./task-row": { TaskRow: ({ task }) => React.createElement("li", null, task.title) },
+    "@/components/ui/empty": load("../ui/empty.tsx"),
   });
   const tasks = [
     ["done", 0, "finished"], ["blocked", 0, "waiting"], ["open", 2, "second"],
@@ -49,6 +50,7 @@ test("send menu offers live sessions in scope while the owner label still resolv
     "@/lib/tasks/types": types,
     "./send-menu": { SendMenu: ({ sessions }) => { offered = sessions.map((s) => s.id); return null; } },
     "@/components/layout/paths-context": { usePaths: () => ({ session: (w, s) => `/p/${w}/${s}` }) },
+    "@/components/ui/checkbox": { Checkbox: () => null },
   });
   const sessions = [
     { id: "live-here", workspaceId: "w1", live: true, title: "Live" },

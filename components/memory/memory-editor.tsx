@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client/api";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Edit a project's or workspace's MEMORY.md in place. Agents read and write the same file. */
 export function MemoryEditor({
@@ -72,7 +73,7 @@ export function MemoryEditor({
       </div>
       <p className="text-muted-foreground text-xs">{hint}</p>
       {loading ? (
-        <div className="bg-muted/40 h-32 animate-pulse rounded-md" />
+        <Skeleton role="status" aria-label="Loading" className="h-32" />
       ) : (
         <Textarea
           value={content}

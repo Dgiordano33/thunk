@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
 import { useSession } from "@/lib/store/session-store";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 export function Checkpoints({ workspaceId, onRestore }: { workspaceId: string; onRestore: () => void }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
@@ -22,7 +23,7 @@ export function Checkpoints({ workspaceId, onRestore }: { workspaceId: string; o
   return <div className="flex flex-col gap-3 p-3 text-xs">
     <p className="text-muted-foreground">Snapshots before each prompt runs in Git workspaces. Rewind restores files; chat history, commits, and staging stay unchanged. Ignored files are excluded. Stop agents and any processes editing files first.</p>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    {!checkpoints.length && <p>No checkpoints yet.</p>}
+    {!checkpoints.length && <Empty className="py-4 gap-2"><EmptyDescription className="text-xs">No checkpoints yet.</EmptyDescription></Empty>}
     {checkpoints.map((c) => <div key={c.id} className="rounded-md border p-3">
       <p className="truncate font-medium" title={c.label}>{c.label}</p>
       <p className="mt-1 text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</p>

@@ -8,6 +8,8 @@ import { MEMORY_NOTE_ID, type NoteMeta } from "@/lib/notes/types";
 import { matchesNoteView, noteFilters, type NoteFilter } from "@/lib/notes/views";
 import { NoteFilters } from "./note-filters";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 /**
  * Apple Notes-style rows: title, time, excerpt, and badges for pinned, injected and open tasks.
@@ -111,10 +113,10 @@ export function NoteList({
       )}
       {shown === null ? (
         <div className="flex flex-col gap-1.5 p-2">
-          {[0, 1, 2].map((i) => <div key={i} className="bg-muted/50 h-14 animate-pulse rounded-lg" />)}
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-6 text-center text-xs">{query || filter !== "all" ? "No matching notes." : emptyText}</p>
+        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query || filter !== "all" ? "No matching notes." : emptyText}</EmptyDescription></Empty>
       ) : (
         <ul ref={listRef} className="flex flex-col gap-1 overflow-y-auto p-2" onKeyDown={onKeyDown}>
           {shown.map((n) => (

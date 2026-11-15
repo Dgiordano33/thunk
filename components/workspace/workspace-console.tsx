@@ -11,6 +11,8 @@ import type { workspaceGitState } from "@/lib/projects/workspace-git";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { confirm } from "@/components/confirm";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 type GitState = Awaited<ReturnType<typeof workspaceGitState>>;
 const KINDS: ProcessKind[] = ["shell", "setup", "run", "archive"];
@@ -131,7 +133,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
               <SelectItem value="squash">Squash into {multi ? "default branches" : git?.target}</SelectItem>
             </SelectContent>
           </Select>
-          {(gitAction === "merge" || gitAction === "squash") && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={cleanup} onChange={(e) => setCleanup(e.target.checked)} /> Then delete workspace</label>}
+          {(gitAction === "merge" || gitAction === "squash") && <Label className="gap-1.5 text-xs font-normal"><Checkbox checked={cleanup} onCheckedChange={(on) => setCleanup(on === true)} /> Then delete workspace</Label>}
           <Button size="sm" variant="outline" disabled={blocked} onClick={() => void applyGit()}>Apply</Button>
           {mergeOpen && <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "merge-abort"))}>Abort merge</Button>}
           {rebaseOpen && <>

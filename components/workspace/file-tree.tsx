@@ -15,6 +15,7 @@ import { filePagePath, filePathFromUrl } from "@/lib/routes";
 import { useOpenFiles } from "@/lib/store/open-files-store";
 import { cn } from "@/lib/utils";
 import { useWorkspaceBase } from "./route-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Git status letter per changed path, per root. Folders holding changes are keyed with a trailing "/". */
 type StatusMap = Map<string, Map<string, string>>;
@@ -142,11 +143,11 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
   }, [expanded, listed, list]);
 
   if (error) return <p className="text-destructive px-4 py-6 text-center text-xs">{error}</p>;
-  if (!roots) return <div className="text-muted-foreground flex justify-center p-6"><div role="status" aria-label="Loading files" className="bg-muted h-12 w-full animate-pulse rounded" /></div>;
+  if (!roots) return <div className="flex justify-center p-6"><Skeleton role="status" aria-label="Loading files" className="h-12 w-full" /></div>;
 
   const rows = (root: FileRoot, path: string, level: number): React.ReactNode => {
     const entries = listed[valueOf(root.id, path)];
-    if (!entries) return path === "" && level === 1 ? <div role="status" aria-label="Loading folder" className="bg-muted mx-2 my-1 h-4 w-2/3 animate-pulse rounded" /> : null;
+    if (!entries) return path === "" && level === 1 ? <Skeleton role="status" aria-label="Loading folder" className="mx-2 my-1 h-4 w-2/3" /> : null;
     if ("error" in entries) return <p className="text-destructive py-1 text-xs" style={indent(level)}>{entries.error}</p>;
     if (!entries.length) return <p className="text-muted-foreground py-1 text-xs italic" style={indent(level)}>Empty</p>;
     return entries.map((e) => e.kind === "dir"

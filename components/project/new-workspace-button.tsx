@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { api } from "@/lib/client/api";
 import { newChatPath } from "@/lib/routes";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 /** Create a workspace, remembering which repos or folders the user last selected. */
 export function NewWorkspaceButton({
@@ -101,22 +103,20 @@ export function NewWorkspaceButton({
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-xs font-medium">Repos in this workspace</legend>
             {repos.map((r) => (
-              <label key={r.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="accent-primary size-4"
+              <Label key={r.id} className="font-normal">
+                <Checkbox
                   checked={chosen.has(r.id)}
-                  onChange={(e) =>
+                  onCheckedChange={(on) =>
                     setChosen((prev) => {
                       const next = new Set(prev);
-                      if (e.target.checked) next.add(r.id);
+                      if (on === true) next.add(r.id);
                       else next.delete(r.id);
                       return next;
                     })
                   }
                 />
                 {r.name}
-              </label>
+              </Label>
             ))}
           </fieldset>
           <p className="text-muted-foreground text-xs">Folders are shared in place. With none selected, this workspace gets a scratch folder.</p>

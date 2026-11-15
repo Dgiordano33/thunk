@@ -26,6 +26,8 @@ import { WorkspaceNotes } from "./workspace-notes";
 import { useWorkspaceBase } from "./route-context";
 import { FileTree } from "./file-tree";
 import { filePagePath } from "@/lib/routes";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 const CHANGES_POLL_MS = 5000;
 
@@ -170,7 +172,7 @@ function Artifacts({ workspaceId }: { workspaceId: string }) {
 
   if (!artifacts) return <Loading />;
   if (artifacts.length === 0)
-    return <Empty text="No artifacts yet. Responses and plans from every session in this workspace show up here." />;
+    return <EmptyNote text="No artifacts yet. Responses and plans from every session in this workspace show up here." />;
 
   return (
     <ul className="flex flex-col gap-0.5 p-2">
@@ -228,7 +230,7 @@ function Changes({ workspaceId, changes, repos }: { workspaceId: string; changes
   const add = (c: DiffComment) => setComments((all) => [...all, c]);
   if (changes === undefined) return <Loading />;
   const multi = repos.length > 0;
-  if (!multi && changes === null) return <Empty text="Not a git repository." />;
+  if (!multi && changes === null) return <EmptyNote text="Not a git repository." />;
   const sections: RepoChanges[] = multi ? repos.filter((r) => r.changes) : [{ id: "workspace", name: "", cwd: "", changes }];
 
   return (
@@ -265,7 +267,7 @@ function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemov
         </span>
       </div>
       {changes.files.length === 0 ? (
-        <Empty text="No changes yet." />
+        <EmptyNote text="No changes yet." />
       ) : (
         <ul className="flex flex-col pb-2">
           {changes.files.map((f) => (
@@ -360,11 +362,11 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
 function Loading() {
   return (
     <div className="text-muted-foreground flex justify-center p-6">
-      <div role="status" aria-label="Loading" className="w-full space-y-2 animate-pulse"><div className="bg-muted h-4 rounded" /><div className="bg-muted h-4 w-2/3 rounded" /></div>
+      <div role="status" aria-label="Loading" className="w-full space-y-2"><Skeleton className="h-4" /><Skeleton className="h-4 w-2/3" /></div>
     </div>
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return <p className="text-muted-foreground px-4 py-6 text-center text-xs">{text}</p>;
+function EmptyNote({ text }: { text: string }) {
+  return <Empty className="gap-2 py-6"><EmptyDescription className="text-xs">{text}</EmptyDescription></Empty>;
 }
