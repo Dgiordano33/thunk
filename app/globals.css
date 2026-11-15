@@ -469,3 +469,88 @@
   stroke-opacity: 0.65;
   filter: drop-shadow(0 0 3px oklch(0.8 0.08 250 / 0.6));
 }
+
+/* ── Space (solar-system map) ─────────────────────────────────────── */
+/* Projects are planets around a star; workspaces are moons; sessions are satellites. */
+:root {
+  --void: oklch(0.97 0.004 250);
+  --orbit: oklch(0.2 0.02 260 / 0.16);
+  --star-core: oklch(0.86 0.13 85);
+  --star-glow: oklch(0.88 0.12 85);
+  --status-running: oklch(0.55 0.13 160);
+  --status-running-soft: oklch(0.55 0.13 160 / 0.14);
+  --status-attention: oklch(0.62 0.15 70);
+  --status-attention-soft: oklch(0.78 0.16 80 / 0.22);
+  --status-error: oklch(0.55 0.2 25);
+  --status-error-soft: oklch(0.6 0.2 25 / 0.14);
+  --status-ok: oklch(0.55 0.13 160);
+}
+.dark {
+  --void: oklch(0.09 0.012 262);
+  --orbit: oklch(1 0 0 / 0.13);
+  --star-core: oklch(0.99 0.02 95);
+  --star-glow: oklch(0.96 0.045 90);
+  --status-running: oklch(0.8 0.13 160);
+  --status-running-soft: oklch(0.8 0.13 160 / 0.16);
+  --status-attention: oklch(0.86 0.15 85);
+  --status-attention-soft: oklch(0.86 0.15 85 / 0.16);
+  --status-error: oklch(0.72 0.17 25);
+  --status-error-soft: oklch(0.72 0.17 25 / 0.18);
+  --status-ok: oklch(0.8 0.13 160);
+}
+
+/* Dark: a sparse star field on the void. Light: a faint dot grid, like chart paper. Neither pans with the map. */
+.space { background-color: var(--void); }
+.dark .space {
+  background-image:
+    radial-gradient(1px 1px at 23px 41px, oklch(1 0 0 / 0.7) 99%, transparent),
+    radial-gradient(1px 1px at 171px 13px, oklch(1 0 0 / 0.45) 99%, transparent),
+    radial-gradient(1.5px 1.5px at 97px 203px, oklch(1 0 0 / 0.6) 99%, transparent),
+    radial-gradient(1px 1px at 211px 151px, oklch(1 0 0 / 0.35) 99%, transparent),
+    radial-gradient(1px 1px at 61px 127px, oklch(1 0 0 / 0.3) 99%, transparent),
+    radial-gradient(1px 1px at 309px 67px, oklch(1 0 0 / 0.5) 99%, transparent),
+    radial-gradient(1.5px 1.5px at 271px 297px, oklch(0.95 0.04 240 / 0.5) 99%, transparent),
+    radial-gradient(1px 1px at 141px 331px, oklch(1 0 0 / 0.35) 99%, transparent),
+    radial-gradient(ellipse 80% 70% at 50% 45%, oklch(0.16 0.025 262 / 0.9), transparent 75%);
+  background-size: 233px 233px, 233px 233px, 233px 233px, 233px 233px, 377px 377px, 377px 377px, 377px 377px, 377px 377px, 100% 100%;
+}
+:root:not(.dark) .space {
+  background-image: radial-gradient(circle, oklch(0.2 0.02 260 / 0.09) 1px, transparent 1.3px);
+  background-size: 28px 28px;
+}
+
+/* Labels sit over orbit lines, so they get a soft halo in the background colour. */
+.planet-label { text-shadow: 0 0 4px var(--void), 0 0 8px var(--void), 0 1px 1px var(--void); }
+
+.orbit-pulse { border: 1.5px solid var(--status-running); animation: orbit-pulse 2.4s ease-out infinite; }
+@keyframes orbit-pulse {
+  0% { opacity: 0.85; transform: scale(0.92); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orbit-pulse { animation: none; opacity: 0.6; }
+}
+
+.status-badge.is-running { background: var(--status-running-soft); color: var(--status-running); }
+.status-badge.is-attention { background: var(--status-attention); color: oklch(0.2 0.04 70); }
+.status-badge.is-error { background: var(--status-error); color: white; }
+.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; }
+.status-dot.is-ok { background: var(--status-ok); }
+.status-cue.is-pass { color: var(--status-ok); }
+.status-cue.is-fail { color: var(--status-error); }
+.status-cue.is-pending { color: var(--status-attention); }
+
+.satellite.is-open { background: var(--foreground); opacity: 0.85; }
+.satellite.is-closed { border: 1.25px solid var(--muted-foreground); opacity: 0.8; }
+.satellite.is-running { background: var(--status-running); box-shadow: 0 0 0 3px var(--status-running-soft); }
+.satellite.is-attention { background: var(--status-attention); box-shadow: 0 0 0 3px var(--status-attention-soft); }
+.satellite.is-error { background: var(--status-error); box-shadow: 0 0 0 3px var(--status-error-soft); }
+
+.dock {
+  background: var(--popover);
+  border-color: var(--border);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.18);
+}
+/* On white, coloured glows read as smudges; keep only a trace. */
+:root:not(.dark) .sphere-glow { opacity: 0.35; }

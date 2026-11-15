@@ -278,3 +278,105 @@
 .mock-dusk .world .t-ocean, .mock-dusk .world .t-ocean-alt { fill: transparent; }
 .mock-moonlit .world .t-shallows, .mock-moonlit .world .t-shallows-alt { fill: oklch(0.45 0.09 250 / 0.35); }
 .mock-dusk .world .t-shallows, .mock-dusk .world .t-shallows-alt { fill: oklch(0.5 0.1 300 / 0.35); }
+
+/* ---------- Variant E · Solar (dark space) and Solar light (white chart) ----------
+   A preview of the solar-system re-theme: neutral chrome, hairline frames, no pixel type, no bronze.
+   `:root.mock-*` outranks the moonlit override on `:root:where(:has(.world))`. */
+:root.mock-solar {
+  color-scheme: dark;
+  --background: oklch(0.13 0.015 260);
+  --foreground: oklch(0.97 0.005 250);
+  --card: oklch(0.17 0.015 260);
+  --card-foreground: oklch(0.97 0.005 250);
+  --popover: oklch(0.16 0.015 260 / 0.94);
+  --popover-foreground: oklch(0.97 0.005 250);
+  --muted: oklch(0.24 0.015 260);
+  --muted-foreground: oklch(0.72 0.02 255);
+  --border: oklch(1 0 0 / 13%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.78 0.11 235);
+  --primary: oklch(0.97 0.005 250);
+  --primary-foreground: oklch(0.13 0.015 260);
+  --secondary: oklch(0.24 0.015 260);
+  --secondary-foreground: oklch(0.97 0.005 250);
+  --accent: oklch(0.24 0.015 260);
+  --accent-foreground: oklch(0.97 0.005 250);
+  /* Old world tokens become neutrals until their users are rewritten. */
+  --w-bronze: oklch(0.5 0.01 255);
+  --w-bronze-light: oklch(0.86 0.01 255);
+  --w-bronze-dark: oklch(0.2 0.015 260);
+  --w-parchment: var(--popover);
+  --w-parchment-ink: var(--foreground);
+  --w-sea: var(--void);
+}
+:root.mock-solar-light {
+  color-scheme: light;
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.16 0.015 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.015 260);
+  --popover: oklch(1 0 0 / 0.94);
+  --popover-foreground: oklch(0.16 0.015 260);
+  --muted: oklch(0.95 0.004 250);
+  --muted-foreground: oklch(0.45 0.02 255);
+  --border: oklch(0.2 0.02 260 / 13%);
+  --input: oklch(0.2 0.02 260 / 16%);
+  --ring: oklch(0.5 0.14 245);
+  --primary: oklch(0.16 0.015 260);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.95 0.004 250);
+  --secondary-foreground: oklch(0.16 0.015 260);
+  --accent: oklch(0.95 0.004 250);
+  --accent-foreground: oklch(0.16 0.015 260);
+  --w-bronze: oklch(0.55 0.01 255);
+  --w-bronze-light: oklch(0.3 0.01 255);
+  --w-bronze-dark: oklch(0.93 0.004 250);
+  --w-parchment: var(--popover);
+  --w-parchment-ink: var(--foreground);
+  --w-sea: var(--void);
+}
+:root:is(.mock-solar, .mock-solar-light) .civ-panel {
+  background: var(--popover);
+  padding: 0;
+  clip-path: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  filter: none;
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.22);
+  backdrop-filter: blur(14px);
+}
+:root:is(.mock-solar, .mock-solar-light) .civ-panel > .civ-panel-body {
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+  backdrop-filter: none;
+}
+:root:is(.mock-solar, .mock-solar-light) .pixel {
+  font-family: var(--font-sans);
+  image-rendering: auto;
+  shape-rendering: auto;
+  letter-spacing: normal;
+}
+:root:is(.mock-solar, .mock-solar-light) [data-slot="button"][data-variant="default"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+  box-shadow: none;
+  border-radius: 8px;
+}
+:root:is(.mock-solar, .mock-solar-light) [data-slot="button"][data-variant="default"]:hover { opacity: 0.88; }
+:root:is(.mock-solar, .mock-solar-light) [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]) {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--foreground);
+  border-radius: 8px;
+}
+:root:is(.mock-solar, .mock-solar-light) [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]):hover { background: var(--muted); }
+/* The menu orb: a plain round button. */
+:root:is(.mock-solar, .mock-solar-light) button[aria-controls="civ-toolbar-menu"] {
+  background: var(--popover) !important;
+  box-shadow: 0 0 0 1px var(--border), 0 8px 24px oklch(0 0 0 / 0.22) !important;
+  color: var(--foreground);
+}
+:root:is(.mock-solar, .mock-solar-light) button[aria-controls="civ-toolbar-menu"] > span { background: transparent; box-shadow: none; }
