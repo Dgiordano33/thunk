@@ -46,7 +46,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
           {isGit && <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="flex min-w-0 items-center gap-1 font-mono"><GitBranchIcon className="size-3 shrink-0" /><span className="truncate">{branch || (status ? "No branch" : "…")}</span></span>
             {repo && <span className="text-muted-foreground font-mono tabular-nums" title={`${repo.git.ahead ?? "?"} ahead of ${status!.base}, ${repo.git.behind ?? "?"} behind`}>↑{repo.git.ahead ?? "?"} ↓{repo.git.behind ?? "?"}</span>}
-            {repo?.git.dirty && <span className="text-amber-600 dark:text-amber-400">Uncommitted changes</span>}
+            {repo?.git.dirty && <span className="text-amber-700 dark:text-amber-400">Uncommitted changes</span>}
             {repo?.deployedPreviewUrl && <a href={repo.deployedPreviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline"><ExternalLinkIcon className="size-3" />Deployed preview</a>}
           </div>}
           {reason && <p role="status" className="text-muted-foreground mt-1">{reason}</p>}

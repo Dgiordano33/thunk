@@ -158,6 +158,7 @@ function MockPlanet({ base, name, ws }: { base: string; name: string; ws?: strin
       selected={{ ws }}
       live={live}
       cues={CUES}
+      panelOpen={!!open}
     >
       {open && (
         <TownPanel eyebrow="Workspace" title={open.label} closeHref={base}>

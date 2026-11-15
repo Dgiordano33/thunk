@@ -98,7 +98,7 @@ function RunRow({ run, routineId, projectId, onChange }: { run: RoutineRun; rout
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           {d && d.files > 0 && (
             <span className="font-mono tabular-nums" title={d.paths.map((p) => `${p.status} ${p.path}`).join("\n")}>
-              <span className="text-emerald-600 dark:text-emerald-400">+{d.additions}</span>{" "}
+              <span className="text-emerald-700 dark:text-emerald-400">+{d.additions}</span>{" "}
               <span className="text-red-600 dark:text-red-400">−{d.deletions}</span> · {d.files} {d.files === 1 ? "file" : "files"}
             </span>
           )}

@@ -127,7 +127,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                       {noteCounts.get(p.id)}
                     </Link>
                   )}
-                  {(notificationCounts[p.id] ?? 0) > 0 && <Link href={`/inbox?projectId=${p.id}`} aria-label={`${notificationCounts[p.id]} notifications need attention`} className="px-1 text-xs text-amber-600">! {notificationCounts[p.id]}</Link>}
+                  {(notificationCounts[p.id] ?? 0) > 0 && <Link href={`/inbox?projectId=${p.id}`} aria-label={`${notificationCounts[p.id]} notifications need attention`} className="px-1 text-xs text-amber-700">! {notificationCounts[p.id]}</Link>}
                   {openTasks > 0 && <Link href={projectSectionPath(projectPath(p), "tasks")} aria-label={`${p.name} open tasks (${openTasks})`} title={`${openTasks} open tasks`} className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1 text-[11px] tabular-nums"><PixelIcon name="checklist" className="size-3" />{openTasks}</Link>}
                   <NewWorkspaceButton
                     compact

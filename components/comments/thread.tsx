@@ -69,7 +69,7 @@ export function Thread({
         >
           {quote || "…"}
         </blockquote>
-        {comment.kind === "question" && <HelpCircleIcon className="size-3.5 shrink-0 text-sky-600" />}
+        {comment.kind === "question" && <HelpCircleIcon className="size-3.5 shrink-0 text-sky-700" />}
         {!readOnly && !drafting && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

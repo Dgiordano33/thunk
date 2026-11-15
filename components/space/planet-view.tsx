@@ -64,6 +64,7 @@ export function PlanetView({
   selected,
   live: liveOverride,
   cues,
+  panelOpen = false,
   children,
 }: {
   projectId: string;
@@ -79,6 +80,8 @@ export function PlanetView({
   /** Design mocks: live session state instead of the ambient feed. */
   live?: Record<string, Live>;
   cues?: Record<string, Cue | null>;
+  /** A side panel is open on the right: the section bar moves left so the panel doesn't cover it. */
+  panelOpen?: boolean;
   children?: React.ReactNode;
 }) {
   const sessions = useAmbient((s) => s.sessions);
@@ -142,7 +145,7 @@ export function PlanetView({
         }
         controls={<Legend />}
       >
-        <SectionDock sections={routineAttention ? sections.map((s) => (s.key === "routines" ? { ...s, attention: true } : s)) : sections} />
+        <SectionDock sections={routineAttention ? sections.map((s) => (s.key === "routines" ? { ...s, attention: true } : s)) : sections} aside={panelOpen} />
         {children}
       </IsoViewport>
     </div>
@@ -272,11 +275,15 @@ const Satellite = memo(function Satellite({ sat, workspace, href, selected, tone
 });
 
 /** Project sections, bottom centre: plain labelled links instead of buildings. */
-function SectionDock({ sections }: { sections: PlanetSection[] }) {
+function SectionDock({ sections, aside }: { sections: PlanetSection[]; aside: boolean }) {
   return (
     <nav
       aria-label="Project sections"
-      className={cn("pointer-events-none absolute inset-x-0 z-20 flex justify-center px-20", process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4")}
+      className={cn(
+        "pointer-events-none absolute inset-x-0 z-20 flex px-20",
+        aside ? "justify-start" : "justify-center",
+        process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4",
+      )}
     >
       <ul className="dock pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full border p-1">
         {sections.map((s) => (

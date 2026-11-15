@@ -18,7 +18,8 @@ In Tailwind, `space:` and `world:` variants target one look (defined in `app/glo
 Colors live in [app/globals.css](app/globals.css). Three families work together:
 
 - **Application tokens:** `background`, `foreground`, `card`, `popover`, `muted`, `border`, `input`, `ring`, `primary`, and `destructive`. Use their Tailwind classes for content, forms, and interactive states. `:root` holds the white palette and `.dark` the near-black one, both cool neutrals (hue ~255, very low chroma). The game look overrides them with the moonlit palette on its screens.
-- **Space tokens:** `--void` (map background), `--orbit` (orbit lines), `--star-core` / `--star-glow`, and status colors `--status-running`, `--status-attention`, `--status-error`, `--status-ok` (each with a `-soft` tint). Use the status tokens, through `StatusBadge` or the `.satellite` / `.status-*` classes, rather than Tailwind palette colors.
+- **Space tokens:** `--void` (map background), `--orbit` (orbit lines), `--star-core` / `--star-glow`, and status colors `--status-running`, `--status-attention`, `--status-error`, `--status-ok` (each with a `-soft` tint). Amber and red also have an `-ink`: `--status-attention-ink` for amber text (the fill is too light for text on white) and `--status-error-ink` for text on the red fill. Use the status tokens, through `StatusBadge` or the `.satellite` / `.status-*` classes, rather than Tailwind palette colors.
+- **Contrast on white:** small status text needs 4.5:1. Tailwind's amber, emerald, sky and green 600 shades fall short on white, so light-mode text uses the 700 shade (`text-emerald-700 dark:text-emerald-400`).
 - **World tokens:** `--w-*` properties for terrain, bronze framing, parchment, roads, and soil, used by the game look. In the solar-system look the bronze and parchment tokens are remapped to neutrals, so older screens that reference them still read as plain selected and hover states; don't use them in new work.
 
 Solar-system values:

@@ -21,9 +21,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 type StatusMap = Map<string, Map<string, string>>;
 
 const STATUS_CLASS: Record<string, string> = {
-  A: "text-emerald-600 dark:text-emerald-400",
-  U: "text-emerald-600 dark:text-emerald-400",
-  M: "text-amber-600 dark:text-amber-400",
+  A: "text-emerald-700 dark:text-emerald-400",
+  U: "text-emerald-700 dark:text-emerald-400",
+  M: "text-amber-700 dark:text-amber-400",
   D: "text-red-600 dark:text-red-400",
 };
 
@@ -163,7 +163,7 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
         <TreeItemLabel title={entry.path} className={ROW} style={indent(level)}>
           <Chevron />
           <FolderIcon aria-hidden="true" className="text-muted-foreground size-3.5 shrink-0" />
-          <span className={cn("truncate", changed && "text-amber-600 dark:text-amber-400")}>{entry.name}</span>
+          <span className={cn("truncate", changed && "text-amber-700 dark:text-amber-400")}>{entry.name}</span>
           {changed && <span aria-label="Has changes" className="ml-auto size-1.5 shrink-0 rounded-full bg-amber-500" />}
         </TreeItemLabel>
         {listed[value] && <TreeGroup>{rows(root, entry.path, level + 1)}</TreeGroup>}

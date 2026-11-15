@@ -222,7 +222,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, un
 }
 
 const CHECK_ICON: Record<CheckState, { icon: typeof CircleCheckIcon; className: string; label: string }> = {
-  pass: { icon: CircleCheckIcon, className: "text-emerald-600 dark:text-emerald-400", label: "Passed" },
+  pass: { icon: CircleCheckIcon, className: "text-emerald-700 dark:text-emerald-400", label: "Passed" },
   fail: { icon: CircleXIcon, className: "text-red-600 dark:text-red-400", label: "Failed" },
   pending: { icon: CircleDashedIcon, className: "animate-spin text-amber-500 [animation-duration:3s]", label: "Running" },
   skipped: { icon: CircleMinusIcon, className: "text-muted-foreground", label: "Skipped" },
@@ -250,8 +250,8 @@ const REVIEW_LINE: Record<string, { text: string; tone: "ok" | "warn" | "bad" | 
 };
 
 const TONE = {
-  ok: "text-emerald-600 dark:text-emerald-400",
-  warn: "text-amber-600 dark:text-amber-400",
+  ok: "text-emerald-700 dark:text-emerald-400",
+  warn: "text-amber-700 dark:text-amber-400",
   bad: "text-red-600 dark:text-red-400",
   muted: "text-muted-foreground",
 };
@@ -284,7 +284,7 @@ function OpenPr({
       <Hint label={pr.title}>
       <PopoverTrigger asChild>
         <Button size="sm" variant="outline" className="h-7 gap-1.5">
-          <GitPullRequestIcon className={cn(pr.isDraft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400")} />
+          <GitPullRequestIcon className={cn(pr.isDraft ? "text-muted-foreground" : "text-emerald-700 dark:text-emerald-400")} />
           {repoName && `${repoName} `}{pr.isDraft ? "Draft" : "PR"} #{pr.number}
           {conflicts ? (
             <CircleDotIcon className={TONE.bad} aria-label="Merge conflicts" />

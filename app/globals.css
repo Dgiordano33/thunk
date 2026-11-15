@@ -80,8 +80,8 @@
   --accent: oklch(0.95 0.004 250);
   --accent-foreground: oklch(0.16 0.015 260);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.2 0.02 260 / 13%);
-  --input: oklch(0.2 0.02 260 / 16%);
+  --border: oklch(0.2 0.02 260 / 14%);
+  --input: oklch(0.2 0.02 260 / 22%);
   --ring: oklch(0.5 0.14 245);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -478,27 +478,32 @@
 /* Projects are planets around a star; workspaces are moons; sessions are satellites. */
 :root {
   --void: oklch(0.97 0.004 250);
-  --orbit: oklch(0.2 0.02 260 / 0.16);
+  --orbit: oklch(0.2 0.02 260 / 0.22);
   --star-core: oklch(0.86 0.13 85);
   --star-glow: oklch(0.88 0.12 85);
-  --status-running: oklch(0.55 0.13 160);
-  --status-running-soft: oklch(0.55 0.13 160 / 0.14);
-  --status-attention: oklch(0.62 0.15 70);
-  --status-attention-soft: oklch(0.78 0.16 80 / 0.22);
+  --status-running: oklch(0.48 0.11 160);
+  --status-running-soft: oklch(0.6 0.13 160 / 0.13);
+  /* Fills (dots, badges) use --status-attention; text uses the darker ink. */
+  --status-attention: oklch(0.66 0.15 70);
+  --status-attention-ink: oklch(0.5 0.12 65);
+  --status-attention-soft: oklch(0.78 0.16 80 / 0.24);
   --status-error: oklch(0.55 0.2 25);
+  --status-error-ink: oklch(1 0 0);
   --status-error-soft: oklch(0.6 0.2 25 / 0.14);
-  --status-ok: oklch(0.55 0.13 160);
+  --status-ok: oklch(0.48 0.11 160);
 }
 .dark {
   --void: oklch(0.09 0.012 262);
   --orbit: oklch(1 0 0 / 0.13);
   --star-core: oklch(0.99 0.02 95);
   --star-glow: oklch(0.96 0.045 90);
-  --status-running: oklch(0.8 0.13 160);
-  --status-running-soft: oklch(0.8 0.13 160 / 0.16);
+  --status-running: oklch(0.82 0.13 160);
+  --status-running-soft: oklch(0.8 0.13 160 / 0.12);
   --status-attention: oklch(0.86 0.15 85);
+  --status-attention-ink: oklch(0.86 0.15 85);
   --status-attention-soft: oklch(0.86 0.15 85 / 0.16);
   --status-error: oklch(0.72 0.17 25);
+  --status-error-ink: oklch(0.18 0.04 25);
   --status-error-soft: oklch(0.72 0.17 25 / 0.18);
   --status-ok: oklch(0.8 0.13 160);
 }
@@ -537,12 +542,12 @@
 
 .status-badge.is-running { background: var(--status-running-soft); color: var(--status-running); }
 .status-badge.is-attention { background: var(--status-attention); color: oklch(0.2 0.04 70); }
-.status-badge.is-error { background: var(--status-error); color: white; }
+.status-badge.is-error { background: var(--status-error); color: var(--status-error-ink); }
 .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; }
 .status-dot.is-ok { background: var(--status-ok); }
 .status-cue.is-pass { color: var(--status-ok); }
 .status-cue.is-fail { color: var(--status-error); }
-.status-cue.is-pending { color: var(--status-attention); }
+.status-cue.is-pending { color: var(--status-attention-ink); }
 
 .satellite.is-open { background: var(--foreground); opacity: 0.85; }
 .satellite.is-closed { border: 1.25px solid var(--muted-foreground); opacity: 0.8; }
@@ -565,7 +570,7 @@
   --w-bronze: color-mix(in oklch, var(--foreground) 38%, transparent);
   --w-bronze-light: color-mix(in oklch, var(--foreground) 70%, transparent);
   --w-bronze-dark: var(--card);
-  --w-parchment: var(--muted);
+  --w-parchment: color-mix(in oklch, var(--muted) 60%, transparent);
   --w-parchment-ink: var(--foreground);
   --w-sea: var(--void);
 }

@@ -171,6 +171,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
         satellites={satellites}
         sections={sections}
         selected={{ session: selected.session, ws: selected.ws, overview: selected.building === "center" }}
+        panelOpen={panel !== null}
       >
         {panel}
         {harvestOffers}
