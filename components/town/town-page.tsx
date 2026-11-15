@@ -164,6 +164,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       <PlanetView
         projectId={id}
         projectName={project.name}
+        level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })}
         baseHref={closeHref}
         overviewHref={projectSectionPath(closeHref, "center")}
         layout={planet}

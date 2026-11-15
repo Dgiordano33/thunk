@@ -475,12 +475,16 @@
 }
 
 /* ── Space (solar-system map) ─────────────────────────────────────── */
-/* Projects are planets around a star; workspaces are moons; sessions are satellites. */
+/* Projects are planets around a star; workspaces are moons; sessions are satellites.
+   A WebGL canvas (components/space/scene) draws the pictorial layer; this CSS is the HTML on top and the fallback art. */
 :root {
-  --void: oklch(0.97 0.004 250);
-  --orbit: oklch(0.2 0.02 260 / 0.22);
-  --star-core: oklch(0.86 0.13 85);
-  --star-glow: oklch(0.88 0.12 85);
+  --ease-space: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Light: an observatory chart on cool paper. */
+  --void: oklch(0.972 0.006 248);
+  --orbit: oklch(0.3 0.03 260 / 0.2);
+  --star-core: oklch(0.82 0.14 80);
+  --star-glow: oklch(0.86 0.13 75);
+  --sp-meta: oklch(0.45 0.02 260);
   --status-running: oklch(0.48 0.11 160);
   --status-running-soft: oklch(0.6 0.13 160 / 0.13);
   /* Fills (dots, badges) use --status-attention; text uses the darker ink. */
@@ -493,10 +497,12 @@
   --status-ok: oklch(0.48 0.11 160);
 }
 .dark {
-  --void: oklch(0.09 0.012 262);
+  /* Dark: deep field. */
+  --void: oklch(0.075 0.014 265);
   --orbit: oklch(1 0 0 / 0.13);
   --star-core: oklch(0.99 0.02 95);
   --star-glow: oklch(0.96 0.045 90);
+  --sp-meta: oklch(0.72 0.02 260);
   --status-running: oklch(0.82 0.13 160);
   --status-running-soft: oklch(0.8 0.13 160 / 0.12);
   --status-attention: oklch(0.86 0.15 85);
@@ -508,7 +514,8 @@
   --status-ok: oklch(0.8 0.13 160);
 }
 
-/* Dark: a sparse star field on the void. Light: a faint dot grid, like chart paper. Neither pans with the map. */
+/* Fallback background (and non-map screens): stars at prime tile sizes in dark, ink specks in light, so the repeat
+   isn't visible. Neither pans with the map. Once the canvas is drawing, it owns the background. */
 .space, .look-space .world, .look-space .fog { background-color: var(--void); }
 .dark .space, .look-space.dark .world, .look-space.dark .fog {
   background-image:
@@ -520,51 +527,124 @@
     radial-gradient(1px 1px at 309px 67px, oklch(1 0 0 / 0.5) 99%, transparent),
     radial-gradient(1.5px 1.5px at 271px 297px, oklch(0.95 0.04 240 / 0.5) 99%, transparent),
     radial-gradient(1px 1px at 141px 331px, oklch(1 0 0 / 0.35) 99%, transparent),
-    radial-gradient(ellipse 80% 70% at 50% 45%, oklch(0.16 0.025 262 / 0.9), transparent 75%);
-  background-size: 233px 233px, 233px 233px, 233px 233px, 233px 233px, 377px 377px, 377px 377px, 377px 377px, 377px 377px, 100% 100%;
+    radial-gradient(1px 1px at 389px 211px, oklch(0.95 0.05 60 / 0.45) 99%, transparent),
+    radial-gradient(1px 1px at 457px 433px, oklch(1 0 0 / 0.4) 99%, transparent),
+    radial-gradient(2px 2px at 523px 89px, oklch(1 0 0 / 0.55) 99%, transparent),
+    radial-gradient(1px 1px at 37px 487px, oklch(0.9 0.05 240 / 0.4) 99%, transparent),
+    radial-gradient(ellipse 60% 45% at 30% 35%, oklch(0.3 0.1 275 / 0.08), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 72% 70%, oklch(0.35 0.07 200 / 0.06), transparent 70%),
+    radial-gradient(ellipse 80% 70% at 50% 45%, oklch(0.14 0.025 262 / 0.9), transparent 75%);
+  background-size: 233px 233px, 233px 233px, 233px 233px, 233px 233px, 377px 377px, 377px 377px, 377px 377px, 377px 377px,
+    541px 541px, 541px 541px, 613px 613px, 613px 613px, 100% 100%, 100% 100%, 100% 100%;
 }
 :root:not(.dark) .space, .look-space:not(.dark) .world, .look-space:not(.dark) .fog {
-  background-image: radial-gradient(circle, oklch(0.2 0.02 260 / 0.09) 1px, transparent 1.3px);
-  background-size: 28px 28px;
+  background-image:
+    radial-gradient(1px 1px at 19px 23px, oklch(0.3 0.03 260 / 0.22) 99%, transparent),
+    radial-gradient(1.5px 1.5px at 131px 97px, oklch(0.3 0.03 260 / 0.16) 99%, transparent),
+    radial-gradient(1px 1px at 83px 191px, oklch(0.3 0.03 260 / 0.18) 99%, transparent),
+    radial-gradient(1px 1px at 241px 53px, oklch(0.3 0.03 260 / 0.14) 99%, transparent),
+    radial-gradient(2px 2px at 307px 263px, oklch(0.3 0.03 260 / 0.12) 99%, transparent),
+    radial-gradient(1px 1px at 173px 331px, oklch(0.3 0.03 260 / 0.2) 99%, transparent),
+    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.93 0.05 80 / 0.5), transparent 70%);
+  background-size: 211px 211px, 211px 211px, 293px 293px, 293px 293px, 389px 389px, 389px 389px, 100% 100%;
 }
+.space.gl-ready { background-image: none; }
+.space .fallback-art { transition: opacity 300ms var(--ease-space); }
+.space.gl-ready .fallback-art { opacity: 0; }
 
-/* Labels sit over orbit lines, so they get a soft halo in the background colour. */
+/* ── Type: Geist for names, Geist Mono caps for metadata. */
+.sp-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -0.011em; color: var(--foreground); transition: color 150ms var(--ease-space); }
+.sp-name.is-dim { color: var(--muted-foreground); }
+.sp-meta, .sp-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sp-meta);
+  font-variant-numeric: tabular-nums;
+}
+.sp-eyebrow { color: var(--muted-foreground); }
+/* A 1px leader joins each body to its label. */
+.sp-tick { display: block; width: 1px; height: 8px; margin: 3px 0 3px; background: currentColor; color: var(--orbit); opacity: 0.9; }
+.dark .sp-tick { color: oklch(1 0 0 / 0.28); }
+.sp-body:hover .sp-name, .sp-body:focus-visible .sp-name { color: var(--foreground); }
+.sp-stats > div + div { border-top: 1px solid var(--border); }
+
+/* Labels sit over stars and orbit lines, so they get a soft halo in the background colour. */
 .planet-label { text-shadow: 0 0 4px var(--void), 0 0 8px var(--void), 0 1px 1px var(--void); }
 
-.orbit-pulse { border: 1.5px solid var(--status-running); animation: orbit-pulse 2.4s ease-out infinite; }
+/* Fallback hover (no canvas): the SVG grows a little. With the canvas, the body scales in the shader instead. */
+.sp-fallback-hover { transition: transform 200ms var(--ease-space); }
+.space:not(.gl-ready) .group:hover .sp-fallback-hover { transform: scale(1.08); }
+.space .group:active .sp-fallback-hover { transform: scale(0.97); transition-duration: 120ms; }
+
+/* ── Entrance, first mount only (~1.1s). `space-clock` is the shared clock the canvas reads. */
+.space-enter { animation: space-clock 1200ms linear; }
+@keyframes space-clock { from { --space-clock: 0; } to { --space-clock: 1; } }
+.space-enter .sp-enter-orbits { animation: sp-fade 700ms var(--ease-space) 150ms both; }
+.space-enter .sp-enter-body { animation: sp-grow 500ms var(--ease-space) calc(300ms + var(--i, 0) * 40ms) both; }
+.space-enter .sp-enter-label { animation: sp-rise 400ms var(--ease-space) calc(500ms + var(--i, 0) * 40ms) both; }
+@keyframes sp-fade { from { opacity: 0; } }
+@keyframes sp-grow { from { opacity: 0; transform: scale(0.6); } }
+@keyframes sp-rise { from { opacity: 0; transform: translateY(6px); } }
+
+.orbit-pulse { border: 1.5px solid var(--status-running); animation: orbit-pulse 2.4s var(--ease-space) infinite; }
 @keyframes orbit-pulse {
   0% { opacity: 0.85; transform: scale(0.92); }
-  100% { opacity: 0; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(1.4); }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .orbit-pulse { animation: none; opacity: 0.6; }
+  .space-enter .sp-enter-orbits, .space-enter .sp-enter-body, .space-enter .sp-enter-label { animation: sp-fade 150ms linear both; }
+  .sp-fallback-hover, .space:not(.gl-ready) .group:hover .sp-fallback-hover, .space .group:active .sp-fallback-hover { transform: none; transition: none; }
 }
 
 .status-badge.is-running { background: var(--status-running-soft); color: var(--status-running); }
 .status-badge.is-attention { background: var(--status-attention); color: oklch(0.2 0.04 70); }
 .status-badge.is-error { background: var(--status-error); color: var(--status-error-ink); }
 .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; }
-.status-dot.is-ok { background: var(--status-ok); }
+.status-dot.is-ok { background: var(--status-ok); box-shadow: 0 0 0 2px var(--status-running-soft); }
 .status-cue.is-pass { color: var(--status-ok); }
 .status-cue.is-fail { color: var(--status-error); }
 .status-cue.is-pending { color: var(--status-attention-ink); }
 
-.satellite.is-open { background: var(--foreground); opacity: 0.85; }
+.satellite { transition: transform 150ms var(--ease-space); }
+.satellite.is-open { background: var(--foreground); opacity: 0.85; box-shadow: 0 0 0 2px oklch(from var(--foreground) l c h / 0.08); }
 .satellite.is-closed { border: 1.25px solid var(--muted-foreground); opacity: 0.8; }
-.satellite.is-running { background: var(--status-running); box-shadow: 0 0 0 3px var(--status-running-soft); }
-.satellite.is-attention { background: var(--status-attention); box-shadow: 0 0 0 3px var(--status-attention-soft); }
+.satellite.is-running { background: var(--status-running); box-shadow: 0 0 0 3px var(--status-running-soft), 0 0 8px var(--status-running-soft); }
+.satellite.is-attention { background: var(--status-attention); box-shadow: 0 0 0 3px var(--status-attention-soft), 0 0 8px var(--status-attention-soft); }
 .satellite.is-error { background: var(--status-error); box-shadow: 0 0 0 3px var(--status-error-soft); }
+.sat-loop { stroke: var(--orbit); }
 
-.dock {
-  background: var(--popover);
-  border-color: var(--border);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 24px oklch(0 0 0 / 0.18);
-}
 /* On white, coloured glows read as smudges; keep only a trace. */
 :root:not(.dark) .sphere-glow { opacity: 0.35; }
 
-/* Solar-system look chrome. Panels are hairline glass; the old bronze and parchment tokens become neutrals
+/* ── Glass: HUD panels and the section dock. */
+.dock, .look-space .civ-panel {
+  background: color-mix(in oklch, var(--popover) 72%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.55),
+    0 1px 2px oklch(0.2 0.02 260 / 0.06),
+    0 4px 12px oklch(0.2 0.02 260 / 0.06),
+    0 16px 40px oklch(0.2 0.02 260 / 0.1);
+}
+.dark .dock, .look-space.dark .civ-panel {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.07),
+    0 1px 2px oklch(0 0 0 / 0.3),
+    0 8px 24px oklch(0 0 0 / 0.35),
+    0 24px 60px oklch(0 0 0 / 0.35);
+}
+.dock .is-selected { box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.18); }
+.dock .dock-count { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* Solar-system look chrome. The old bronze and parchment tokens become neutrals
    so screens that still reference them read as plain selected and hover states. */
 :root.look-space {
   --w-bronze: color-mix(in oklch, var(--foreground) 38%, transparent);
@@ -575,13 +655,11 @@
   --w-sea: var(--void);
 }
 .look-space .civ-panel {
-  background: var(--popover);
   color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 10px 30px oklch(0 0 0 / 0.14);
-  backdrop-filter: blur(14px);
+  border-radius: 14px;
   overflow: hidden;
 }
-.look-space.dark .civ-panel { box-shadow: 0 10px 30px oklch(0 0 0 / 0.45); }
 .look-space .civ-panel > .civ-panel-body { height: 100%; border-radius: inherit; }
+/* The map's control column: hairlines between buttons. */
+.look-space .map-controls > * + * { border-top: 1px solid var(--border); }
+.sp-core-name { font-size: 20px; line-height: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }

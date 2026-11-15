@@ -10,13 +10,15 @@ export const TILT = 0.58;
 export const FIRST_ORBIT = 170;
 export const ORBIT_GAP = 120;
 /** Arc length (px) each planet reserves on its ring, so labels don't collide. */
-export const PLANET_SPACING = 190;
+export const PLANET_SPACING = 230;
+/** Screen box (px) a planet and its label need clear of planets on other rings: half-width, and height above + below. */
+export const LABEL_BOX = { halfW: 70, above: 45, below: 85 } as const;
 /** Room around the outermost orbit for labels and the largest planet. */
 const MARGIN_X = 200;
 const MARGIN_Y = 140;
 
-/** Sphere radius (px) for project sizes 1..5. */
-export const PLANET_RADIUS = [9, 13, 18, 24, 31] as const;
+/** Sphere radius (px) for project sizes 1..5: rock, ice, cloud world, gas giant, great giant (see `bodies.ts`). */
+export const PLANET_RADIUS = [12, 17, 23, 30, 38] as const;
 export const planetRadius = (level: number) => PLANET_RADIUS[Math.min(5, Math.max(1, level)) - 1];
 
 export type PlanetSpot = { ring: number; angle: number; x: number; y: number };
@@ -35,12 +37,21 @@ const gap = (a: number, b: number) => {
 
 /**
  * Places projects oldest first. Each takes its own preferred angle (from its id) on the innermost ring with room,
- * nudged to the nearest free slot. Earlier planets are never revisited, so positions are stable as projects are added.
+ * nudged to the nearest free slot. A slot is free when its neighbours on the ring are far enough apart and no planet on
+ * another ring sits in its label box. Earlier planets are never revisited, so positions are stable as projects are added.
  */
 export function placePlanets(projects: { id: string; createdAt: string }[]): { spots: Map<string, PlanetSpot>; rings: number } {
   const ordered = [...projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const taken: number[][] = [];
   const spots = new Map<string, PlanetSpot>();
+  const at = (ring: number, a: number) => ({ x: Math.cos(a) * orbitRadius(ring), y: Math.sin(a) * orbitRadius(ring) * TILT });
+  // Two label boxes overlap when the planets are close horizontally and the lower one starts above the upper one's label.
+  const clear = (p: { x: number; y: number }) =>
+    [...spots.values()].every((o) => {
+      if (Math.abs(o.x - p.x) >= 2 * LABEL_BOX.halfW) return true;
+      const [top, bottom] = o.y < p.y ? [o, p] : [p, o];
+      return bottom.y - top.y >= LABEL_BOX.above + LABEL_BOX.below;
+    });
   for (const p of ordered) {
     const preferred = ((hash32(`planet:${p.id}`) % 3600) / 3600) * 2 * Math.PI;
     for (let ring = 0; ; ring++) {
@@ -50,8 +61,17 @@ export function placePlanets(projects: { id: string; createdAt: string }[]): { s
       const step = (2 * Math.PI) / cap;
       // Slots on this ring, nearest the preferred angle first.
       const slots = Array.from({ length: cap }, (_, i) => i * step + (ring % 2) * (step / 2)).sort((a, b) => gap(a, preferred) - gap(b, preferred));
-      const free = slots.find((s) => taken[ring].every((t) => gap(s, t) > step / 2));
-      if (free === undefined) continue;
+      const free = slots.find((s) => taken[ring].every((t) => gap(s, t) > step / 2) && clear(at(ring, s)));
+      // Look up to four rings past the outermost one in use before giving up on label clearance, so placement always ends.
+      const outermost = taken.findLastIndex((t) => t.length > 0);
+      if (free === undefined && ring < outermost + 4) continue;
+      if (free === undefined) {
+        const fallback = slots.find((s) => taken[ring].every((t) => gap(s, t) > step / 2))!;
+        taken[ring].push(fallback);
+        const q = at(ring, fallback);
+        spots.set(p.id, { ring, angle: fallback, x: round2(q.x), y: round2(q.y) });
+        break;
+      }
       taken[ring].push(free);
       const r = orbitRadius(ring);
       spots.set(p.id, { ring, angle: free, x: round2(Math.cos(free) * r), y: round2(Math.sin(free) * r * TILT) });

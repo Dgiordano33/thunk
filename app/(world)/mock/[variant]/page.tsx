@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BodyGallery } from "@/components/space/body-gallery";
 import { PlanetView, type PlanetMoon, type PlanetSatellite, type PlanetSection } from "@/components/space/planet-view";
 import { SystemMap } from "@/components/space/system-map";
 import { TownPanel } from "@/components/town/town-panel";
@@ -14,7 +15,8 @@ import "./mock-themes.css";
 export const dynamic = "force-dynamic";
 
 // Palette explorations: obsidian/vellum (mono), moonlit (KH1 cover night), dusk (violet twilight),
-// and solar / solar-light, the solar-system re-theme. Solar takes `?planet=<project>` and `?ws=<workspace>`.
+// and solar / solar-light, the solar-system re-theme. Solar takes `?planet=<project>` and `?ws=<workspace>`,
+// and `?gallery` for every body type × palette.
 const VARIANTS = {
   obsidian: { dark: true },
   vellum: { dark: false },
@@ -69,7 +71,7 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
     return (
       <>
         <MockTheme variant={variant} dark={dark} look="space" />
-        {planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} activity={ACTIVITY} />}
+        {"gallery" in query ? <BodyGallery /> : planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} activity={ACTIVITY} />}
       </>
     );
   }
@@ -149,6 +151,10 @@ function MockPlanet({ base, name, ws }: { base: string; name: string; ws?: strin
     <PlanetView
       projectId={name}
       projectName={name}
+      level={(() => {
+        const known = [...PROJECTS, ...MORE].find((p) => p.id === name);
+        return known ? cityLevel(known) : cityLevel({ workspaceCount: WORKSPACES.length, sessionCount: sessions.length });
+      })()}
       baseHref={base}
       overviewHref={base}
       layout={layout}
