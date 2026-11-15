@@ -61,7 +61,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           <PixelIcon name="chest" className="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
           <h1 className="pixel mt-1 text-3xl">Nothing to guard yet</h1>
-          <p className="mt-3 text-sm leading-relaxed opacity-80">Every city has a Vault for source material: docs, screenshots, slides, transcripts. Found a city first.</p>
+          <p className="mt-3 text-sm leading-relaxed opacity-80">Every project has a Vault for source material: docs, screenshots, slides, transcripts. Add a project first.</p>
           <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to the map</Link>
         </CivPanel>
       </main>
@@ -87,7 +87,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
             </SelectContent>
           </Select>
           {projectId && (
-            <Link href={projectSectionPath(paths.project(projectId), "vault")} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Visit town →</Link>
+            <Link href={projectSectionPath(paths.project(projectId), "vault")} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Open project →</Link>
           )}
         </header>
         {!projectId && (

@@ -1,6 +1,8 @@
 "use client";
 
-import { BellIcon, ChartNoAxesColumnIcon, SettingsIcon, SunMoonIcon } from "lucide-react";
+import { BellIcon, ChartNoAxesColumnIcon, OrbitIcon, SettingsIcon, SunMoonIcon } from "lucide-react";
+import { useLook } from "@/components/look-context";
+import { LOOKS, type Look } from "@/lib/look";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
   const muted = useNotifications((s) => s.muted);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
+  const { look, setLook } = useLook();
   const notifications = useAmbient((s) => s.notifications);
   const usageOpen = useAmbient((s) => s.usageOpen);
   const setUsageOpen = (open: boolean) => useAmbient.setState({ usageOpen: open });
@@ -91,6 +94,16 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
               </SelectContent>
             </Select>
           </div>
+          <div className="flex items-center gap-2 px-2 py-1 text-xs">
+            <OrbitIcon className="size-4" /><span id="look-label">Look</span>
+            <Select value={look} onValueChange={(value) => setLook(value as Look)}>
+              <SelectTrigger size="sm" className="ml-auto w-32 text-xs" aria-labelledby="look-label"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LOOKS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {look === "world" && <p className="text-muted-foreground px-2 pb-1 text-[11px]">The game world is always dark.</p>}
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => setUsageOpen(true)}>
             <ChartNoAxesColumnIcon /> Usage
           </Button>

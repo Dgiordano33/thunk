@@ -69,7 +69,7 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
       {req.questions.map((q) => (
         <fieldset key={q.question} className="flex flex-col gap-2">
           <legend className="mb-2 flex items-start gap-2 text-sm font-medium">
-            <MessageCircleQuestionIcon className="mt-0.5 size-4 text-sky-600" />
+            <MessageCircleQuestionIcon className="mt-0.5 size-4 text-sky-700" />
             {q.question}
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">

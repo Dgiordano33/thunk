@@ -15,8 +15,7 @@ import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import type { PersistedDocument } from "@/lib/documents/types";
 import type { ExternalSession } from "@/lib/projects";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
-import { LEVEL_NAMES, type CityLevel } from "@/lib/world/cities";
-import { CROP_NAMES } from "@/lib/world/town";
+import type { CityLevel } from "@/lib/world/cities";
 import { WorkspaceDirectory } from "@/components/workspace/workspace-directory";
 import { DevServer, WorkspaceRepos, type RepoRow } from "./delivery-panel";
 import { ProjectSettings } from "./project-settings";
@@ -57,7 +56,7 @@ function Stats({ rows }: { rows: [string, React.ReactNode][] }) {
   );
 }
 
-/** The project has one civic center, independent of its workspaces. */
+/** The project overview: chief, stats, notes, external and archived workspaces, settings. Independent of any workspace. */
 export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeCount, archived, externalSessions, workspaces, closeHref }: {
   project: Project; level: CityLevel; allFarmCount: number; totalSpend: number; activeCount: number;
   archived: WorkspaceSummary[]; externalSessions: ExternalSession[]; workspaces: WorkspaceSummary[]; closeHref: string;
@@ -71,11 +70,11 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
         <Section title="Project">
           <Stats
             rows={[
-              ["Rank", `${LEVEL_NAMES[level - 1]} (level ${level})`],
+              ["Size", `${level} of 5`],
               ["Workspaces", activeCount],
               ["Sessions", allFarmCount],
               ["Total spend", usd(totalSpend)],
-              ["Founded", relativeTime(project.createdAt)],
+              ["Created", relativeTime(project.createdAt)],
             ]}
           />
           <div className="mt-3">
@@ -92,7 +91,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
   ];
   if (externalSessions.length > 0) tabs.push({
     value: "settlers",
-    label: <>Settlers <Count n={externalSessions.length} /></>,
+    label: <>External <Count n={externalSessions.length} /></>,
     content: <Pane><ExternalSessions projectSlug={project.slug} sessions={externalSessions} workspaces={workspaces} /></Pane>,
   });
   if (archived.length > 0) tabs.push({
@@ -162,7 +161,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
               <li key={f.id}>
                 <Link href={`${base}?session=${f.id}`} scroll={false} className={`hover:bg-muted flex items-center gap-2 px-1 py-1 text-xs ${f.fallow ? "opacity-50" : ""}`}>
                   <span className="min-w-0 flex-1 truncate">{f.title || "Untitled session"}</span>
-                  <span className="text-muted-foreground shrink-0">{f.fallow ? "Fallow" : CROP_NAMES[f.stage]} · {relativeTime(f.createdAt)}</span>
+                  <span className="text-muted-foreground shrink-0">{f.fallow ? "Closed" : usd(f.costUsd)} · {relativeTime(f.createdAt)}</span>
                 </Link>
               </li>
             ))}

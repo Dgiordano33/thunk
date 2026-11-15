@@ -102,7 +102,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
           return <Button className="pixel text-xs" key={kind} size="sm" variant={open && tab === kind ? "secondary" : "ghost"} onClick={() => selectTab(kind)} aria-pressed={open && tab === kind}>
             {kind === "shell" && <TerminalIcon className="size-3.5" />}
             {LABELS[kind]}
-            {proc && <Hint label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}><span role="img" aria-label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`} className={proc.running ? "text-emerald-600 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span></Hint>}
+            {proc && <Hint label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}><span role="img" aria-label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`} className={proc.running ? "text-emerald-700 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span></Hint>}
           </Button>;
         })}
         {state?.previewUrl && <Button size="sm" variant={open && tab === "preview" ? "secondary" : "ghost"} onClick={() => selectTab("preview")}>Preview</Button>}

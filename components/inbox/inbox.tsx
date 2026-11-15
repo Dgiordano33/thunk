@@ -169,7 +169,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
               <section aria-labelledby="attention-heading">
                 <div className="mb-4 flex items-center gap-3"><h2 id="attention-heading" className="pixel text-sm tracking-wide">Needs your attention</h2><span className="bg-amber-500/10 rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-amber-700 tabular-nums dark:text-amber-400">{attention.length}</span><span className="h-px flex-1 bg-border" /></div>
                 <div className="space-y-3">{attention.map(row)}</div>
-                {!attention.length && <p className="text-muted-foreground flex items-center gap-2 border-b pb-5 text-xs"><CheckCheckIcon aria-hidden="true" className="size-4 text-emerald-600 dark:text-emerald-400" />Nothing waiting on you. You’re all caught up.</p>}
+                {!attention.length && <p className="text-muted-foreground flex items-center gap-2 border-b pb-5 text-xs"><CheckCheckIcon aria-hidden="true" className="size-4 text-emerald-700 dark:text-emerald-400" />Nothing waiting on you. You’re all caught up.</p>}
               </section>
               {earlier.length > 0 && <section className="mt-9" aria-labelledby="earlier-heading"><div className="mb-1 flex items-center gap-3"><h2 id="earlier-heading" className="pixel text-muted-foreground text-sm tracking-wide">Earlier</h2><span className="bg-border h-px flex-1" /></div>{earlier.map(row)}</section>}
             </>}

@@ -1,3 +1,4 @@
+import { ArchiveIcon, BellIcon, ListChecksIcon, NotebookTextIcon, OrbitIcon, PenLineIcon, RepeatIcon, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,16 +94,32 @@ const ICONS = {
 
 export type PixelIconName = keyof typeof ICONS;
 
+/** The solar-system look's line icon for each pixel icon. */
+const PLAIN: Record<PixelIconName, LucideIcon> = {
+  bell: BellIcon,
+  checklist: ListChecksIcon,
+  castle: OrbitIcon,
+  scroll: NotebookTextIcon,
+  quill: PenLineIcon,
+  hourglass: RepeatIcon,
+  chest: ArchiveIcon,
+};
+
+/** Pixel art in the game look; a plain line icon in the solar-system look. CSS picks one, so this also works in server components. */
 export function PixelIcon({ name, className }: { name: PixelIconName; className?: string }) {
   const { palette, rows } = ICONS[name];
   const width = Math.max(...rows.map((r) => r.length));
+  const Plain = PLAIN[name];
   return (
-    <svg viewBox={`0 0 ${width} ${rows.length}`} className={cn("pixel", className)} aria-hidden="true">
+    <>
+    <Plain aria-hidden="true" strokeWidth={1.5} className={cn("text-muted-foreground world:hidden", className)} />
+    <svg viewBox={`0 0 ${width} ${rows.length}`} className={cn("pixel space:hidden", className)} aria-hidden="true">
       {rows.flatMap((row, y) =>
         [...row].map((ch, x) =>
           ch === "." ? null : <rect key={`${x},${y}`} x={x} y={y} width={1.02} height={1.02} fill={palette[ch as keyof typeof palette]} />,
         ),
       )}
     </svg>
+    </>
   );
 }

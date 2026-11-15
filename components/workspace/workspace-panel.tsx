@@ -266,7 +266,7 @@ function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemov
         </span>
         <span className="text-muted-foreground truncate text-xs">vs {changes.baseLabel}</span>
         <span className="ml-auto shrink-0 font-mono text-xs">
-          <span className="text-emerald-600 dark:text-emerald-400">+{changes.additions}</span>{" "}
+          <span className="text-emerald-700 dark:text-emerald-400">+{changes.additions}</span>{" "}
           <span className="text-red-600 dark:text-red-400">-{changes.deletions}</span>
         </span>
       </div>
@@ -294,9 +294,9 @@ function RepoChangesSection({ workspaceId, repo, multi, comments, onAdd, onRemov
 }
 
 const STATUS_STYLE: Record<string, { label: string; className: string }> = {
-  A: { label: "Added", className: "text-emerald-600 dark:text-emerald-400" },
-  U: { label: "Untracked", className: "text-emerald-600 dark:text-emerald-400" },
-  M: { label: "Modified", className: "text-amber-600 dark:text-amber-400" },
+  A: { label: "Added", className: "text-emerald-700 dark:text-emerald-400" },
+  U: { label: "Untracked", className: "text-emerald-700 dark:text-emerald-400" },
+  M: { label: "Modified", className: "text-amber-700 dark:text-amber-400" },
   D: { label: "Deleted", className: "text-red-600 dark:text-red-400" },
 };
 
@@ -340,7 +340,7 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
           </span>
         </Hint>
         <span className="w-16 shrink-0 text-right font-mono text-[11px]">
-          {file.additions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>}
+          {file.additions > 0 && <span className="text-emerald-700 dark:text-emerald-400">+{file.additions}</span>}
           {file.deletions > 0 && <span className="ml-1 text-red-600 dark:text-red-400">-{file.deletions}</span>}
         </span>
         {/* Room for the edit link, which sits over the row so it isn't nested in the button. */}

@@ -58,7 +58,7 @@ export function RevisionBar({ doc, onSend }: { doc: DocState; onSend: () => Prom
         {plural(stat.hunks, "edit")}
         {stat.hunks > 0 && (
           <span className="ml-1 font-mono text-xs">
-            <span className="text-emerald-600 dark:text-emerald-400">+{stat.added}</span>{" "}
+            <span className="text-emerald-700 dark:text-emerald-400">+{stat.added}</span>{" "}
             <span className="text-red-600 dark:text-red-400">-{stat.removed}</span>
           </span>
         )}

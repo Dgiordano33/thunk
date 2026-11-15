@@ -36,14 +36,14 @@ export function RoutinesOverview({
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Routines</p>
           <h1 className="pixel mt-1 text-3xl">No standing orders</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">
-            Routines are agent sessions that run on a schedule, on demand, or when something happens, and report back to the city
-            that owns them. Each city builds its own in its Workshop.
+            Routines are agent sessions that run on a schedule, on demand, or when something happens, and report back to the
+            project that owns them. Each project sets up its own.
           </p>
           <Link
             href={firstProjectId ? projectSectionPath(paths.project(firstProjectId), "workshop", { routine: "new" }) : "/projects"}
             className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80"
           >
-            {firstProjectId ? "Visit a Workshop →" : "← Found a city first"}
+            {firstProjectId ? "Open a project’s routines →" : "← Add a project first"}
           </Link>
         </CivPanel>
       </main>

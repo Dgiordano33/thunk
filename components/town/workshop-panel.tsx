@@ -11,7 +11,7 @@ import { TownPanel } from "./town-panel";
 export async function WorkshopPanel({ project, workspaces, closeHref }: { project: Project; workspaces: WorkspaceSummary[]; closeHref: string }) {
   const routines = await listRoutines({ projectId: project.id }).catch(() => []);
   return (
-    <TownPanel eyebrow="Workshop" title="Routines" closeHref={closeHref} wide>
+    <TownPanel eyebrow={project.name} title="Routines" closeHref={closeHref} wide>
       <Suspense>
         <WorkshopRoutines
           projectId={project.id}
