@@ -5,7 +5,9 @@ import { WORLD_SELECTION } from "@/components/world/selection";
 import { Tree, TreeGroup, TreeItem, TreeItemIndicator, TreeItemLabel } from "@ui-sdk/react/tree";
 import { ChevronRightIcon, FileIcon, FolderIcon, LoaderCircleIcon, RotateCwIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { FileEntry, FileRoot, RepoChanges, WorkspaceChanges } from "@/lib/projects/types";
@@ -67,6 +69,8 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
   const [error, setError] = useState<string | null>(null);
   /** Listed folders, by tree value; a folder that failed to list holds its error. */
   const [listed, setListed] = useState<Record<string, FileEntry[] | { error: string }>>({});
+  const [menuFor, setMenuFor] = useState<{ value: string; file: boolean } | null>(null);
+  const router = useRouter();
   const hydrate = useOpenFiles((s) => s.hydrate);
   useEffect(() => hydrate(), [hydrate]);
 
@@ -154,7 +158,7 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
   const folder = (root: FileRoot, entry: FileEntry, level: number, status?: Map<string, string>) => {
     const value = valueOf(root.id, entry.path), changed = status?.has(`${entry.path}/`);
     return (
-      <TreeItem key={entry.path} value={value} branch label={entry.name} className={cn(entry.ignored && "opacity-50")}>
+      <TreeItem key={entry.path} value={value} branch label={entry.name} data-tree-value={value} className={cn(entry.ignored && "opacity-50")}>
         <TreeItemLabel title={entry.path} className={ROW} style={indent(level)}>
           <Chevron />
           <FolderIcon aria-hidden="true" className="text-muted-foreground size-3.5 shrink-0" />
@@ -169,7 +173,7 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
   const file = (root: FileRoot, entry: FileEntry, level: number, status?: string) => {
     const value = valueOf(root.id, entry.path);
     return (
-      <TreeItem key={entry.path} value={value} label={entry.name} className={cn(entry.ignored && "opacity-50")}>
+      <TreeItem key={entry.path} value={value} label={entry.name} data-tree-value={value} data-file="" className={cn(entry.ignored && "opacity-50")}>
         <TreeItemLabel
           render={<Link href={filePagePath(base, root.id, entry.path, route.tab)} />}
           title={entry.path}
@@ -184,8 +188,22 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
     );
   };
 
+  // One menu for the whole tree; a right-click (or the menu key) notes which row it was on.
+  const menuRoot = menuFor ? roots.find((r) => r.id === parse(menuFor.value).root) : undefined;
+  const menuPath = menuFor ? parse(menuFor.value).path : "";
+  const copy = async (text: string, what: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success(`Copied ${what}`, { description: text }); }
+    catch { toast.error(`Couldn’t copy the ${what}`); }
+  };
+  const collapseAll = () => { for (const v of expanded) if (!isRoot(v)) toggleDir(`${prefix}${v}`, false); };
+
   return (
-    <div className="py-1">
+    <ContextMenu onOpenChange={(open) => { if (!open) setMenuFor(null); }}>
+    <ContextMenuTrigger asChild>
+    <div className="py-1" onContextMenuCapture={(e) => {
+      const row = (e.target as HTMLElement).closest<HTMLElement>("[data-tree-value]");
+      setMenuFor(row ? { value: row.dataset.treeValue!, file: row.hasAttribute("data-file") } : null);
+    }}>
       <Tree
         aria-label="Workspace files"
         mode="none"
@@ -210,6 +228,17 @@ export function FileTree({ workspaceId, changes, repos, refreshKey }: {
         })}
       </Tree>
     </div>
+    </ContextMenuTrigger>
+    <ContextMenuContent className="w-56">
+      {menuFor && menuRoot && <>
+        {menuFor.file && <ContextMenuItem onSelect={() => router.push(filePagePath(base, menuRoot.id, menuPath, route.tab))}>Open</ContextMenuItem>}
+        {menuPath && <ContextMenuItem onSelect={() => void copy(menuPath, "path")}>Copy path</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => void copy(menuPath ? `${menuRoot.cwd}/${menuPath}` : menuRoot.cwd, "full path")}>Copy full path</ContextMenuItem>
+        <ContextMenuSeparator />
+      </>}
+      <ContextMenuItem disabled={!expanded.some((v) => !isRoot(v))} onSelect={collapseAll}>Collapse all folders</ContextMenuItem>
+    </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
