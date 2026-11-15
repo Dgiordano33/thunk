@@ -1,6 +1,6 @@
 # Town map: one Town center, workspaces as farms
 
-Status: implemented; browser visual verification pending · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-08
+Status: done · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-08
 
 ## Goal
 
