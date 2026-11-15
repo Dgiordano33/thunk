@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import { HourglassIcon, Loader2Icon, MessageSquareIcon, PlayIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -132,7 +134,7 @@ function RoutineBadge({ meta, origin }: { meta: SessionMeta; origin: Extract<Ses
     );
   return (
     <Badge variant="outline" className="h-5 max-w-48 gap-1 text-[11px]" asChild>
-      <Link href={`${paths.project(meta.projectId)}?building=workshop&routine=${origin.routineId}`} title="Started by a routine">
+      <Link href={projectSectionPath(paths.project(meta.projectId), "workshop", { routine: origin.routineId })} title="Started by a routine">
         <HourglassIcon /> <span className="truncate">Routine · {origin.routineName}</span>
       </Link>
     </Badge>

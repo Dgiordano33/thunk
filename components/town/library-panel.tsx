@@ -34,7 +34,7 @@ export function LibraryPanel({
 
   const go = (next: { ws?: string | null; repo?: string | null; note?: string | null }) => {
     const q = new URLSearchParams(params.toString());
-    q.set("building", "library");
+    q.delete("building");
     const nws = next.ws === undefined ? ws : next.ws;
     const nrf = next.repo === undefined ? repo : next.repo;
     const nnote = next.note === undefined ? note : next.note;
@@ -44,7 +44,7 @@ export function LibraryPanel({
     else q.delete("nrf");
     if (nnote) q.set("note", nnote);
     else q.delete("note");
-    router.replace(`${pathname}?${q}`, { scroll: false });
+    router.push(`${pathname}?${q}`, { scroll: false });
   };
 
   return (

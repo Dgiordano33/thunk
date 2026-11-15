@@ -1,4 +1,7 @@
 "use client";
+
+import { projectSectionPath } from "@/lib/routes";
+
 import { StudioSprite } from "./sprites";
 
 import { motion, useReducedMotion } from "motion/react";
@@ -145,7 +148,7 @@ export function TownView({
               attention={sessions.some((s) => s.workspaceId === ws.id && (s.pending > 0 || needsPerson(s) || s.status === "error"))}
             />
           ))}
-          <Building cell={center} grid={grid} name="Town center" href={`${base}?building=center`} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || needsPerson(s) || s.status === "error"))}>
+          <Building cell={center} grid={grid} name="Town center" href={projectSectionPath(base, "center")} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || needsPerson(s) || s.status === "error"))}>
             <TownCenterSprite />
           </Building>
           <Building cell={studio} grid={grid} name="Canvas" href={`${base}/canvas`} selected={false} size={{ w: 80, h: 90 }} ground={30} blurb="Plan, discuss and draw with your agent."><StudioSprite /></Building>
@@ -153,7 +156,7 @@ export function TownView({
             cell={library}
             grid={grid}
             name="Library"
-            href={`${base}?building=library`}
+            href={projectSectionPath(base, "library")}
             selected={selected.building === "library"}
             size={LIBRARY_SIZE}
             ground={29}
@@ -165,7 +168,7 @@ export function TownView({
             cell={workshop}
             grid={grid}
             name="Workshop"
-            href={`${base}?building=workshop`}
+            href={projectSectionPath(base, "workshop")}
             selected={selected.building === "workshop"}
             size={WORKSHOP_SIZE}
             ground={31}
@@ -178,7 +181,7 @@ export function TownView({
             cell={vault}
             grid={grid}
             name="Vault"
-            href={`${base}?building=vault`}
+            href={projectSectionPath(base, "vault")}
             selected={selected.building === "vault"}
             size={VAULT_SIZE}
             ground={29}
@@ -187,7 +190,7 @@ export function TownView({
           >
             <VaultSprite busy={vault.busy} />
           </Building>
-          <Building cell={townHall} grid={grid} name="Town hall" href={`${base}?building=tasks`} selected={selected.building === "tasks"} size={TOWN_HALL_SIZE} ground={33} blurb="This project's task list: what's open, who's on it.">
+          <Building cell={townHall} grid={grid} name="Town hall" href={projectSectionPath(base, "tasks")} selected={selected.building === "tasks"} size={TOWN_HALL_SIZE} ground={33} blurb="This project's task list: what's open, who's on it.">
             <TownHallSprite />
           </Building>
         </>

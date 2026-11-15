@@ -1,3 +1,4 @@
+import { projectSectionPath } from "@/lib/routes";
 import { getRoutine } from "@/lib/supabase/repo/routines";
 import type { RoutineRun } from "@/lib/routines/types";
 import { notify, resolveWhere } from "./service";
@@ -12,5 +13,5 @@ export async function runNotification(run: RoutineRun) {
   await notify({ kind, urgency: run.status === "needs_attention" ? "action" : "info", projectId: routine.projectId,
     workspaceId: run.workspaceId, sessionId: run.sessionId, runId: run.id, subjectKey: `run:${run.id}:${run.status}`,
     title: `${routine.name} · ${run.status.replaceAll("_", " ")}`, detail: run.summary || run.error,
-    href: run.sessionId && run.workspaceId ? await hrefForSession(run.workspaceId, run.sessionId) : `${await hrefForProject(routine.projectId)}?building=workshop&routine=${routine.id}` });
+    href: run.sessionId && run.workspaceId ? await hrefForSession(run.workspaceId, run.sessionId) : projectSectionPath(await hrefForProject(routine.projectId), "workshop", { routine: routine.id }) });
 }

@@ -1,3 +1,4 @@
+import { projectSectionPath } from "@/lib/routes";
 import "server-only";
 import { projectNoteDirs } from "@/lib/notes/resolve";
 import { createNote } from "@/lib/notes/store";
@@ -47,7 +48,7 @@ export async function writeRunNote(opts: {
   const outputs = [
     ...(tasks?.created.length ? ["", "## Tasks filed", "", ...tasks.created.map(task)] : []),
     ...(tasks?.updated.length ? ["", "## Tasks worked on", "", ...tasks.updated.map(task)] : []),
-    ...(keptNotes.length ? ["", "## Notes written", "", ...keptNotes.map((n) => `- [${n.title}](${projectPath(project)}?building=library&note=${n.id})`)] : []),
+    ...(keptNotes.length ? ["", "## Notes written", "", ...keptNotes.map((n) => `- [${n.title}](${projectSectionPath(projectPath(project), "library", { note: n.id })})`)] : []),
   ];
   const markdown = [...lines, "", "## Summary", "", report.summary || "_The agent did not write a summary._", ...outputs, ""].join("\n");
   return createNote(projectNoteDirs(project), {

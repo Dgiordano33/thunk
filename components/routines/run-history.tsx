@@ -1,5 +1,7 @@
 "use client";
 
+import { projectSectionPath } from "@/lib/routes";
+
 import { ExternalLinkIcon, GitPullRequestIcon, NotebookTextIcon, SquareIcon } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -110,7 +112,7 @@ function RunRow({ run, routineId, projectId, onChange }: { run: RoutineRun; rout
             </Link>
           )}
           {run.noteId && (
-            <Link href={`${paths.project(projectId)}?building=library&note=${run.noteId}`} scroll={false} className="text-primary flex items-center gap-1 hover:underline">
+            <Link href={projectSectionPath(paths.project(projectId), "library", { note: run.noteId })} scroll={false} className="text-primary flex items-center gap-1 hover:underline">
               <NotebookTextIcon className="size-3" /> Report note
             </Link>
           )}

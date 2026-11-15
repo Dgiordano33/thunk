@@ -5,7 +5,7 @@ import { AmbientHub } from "@/components/ambient/ambient-hub";
 import { AddProjectForm } from "@/components/home/add-project-form";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
-import { isProjectPath, PROJECTS_PATH } from "@/lib/routes";
+import { projectSlugFromPath, isProjectPath, PROJECTS_PATH } from "@/lib/routes";
 import { CivPanel } from "./civ-panel";
 import { CivToolbar } from "./civ-toolbar";
 import { HudTitle } from "./hud-title";
@@ -14,7 +14,7 @@ import { HudTitle } from "./hud-title";
 export function WorldHud({ projects, noteCount, routineCount, vaultCount, notificationCount }: { projects: SidebarProject[]; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
   const pathname = usePathname();
   const home = pathname === PROJECTS_PATH;
-  const project = isProjectPath(pathname) ? projects.find((p) => p.slug === pathname.split("/")[1]) : undefined;
+  const project = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
