@@ -17,6 +17,8 @@ import { api } from "@/lib/client/api";
 import type { Workspace } from "@/lib/projects/types";
 import { projectPath, workspacePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { confirm } from "@/components/confirm";
 
 /** New note / save to project / archive / delete for a workspace. */
 export function WorkspaceMenu({ project, workspace, label, className }: { project: { slug: string }; workspace: Workspace; label: string; className?: string }) {
@@ -40,7 +42,7 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
       if (!archived) router.push(`${projectPath(project)}?harvest=${workspace.id}`);
       else done();
     } catch (err) {
-      window.alert((err as Error).message);
+      toast.error((err as Error).message);
     }
   };
 
@@ -49,15 +51,20 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
       const data = await api.getHarvest(workspace.id);
       if (data.empty && action !== "harvest") {
         const what = action === "merge" ? "Merge committed changes into the local default branch, run the archive hook, and delete" : "Delete";
-        if (!window.confirm(`${what} "${label}" and its sessions? Memory and notes go to the granary. ${workspace.branch ? "Worktree deletion requires committed changes merged into the default branch." : `Shared folders and non-empty scratch folders are kept at ${workspace.cwd}.`}`)) return;
+        if (!(await confirm({
+          title: `${what} “${label}” and its sessions?`,
+          description: `Memory and notes go to the granary. ${workspace.branch ? "Worktree deletion requires committed changes merged into the default branch." : `Shared folders and non-empty scratch folders are kept at ${workspace.cwd}.`}`,
+          action: action === "merge" ? "Merge and delete" : "Delete",
+          destructive: true,
+        }))) return;
         if (action === "merge") await api.workspaceGitAction(workspace.id, "merge", true);
         else {
           const result = await api.deleteWorkspace(workspace.id, { worktree: true });
-          if (result.retainedDirectory) window.alert(`Files kept in ${result.retainedDirectory}`);
+          if (result.retainedDirectory) toast.info("Some files were kept", { description: result.retainedDirectory });
         }
         done();
       } else setHarvest({ data, action });
-    } catch (err) { window.alert((err as Error).message); }
+    } catch (err) { toast.error((err as Error).message); }
   };
 
   const newNote = async () => {
@@ -65,7 +72,7 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
       const { note } = await api.createNote("workspaces", workspace.id, { title: "Untitled" });
       router.push(`/notes?scope=w:${workspace.id}&note=${note.id}`);
     } catch (err) {
-      window.alert((err as Error).message);
+      toast.error("Couldn’t create the note", { description: (err as Error).message });
     }
   };
 

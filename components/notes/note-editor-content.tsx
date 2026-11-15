@@ -15,6 +15,7 @@ import { docToMarkdown } from "@/lib/editor/markdown";
 import { MEMORY_NOTE_ID, scopeKey, type Note, type NoteFlags, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed } from "@/lib/store/notes-store";
 import { NoteMetaBar } from "./note-meta-bar";
+import { confirm } from "@/components/confirm";
 
 const SAVE_MS = 800;
 
@@ -229,7 +230,9 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
   };
 
   const remove = async () => {
-    if (!window.confirm(note.source === "repo" ? `Delete ${note.path}? This removes the file from the working tree.` : `Delete "${note.title}"? This removes the file from disk.`)) return;
+    if (!(await confirm(note.source === "repo"
+      ? { title: `Delete ${note.path}?`, description: "This removes the file from the working tree.", action: "Delete", destructive: true }
+      : { title: `Delete “${note.title}”?`, description: "This removes the file from disk.", action: "Delete", destructive: true }))) return;
     if (timer.current) clearTimeout(timer.current);
     dirty.current = false;
     await api.deleteNote(scope.kind, scope.id, initial.id);

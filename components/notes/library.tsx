@@ -10,6 +10,7 @@ import { CollapsiblePane } from "./collapsible-pane";
 import { NoteEditor } from "./note-editor";
 import { NewRepoNote } from "./new-repo-note";
 import { NoteList } from "./note-list";
+import { confirm } from "@/components/confirm";
 
 /** Create and delete notes in a scope, keeping every open view in sync. */
 export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | null) => void) {
@@ -30,7 +31,9 @@ export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | 
   }, [scope, created]);
   const remove = useCallback(
     async (note: NoteMeta) => {
-      if (!window.confirm(note.source === "repo" ? `Delete ${note.path}? This removes the file from the working tree.` : `Delete "${note.title}"? This removes the file from disk.`)) return;
+      if (!(await confirm(note.source === "repo"
+        ? { title: `Delete ${note.path}?`, description: "This removes the file from the working tree.", action: "Delete", destructive: true }
+        : { title: `Delete “${note.title}”?`, description: "This removes the file from disk.", action: "Delete", destructive: true }))) return;
       await api.deleteNote(note.scope.kind, note.scope.id, note.id);
       useNotesFeed.getState().touch(note.scope);
       onSelect(null);

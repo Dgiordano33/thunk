@@ -4,6 +4,7 @@ import { FolderIcon, GitBranchIcon } from "lucide-react";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { scopeKey, type NoteFolder, type NoteScope } from "@/lib/notes/types";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const count = (n: number) => <span className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums">{n}</span>;
 
@@ -33,7 +34,7 @@ export function LibraryFolders({
         <span className="font-medium">All notes</span>
         {count(total)}
       </button>
-      {folders === null && [0, 1].map((i) => <div key={i} className="bg-muted/50 mx-2 my-1 h-6 animate-pulse rounded" />)}
+      {folders === null && [0, 1].map((i) => <Skeleton key={i} className="mx-2 my-1 h-6" />)}
       {folders?.map((f) => {
         const pScope: NoteScope = { kind: "projects", id: f.project.id };
         return (

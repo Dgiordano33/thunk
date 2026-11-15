@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { RunNowButton } from "./routine-list";
 import { RunStatusBadge, triggerSummary, untilTime, useRoutines } from "./shared";
 import { usePaths } from "@/components/layout/paths-context";
+import { toast } from "sonner";
 
 /** Every project's routines in one table, refreshed every few seconds. */
 export function RoutinesOverview({
@@ -136,7 +137,7 @@ function EnabledToggle({ routine, onChange }: { routine: RoutineSummary; onChang
           await api.updateRoutine(routine.id, { enabled: !routine.enabled });
           onChange();
         } catch (err) {
-          window.alert((err as Error).message);
+          toast.error((err as Error).message);
         }
       }}
       className={cn(

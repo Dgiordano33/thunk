@@ -9,6 +9,7 @@ import { baselineOf, collectRevision } from "@/lib/revisions/collect";
 import type { DocState } from "@/lib/store/session-store";
 import { useSession } from "@/lib/store/session-store";
 import { RevisionDialog } from "./revision-dialog";
+import { Kbd } from "@/components/ui/kbd";
 
 export function useRevisionStat(doc: DocState) {
   const baseline = baselineOf(doc);
@@ -72,7 +73,7 @@ export function RevisionBar({ doc, onSend }: { doc: DocState; onSend: () => Prom
         <Button size="sm" onClick={send} disabled={sending || !live || !stat.dirty}>
           {sending ? <Loader2Icon className="animate-spin" /> : <SendIcon />}
           Send revisions
-          <kbd className="text-primary-foreground/70 text-[11px]">⌘↵</kbd>
+          <Kbd className="bg-primary-foreground/15 text-primary-foreground/80">⌘↵</Kbd>
         </Button>
       </div>
       <RevisionDialog doc={doc} open={reviewing} onOpenChange={setReviewing} />

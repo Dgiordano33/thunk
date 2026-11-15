@@ -7,6 +7,8 @@ import type { RepoSpec } from "@/lib/projects/repo-spec";
 import { repoNameFromUrl } from "@/lib/projects/repo-name";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PARENT, Field, FolderPicker } from "./form-fields";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export type RepoDraft = { source: RepoSpec["source"]; path: string; url: string; parent: string; folder: string; git: boolean; name: string };
 
@@ -102,10 +104,10 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
         </Field>
       )}
       {draft.source === "new" && (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={draft.git} onChange={(e) => set({ git: e.target.checked })} className="accent-primary size-4" />
+        <Label className="font-normal">
+          <Checkbox checked={draft.git} onCheckedChange={(on) => set({ git: on === true })} />
           Initialize a git repository
-        </label>
+        </Label>
       )}
       <Field label="Name (optional)" hint="How agents and the UI refer to it. Defaults to the folder name.">
         <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="api" className="font-mono text-sm" />

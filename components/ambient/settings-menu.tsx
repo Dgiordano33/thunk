@@ -16,6 +16,8 @@ import { NOTIFICATION_KINDS, NOTIFICATION_LABELS } from "@/lib/notifications/typ
 import { setMuted, useNotifications } from "@/lib/store/notifications-store";
 import { cn } from "@/lib/utils";
 import { usePaths } from "@/components/layout/paths-context";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cost);
 
@@ -95,7 +97,7 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs" aria-pressed={notifications} onClick={toggleNotifications}>
             <BellIcon /> Desktop alerts <span className="text-muted-foreground ml-auto">{notifications ? "On" : "Off"}</span>
           </Button>
-          <details className="px-2 py-1 text-xs"><summary className="cursor-pointer">Alert kinds</summary><div className="mt-2 max-h-64 space-y-2 overflow-y-auto">{NOTIFICATION_KINDS.map((kind) => <label key={kind} className="flex items-center gap-2"><input type="checkbox" checked={!muted.includes(kind)} onChange={(e) => setMuted(e.target.checked ? muted.filter((k) => k !== kind) : [...muted, kind])} />{NOTIFICATION_LABELS[kind]}</label>)}</div></details>
+          <details className="px-2 py-1 text-xs"><summary className="cursor-pointer">Alert kinds</summary><div className="mt-2 max-h-64 space-y-2 overflow-y-auto">{NOTIFICATION_KINDS.map((kind) => <Label key={kind} className="text-xs font-normal"><Checkbox checked={!muted.includes(kind)} onCheckedChange={(on) => setMuted(on === true ? muted.filter((k) => k !== kind) : [...muted, kind])} />{NOTIFICATION_LABELS[kind]}</Label>)}</div></details>
           {notificationMessage && <p role="status" className="text-muted-foreground px-2 py-1 text-xs">{notificationMessage}</p>}
         </PopoverContent>
       </Popover>

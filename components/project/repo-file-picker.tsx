@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client/api";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 type FileOption = Awaited<ReturnType<typeof api.listRepoFolderFiles>>["files"][number];
 
@@ -91,12 +93,12 @@ export function RepoFilePicker({
         )}
         <div className="min-h-24 flex-1 overflow-y-auto rounded-xs border">
           {files === null && !error && <div className="text-muted-foreground flex items-center justify-center gap-2 p-6 text-xs"><Loader2Icon className="size-3.5 animate-spin" />Loading files…</div>}
-          {files?.length === 0 && <p className="text-muted-foreground p-6 text-center text-xs">No Markdown files in this folder yet.</p>}
+          {files?.length === 0 && <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">No Markdown files in this folder yet.</EmptyDescription></Empty>}
           {files && files.length > 0 && (
             <ul className="divide-y text-xs">
               <li className="bg-muted/40 sticky top-0">
                 <label className="flex cursor-pointer items-center gap-2 px-3 py-2 font-medium">
-                  <input type="checkbox" className="accent-(--w-bronze)" checked={allVisibleSelected} onChange={toggleVisible} />
+                  <Checkbox className="data-checked:border-(--w-bronze) data-checked:bg-(--w-bronze)" checked={allVisibleSelected} onCheckedChange={toggleVisible} />
                   {query ? `Select ${visible.length} matching` : "Select all"}
                   <span className="text-muted-foreground ml-auto font-normal tabular-nums">{selected.size} of {files.length}</span>
                 </label>
@@ -104,7 +106,7 @@ export function RepoFilePicker({
               {visible.map((f) => (
                 <li key={f.id}>
                   <label className="hover:bg-muted/60 flex cursor-pointer items-center gap-2 px-3 py-1.5">
-                    <input type="checkbox" className="accent-(--w-bronze)" checked={selected.has(f.id)} onChange={() => toggle(f.id)} />
+                    <Checkbox className="data-checked:border-(--w-bronze) data-checked:bg-(--w-bronze)" checked={selected.has(f.id)} onCheckedChange={() => toggle(f.id)} />
                     <span className="min-w-0 flex-1 truncate">{f.title}</span>
                     <span className="text-muted-foreground shrink-0 font-mono text-[11px]">{f.id}.md</span>
                   </label>

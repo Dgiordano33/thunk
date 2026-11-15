@@ -14,6 +14,8 @@ import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { api } from "@/lib/client/api";
 import { NOTIFICATION_KINDS, NOTIFICATION_LABELS, type Notification } from "@/lib/notifications/types";
 import { refreshNotifications, useNotifications, useNotificationsEvents } from "@/lib/store/notifications-store";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Kbd } from "@/components/ui/kbd";
 
 export function Inbox({ projects }: { projects: SidebarProject[] }) {
   useNotificationsEvents();
@@ -152,7 +154,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           </header>
           {(error || feedError) && <div role="alert" className="bg-destructive/5 text-destructive flex shrink-0 items-center gap-3 border-b px-5 py-2 text-xs sm:px-8"><CircleAlertIcon className="size-4 shrink-0" /><span className="min-w-0 flex-1">{error || feedError}</span><Button size="sm" variant="ghost" onClick={() => void refreshNotifications()}>Retry</Button></div>}
           <div ref={list} className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
-            {!loaded && !feedError && <div role="status" aria-label="Loading inbox" className="space-y-4">{[0, 1, 2].map((i) => <div key={i} className="motion-safe:animate-pulse rounded-sm border p-5"><div className="bg-muted mb-3 h-2 w-1/4" /><div className="bg-muted h-3 w-2/3" /><div className="bg-muted mt-4 h-6 w-20" /></div>)}<span className="sr-only">Loading inbox…</span></div>}
+            {!loaded && !feedError && <div role="status" aria-label="Loading inbox" className="space-y-4">{[0, 1, 2].map((i) => <div key={i} className="rounded-sm border p-5"><Skeleton className="mb-3 h-2 w-1/4" /><Skeleton className="h-3 w-2/3" /><Skeleton className="mt-4 h-6 w-20" /></div>)}<span className="sr-only">Loading inbox…</span></div>}
             {!loaded && feedError && <div className="flex min-h-full items-center justify-center py-10"><div className="max-w-sm text-center"><CircleAlertIcon aria-hidden="true" className="text-muted-foreground mx-auto mb-4 size-8" /><h2 className="pixel text-2xl">Your inbox couldn’t load.</h2><p className="text-muted-foreground mt-3 text-sm leading-relaxed">Try again in a moment. Your notifications will appear when the connection is restored.</p><Button className="mt-5" variant="outline" onClick={() => void refreshNotifications()}>Try again</Button></div></div>}
             {loaded && !filtered.length && <div className="flex min-h-full items-center justify-center py-10">
               <div className="max-w-sm text-center">
@@ -176,7 +178,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
               useNotifications.setState((s) => ({ items: [...s.items, ...data.notifications.filter((n) => !s.items.some((item) => item.id === n.id))].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)), before: data.notifications.length === 500 ? { at: data.notifications.at(-1)!.createdAt, id: data.notifications.at(-1)!.id } : null }));
             })}>Load earlier notifications</Button>}
           </div>
-          <footer className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[10px] sm:px-8"><span><kbd className="font-mono">j</kbd> / <kbd className="font-mono">k</kbd> to move</span><span><kbd className="font-mono">o</kbd> to open</span><span><kbd className="font-mono">e</kbd> to dismiss</span><span className="ml-auto hidden sm:inline">Updates appear automatically</span></footer>
+          <footer className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[10px] sm:px-8"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> to move</span><span><Kbd>o</Kbd> to open</span><span><Kbd>e</Kbd> to dismiss</span><span className="ml-auto hidden sm:inline">Updates appear automatically</span></footer>
         </div>
       </CivPanel>
     </main>

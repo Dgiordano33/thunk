@@ -16,6 +16,7 @@ import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { canvasPath, pathsFor, projectPath, workspacePath } from "@/lib/routes";
+import { Kbd } from "@/components/ui/kbd";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -133,7 +134,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     return (
       <>
         <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSearchOpen(true)}>
-          <SearchIcon /> Search <kbd className="text-muted-foreground font-sans text-[10px]">⌘K</kbd>
+          <SearchIcon /> Search <Kbd>⌘K</Kbd>
         </Button>
         {searchDialog}
       </>

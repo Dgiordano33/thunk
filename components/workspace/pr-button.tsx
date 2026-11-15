@@ -23,6 +23,8 @@ import type { CheckState, PullRequestInfo, WorkspacePrStatus } from "@/lib/proje
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 import { useWorkspaceBase } from "./route-context";
+import { toast } from "sonner";
+import { Hint } from "@/components/hint";
 
 const POLL_MS = 30_000;
 /** While a PR is being created, checks are running, or mergeability is being computed. */
@@ -158,7 +160,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, un
       }
       setRequested({ action, at: Date.now() });
     } catch (err) {
-      window.alert(`Couldn't hand off "${ACTION_TITLE[action]}": ${(err as Error).message}`);
+      toast.error(`Couldn’t hand off “${ACTION_TITLE[action]}”`, { description: (err as Error).message });
     } finally {
       setPending(null);
     }
@@ -190,17 +192,20 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, un
 
   if (pr && pr.state === "MERGED")
     return (
+      <Hint label={pr.title}>
       <Button size="sm" variant="outline" className="h-7 gap-1.5" asChild>
-        <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title}>
+        <a href={pr.url} target="_blank" rel="noreferrer">
           <GitMergeIcon className="text-violet-600 dark:text-violet-400" />
           {repoName && `${repoName} `}Merged #{pr.number}
         </a>
       </Button>
+      </Hint>
     );
 
   // The wrapper carries the tooltip: disabled buttons don't receive pointer events.
   return (
-    <span title={`${repo ? `${repo.name}: ` : ""}${status.reason ?? `Ask Claude to commit, push and open a PR into ${status.base}`}`}>
+    <Hint label={`${repo ? `${repo.name}: ` : ""}${status.reason ?? `Ask Claude to commit, push and open a PR into ${status.base}`}`}>
+    <span tabIndex={!status.canCreate ? 0 : undefined}>
       <Button
         size="sm"
         className="h-7 gap-1.5"
@@ -212,6 +217,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, un
         {repoName && <span className="opacity-70">· {repoName}</span>}
       </Button>
     </span>
+    </Hint>
   );
 }
 
@@ -275,8 +281,9 @@ function OpenPr({
 
   return (
     <Popover>
+      <Hint label={pr.title}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="h-7 gap-1.5" title={pr.title}>
+        <Button size="sm" variant="outline" className="h-7 gap-1.5">
           <GitPullRequestIcon className={cn(pr.isDraft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400")} />
           {repoName && `${repoName} `}{pr.isDraft ? "Draft" : "PR"} #{pr.number}
           {conflicts ? (
@@ -286,6 +293,7 @@ function OpenPr({
           )}
         </Button>
       </PopoverTrigger>
+      </Hint>
       <PopoverContent align="end" className="w-80 p-0">
         <PrSummary pr={pr} base={base} pending={pending} requested={requested} onAsk={onAsk} />
       </PopoverContent>
@@ -385,18 +393,18 @@ function FixActions({
   return (
     <div className="flex flex-wrap gap-2 border-b px-4 py-3">
       {actions.map(({ action, label, icon: Icon }) => (
+        <Hint key={action} label="Hand this to Claude in the open session (or a new one)">
         <Button
-          key={action}
           size="sm"
           variant={action === actions[0].action ? "default" : "outline"}
           className="h-7 gap-1.5"
           disabled={pending !== null || requested === action}
-          title="Hand this to Claude in the open session (or a new one)"
           onClick={() => onAsk(action)}
         >
           {pending === action ? <Loader2Icon className="animate-spin" /> : <Icon />}
           {requested === action ? "Sent to Claude" : `${label} with Claude`}
         </Button>
+        </Hint>
       ))}
     </div>
   );

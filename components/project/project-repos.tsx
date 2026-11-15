@@ -9,6 +9,7 @@ import { api } from "@/lib/client/api";
 import type { Project, ProjectRepo } from "@/lib/projects/types";
 import { tildify } from "./form-fields";
 import { draftReady, draftToSpec, emptyDraft, RepoSourceFields } from "./repo-source-form";
+import { confirm } from "@/components/confirm";
 
 /** The repos and folders a project spans, with add and remove. */
 export function ProjectRepos({ project }: { project: Project }) {
@@ -17,7 +18,7 @@ export function ProjectRepos({ project }: { project: Project }) {
   const [error, setError] = useState<string | null>(null);
 
   const remove = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from ${project.name}? Its checkout on disk is left alone.`)) return;
+    if (!(await confirm({ title: `Remove ${name} from ${project.name}?`, description: "Its checkout on disk is left alone.", action: "Remove", destructive: true }))) return;
     setRemoving(id);
     setError(null);
     try {

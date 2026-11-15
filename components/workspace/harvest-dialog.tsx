@@ -8,6 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client/api";
 import type { HarvestData } from "@/lib/projects/harvest";
+import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Hint } from "@/components/hint";
 
 export type HarvestAction = "harvest" | "delete" | "merge";
 
@@ -29,7 +33,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
       }
       if (action === "delete") {
         const result = await api.deleteWorkspace(workspaceId, { worktree: true });
-        if (result.retainedDirectory) window.alert(`Files kept in ${result.retainedDirectory}`);
+        if (result.retainedDirectory) toast.info("Some files were kept", { description: result.retainedDirectory });
       }
       if (action === "merge") await api.workspaceGitAction(workspaceId, "merge", true);
       onComplete(); onClose();
@@ -47,7 +51,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
           <label className="text-sm font-medium">Keep in project memory<Textarea className="mt-2 min-h-48 font-mono text-xs" value={memory} onChange={e => setMemory(e.target.value)} /></label>
         </div>
         <fieldset><legend className="mb-2 text-sm font-medium">Move to project notes</legend>
-          {data.notes.length ? data.notes.map(note => <label key={note.id} className="flex items-center gap-2 py-1 text-sm"><input type="checkbox" checked={noteIds.includes(note.id)} onChange={e => setNoteIds(ids => e.target.checked ? [...ids, note.id] : ids.filter(id => id !== note.id))} />{note.title}</label>) : <p className="text-muted-foreground text-sm">No workspace notes.</p>}
+          {data.notes.length ? data.notes.map(note => <Label key={note.id} className="py-1 font-normal"><Checkbox checked={noteIds.includes(note.id)} onCheckedChange={on => setNoteIds(ids => on === true ? [...ids, note.id] : ids.filter(id => id !== note.id))} />{note.title}</Label>) : <p className="text-muted-foreground text-sm">No workspace notes.</p>}
         </fieldset>
         <details><summary className="cursor-pointer text-sm">Project memory today</summary><pre className="bg-muted mt-2 max-h-48 overflow-auto whitespace-pre-wrap p-3 text-xs">{data.projectMemory || "No project memory yet."}</pre></details>
       </fieldset>
@@ -67,11 +71,13 @@ export function HarvestButton({ workspaceId, label }: { workspaceId: string; lab
   const [data, setData] = useState<HarvestData | null>(null);
   const [busy, setBusy] = useState(false);
   return <>
-    <Button size="sm" variant="outline" disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
+    <Hint label="Copy this workspace’s memory and notes into the project">
+    <Button size="sm" variant="outline" disabled={busy} onClick={async () => {
       setBusy(true);
-      try { setData(await api.getHarvest(workspaceId)); } catch (err) { window.alert((err as Error).message); }
+      try { setData(await api.getHarvest(workspaceId)); } catch (err) { toast.error((err as Error).message); }
       finally { setBusy(false); }
     }}><SaveIcon /> Save to project</Button>
+    </Hint>
     {data && <HarvestDialog workspaceId={workspaceId} label={label} data={data} action="harvest" onClose={() => setData(null)} onComplete={() => router.refresh()} />}
   </>;
 }

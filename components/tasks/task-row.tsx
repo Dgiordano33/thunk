@@ -6,6 +6,7 @@ import type { SessionMeta } from "@/lib/agent/types";
 import { TASK_STATUS_LABELS, type Task } from "@/lib/tasks/types";
 import { SendMenu } from "./send-menu";
 import { usePaths } from "@/components/layout/paths-context";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type TaskRowProps = {
   task: Task;
@@ -22,7 +23,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
   const workspaceId = owner?.workspaceId ?? task.workspaceId;
   const paths = usePaths();
   return <li className="group hover:bg-muted/50 flex items-start gap-2 border-b px-3 py-2 last:border-0">
-    <input type="checkbox" className="accent-primary mt-1 size-3.5 shrink-0" checked={task.status === "done"} disabled={busy} aria-label={`Mark ${task.title} ${task.status === "done" ? "open" : "done"}`} onChange={() => onToggle(task)} />
+    <Checkbox className="mt-0.5" checked={task.status === "done"} disabled={busy} aria-label={`Mark ${task.title} ${task.status === "done" ? "open" : "done"}`} onCheckedChange={() => onToggle(task)} />
     <div className="min-w-0 flex-1">
       <button type="button" className={`w-full text-left text-[13px] break-words hover:underline ${task.status === "done" || task.status === "cancelled" ? "text-muted-foreground line-through" : ""}`} onClick={() => onPatch(task)}>{task.title}</button>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">

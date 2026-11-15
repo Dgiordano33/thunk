@@ -83,6 +83,17 @@ Use [Button](components/ui/button.tsx) for ordinary form actions. It already sup
 
 [PixelIcon](components/world/pixel-icon.tsx) supplies castle, scroll, and hourglass artwork for section navigation. Lucide icons handle functional controls such as zoom, back, information, and close. The command-menu orb is a deliberate circular exception: 56px across, with bronze rings, a sea-colored inset, and the dotted Thunk mark.
 
+### Which component library
+
+Two libraries are in use, by rule rather than by habit:
+
+- **shadcn** (`components/ui/`) everywhere by default. Before hand-rolling a control, check for a shadcn component: `alert-dialog`, `context-menu`, `checkbox` and `label`, `skeleton`, `kbd`, `empty`, `tooltip`, `sonner`, and the rest of `components/ui/`. Add one with `./node_modules/.bin/shadcn add <name>`, not `npx shadcn` or an npm script: those pass npm's own config (like a global `allow-scripts`) to the install the CLI runs, and npm 12 refuses it. Never pass `--overwrite` without reviewing the diff: it also rewrites registry dependencies, such as the customized `button.tsx`. If the CLI adds a package, pin it like the rest of package.json.
+- **UI SDK** only where it adds behavior shadcn doesn't have: the Canvas board (gestures, and its controls in `board-ui.tsx`) and the workspace file tree (`Tree`: one tab stop, arrows, type-to-find, lazy folders).
+
+Ask and tell with [`confirm()`](components/confirm.tsx) and `toast` from `sonner`, never `window.confirm`, `window.alert` or `window.prompt` (the canvas doc toolbar asks for a link in place, inside its menu). A destructive question passes `destructive: true`: a red action, and focus starts on Cancel. Errors toast with a short title and the error as the description.
+
+Use [`Hint`](components/hint.tsx) (a tooltip, with an optional key) for icon buttons, status marks and actions. A plain `title` is still right for revealing the full text of a truncated name, like a tab or a path. A status mark that is only a glyph or dot also gets an accessible name.
+
 ## Homepage composition
 
 The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and places the map under a shared HUD. The homepage has no project sidebar.

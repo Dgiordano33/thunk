@@ -1,19 +1,45 @@
 "use client"
 
+import * as React from "react"
 import { cn } from "cn"
 import * as ResizablePrimitive from "react-resizable-panels"
+import { PANEL_COOKIE_MAX_AGE, panelCookieName } from "@/lib/panel-layout"
 
-export const panelLayoutStorage: ResizablePrimitive.LayoutStorage = {
-  getItem(key) {
-    try {
-      return typeof window === "undefined" ? null : window.localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  },
-  setItem(key, value) {
-    if (typeof window !== "undefined") window.localStorage.setItem(key, value)
-  },
+/**
+ * Layout storage in cookies (see lib/panel-layout). During the server render it reads `fromServer`, the request's
+ * cookies; in the browser it reads and writes document.cookie, so both renders start from the same layout.
+ */
+export function panelLayoutStorage(fromServer: Record<string, string> = {}): ResizablePrimitive.LayoutStorage {
+  return {
+    getItem(key) {
+      const name = panelCookieName(key)
+      if (typeof document === "undefined") return fromServer[name] ?? null
+      const hit = document.cookie.split("; ").find((c) => c.startsWith(`${name}=`))
+      if (!hit) return null
+      try {
+        return decodeURIComponent(hit.slice(name.length + 1))
+      } catch {
+        return null
+      }
+    },
+    setItem(key, value) {
+      if (typeof document === "undefined") return
+      document.cookie = `${panelCookieName(key)}=${encodeURIComponent(value)}; path=/; max-age=${PANEL_COOKIE_MAX_AGE}; samesite=lax`
+    },
+  }
+}
+
+const PanelCookies = React.createContext<Record<string, string>>({})
+
+/** Hands the request's panel layout cookies to the panels below, for the server render. */
+export function PanelLayoutCookies({ value, children }: { value: Record<string, string>; children: React.ReactNode }) {
+  return <PanelCookies.Provider value={value}>{children}</PanelCookies.Provider>
+}
+
+/** Storage for `useDefaultLayout`, the same on the server and in the browser. */
+export function usePanelLayoutStorage() {
+  const fromServer = React.useContext(PanelCookies)
+  return React.useMemo(() => panelLayoutStorage(fromServer), [fromServer])
 }
 
 function ResizablePanelGroup({

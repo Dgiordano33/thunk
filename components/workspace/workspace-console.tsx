@@ -10,6 +10,10 @@ import type { ProcessKind, ProcessSnapshot, RuntimeSnapshot } from "@/lib/projec
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { confirm } from "@/components/confirm";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Hint } from "@/components/hint";
 
 type GitState = Awaited<ReturnType<typeof workspaceGitState>>;
 const KINDS: ProcessKind[] = ["shell", "setup", "run", "archive"];
@@ -78,10 +82,11 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
   const rebaseOpen = repos.some((r) => r.operation === "rebase");
   const inRoot = repos.some((r) => r.rootConflicts.length);
 
-  const applyGit = () => {
+  const applyGit = async () => {
     const merging = gitAction === "merge" || gitAction === "squash";
     const into = multi ? "each repo's default branch" : `local ${git?.target}`;
-    if (merging && !window.confirm(`${gitAction === "squash" ? "Squash" : "Merge"} committed workspace changes into ${into}?${cleanup ? " Then run the archive hook and delete this workspace and its sessions." : ""}`)) return;
+    const verb = gitAction === "squash" ? "Squash" : "Merge";
+    if (merging && !(await confirm({ title: `${verb} into ${into}?`, description: `Committed workspace changes go into ${into}.${cleanup ? " Then the archive hook runs and this workspace and its sessions are deleted." : ""}`, action: verb, destructive: cleanup }))) return;
     void act(async () => {
       const result = await api.workspaceGitAction(workspaceId, gitAction, merging && cleanup);
       if (result.deleted) { router.push("/projects"); return; }
@@ -97,7 +102,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
           return <Button className="pixel text-xs" key={kind} size="sm" variant={open && tab === kind ? "secondary" : "ghost"} onClick={() => selectTab(kind)} aria-pressed={open && tab === kind}>
             {kind === "shell" && <TerminalIcon className="size-3.5" />}
             {LABELS[kind]}
-            {proc && <span className={proc.running ? "text-emerald-600 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"} title={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span>}
+            {proc && <Hint label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`}><span role="img" aria-label={proc.running ? "Running" : `Exited with code ${proc.exitCode}`} className={proc.running ? "text-emerald-600 dark:text-emerald-400" : proc.exitCode ? "text-destructive" : "text-muted-foreground"}>{proc.running ? "●" : proc.exitCode ? "✕" : "✓"}</span></Hint>}
           </Button>;
         })}
         {state?.previewUrl && <Button size="sm" variant={open && tab === "preview" ? "secondary" : "ghost"} onClick={() => selectTab("preview")}>Preview</Button>}
@@ -112,7 +117,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
             </Button>)}
         {tab === "run" && state?.port ? <span className="text-muted-foreground text-xs">:{state.port}</span> : null}
         {tab === "preview" && state?.previewUrl && <a href={state.previewUrl} target="_blank" rel="noreferrer" aria-label="Open dev server in new tab" className="text-muted-foreground px-1"><ExternalLinkIcon className="size-3.5" /></a>}
-        {!open && repos.filter((r) => r.target).map((r) => <span key={r.id} className="text-muted-foreground whitespace-nowrap px-1 text-xs" title={`${multi ? `${r.name}: ` : ""}${r.ahead} ahead, ${r.behind} behind ${r.target}`}>{multi && `${r.name} `}{r.ahead}↑ {r.behind}↓{!multi && ` ${r.target}`}</span>)}
+        {!open && repos.filter((r) => r.target).map((r) => <Hint key={r.id} label={`${multi ? `${r.name}: ` : ""}${r.ahead} ahead, ${r.behind} behind ${r.target}`}><span aria-label={`${multi ? `${r.name}: ` : ""}${r.ahead} ahead, ${r.behind} behind ${r.target}`} className="text-muted-foreground whitespace-nowrap px-1 text-xs">{multi && `${r.name} `}{r.ahead}↑ {r.behind}↓{!multi && ` ${r.target}`}</span></Hint>)}
         <Button size="icon-sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Collapse console" : "Expand console"}>
           {open ? <ChevronDownIcon /> : <ChevronUpIcon />}
         </Button>
@@ -129,15 +134,15 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
               <SelectItem value="squash">Squash into {multi ? "default branches" : git?.target}</SelectItem>
             </SelectContent>
           </Select>
-          {(gitAction === "merge" || gitAction === "squash") && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={cleanup} onChange={(e) => setCleanup(e.target.checked)} /> Then delete workspace</label>}
-          <Button size="sm" variant="outline" disabled={blocked} onClick={applyGit}>Apply</Button>
+          {(gitAction === "merge" || gitAction === "squash") && <Label className="gap-1.5 text-xs font-normal"><Checkbox checked={cleanup} onCheckedChange={(on) => setCleanup(on === true)} /> Then delete workspace</Label>}
+          <Button size="sm" variant="outline" disabled={blocked} onClick={() => void applyGit()}>Apply</Button>
           {mergeOpen && <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "merge-abort"))}>Abort merge</Button>}
           {rebaseOpen && <>
             <Button size="sm" variant="outline" disabled={blocked || conflicts.length > 0} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-continue"))}>Continue rebase</Button>
             <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-abort"))}>Abort rebase</Button>
           </>}
-          <Button size="sm" variant="ghost" disabled={blocked} onClick={() => {
-            if (window.confirm("Run the archive hook and close this workspace’s terminals and agents? The worktree will be kept.")) {
+          <Button size="sm" variant="ghost" disabled={blocked} onClick={async () => {
+            if (await confirm({ title: "Archive this workspace?", description: "Runs the archive hook and closes its terminals and agents. The worktree is kept.", action: "Archive" })) {
               void act(async () => { await api.updateWorkspace(workspaceId, { status: "archived" }); });
             }
           }}>{state?.archived ? "Archived" : "Archive"}</Button>

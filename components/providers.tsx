@@ -1,5 +1,7 @@
 "use client";
 
+import { ConfirmHost } from "@/components/confirm";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { useUi } from "@/lib/store/ui-store";
@@ -25,5 +27,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-  return <TooltipProvider delayDuration={300}>{children}</TooltipProvider>;
+  return (
+    <TooltipProvider delayDuration={300}>
+      {children}
+      <ConfirmHost />
+      <Toaster position="bottom-right" />
+    </TooltipProvider>
+  );
 }
