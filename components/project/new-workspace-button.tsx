@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/client/api";
 import { newChatPath } from "@/lib/routes";
+import { toast } from "sonner";
 
 /** Create a workspace, remembering which repos or folders the user last selected. */
 export function NewWorkspaceButton({
@@ -41,7 +42,7 @@ export function NewWorkspaceButton({
       router.push(newChatPath({ slug: projectSlug }, workspace));
       router.refresh();
     } catch (err) {
-      window.alert(`Couldn't create workspace: ${(err as Error).message}`);
+      toast.error("Couldn’t create the workspace", { description: (err as Error).message });
     } finally {
       setPending(false);
     }

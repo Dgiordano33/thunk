@@ -11,6 +11,7 @@ import { NewTaskInput } from "./new-task-input";
 import { TaskList } from "./task-list";
 import { TaskSheet, type TaskDraft, type TaskWorkspace } from "./task-sheet";
 import { refreshTasks, useScopeTasks } from "./use-tasks";
+import { confirm } from "@/components/confirm";
 
 export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspaces = [] }: { projectId: string; workspaceId?: string; workspaces?: TaskWorkspace[] }) {
   const router = useRouter();
@@ -50,7 +51,7 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
   const list = (items: Task[], emptyText: string) => <TaskList tasks={items} sessions={sessions} busyId={busyId} emptyText={emptyText}
     onToggle={(task) => void run(task.id, () => api.patchTask(task.id, { status: task.status === "done" ? "open" : "done" }))}
     onPatch={(task) => setEditor({ task })} onSend={send}
-    onDelete={(task) => { if (window.confirm(`Delete “${task.title}”?`)) void run(task.id, () => api.deleteTask(task.id)); }} />;
+    onDelete={(task) => void confirm({ title: `Delete “${task.title}”?`, action: "Delete", destructive: true }).then((ok) => { if (ok) void run(task.id, () => api.deleteTask(task.id)); })} />;
   return <div className="pb-4">
     <div className="space-y-2 border-b p-3">
       {!workspaceId && <Select value={scope} onValueChange={setScope}><SelectTrigger aria-label="New task scope" className="w-full" size="sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="project">Project</SelectItem>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>Workspace · {w.name}</SelectItem>)}</SelectContent></Select>}

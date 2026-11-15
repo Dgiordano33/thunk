@@ -9,6 +9,8 @@ import { api } from "@/lib/client/api";
 import type { RoutineSummary } from "@/lib/routines/types";
 import { cn } from "@/lib/utils";
 import { RunStatusBadge, triggerSummary, untilTime } from "./shared";
+import { toast } from "sonner";
+import { confirm } from "@/components/confirm";
 
 /** Run now; surfaces "already running" and other refusals inline instead of failing silently. */
 export function RunNowButton({ routine, onStarted, className }: { routine: RoutineSummary; onStarted: () => void; className?: string }) {
@@ -28,7 +30,7 @@ export function RunNowButton({ routine, onStarted, className }: { routine: Routi
           await api.runRoutine(routine.id);
           onStarted();
         } catch (err) {
-          window.alert(`Couldn't start the run: ${(err as Error).message}`);
+          toast.error("Couldn’t start the run", { description: (err as Error).message });
         } finally {
           setPending(false);
         }
@@ -89,7 +91,7 @@ function RoutineMenu({ routine, onEdit, onChange }: { routine: RoutineSummary; o
       await fn();
       onChange();
     } catch (err) {
-      window.alert((err as Error).message);
+      toast.error((err as Error).message);
     }
   };
   return (
@@ -108,8 +110,8 @@ function RoutineMenu({ routine, onEdit, onChange }: { routine: RoutineSummary; o
         <DropdownMenuItem
           variant="destructive"
           onSelect={() => {
-            if (window.confirm(`Delete “${routine.name}” and its run history? Workspaces and notes it created are kept.`))
-              void act(() => api.deleteRoutine(routine.id));
+            void confirm({ title: `Delete “${routine.name}” and its run history?`, description: "Workspaces and notes it created are kept.", action: "Delete", destructive: true })
+              .then((ok) => { if (ok) void act(() => api.deleteRoutine(routine.id)); });
           }}
         >
           Delete

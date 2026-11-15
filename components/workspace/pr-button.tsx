@@ -23,6 +23,7 @@ import type { CheckState, PullRequestInfo, WorkspacePrStatus } from "@/lib/proje
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 import { useWorkspaceBase } from "./route-context";
+import { toast } from "sonner";
 
 const POLL_MS = 30_000;
 /** While a PR is being created, checks are running, or mergeability is being computed. */
@@ -158,7 +159,7 @@ export function PrButton({ workspaceId, deliveryStatus, inline = false, repo, un
       }
       setRequested({ action, at: Date.now() });
     } catch (err) {
-      window.alert(`Couldn't hand off "${ACTION_TITLE[action]}": ${(err as Error).message}`);
+      toast.error(`Couldn’t hand off “${ACTION_TITLE[action]}”`, { description: (err as Error).message });
     } finally {
       setPending(null);
     }

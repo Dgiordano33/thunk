@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client/api";
 import type { HarvestData } from "@/lib/projects/harvest";
+import { toast } from "sonner";
 
 export type HarvestAction = "harvest" | "delete" | "merge";
 
@@ -29,7 +30,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
       }
       if (action === "delete") {
         const result = await api.deleteWorkspace(workspaceId, { worktree: true });
-        if (result.retainedDirectory) window.alert(`Files kept in ${result.retainedDirectory}`);
+        if (result.retainedDirectory) toast.info("Some files were kept", { description: result.retainedDirectory });
       }
       if (action === "merge") await api.workspaceGitAction(workspaceId, "merge", true);
       onComplete(); onClose();
@@ -69,7 +70,7 @@ export function HarvestButton({ workspaceId, label }: { workspaceId: string; lab
   return <>
     <Button size="sm" variant="outline" disabled={busy} title="Copy this workspace's memory and notes into the project" onClick={async () => {
       setBusy(true);
-      try { setData(await api.getHarvest(workspaceId)); } catch (err) { window.alert((err as Error).message); }
+      try { setData(await api.getHarvest(workspaceId)); } catch (err) { toast.error((err as Error).message); }
       finally { setBusy(false); }
     }}><SaveIcon /> Save to project</Button>
     {data && <HarvestDialog workspaceId={workspaceId} label={label} data={data} action="harvest" onClose={() => setData(null)} onComplete={() => router.refresh()} />}

@@ -10,6 +10,7 @@ import type { ProcessKind, ProcessSnapshot, RuntimeSnapshot } from "@/lib/projec
 import type { workspaceGitState } from "@/lib/projects/workspace-git";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { confirm } from "@/components/confirm";
 
 type GitState = Awaited<ReturnType<typeof workspaceGitState>>;
 const KINDS: ProcessKind[] = ["shell", "setup", "run", "archive"];
@@ -78,10 +79,11 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
   const rebaseOpen = repos.some((r) => r.operation === "rebase");
   const inRoot = repos.some((r) => r.rootConflicts.length);
 
-  const applyGit = () => {
+  const applyGit = async () => {
     const merging = gitAction === "merge" || gitAction === "squash";
     const into = multi ? "each repo's default branch" : `local ${git?.target}`;
-    if (merging && !window.confirm(`${gitAction === "squash" ? "Squash" : "Merge"} committed workspace changes into ${into}?${cleanup ? " Then run the archive hook and delete this workspace and its sessions." : ""}`)) return;
+    const verb = gitAction === "squash" ? "Squash" : "Merge";
+    if (merging && !(await confirm({ title: `${verb} into ${into}?`, description: `Committed workspace changes go into ${into}.${cleanup ? " Then the archive hook runs and this workspace and its sessions are deleted." : ""}`, action: verb, destructive: cleanup }))) return;
     void act(async () => {
       const result = await api.workspaceGitAction(workspaceId, gitAction, merging && cleanup);
       if (result.deleted) { router.push("/projects"); return; }
@@ -130,14 +132,14 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
             </SelectContent>
           </Select>
           {(gitAction === "merge" || gitAction === "squash") && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={cleanup} onChange={(e) => setCleanup(e.target.checked)} /> Then delete workspace</label>}
-          <Button size="sm" variant="outline" disabled={blocked} onClick={applyGit}>Apply</Button>
+          <Button size="sm" variant="outline" disabled={blocked} onClick={() => void applyGit()}>Apply</Button>
           {mergeOpen && <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "merge-abort"))}>Abort merge</Button>}
           {rebaseOpen && <>
             <Button size="sm" variant="outline" disabled={blocked || conflicts.length > 0} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-continue"))}>Continue rebase</Button>
             <Button size="sm" variant="outline" disabled={blocked} onClick={() => void act(() => api.workspaceGitAction(workspaceId, "rebase-abort"))}>Abort rebase</Button>
           </>}
-          <Button size="sm" variant="ghost" disabled={blocked} onClick={() => {
-            if (window.confirm("Run the archive hook and close this workspace’s terminals and agents? The worktree will be kept.")) {
+          <Button size="sm" variant="ghost" disabled={blocked} onClick={async () => {
+            if (await confirm({ title: "Archive this workspace?", description: "Runs the archive hook and closes its terminals and agents. The worktree is kept.", action: "Archive" })) {
               void act(async () => { await api.updateWorkspace(workspaceId, { status: "archived" }); });
             }
           }}>{state?.archived ? "Archived" : "Archive"}</Button>

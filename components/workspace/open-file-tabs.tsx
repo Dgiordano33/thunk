@@ -12,6 +12,7 @@ import { filePagePath, filePathFromUrl } from "@/lib/routes";
 import { fileKey, useOpenFiles, type OpenFile } from "@/lib/store/open-files-store";
 import { lineTabIndicator } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { confirm } from "@/components/confirm";
 
 /** Files opened from the tree, as tabs after the workspace's sessions. A dot marks unsaved edits. */
 export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base: string }) {
@@ -26,8 +27,8 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
   const activePath = filePathFromUrl(base, pathname);
   const isActive = (f: OpenFile) => activePath === f.path && (!params.get("root") || params.get("root") === f.root);
 
-  const close = (f: OpenFile) => {
-    if (drafts[fileKey(f)] && !window.confirm(`Discard unsaved changes to ${fileName(f.path)}?`)) return;
+  const close = async (f: OpenFile) => {
+    if (drafts[fileKey(f)] && !(await confirm({ title: `Discard unsaved changes to ${fileName(f.path)}?`, description: "Your edits to this file haven’t been saved.", action: "Discard", destructive: true }))) return;
     const index = files.findIndex((o) => fileKey(o) === fileKey(f));
     useOpenFiles.getState().close(f);
     if (!isActive(f)) return;
@@ -61,7 +62,7 @@ export function OpenFileTabs({ workspaceId, base }: { workspaceId: string; base:
         </Link>
         <Button variant="ghost" size="xs"
           type="button"
-          onClick={() => close(f)}
+          onClick={() => void close(f)}
           aria-label={`Close ${fileName(f.path)}${dirty ? " (unsaved changes)" : ""}`}
           title={dirty ? "Unsaved changes" : "Close"}
           className="hover:bg-muted mr-2 grid size-5 shrink-0 place-items-center rounded"

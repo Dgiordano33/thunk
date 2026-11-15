@@ -9,6 +9,7 @@ import { PrButton } from "@/components/workspace/pr-button";
 import { api } from "@/lib/client/api";
 import type { RuntimeSnapshot } from "@/lib/projects/runtime-types";
 import { useAmbient } from "@/lib/store/ambient-store";
+import { toast } from "sonner";
 
 /** One checkout the workspace works in: a git repo (worktree or main checkout), a shared folder, or its scratch folder. */
 export type RepoRow = { id: string | null; name: string; cwd: string; kind: "worktree" | "checkout" | "folder" | "scratch"; branch: string | null };
@@ -53,7 +54,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
             type="button"
             title="Reveal in Finder"
             className="text-muted-foreground hover:text-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono"
-            onClick={() => void api.revealWorkspace(workspaceId, row.id ?? undefined).catch((err: Error) => window.alert(err.message))}
+            onClick={() => void api.revealWorkspace(workspaceId, row.id ?? undefined).catch((err: Error) => toast.error("Couldn’t reveal the folder", { description: err.message }))}
           >
             <FolderIcon className="size-3 shrink-0" /><span className="truncate">{row.cwd.replace(/^\/(Users|home)\/[^/]+/, "~")}</span>
           </button>

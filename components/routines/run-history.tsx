@@ -11,6 +11,7 @@ import { api } from "@/lib/client/api";
 import { OPEN_RUN_STATUSES, RUN_TRIGGER_LABELS, type RoutineRun } from "@/lib/routines/types";
 import { isSkipRun, RunStatusBadge, runDuration, usd } from "./shared";
 import { usePaths } from "@/components/layout/paths-context";
+import { toast } from "sonner";
 
 /** A routine's recent runs, newest first, refreshed while any is open. */
 export function RunHistory({ routineId, projectId, refreshKey }: { routineId: string; projectId: string; refreshKey?: number }) {
@@ -128,7 +129,7 @@ function RunRow({ run, routineId, projectId, onChange }: { run: RoutineRun; rout
                   await api.cancelRoutineRun(routineId, run.id);
                   onChange();
                 } catch (err) {
-                  window.alert(`Couldn't cancel: ${(err as Error).message}`);
+                  toast.error("Couldn’t cancel the run", { description: (err as Error).message });
                 } finally {
                   setCancelling(false);
                 }
