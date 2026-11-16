@@ -5,7 +5,7 @@ import { projectSectionPath } from "@/lib/routes";
 import Link from "next/link";
 import { relativeTime } from "@/components/session/labels";
 import { CivPanel } from "@/components/world/civ-panel";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 import { api } from "@/lib/client/api";
 import type { RoutineSummary } from "@/lib/routines/types";
 import { cn } from "@/lib/utils";
@@ -32,9 +32,9 @@ export function RoutinesOverview({
     return (
       <main className="fog absolute inset-0 flex items-center justify-center p-6">
         <CivPanel parchment className="w-full max-w-md" bodyClassName="flex flex-col items-center px-8 py-8 text-center">
-          <PixelIcon name="hourglass" className="mb-4 size-14" />
+          <EmptyMark name="hourglass" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Routines</p>
-          <h1 className="pixel mt-1 text-3xl">No standing orders</h1>
+          <h1 className="pixel mt-1 text-3xl">No routines yet</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">
             Routines are agent sessions that run on a schedule, on demand, or when something happens, and report back to the
             project that owns them. Each project sets up its own.

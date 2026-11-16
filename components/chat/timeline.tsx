@@ -1,7 +1,7 @@
 "use client";
 
 import { CivPanel } from "@/components/world/civ-panel";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 
 import { AlertTriangleIcon } from "lucide-react";
 import {
@@ -32,7 +32,7 @@ export function Timeline() {
       <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-6 pt-8 pb-16">
         {items.length === 0 ? (
           <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5 text-center">
-            <PixelIcon name="scroll" className="mx-auto mb-3 size-8" />
+            <EmptyMark name="scroll" className="mx-auto mb-2" pixelClassName="mx-auto mb-3 size-8" />
             <h2 className="pixel text-lg">Start the conversation</h2>
             <p className="text-muted-foreground mt-2 text-sm">Replies arrive as documents you can edit and comment on.</p>
           </CivPanel>

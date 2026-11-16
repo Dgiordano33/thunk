@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 import { api } from "@/lib/client/api";
 import { scopeKey, type NoteMeta, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed, useScopeNotes } from "@/lib/store/notes-store";
@@ -94,7 +94,7 @@ export function EmptyNote({ onCreate }: { onCreate?: () => void }) {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="is-parchment flex max-w-xs flex-col items-center rounded-sm bg-[var(--w-parchment)] px-6 py-6 text-center text-[var(--w-parchment-ink)]">
-        <PixelIcon name="quill" className="mb-3 size-10" />
+        <EmptyMark name="quill" className="mb-2" pixelClassName="mb-3 size-10" />
         <p className="pixel text-base">Pick a note</p>
         <p className="mt-1 text-xs opacity-80">
           Or{" "}

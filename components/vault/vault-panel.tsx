@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TownPanel } from "@/components/town/town-panel";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 import type { VaultItem } from "@/lib/vault/types";
 import { Dropzone } from "./dropzone";
 import { ItemDetail } from "./item-detail";
@@ -104,8 +104,8 @@ export function VaultBody({
           <ItemDetail key={`${selected.projectId}/${selected.id}:${selected.title}`} item={selected} onChange={onChange} onDeleted={() => onDeleted(selected.id)} />
         ) : (
           <div className="flex flex-1 items-center justify-center p-6">
-            <div className="bg-[var(--w-parchment)] text-[var(--w-parchment-ink)] flex max-w-xs flex-col items-center gap-2 rounded-md p-5 text-center">
-              <PixelIcon name="chest" className="size-10" />
+            <div className="is-parchment bg-[var(--w-parchment)] text-[var(--w-parchment-ink)] flex max-w-xs flex-col items-center gap-2 rounded-md p-5 text-center">
+              <EmptyMark name="chest" pixelClassName="size-10" />
               <p className="pixel text-sm">{items?.length ? "Pick something from the Vault" : "The Vault is empty"}</p>
               <p className="text-xs opacity-80">
                 Drop in docs, PDFs, screenshots, slides or transcripts. Claude reads each one, writes a summary and pulls out the ideas worth keeping —

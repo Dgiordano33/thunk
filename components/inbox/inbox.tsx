@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CivPanel } from "@/components/world/civ-panel";
 import { PixelIcon } from "@/components/world/pixel-icon";
+import { OrbitMark } from "@/components/space/orbit-mark";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -158,7 +159,8 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             {!loaded && feedError && <div className="flex min-h-full items-center justify-center py-10"><div className="max-w-sm text-center"><CircleAlertIcon aria-hidden="true" className="text-muted-foreground mx-auto mb-4 size-8" /><h2 className="pixel text-2xl">Your inbox couldn’t load.</h2><p className="text-muted-foreground mt-3 text-sm leading-relaxed">Try again in a moment. Your notifications will appear when the connection is restored.</p><Button className="mt-5" variant="outline" onClick={() => void refreshNotifications()}>Try again</Button></div></div>}
             {loaded && !filtered.length && <div className="flex min-h-full items-center justify-center py-10">
               <div className="max-w-sm text-center">
-                <CivPanel parchment className="mx-auto mb-6 w-fit" bodyClassName="p-5"><PixelIcon name="bell" className="size-14" /></CivPanel>
+                <CivPanel parchment className="mx-auto mb-6 w-fit space:hidden" bodyClassName="p-5"><PixelIcon name="bell" className="size-14" /></CivPanel>
+                <OrbitMark name="bell" className="mx-auto mb-5" />
                 <p className="pixel text-muted-foreground mb-2 text-[11px] tracking-widest uppercase">{hasFilters ? "Nothing in this view" : "A quiet moment"}</p>
                 <h2 className="pixel text-3xl">{hasFilters ? "No matching notifications" : "Nothing needs you right now."}</h2>
                 <p className="text-muted-foreground mt-3 text-sm leading-relaxed">{hasFilters ? "Try another project or notification kind to see more of your inbox." : "When an agent needs a decision or has news to share, it will land here. You can get back to building."}</p>

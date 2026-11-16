@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CivPanel } from "@/components/world/civ-panel";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 import { api } from "@/lib/client/api";
 import { isBusy, type VaultItem } from "@/lib/vault/types";
 import { VaultBody } from "./vault-panel";
@@ -58,11 +58,11 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
     return (
       <main className="fog absolute inset-0 flex items-center justify-center p-6">
         <CivPanel parchment className="w-full max-w-md" bodyClassName="flex flex-col items-center px-8 py-8 text-center">
-          <PixelIcon name="chest" className="mb-4 size-14" />
+          <EmptyMark name="chest" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
-          <h1 className="pixel mt-1 text-3xl">Nothing to guard yet</h1>
+          <h1 className="pixel mt-1 text-3xl">Your Vault is empty</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">Every project has a Vault for source material: docs, screenshots, slides, transcripts. Add a project first.</p>
-          <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to the map</Link>
+          <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to your projects</Link>
         </CivPanel>
       </main>
     );

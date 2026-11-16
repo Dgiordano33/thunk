@@ -85,7 +85,7 @@ Use `tabular-nums` for counts and comparable numeric values. Truncate names and 
 
 [CivPanel](components/world/civ-panel.tsx) is the shared frame for HUD groups, legends, hover cards, empty states, and project panels. Its look comes from CSS:
 
-- **Solar system:** a 1px `border` hairline with a 1px inner top highlight, 14px radius, `popover` glass at 72% with `blur(20px) saturate(140%)` and a layered shadow. The map's control column has hairlines between buttons. `parchment` looks the same as the default.
+- **Solar system:** ruled glass: a 1px `--sp-rule` edge, 14px radius, `popover` at 90% with `blur(20px) saturate(140%)` and a small shadow. The map's control column has hairlines between buttons. `parchment` looks the same as the default.
 - **Game world:** the bronze frame below.
 
 - A 3px bronze gradient frame runs from highlight through midtone to dark edge.
@@ -95,7 +95,7 @@ Use `tabular-nums` for counts and comparable numeric values. Truncate names and 
 - The `parchment` prop switches the body to the warm parchment and ink tokens.
 - `className` controls the outer frame; `bodyClassName` controls inner layout and spacing.
 
-Use the default body for working controls and longer content. Existing explanatory hover cards and empty states use parchment. Preserve the notched silhouette instead of adding rounded card chrome around it.
+Use the default body for working controls and longer content. In the game look, explanatory hover cards and empty states use parchment; preserve the notched silhouette instead of adding rounded card chrome around it. In the solar-system look they are the same ruled glass, and empty states carry an `EmptyMark` (see Screens outside the map).
 
 Portalled map cards remove the underlying primitive's surface with `rounded-none bg-transparent p-0 shadow-none ring-0`, then render a `CivPanel` inside. City cards are 288px wide; town cards are 256px wide, with 12px inner padding.
 
@@ -173,6 +173,18 @@ One curve for UI: `cubic-bezier(0.22, 1, 0.36, 1)` (`--ease-space`, `ease()` in 
 
 Every state pairs a glyph and a word with its colour.
 
+## Screens outside the map
+
+The solar-system look carries past the map to every screen: the workspace shell, the canvas, the Library, Inbox, Routines, Vault and every panel. It is done with shared tokens and a few classes, so screens pick it up without their own styling.
+
+- **Surfaces:** in this look the application tokens (`background`, `card`, `popover`, `muted`, `accent`, `border`, `input`, `ring`, `sidebar-*`) are the twilight family rather than neutral grey: deep indigo in dark, dawn lavender in light (`:root.look-space` blocks in `app/globals.css`). Don't hard-code neutral greys on top of them.
+- **Sky:** map routes and the `(world)` screens sit on `.world`, which paints the sky with its stars. The workspace shell (`ShellPanels`) and the canvas layout add `.sky-surface`, the same gradient without stars. The sidebar is translucent so the sky shows through; dense content (console, editors, documents) stays on solid surfaces.
+- **Accent:** `--sp-accent` (periwinkle) marks selection. The old `--w-bronze` and `--w-parchment` tokens point at it in this look, so `WORLD_SELECTION`, pressed toggles and the Inbox and Library rails read as accent tints.
+- **Eyebrows:** `.pixel` eyebrows set in caps (`.pixel.uppercase`) render as 10px Geist Mono caps with 0.1em tracking, like the map's metadata. Headings keep Geist.
+- **Empty states:** [`EmptyMark`](components/space/orbit-mark.tsx) shows the section's line icon on a small line-art planet in a dotted orbit, with two sparkles; the game look keeps its pixel icon. Parchment cards that aren't panels lose their fill in this look, so the mark and text sit straight on the panel.
+- **404:** [app/not-found.tsx](app/not-found.tsx) uses the same empty-state frame.
+- **Words:** empty states and panels use plain product terms in both looks ("No routines yet", "Your Vault is empty", "Back to your projects"); game words stay on the game map.
+
 ## Homepage composition
 
 The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and places the map under a shared HUD in both looks. The homepage has no project sidebar.
@@ -184,7 +196,7 @@ The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and pl
 | Actions | Top-right bronze frame; compact group with 4px padding |
 | Main menu | Bottom-left; 16px inset; expandable menu above the orb |
 | Zoom and legend | Bottom-right; vertical bronze-framed control column |
-| Empty state | Centered parchment panel, `max-w-sm`, 24px padding |
+| Empty state | Centered parchment panel (glass in the solar-system look), `max-w-sm`, 24px padding |
 
 The HUD and map controls use `z-20`; the command menu and town panels use `z-30`. World objects use their own depth order inside the map stage. Overlay containers allow pointer events through empty space and enable them on actual controls. Keep future overlays from blocking map interaction outside their bounds.
 
@@ -216,7 +228,7 @@ Notes follow Apple Notes' shape: notebooks → list → editor. The `/notes` Lib
 
 - Pane headers use small `.pixel` uppercase eyebrows. Note titles and bodies stay in Geist: the title is a 24px bold input, the body uses `.doc-prose` (including `- [ ]` checklists).
 - List rows match `SessionsList`: `bg-background rounded-lg border`, a 13px title, an 11px time and excerpt line, and lucide badges for pinned, injected (brain), memory (lock) and open tasks (`tabular-nums`).
-- Selected notebooks reuse the toolbar's active treatment (bronze tint and outline). Parchment and the `quill` pixel icon appear only in the empty editor state.
+- Selected notebooks reuse the toolbar's active treatment (bronze tint and outline in the game look, the accent in the solar-system look). The empty editor state shows the `quill` mark: parchment and pixel art in the game look, `EmptyMark` in the solar-system look.
 - Flags (Pin, Inject into sessions, Actionable) are pressed-state toggle chips; the note's file path sits below them in 10px mono, like the old memory editor.
 - Saving is automatic (800ms) with a footer status. An agent edit while the note is dirty shows an amber banner with "Load their version" / "Keep mine" instead of overwriting.
 
@@ -234,7 +246,7 @@ The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses 
 
 - Requests that need a decision get an amber left edge, a status icon, readable context, and a primary action. Details expand in place so permissions and plans can be inspected before acting.
 - Earlier updates use quiet, divided rows instead of equally prominent cards. Pixel type stays on headings; titles, details, and timestamps use the body font.
-- Empty views use a parchment bell and one clear next step. Loading skeletons stop on failure, which shows a retry state instead of an endless loading screen.
+- Empty views use the bell mark (parchment in the game look, `EmptyMark` in the solar-system look) and one clear next step. Loading skeletons stop on failure, which shows a retry state instead of an endless loading screen.
 - Bulk actions live in the header menu. The scrollable content sits between a fixed header and a keyboard-shortcut footer; all controls remain available without hover.
 
 ## Vault
@@ -244,7 +256,7 @@ The Vault reuses the Notes shapes. The town Vault is a `wide` `TownPanel` titled
 - Item rows match note rows: a lucide kind icon, a 13px title, an 11px “time · size · file name” line, and either an idea count (lightbulb, `tabular-nums`) or a status badge.
 - Status badges use the routine palette: muted for queued, amber pulse for “Reading”, emerald for ready, red for failed.
 - The detail title is a 20px bold auto-growing field; the summary renders as `.doc-prose` markdown; tags are secondary badges. Ideas are bordered cards with an outline kind badge (bronze idea, sky insight, violet question, emerald action) and **→ Note** / **→ Task** buttons that turn into ghost links once used.
-- The empty detail state is the only parchment surface, with the `chest` pixel icon.
+- The empty detail state shows the `chest` mark: the only parchment surface in the game look, `EmptyMark` in the solar-system look.
 
 ## Game look: map artwork and states
 
@@ -305,4 +317,4 @@ A card is placed by `left: var(--hold-x, <x>)` / `top: var(--hold-y, <y>)`: whil
 - Keep unavailable features explicitly labeled and use current legends and status meanings.
 - Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing application code, as required by `AGENTS.md`.
 
-In the game look, the workspace shell opts into the moonlit palette through `.moonlit`; in the solar-system look it follows light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
+In the game look, the workspace shell opts into the moonlit palette through `.moonlit`; in the solar-system look it sits on the sky (`.sky-surface`) with the twilight surfaces, in light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
