@@ -1,11 +1,10 @@
 'use client';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { flattenChart, flattenDrawing, flattenImage } from "@/lib/board/flatten.client";
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PencilIcon, TypeIcon } from 'lucide-react';
+import { PencilIcon, PlusIcon, TypeIcon } from 'lucide-react';
 import { NeedsYouTray } from './needs-you-tray';
 import { itemLabel } from './board-item';
 import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
@@ -49,7 +48,10 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
     const base = boardBase(projectId, boardId);
     const [switching, setSwitching] = useState(false);
     const [creating, setCreating] = useState(false), [sessionName, setSessionName] = useState('');
+    const activeCanvas = useRef<HTMLButtonElement>(null);
+    useEffect(() => { activeCanvas.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [boardId]);
     const switchSession = async (id: string) => {
+        if (switching || id === boardId) return;
         setSwitching(true);
         try {
             await flushAll(projectId, boardId);
@@ -228,13 +230,17 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
     const quiet = useBoard(s => s.quiet !== null && s.quiet === s.focus.anchorId);
     const later = deferred || busy;
 
-    return <div className="relative flex h-full flex-col">
-    <header className="z-20 flex items-center gap-3 border-b bg-background p-3"><BoardButton variant="ghost" onClick={() => void flushAll(projectId, boardId).then(() => router.push(`/${slug}`)).catch(fail)}>← {name}</BoardButton><h1 className="font-semibold">Canvas</h1>
-      <Select value={boardId} onValueChange={id => void switchSession(id)} disabled={switching}>
-        <SelectTrigger aria-label="Canvas session" className="max-w-48"><SelectValue /></SelectTrigger>
-        <SelectContent>{sessions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-      </Select>
-      <BoardButton variant="outline" size="sm" disabled={switching} onClick={() => { setSessionName(''); setCreating(true); }}>New session</BoardButton>
+    return <div className="relative flex h-full min-w-0 flex-col">
+    <header className="z-20 shrink-0 border-b bg-background">
+      <div className="flex items-center gap-3 px-3 pt-3 pb-2"><BoardButton variant="ghost" className="min-w-0 max-w-64" onClick={() => void flushAll(projectId, boardId).then(() => router.push(`/${slug}`)).catch(fail)}><span className="truncate">← {name}</span></BoardButton><h1 className="font-semibold">Canvases</h1><span className="text-xs text-muted-foreground tabular-nums">{sessions.length}</span></div>
+      <div className="flex items-center gap-3 px-3 pb-3">
+        <nav aria-label="Project canvases" aria-busy={switching} className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-1">
+          {sessions.map(s => <BoardButton key={s.id} ref={s.id === boardId ? activeCanvas : undefined} variant={s.id === boardId ? 'secondary' : 'ghost'} aria-current={s.id === boardId ? 'page' : undefined} disabled={switching} onClick={() => void switchSession(s.id)}>{s.name}</BoardButton>)}
+        </nav>
+        <BoardButton variant="outline" disabled={switching} onClick={() => { setSessionName(''); setCreating(true); }}><PlusIcon aria-hidden="true"/>New canvas</BoardButton>
+      </div>
+    </header>
+    <div className="z-10 flex shrink-0 flex-wrap items-center gap-3 border-b bg-background px-3 py-2">
       <BoardSegmented<Tool> aria-label="Tool" value={tool} onValueChange={v => v && setTool(v)} items={[
           { value: 'write', label: <><TypeIcon aria-hidden="true"/>Write</>, hint: 'Write: click anywhere to type' },
           { value: 'draw', label: <><PencilIcon aria-hidden="true"/>Draw</>, hint: 'Draw; Esc to stop', shortcut: 'd' },
@@ -245,14 +251,14 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
         <BoardToolbarButton size="sm" variant="outline" onClick={() => handle.api.viewport.setViewport({ x: 0, y: 0, zoom: 1 })}>Reset view</BoardToolbarButton>
       </BoardToolbar>
       <input ref={imageInput} className="sr-only" tabIndex={-1} aria-hidden="true" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files) void upload(e.target.files, center()); e.target.value = ''; }}/>
-      <ZoomLabel board={handle}/></header>
+      <ZoomLabel board={handle}/></div>
     <Dialog open={creating} onOpenChange={open => { if (!switching) setCreating(open); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>New canvas session</DialogTitle><DialogDescription>Start a separate canvas and conversation in this project.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>New canvas</DialogTitle><DialogDescription>Give this canvas a name. Each canvas has its own content and agent conversation.</DialogDescription></DialogHeader>
         <form onSubmit={e => { e.preventDefault(); void newSession(); }}>
           <label htmlFor="canvas-session-name" className="text-sm">Name</label>
-          <Input id="canvas-session-name" autoFocus maxLength={200} value={sessionName} onChange={e => setSessionName(e.target.value)} disabled={switching} />
-          <DialogFooter className="mt-4"><BoardButton type="button" variant="outline" disabled={switching} onClick={() => setCreating(false)}>Cancel</BoardButton><BoardButton type="submit" disabled={switching || !sessionName.trim()}>Create session</BoardButton></DialogFooter>
+          <Input id="canvas-session-name" autoFocus placeholder="e.g. Research or Launch plan" maxLength={200} value={sessionName} onChange={e => setSessionName(e.target.value)} disabled={switching} />
+          <DialogFooter className="mt-4"><BoardButton type="button" variant="outline" disabled={switching} onClick={() => setCreating(false)}>Cancel</BoardButton><BoardButton type="submit" disabled={switching || !sessionName.trim()}>{switching ? 'Creating…' : 'Create canvas'}</BoardButton></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
