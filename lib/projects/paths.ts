@@ -90,4 +90,7 @@ export function workspaceHomeDir(key: string, slug: string) {
   return slug === "main" ? projectHomeDir(key) : `${projectHomeDir(key)}--${slug}`;
 }
 
-export function projectBoardsDir(key: string) { return path.join(projectDir(key), 'boards', 'main'); }
+export function projectBoardsDir(key: string, boardId = 'main') {
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(boardId)) throw new Error('Invalid canvas session id');
+  return path.join(projectDir(key), 'boards', boardId);
+}

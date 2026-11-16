@@ -11,13 +11,13 @@ import type { Card } from './types';
 import { HttpError } from '@/lib/api/errors';
 import { payload } from './payload';
 import type { PromptImage } from '@/lib/prompts/schema';
-export async function ensureBoardSession(projectId: string) {
-    return withFileLock(`board-session:${projectId}`, async () => {
-        const { project, dir } = await boardFor(projectId), board = await readBoard(dir);
+export async function ensureBoardSession(projectId: string, boardId = 'main') {
+    return withFileLock(`board-session:${projectId}:${boardId}`, async () => {
+        const { project, dir } = await boardFor(projectId, boardId), board = await readBoard(dir);
         let live = board.agent ? await resumeSession(board.agent.sessionId) : null;
         if (!live) {
             const workspace = await ensureMainWorkspace(project);
-            live = await startSession({ workspaceId: workspace.id, model: 'claude-sonnet-5-5', permissionMode: 'default', title: 'Canvas', origin: { kind: 'board' }, resumeSdkSessionId: board.agent?.sdkSessionId ?? undefined });
+            live = await startSession({ workspaceId: workspace.id, model: 'claude-sonnet-5-5', permissionMode: 'default', title: board.name ?? 'Canvas', origin: { kind: 'board', boardId }, resumeSdkSessionId: board.agent?.sdkSessionId ?? undefined });
         }
         const session = live;
         await lock(dir, async () => { const b = await readBoard(dir); b.agent = { sessionId: session.id, sdkSessionId: session.meta.sdkSessionId ?? board.agent?.sdkSessionId ?? null }; await saveBoard(dir, b); });
@@ -32,7 +32,7 @@ export async function ensureBoardSession(projectId: string) {
                 if (e.type === 'init')
                     void lock(dir, async () => { const b = await readBoard(dir); b.agent = { sessionId: session.id, sdkSessionId: e.sdkSessionId }; await saveBoard(dir, b); }).catch(console.error);
                 if (e.type === 'turn_complete' && !hadOp && e.markdown.length > 280)
-                    void lock(dir, async () => { const card = await addCard(dir, { markdown: e.markdown, baselineMarkdown: e.markdown, title: 'Response', author: 'agent', sentAt: new Date().toISOString() }); emit(session, { type: 'board_op', boardId: 'main', op: { card } }); }).catch(console.error);
+                    void lock(dir, async () => { const card = await addCard(dir, { markdown: e.markdown, baselineMarkdown: e.markdown, title: 'Response', author: 'agent', sentAt: new Date().toISOString() }); emit(session, { type: 'board_op', boardId, op: { card } }); }).catch(console.error);
             });
         }
         return session;
@@ -55,8 +55,8 @@ async function imageFor(dir: string, c: Card): Promise<PromptImage> {
  * Sends the scope's pending work to the board agent. `sent` is false when there was nothing new to send;
  * `held` counts images left pending for the next send because of the per-turn cap.
  */
-export async function sendBoard(projectId: string, scope?: Scope) {
-    const live = await ensureBoardSession(projectId), { dir } = await boardFor(projectId);
+export async function sendBoard(projectId: string, scope?: Scope, boardId = 'main') {
+    const live = await ensureBoardSession(projectId, boardId), { dir } = await boardFor(projectId, boardId);
     return lock(dir, async () => {
         const state = await snapshot(dir), pending = pendingOf(state.board, state.cards, scope), focus = isFocus(scope);
         const idle = { sessionId: live.id, sent: false, held: 0 };

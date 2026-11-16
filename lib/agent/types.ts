@@ -1,7 +1,7 @@
 import type { PromptImage } from "@/lib/prompts/schema";
 import type { RunTrigger } from "@/lib/routines/types";
 export type SessionOrigin =
-  | { kind: "board" }
+  | { kind: "board"; boardId?: string }
   | { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger }
   | { kind: "chief" }
   /** `scout`: read-only in the main checkout. `raceId`: one of several workers racing the same task on different models. */

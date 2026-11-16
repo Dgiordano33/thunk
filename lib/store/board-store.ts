@@ -79,8 +79,8 @@ export async function boardRequest(url: string, method = 'GET', body?: unknown) 
     return data;
 }
 let saving: Promise<void> = Promise.resolve();
-export function flushAll(projectId: string): Promise<void> {
-    const base = `/api/projects/${projectId}/board/cards`;
+export function flushAll(projectId: string, boardId = 'main'): Promise<void> {
+    const base = `${boardBase(projectId, boardId)}/cards`;
     saving = saving.catch(() => { }).then(async () => {
         for (let id = unsavedIds()[0]; id; id = unsavedIds()[0]) {
             const s = useBoard.getState(), patch = s.dirty[id], card = s.cards.find(c => c.id === id);
@@ -110,3 +110,5 @@ export function flushAll(projectId: string): Promise<void> {
 // Browser tests drive the store directly, like an agent edit arriving mid-gesture. Only in their dev server.
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_THUNK_E2E === '1')
     (window as unknown as { __thunkBoard: typeof useBoard }).__thunkBoard = useBoard;
+
+export const boardBase = (projectId: string, boardId: string) => `/api/projects/${projectId}/${boardId === 'main' ? 'board' : `boards/${boardId}`}`;

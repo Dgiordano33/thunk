@@ -63,7 +63,9 @@ export type Card = {
         summary: string;
     };
 };
+export type CanvasSession = { id: string; name: string };
 export type Board = {
+    name?: string;
     id: string;
     rev: number;
     viewport: {

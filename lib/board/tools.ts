@@ -21,10 +21,11 @@ export const boardPrompt = `You collaborate on the project's Canvas, a spatial b
 export function boardTools(live: LiveSession, emit: (live: LiveSession, body: HarnessEventBody) => void) {
     if (live.meta.origin?.kind !== 'board')
         return [];
-    const dir = projectBoardsDir(live.ctx.project.dataKey);
+    const boardId = live.meta.origin.boardId ?? 'main';
+    const dir = projectBoardsDir(live.ctx.project.dataKey, boardId);
     // The card is already saved by the time this runs, so a failed broadcast must not fail the tool: the agent would retry and add it again.
     const publish = async (card: Card) => { try {
-        emit(live, { type: 'board_op', boardId: 'main', op: { card } });
+        emit(live, { type: 'board_op', boardId, op: { card } });
     }
     catch (e) {
         console.error('board_op broadcast failed', e);

@@ -101,7 +101,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     ...(isWorktree && anchor ? { projectConfigRoot: anchor.path } : {}),
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // The other repos of a multi-repo workspace are working directories too.
-    additionalDirectories: [...(live.meta.origin?.kind === "board" ? [projectBoardsDir(project.dataKey)] : []), projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
+    additionalDirectories: [...(live.meta.origin?.kind === "board" ? [projectBoardsDir(project.dataKey, live.meta.origin.boardId)] : []), projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
     mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
