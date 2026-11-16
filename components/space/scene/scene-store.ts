@@ -20,9 +20,11 @@ export type SceneBody = {
   dormant: boolean;
   /** Entrance order: lower appears first. */
   order: number;
+  /** Bobs gently in place (home map). Its HTML twin, registered with `float()`, moves with it. */
+  float?: boolean;
 };
 
-export type SceneOrbit = { cx: number; cy: number; r: number; tilt: number; bodies: string[]; ticks?: boolean };
+export type SceneOrbit = { cx: number; cy: number; r: number; tilt: number; bodies: string[] };
 
 export type SceneData = {
   bodies: SceneBody[];
@@ -33,9 +35,9 @@ export type SceneData = {
   keyLight?: number;
 };
 
-export function makeBody(o: { id: string; x: number; y: number; r: number; kind: BodyKind; palette: PlanetPalette; dormant?: boolean; order?: number }): SceneBody {
+export function makeBody(o: { id: string; x: number; y: number; r: number; kind: BodyKind; palette: PlanetPalette; dormant?: boolean; order?: number; float?: boolean }): SceneBody {
   const spec = bodySpec(o.id, o.kind);
-  return { id: o.id, x: o.x, y: o.y, r: o.r, spec, colors: bodyColors(o.palette, spec), dormant: !!o.dormant, order: o.order ?? 0 };
+  return { id: o.id, x: o.x, y: o.y, r: o.r, spec, colors: bodyColors(o.palette, spec, !!o.dormant), dormant: !!o.dormant, order: o.order ?? 0, float: o.float };
 }
 
 type Listener = () => void;
@@ -44,6 +46,10 @@ export class SceneStore {
   view: View = { x: 0, y: 0, z: 1 };
   hover: string | null = null;
   data: SceneData = { bodies: [], orbits: [], star: null };
+  /** The body being dragged: it stops bobbing and stays bright. */
+  dragging: string | null = null;
+  /** HTML elements that bob with their body; the renderer sets their `translate` each frame. */
+  floaters = new Map<string, HTMLElement>();
   private listeners = new Set<Listener>();
 
   subscribe(fn: Listener) {
@@ -60,6 +66,15 @@ export class SceneStore {
   setHover = (id: string | null) => {
     if (this.hover === id) return;
     this.hover = id;
+    this.emit();
+  };
+  /** Ref callback for a body's HTML twin. */
+  float = (id: string) => (el: HTMLElement | null) => {
+    if (el) this.floaters.set(id, el);
+    else this.floaters.delete(id);
+  };
+  setDragging = (id: string | null) => {
+    this.dragging = id;
     this.emit();
   };
   setData(d: SceneData) {

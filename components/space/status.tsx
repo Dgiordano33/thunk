@@ -18,7 +18,7 @@ export function StatusBadge({ activity, tone, compact, className }: { activity?:
   if (!t) return null;
   const { glyph, text } = LABEL[t];
   return (
-    <span className={cn("status-badge inline-flex items-center gap-1 rounded-full px-1.5 font-mono text-[10px] leading-4 font-medium tracking-[0.06em] uppercase", `is-${t}`, className)}>
+    <span className={cn("status-badge inline-flex items-center gap-1 rounded-[4px] px-1.5 font-mono text-[10px] leading-4 font-medium tracking-[0.06em] uppercase", `is-${t}`, className)}>
       <span aria-hidden="true" className={cn(t === "running" && "text-[8px]")}>{glyph}</span>
       {!compact && text}
     </span>

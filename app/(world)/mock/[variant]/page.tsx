@@ -9,6 +9,7 @@ import { WorldMap } from "@/components/world/world-map";
 import type { ProjectSummary } from "@/lib/projects/types";
 import { cityHue, cityLevel, cityMood, type CityActivity, type WorldCity } from "@/lib/world/cities";
 import { layoutPlanet, spendStep } from "@/lib/world/planet";
+import { getPlanetPositions } from "@/lib/world/positions.server";
 import { generateTerrain, placeCities, territory } from "@/lib/world/terrain";
 import "./mock-themes.css";
 
@@ -71,7 +72,7 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
     return (
       <>
         <MockTheme variant={variant} dark={dark} look="space" />
-        {"gallery" in query ? <BodyGallery /> : planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} activity={ACTIVITY} />}
+        {"gallery" in query ? <BodyGallery /> : planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} positions={await getPlanetPositions()} activity={ACTIVITY} />}
       </>
     );
   }

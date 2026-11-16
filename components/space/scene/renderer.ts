@@ -1,7 +1,8 @@
-// WebGL2 renderer for the solar-system look: nebula, star field, orbits, the star and every body, on one canvas.
-// Raw WebGL2: a handful of quads and five small programs don't need a scene graph.
+// WebGL2 renderer for the solar-system look: sky, star field, orbits, the star and every body, on one canvas.
+// Line art on a twilight gradient. Raw WebGL2: a handful of quads and five small programs don't need a scene graph.
 import { ease } from "@/lib/ease";
-import { BLIT_FS, BODY_FS, NEBULA_FS, ORBIT_FS, QUAD_VS, STARS_FS, STARS_VS, SUN_FS } from "./shaders";
+import { SKY } from "@/lib/world/bodies";
+import { BODY_FS, ORBIT_FS, QUAD_VS, SKY_FS, STARS_FS, STARS_VS, SUN_FS } from "./shaders";
 import type { SceneBody, SceneStore } from "./scene-store";
 
 type Program = { p: WebGLProgram; u: (name: string) => WebGLUniformLocation | null };
@@ -10,10 +11,14 @@ type Theme = 0 | 1;
 const KIND_INDEX = { rock: 0, ice: 1, cloud: 2, gas: 3, giant: 4 } as const;
 const STAR_COUNT = 650;
 const SUN_RADIUS = 13;
-/** Ink for light-theme limbs and shadows: oklch(0.3 0.03 260). */
-const INK: [number, number, number] = [0.2, 0.24, 0.32];
+/** Sparkles among the stars: the first few are large. */
+const SPARKLE_COUNT = 40;
+/** Map pixels between the dots of an orbit line. */
+const ORBIT_DOT_GAP = 6.5;
 /** Viewing elevation of planet poles: how far rings and bands open toward the viewer. */
 const POLE_ELEVATION = 0.33;
+/** How far (map px) floating planets bob, up and down. */
+const FLOAT_AMP = 3;
 
 /** Entrance timeline (ms). */
 const T = { sun: 600, orbitStart: 150, orbitStep: 80, orbitDur: 700, bodyStart: 300, bodyStep: 40, bodyDur: 500 };
@@ -57,8 +62,10 @@ function starData() {
     const layer = u < 0.55 ? 0 : u < 0.85 ? 1 : 2;
     // Power law: many faint specks, a few bright stars. Nearer layers skew brighter.
     const v = rnd();
-    const size = 0.55 + 2.1 * Math.pow(v, 7) + layer * 0.25;
-    const bright = 0.22 + 0.78 * Math.pow(rnd(), 2.6) + layer * 0.08;
+    // Sizes of 2.5 and up are drawn as four-point sparkles (the size is the arm length); the rest are specks.
+    const sparkle = i < SPARKLE_COUNT;
+    const size = sparkle ? (i < 4 ? 9 + rnd() * 4 : 2.6 + 5.5 * rnd() ** 2) : 0.55 + 1.2 * Math.pow(v, 7) + layer * 0.25;
+    const bright = sparkle ? 0.6 + 0.4 * rnd() : 0.22 + 0.78 * Math.pow(rnd(), 2.6) + layer * 0.08;
     a.set([rnd(), rnd(), size, Math.min(1, bright), (rnd() * 2 - 1) * (rnd() < 0.6 ? 0.4 : 1), rnd() * 6.283, 3 + rnd() * 4, layer], i * 8);
   }
   return a;
@@ -70,8 +77,7 @@ export class SpaceRenderer {
   private gl: WebGL2RenderingContext;
   private quad!: WebGLVertexArrayObject;
   private stars!: WebGLVertexArrayObject;
-  private prog!: Record<"nebula" | "blit" | "stars" | "orbit" | "sun" | "body", Program>;
-  private nebula: { tex: WebGLTexture; fb: WebGLFramebuffer; w: number; h: number; theme: Theme; key: boolean } | null = null;
+  private prog!: Record<"sky" | "stars" | "orbit" | "sun" | "body", Program>;
   private size = { w: 0, h: 0, dpr: 1 };
   private theme: Theme = 1;
   private reduced: boolean;
@@ -79,6 +85,7 @@ export class SpaceRenderer {
   private last = 0;
   private activeUntil = 0;
   private hover = new Map<string, number>();
+  private bobbed = new Map<string, number>();
   private t0: number | null = null;
   private ready = false;
   private disposed = false;
@@ -123,7 +130,6 @@ export class SpaceRenderer {
       this.hooks.onLost();
     };
     const onRestored = () => {
-      this.nebula = null;
       this.setup();
       this.invalidate();
     };
@@ -147,8 +153,7 @@ export class SpaceRenderer {
   private setup() {
     const gl = this.gl;
     this.prog = {
-      nebula: compile(gl, QUAD_VS, NEBULA_FS),
-      blit: compile(gl, QUAD_VS, BLIT_FS),
+      sky: compile(gl, QUAD_VS, SKY_FS),
       stars: compile(gl, STARS_VS, STARS_FS),
       orbit: compile(gl, QUAD_VS, ORBIT_FS),
       sun: compile(gl, QUAD_VS, SUN_FS),
@@ -186,7 +191,6 @@ export class SpaceRenderer {
     this.size = { w, h, dpr };
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);
-    this.nebula = null;
     this.invalidate();
   }
 
@@ -232,50 +236,20 @@ export class SpaceRenderer {
     return target !== null && !this.hover.has(target);
   }
 
-  private renderNebula(key: boolean) {
-    const gl = this.gl;
-    const w = Math.max(1, Math.round(this.size.w / 2));
-    const h = Math.max(1, Math.round(this.size.h / 2));
-    let n = this.nebula;
-    if (!n || n.w !== w || n.h !== h) {
-      if (n) {
-        gl.deleteTexture(n.tex);
-        gl.deleteFramebuffer(n.fb);
-      }
-      const tex = gl.createTexture()!;
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      const fb = gl.createFramebuffer()!;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-      n = this.nebula = { tex, fb, w, h, theme: this.theme, key };
-    } else {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, n.fb);
-      n.theme = this.theme;
-      n.key = key;
-    }
-    gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    const p = this.prog.nebula;
-    gl.useProgram(p.p);
-    this.quadAt(p, this.size.w / 2, this.size.h / 2, this.size.w / 2, this.size.h / 2);
-    gl.uniform1f(p.u("u_theme"), this.theme);
-    gl.uniform1f(p.u("u_key"), key ? 1 : 0);
-    gl.bindVertexArray(this.quad);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  }
-
   private quadAt(p: Program, cx: number, cy: number, hx: number, hy: number) {
     const gl = this.gl;
     gl.uniform2f(p.u("u_res"), this.size.w, this.size.h);
     gl.uniform2f(p.u("u_center"), cx, cy);
     gl.uniform2f(p.u("u_half"), hx, hy);
+  }
+
+  /** The uniforms every pass that paints over the sky needs. */
+  private skyUniforms(p: Program) {
+    const gl = this.gl;
+    const sky = this.theme ? SKY.light : SKY.dark;
+    gl.uniform1f(p.u("u_dpr"), this.size.dpr);
+    gl.uniform3fv(p.u("u_skyTop"), sky.top);
+    gl.uniform3fv(p.u("u_skyBot"), sky.bottom);
   }
 
   private draw(now: number, dt: number) {
@@ -301,21 +275,17 @@ export class SpaceRenderer {
       else this.hover.set(b.id, next);
     }
 
-    const key = !data.star;
-    if (!this.nebula || this.nebula.theme !== theme || this.nebula.key !== key) this.renderNebula(key);
-
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.bindVertexArray(this.quad);
+    const sky = theme ? SKY.light : SKY.dark;
 
-    // Nebula wash and vignette.
-    let p = this.prog.blit;
+    // Sky gradient.
+    let p = this.prog.sky;
     gl.useProgram(p.p);
     this.quadAt(p, w / 2, h / 2, w / 2, h / 2);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.nebula!.tex);
-    gl.uniform1i(p.u("u_tex"), 0);
+    this.skyUniforms(p);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     // Star field.
@@ -335,19 +305,18 @@ export class SpaceRenderer {
     p = this.prog.orbit;
     gl.useProgram(p.p);
     gl.uniform1f(p.u("u_dpr"), dpr);
-    const orbitCol = theme ? [0.17, 0.2, 0.28] : [1, 1, 1];
-    gl.uniform3f(p.u("u_col"), orbitCol[0], orbitCol[1], orbitCol[2]);
+    gl.uniform3fv(p.u("u_col"), sky.orbit);
     data.orbits.forEach((o, i) => {
       const rx = o.r * view.z;
       const ry = rx * o.tilt;
       const lift = Math.max(0, ...o.bodies.map((id) => this.hover.get(id) ?? 0));
-      const [near, far] = theme ? [0.34, 0.16] : [0.22, 0.08];
+      const [near, far] = theme ? [0.5, 0.28] : [0.55, 0.3];
       this.quadAt(p, view.x + o.cx * view.z, view.y + o.cy * view.z, rx + 14, ry + 14);
       gl.uniform2f(p.u("u_R"), rx, ry);
-      gl.uniform1f(p.u("u_near"), near * (1 + 0.9 * lift));
-      gl.uniform1f(p.u("u_far"), far * (1 + 0.9 * lift));
+      gl.uniform1f(p.u("u_near"), Math.min(1, near * (1 + 0.7 * lift)));
+      gl.uniform1f(p.u("u_far"), Math.min(1, far * (1 + 0.7 * lift)));
       gl.uniform1f(p.u("u_prog"), step(T.orbitStart + i * T.orbitStep, T.orbitDur) * 1.04);
-      gl.uniform1f(p.u("u_ticks"), theme && o.ticks ? 1 : 0);
+      gl.uniform1f(p.u("u_dots"), (Math.PI * o.r * (1 + o.tilt)) / ORBIT_DOT_GAP);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     });
 
@@ -356,12 +325,12 @@ export class SpaceRenderer {
       p = this.prog.sun;
       gl.useProgram(p.p);
       const rs = SUN_RADIUS * view.z;
-      const reach = rs * (theme ? 60 : 18);
+      const reach = rs * 7.2;
       this.quadAt(p, view.x + data.star.x * view.z, view.y + data.star.y * view.z, reach, reach);
+      this.skyUniforms(p);
       gl.uniform1f(p.u("u_rs"), rs);
       gl.uniform1f(p.u("u_time"), time);
-      gl.uniform1f(p.u("u_theme"), theme);
-      gl.uniform1f(p.u("u_dpr"), dpr);
+      gl.uniform3fv(p.u("u_line"), sky.star);
       gl.uniform1f(p.u("u_bloom"), step(0, T.sun));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
@@ -369,27 +338,44 @@ export class SpaceRenderer {
     // Bodies, back to front.
     p = this.prog.body;
     gl.useProgram(p.p);
-    gl.uniform1f(p.u("u_dpr"), dpr);
+    this.skyUniforms(p);
     gl.uniform1f(p.u("u_theme"), theme);
-    gl.uniform3f(p.u("u_ink"), INK[0], INK[1], INK[2]);
     const bodies = [...data.bodies].sort((a, b) => a.y - b.y);
-    for (const b of bodies) this.drawBody(p, b, view, time, step(T.bodyStart + b.order * T.bodyStep, T.bodyDur));
+    for (const b of bodies) {
+      const lift = this.float(b, time);
+      this.drawBody(p, b, view, time, step(T.bodyStart + b.order * T.bodyStep, T.bodyDur), lift);
+    }
   }
 
-  private drawBody(p: Program, b: SceneBody, view: { x: number; y: number; z: number }, time: number, enter: number) {
+  /** Vertical bob (map px) for a floating body, mirrored onto its HTML twin so labels and hit areas move with it. */
+  private float(b: SceneBody, time: number) {
+    if (!b.float) return 0;
+    const off = this.reduced || this.store.dragging === b.id ? 0 : FLOAT_AMP * Math.sin((time / (5 + b.spec.seed * 4)) * 2 * Math.PI + b.spec.seed * 40);
+    const el = this.store.floaters.get(b.id);
+    if (el) {
+      const prev = this.bobbed.get(b.id);
+      if (prev === undefined || Math.abs(prev - off) > 0.05) {
+        el.style.translate = off ? `0 ${off.toFixed(2)}px` : "";
+        this.bobbed.set(b.id, off);
+      }
+    }
+    return off;
+  }
+
+  private drawBody(p: Program, b: SceneBody, view: { x: number; y: number; z: number }, time: number, enter: number, lift = 0) {
     const gl = this.gl;
     const { data } = this.store;
-    const hv = this.hover.get(b.id) ?? 0;
+    const hv = Math.max(this.hover.get(b.id) ?? 0, this.store.dragging === b.id ? 1 : 0);
     const scale = (this.reduced ? 1 : 0.6 + 0.4 * enter) * (this.reduced ? 1 : 1 + 0.08 * hv);
     const r = b.r * view.z * scale;
     const cx = view.x + b.x * view.z;
-    const cy = view.y + b.y * view.z;
+    const cy = view.y + (b.y + lift) * view.z;
     const ring = b.spec.ring;
     const ringR: [number, number] = b.spec.kind === "giant" ? [1.35, 2.35] : [1.4, 2.05];
-    const reach = Math.max(ring ? ringR[1] : 0, 1.7) * r + 3;
+    const reach = Math.max(ring ? ringR[1] : 0, 1) * r + 3;
     if (cx + reach < 0 || cy + reach < 0 || cx - reach > this.size.w || cy - reach > this.size.h) return;
 
-    // Light direction: toward the star, with some front fill so lit faces read; or the fixed key light.
+    // Light direction: toward the star, tipped toward the viewer so the night side is a crescent; or the fixed key light.
     let lx: number, ly: number;
     if (data.star) {
       const dx = data.star.x - b.x;
@@ -402,7 +388,7 @@ export class SpaceRenderer {
       lx = Math.cos(a);
       ly = Math.sin(a);
     }
-    const lz = 0.55;
+    const lz = 0.6;
     const ln = Math.hypot(lx * 0.85, ly * 0.85, lz);
 
     // Body frame: pole tipped toward the viewer, rolled by the axial tilt.
@@ -417,27 +403,25 @@ export class SpaceRenderer {
 
     const spin = ((time / b.spec.period) * 2 * Math.PI + b.spec.seed * 2 * Math.PI) % (2 * Math.PI);
     const c = b.colors;
+    // Hatching runs across the light, a little off square.
+    const hatch = Math.atan2(ly, lx) + (55 * Math.PI) / 180;
     this.quadAt(p, cx, cy, reach, reach);
     gl.uniform1f(p.u("u_r"), r);
     gl.uniform1i(p.u("u_kind"), KIND_INDEX[b.spec.kind]);
-    gl.uniform3fv(p.u("u_c0"), c.base);
-    gl.uniform3fv(p.u("u_c1"), c.second);
-    gl.uniform3fv(p.u("u_c2"), c.accent);
-    gl.uniform3fv(p.u("u_atm"), c.atmosphere);
-    gl.uniform3fv(p.u("u_ringC"), c.ring);
-    gl.uniform3fv(p.u("u_storm"), c.storm);
+    gl.uniform3fv(p.u("u_line"), this.theme ? c.lineLight : c.lineDark);
+    gl.uniform3fv(p.u("u_fill"), this.theme ? c.fillLight : c.fillDark);
+    gl.uniform3fv(p.u("u_shade"), this.theme ? c.shadeLight : c.shadeDark);
+    gl.uniform2f(p.u("u_hatch"), Math.cos(hatch), Math.sin(hatch));
     gl.uniform3f(p.u("u_L"), (lx * 0.85) / ln, (ly * 0.85) / ln, lz / ln);
     gl.uniform3fv(p.u("u_A"), A);
     gl.uniform3fv(p.u("u_E1"), E1);
     gl.uniform3fv(p.u("u_E2"), E2);
     gl.uniform1f(p.u("u_rot"), spin);
-    gl.uniform1f(p.u("u_cloudRot"), spin * 1.18 + 1.7);
     gl.uniform1f(p.u("u_seed"), b.spec.seed);
     gl.uniform1f(p.u("u_bands"), b.spec.bands);
     gl.uniform1f(p.u("u_ringOn"), ring ? 1 : 0);
     gl.uniform2f(p.u("u_ringR"), ringR[0], ringR[1]);
     gl.uniform1f(p.u("u_ringGap"), b.spec.kind === "giant" && ring ? 0.5 + ring.gap * 0.2 : -1);
-    gl.uniform1f(p.u("u_dormant"), b.dormant ? 1 : 0);
     gl.uniform1f(p.u("u_alpha"), enter);
     gl.uniform1f(p.u("u_hover"), hv);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -446,6 +430,7 @@ export class SpaceRenderer {
   dispose() {
     this.disposed = true;
     this.stop();
+    for (const el of this.store.floaters.values()) el.style.translate = "";
     for (const fn of this.unsub) fn();
   }
 }

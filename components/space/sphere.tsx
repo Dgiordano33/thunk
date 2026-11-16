@@ -2,14 +2,19 @@ import { useId } from "react";
 import type { PlanetPalette } from "@/lib/world/system";
 import { cn } from "@/lib/utils";
 
-const ok = (l: number, c: number, h: number, a = 1) => `oklch(${Math.max(0, Math.min(1, l)).toFixed(3)} ${Math.max(0, c).toFixed(3)} ${h} / ${a})`;
+const n = (v: number) => Math.round(v * 100) / 100;
+const circle = (cx: number, cy: number, r: number) => `M${n(cx - r)},${n(cy)}a${n(r)},${n(r)} 0 1,0 ${n(2 * r)},0a${n(r)},${n(r)} 0 1,0 ${n(-2 * r)},0Z`;
+const ellipse = (cx: number, cy: number, rx: number, ry: number) => `M${n(cx - rx)},${n(cy)}a${n(rx)},${n(ry)} 0 1,0 ${n(2 * rx)},0a${n(rx)},${n(ry)} 0 1,0 ${n(-2 * rx)},0Z`;
+/** A concave four-point sparkle with arms `s` long, centred on the origin. */
+export const sparklePath = (s: number, k = 0.1) => `M0,${-s}Q${n(s * k)},${n(-s * k)} ${s},0Q${n(s * k)},${n(s * k)} 0,${s}Q${n(-s * k)},${n(s * k)} ${-s},0Q${n(-s * k)},${n(-s * k)} 0,${-s}Z`;
 
 /**
  * Fallback art: what the server renders and what stays when WebGL2 is missing. The canvas draws the real bodies on top
  * and this fades out (`.fallback-art`), so keep positions, sizes and hues in step with it, not every detail.
  *
- * A softly lit sphere, as an SVG sized to `r` plus its glow. `light` is the direction (radians, screen space) the light
- * comes from; the lit side faces it and the far side falls into shadow. Larger worlds get faint bands; `ringed` adds a ring.
+ * Line art: a tinted disc with an outline, and a hatched crescent on the side away from the light. `light` is the
+ * direction (radians, screen space) the light comes from. Larger worlds get band lines; `ringed` adds a ring.
+ * Colours come from `--h` and `--c` through the `.sp-sphere` rules in globals.css, so they follow the theme.
  */
 export function Sphere({
   r,
@@ -25,83 +30,76 @@ export function Sphere({
   light: number;
   bands?: boolean;
   ringed?: boolean;
-  /** Dormant worlds: desaturated, darker, no glow. */
+  /** Dormant worlds: the same drawing in grey. */
   dim?: boolean;
   className?: string;
 }) {
   const id = useId().replace(/:/g, "");
-  const { h, c } = palette;
-  const pad = Math.ceil(ringed ? r * 1.05 : r * 0.55);
+  const pad = Math.ceil(ringed ? r * 1.15 : 4);
   const size = 2 * (r + pad);
   const mid = size / 2;
-  // Highlight sits toward the light, about a third of the way to the limb.
-  const lx = Math.round((0.5 + 0.3 * Math.cos(light)) * 1000) / 1000;
-  const ly = Math.round((0.5 + 0.3 * Math.sin(light)) * 1000) / 1000;
+  const lx = Math.cos(light);
+  const ly = Math.sin(light);
   const tilt = -14;
-  // Terminator: a gradient across the disc, lit side clear, night side dark.
-  const tx1 = Math.round((0.5 + 0.5 * Math.cos(light)) * 1000) / 1000;
-  const ty1 = Math.round((0.5 + 0.5 * Math.sin(light)) * 1000) / 1000;
-  const tx2 = Math.round((1 - tx1) * 1000) / 1000;
-  const ty2 = Math.round((1 - ty1) * 1000) / 1000;
+  const outline = Math.max(1.5, r * 0.05);
+  const thin = n(Math.max(1, r * 0.03));
+  const gap = n(Math.max(3.5, r * 0.13));
+  // The lit part is a disc slid toward the light; what it leaves uncovered is the night side.
+  const lit = circle(mid + lx * r * 0.42, mid + ly * r * 0.42, r * 1.03);
+  const night = circle(mid, mid, r) + lit;
+  const band = (y: number) => `M${n(mid - r * 1.1)},${n(mid + y)}Q${mid},${n(mid + y + r * 0.22)} ${n(mid + r * 1.1)},${n(mid + y)}`;
+  const ring = <path d={ellipse(mid, mid, r * 2.05, r * 0.66) + ellipse(mid, mid, r * 1.4, r * 0.45)} fillRule="evenodd" fill="var(--void)" stroke="var(--ln)" strokeWidth={thin} transform={`rotate(${tilt} ${mid} ${mid})`} />;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className={cn("fallback-art overflow-visible", dim && "saturate-[0.15] brightness-75", className)}>
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      aria-hidden="true"
+      className={cn("fallback-art sp-sphere overflow-visible", dim && "is-dim", className)}
+      style={{ "--h": palette.h, "--c": dim ? 0.008 : palette.c } as React.CSSProperties}
+    >
       <defs>
-        <radialGradient id={`${id}-body`} cx={lx} cy={ly} r={0.85} fx={lx} fy={ly}>
-          <stop offset="0" stopColor={ok(0.9, c * 0.45, h)} />
-          <stop offset="0.35" stopColor={ok(0.68, c, h)} />
-          <stop offset="0.75" stopColor={ok(0.42, c * 0.9, h)} />
-          <stop offset="1" stopColor={ok(0.2, c * 0.6, h)} />
-        </radialGradient>
-        <radialGradient id={`${id}-glow`}>
-          <stop offset="0.6" stopColor={ok(0.75, c, h, 0.28)} />
-          <stop offset="1" stopColor={ok(0.75, c, h, 0)} />
-        </radialGradient>
-        <linearGradient id={`${id}-night`} x1={tx1} y1={ty1} x2={tx2} y2={ty2}>
-          <stop offset="0.45" stopColor="oklch(0.08 0.02 262)" stopOpacity="0" />
-          <stop offset="0.72" stopColor="oklch(0.08 0.02 262)" stopOpacity="0.55" />
-          <stop offset="1" stopColor="oklch(0.08 0.02 262)" stopOpacity="0.8" />
-        </linearGradient>
-        <linearGradient id={`${id}-rim`} x1={tx1} y1={ty1} x2={tx2} y2={ty2}>
-          <stop offset="0" stopColor={ok(0.92, c * 0.5, h)} stopOpacity="0.55" />
-          <stop offset="0.5" stopColor={ok(0.92, c * 0.5, h)} stopOpacity="0" />
-        </linearGradient>
         <clipPath id={`${id}-clip`}>
           <circle cx={mid} cy={mid} r={r} />
         </clipPath>
         <clipPath id={`${id}-front`}>
           <rect x={0} y={mid} width={size} height={size} transform={`rotate(${tilt} ${mid} ${mid})`} />
         </clipPath>
+        <clipPath id={`${id}-back`}>
+          <rect x={0} y={mid - size} width={size} height={size} transform={`rotate(${tilt} ${mid} ${mid})`} />
+        </clipPath>
+        <pattern id={`${id}-hatch`} patternUnits="userSpaceOnUse" width={gap} height={gap} patternTransform={`rotate(${n((light * 180) / Math.PI + 55)})`}>
+          <line x1={0} y1={0} x2={0} y2={gap} stroke="var(--ln)" strokeWidth={n(Math.max(0.9, r * 0.028))} />
+        </pattern>
       </defs>
-      {!dim && <circle className="sphere-glow" cx={mid} cy={mid} r={r * 1.5} fill={`url(#${id}-glow)`} />}
-      {ringed && <Ring mid={mid} r={r} h={h} tilt={tilt} />}
-      <circle cx={mid} cy={mid} r={r} fill={`url(#${id}-body)`} />
-      {bands && (
-        <g clipPath={`url(#${id}-clip)`} opacity={0.16}>
-          <ellipse cx={mid} cy={mid - r * 0.35} rx={r * 1.2} ry={r * 0.12} fill="white" />
-          <ellipse cx={mid} cy={mid + r * 0.15} rx={r * 1.2} ry={r * 0.18} fill="black" />
-          <ellipse cx={mid} cy={mid + r * 0.55} rx={r * 1.2} ry={r * 0.08} fill="white" />
-        </g>
-      )}
-      <circle cx={mid} cy={mid} r={r} fill={`url(#${id}-night)`} />
-      {/* A thin rim catches the light on the lit limb only. */}
-      <circle cx={mid} cy={mid} r={r - 0.5} fill="none" stroke={`url(#${id}-rim)`} strokeWidth={1} />
-      {ringed && <g clipPath={`url(#${id}-front)`}><Ring mid={mid} r={r} h={h} tilt={tilt} /></g>}
+      {ringed && <g clipPath={`url(#${id}-back)`}>{ring}</g>}
+      <g clipPath={`url(#${id}-clip)`}>
+        <rect x={mid - r} y={mid - r} width={2 * r} height={2 * r} fill="var(--fl)" />
+        {bands && (
+          <g fill="none" stroke="var(--ln)" strokeWidth={thin} opacity={0.9} transform={`rotate(${tilt} ${mid} ${mid})`}>
+            {[-0.62, -0.32, 0.02, 0.36].map((y) => <path key={y} d={band(y * r)} />)}
+          </g>
+        )}
+        <path d={night} fillRule="evenodd" fill="var(--sh)" />
+        <path d={night} fillRule="evenodd" fill={`url(#${id}-hatch)`} opacity={0.9} />
+        <path d={lit} fill="none" stroke="var(--ln)" strokeWidth={thin} />
+      </g>
+      <circle cx={mid} cy={mid} r={n(r - outline / 2)} fill="none" stroke="var(--ln)" strokeWidth={n(outline)} />
+      {ringed && <g clipPath={`url(#${id}-front)`}>{ring}</g>}
     </svg>
   );
 }
 
-function Ring({ mid, r, h, tilt }: { mid: number; r: number; h: number; tilt: number }) {
+/** The star as line art: a solid core in a ring, on two nested sparkles. Fallback for the canvas's star. */
+export function StarMark({ cx, cy, r = 13 }: { cx: number; cy: number; r?: number }) {
+  const w = Math.max(1.25, r * 0.1);
   return (
-    <ellipse
-      cx={mid}
-      cy={mid}
-      rx={r * 1.85}
-      ry={r * 0.42}
-      fill="none"
-      stroke={ok(0.82, 0.03, h, 0.6)}
-      strokeWidth={Math.max(1.5, r * 0.16)}
-      transform={`rotate(${tilt} ${mid} ${mid})`}
-    />
+    <g transform={`translate(${cx} ${cy})`} stroke="var(--star-core)" strokeLinejoin="round" fill="var(--void)">
+      <path d={sparklePath(n(r * 6.4), 0.09)} strokeWidth={w} />
+      <path d={sparklePath(n(r * 4), 0.16)} strokeWidth={n(w * 0.85)} opacity={0.8} transform="rotate(45)" />
+      <circle r={n(r * 1.67)} strokeWidth={n(w * 1.15)} />
+      <circle r={r} fill="var(--star-core)" stroke="none" />
+    </g>
   );
 }

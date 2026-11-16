@@ -476,15 +476,18 @@
 
 /* ── Space (solar-system map) ─────────────────────────────────────── */
 /* Projects are planets around a star; workspaces are moons; sessions are satellites.
-   A WebGL canvas (components/space/scene) draws the pictorial layer; this CSS is the HTML on top and the fallback art. */
+   Line art on a twilight sky. A WebGL canvas (components/space/scene) draws the pictorial layer; this CSS is the HTML
+   on top and the fallback art. The sky and star colours are mirrored in SKY (lib/world/bodies.ts) for the canvas. */
 :root {
   --ease-space: cubic-bezier(0.22, 1, 0.36, 1);
-  /* Light: an observatory chart on cool paper. */
-  --void: oklch(0.972 0.006 248);
-  --orbit: oklch(0.3 0.03 260 / 0.2);
-  --star-core: oklch(0.82 0.14 80);
-  --star-glow: oklch(0.86 0.13 75);
-  --sp-meta: oklch(0.45 0.02 260);
+  /* Light: ink on pale dawn paper. --void is the middle of the sky, for label halos and flat fills. */
+  --sky-top: oklch(0.962 0.022 250);
+  --sky-bot: oklch(0.972 0.032 330);
+  --void: oklch(0.967 0.027 290);
+  --orbit: oklch(0.3 0.08 265 / 0.42);
+  --star-core: oklch(0.62 0.15 70);
+  --sp-meta: oklch(0.45 0.05 265);
+  --sp-rule: oklch(0.25 0.08 265 / 0.45);
   --status-running: oklch(0.48 0.11 160);
   --status-running-soft: oklch(0.6 0.13 160 / 0.13);
   /* Fills (dots, badges) use --status-attention; text uses the darker ink. */
@@ -497,12 +500,14 @@
   --status-ok: oklch(0.48 0.11 160);
 }
 .dark {
-  /* Dark: deep field. */
-  --void: oklch(0.075 0.014 265);
-  --orbit: oklch(1 0 0 / 0.13);
-  --star-core: oklch(0.99 0.02 95);
-  --star-glow: oklch(0.96 0.045 90);
-  --sp-meta: oklch(0.72 0.02 260);
+  /* Dark: glowing lines on a twilight sky, indigo at the top to violet at the bottom. */
+  --sky-top: oklch(0.14 0.055 265);
+  --sky-bot: oklch(0.215 0.1 302);
+  --void: oklch(0.175 0.078 284);
+  --orbit: oklch(0.82 0.06 250 / 0.42);
+  --star-core: oklch(0.93 0.11 95);
+  --sp-meta: oklch(0.78 0.045 262);
+  --sp-rule: oklch(0.86 0.06 250 / 0.4);
   --status-running: oklch(0.82 0.13 160);
   --status-running-soft: oklch(0.8 0.13 160 / 0.12);
   --status-attention: oklch(0.86 0.15 85);
@@ -514,43 +519,34 @@
   --status-ok: oklch(0.8 0.13 160);
 }
 
-/* Fallback background (and non-map screens): stars at prime tile sizes in dark, ink specks in light, so the repeat
-   isn't visible. Neither pans with the map. Once the canvas is drawing, it owns the background. */
+/* The sky is a vertical gradient. The canvas paints it, with its stars, once it is drawing; this is the fallback and
+   what non-map screens get: the same gradient under one large seeded tile of specks and sparkles. */
 .space, .look-space .world, .look-space .fog { background-color: var(--void); }
 .dark .space, .look-space.dark .world, .look-space.dark .fog {
-  background-image:
-    radial-gradient(1px 1px at 23px 41px, oklch(1 0 0 / 0.7) 99%, transparent),
-    radial-gradient(1px 1px at 171px 13px, oklch(1 0 0 / 0.45) 99%, transparent),
-    radial-gradient(1.5px 1.5px at 97px 203px, oklch(1 0 0 / 0.6) 99%, transparent),
-    radial-gradient(1px 1px at 211px 151px, oklch(1 0 0 / 0.35) 99%, transparent),
-    radial-gradient(1px 1px at 61px 127px, oklch(1 0 0 / 0.3) 99%, transparent),
-    radial-gradient(1px 1px at 309px 67px, oklch(1 0 0 / 0.5) 99%, transparent),
-    radial-gradient(1.5px 1.5px at 271px 297px, oklch(0.95 0.04 240 / 0.5) 99%, transparent),
-    radial-gradient(1px 1px at 141px 331px, oklch(1 0 0 / 0.35) 99%, transparent),
-    radial-gradient(1px 1px at 389px 211px, oklch(0.95 0.05 60 / 0.45) 99%, transparent),
-    radial-gradient(1px 1px at 457px 433px, oklch(1 0 0 / 0.4) 99%, transparent),
-    radial-gradient(2px 2px at 523px 89px, oklch(1 0 0 / 0.55) 99%, transparent),
-    radial-gradient(1px 1px at 37px 487px, oklch(0.9 0.05 240 / 0.4) 99%, transparent),
-    radial-gradient(ellipse 60% 45% at 30% 35%, oklch(0.3 0.1 275 / 0.08), transparent 70%),
-    radial-gradient(ellipse 55% 40% at 72% 70%, oklch(0.35 0.07 200 / 0.06), transparent 70%),
-    radial-gradient(ellipse 80% 70% at 50% 45%, oklch(0.14 0.025 262 / 0.9), transparent 75%);
-  background-size: 233px 233px, 233px 233px, 233px 233px, 233px 233px, 377px 377px, 377px 377px, 377px 377px, 377px 377px,
-    541px 541px, 541px 541px, 613px 613px, 613px 613px, 100% 100%, 100% 100%, 100% 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='997' height='997'%3E%3Ccircle cx='323' cy='150' r='0.66' fill='%23dfe6ff' opacity='0.33'/%3E%3Ccircle cx='534' cy='365' r='0.50' fill='%23ffd98a' opacity='0.56'/%3E%3Ccircle cx='37' cy='432' r='0.50' fill='%23f2b6dd' opacity='0.32'/%3E%3Ccircle cx='423' cy='824' r='0.50' fill='%23dfe6ff' opacity='0.40'/%3E%3Ccircle cx='626' cy='945' r='0.60' fill='%23ffd98a' opacity='0.51'/%3E%3Ccircle cx='973' cy='46' r='0.99' fill='%23f2b6dd' opacity='0.40'/%3E%3Ccircle cx='144' cy='117' r='0.51' fill='%23dfe6ff' opacity='0.67'/%3E%3Ccircle cx='180' cy='580' r='0.65' fill='%23ffd98a' opacity='0.50'/%3E%3Ccircle cx='546' cy='63' r='0.50' fill='%23f2b6dd' opacity='0.37'/%3E%3Ccircle cx='678' cy='426' r='0.51' fill='%23dfe6ff' opacity='0.56'/%3E%3Ccircle cx='452' cy='299' r='0.86' fill='%23ffd98a' opacity='0.66'/%3E%3Ccircle cx='243' cy='573' r='0.57' fill='%23f2b6dd' opacity='0.65'/%3E%3Ccircle cx='727' cy='287' r='1.33' fill='%23dfe6ff' opacity='0.35'/%3E%3Ccircle cx='417' cy='755' r='0.50' fill='%23ffd98a' opacity='0.55'/%3E%3Ccircle cx='39' cy='666' r='0.81' fill='%23f2b6dd' opacity='0.52'/%3E%3Ccircle cx='873' cy='313' r='0.71' fill='%23dfe6ff' opacity='0.57'/%3E%3Ccircle cx='578' cy='455' r='0.95' fill='%23ffd98a' opacity='0.77'/%3E%3Ccircle cx='473' cy='662' r='0.50' fill='%23f2b6dd' opacity='0.57'/%3E%3Ccircle cx='645' cy='990' r='0.91' fill='%23dfe6ff' opacity='0.43'/%3E%3Ccircle cx='385' cy='667' r='0.50' fill='%23ffd98a' opacity='0.54'/%3E%3Ccircle cx='168' cy='117' r='0.50' fill='%23f2b6dd' opacity='0.60'/%3E%3Ccircle cx='129' cy='247' r='0.52' fill='%23dfe6ff' opacity='0.69'/%3E%3Ccircle cx='80' cy='448' r='0.58' fill='%23ffd98a' opacity='0.74'/%3E%3Ccircle cx='817' cy='861' r='0.51' fill='%23f2b6dd' opacity='0.45'/%3E%3Ccircle cx='358' cy='882' r='1.26' fill='%23dfe6ff' opacity='0.37'/%3E%3Ccircle cx='176' cy='231' r='0.50' fill='%23ffd98a' opacity='0.55'/%3E%3Ccircle cx='587' cy='262' r='0.50' fill='%23f2b6dd' opacity='0.46'/%3E%3Ccircle cx='368' cy='565' r='1.24' fill='%23dfe6ff' opacity='0.61'/%3E%3Ccircle cx='514' cy='616' r='0.69' fill='%23ffd98a' opacity='0.35'/%3E%3Ccircle cx='897' cy='778' r='1.03' fill='%23f2b6dd' opacity='0.62'/%3E%3Ccircle cx='391' cy='398' r='0.50' fill='%23dfe6ff' opacity='0.59'/%3E%3Ccircle cx='62' cy='67' r='0.50' fill='%23ffd98a' opacity='0.40'/%3E%3Ccircle cx='339' cy='52' r='0.50' fill='%23f2b6dd' opacity='0.34'/%3E%3Ccircle cx='101' cy='363' r='0.50' fill='%23dfe6ff' opacity='0.69'/%3E%3Ccircle cx='612' cy='148' r='0.50' fill='%23ffd98a' opacity='0.49'/%3E%3Ccircle cx='363' cy='122' r='0.97' fill='%23f2b6dd' opacity='0.70'/%3E%3Ccircle cx='465' cy='482' r='0.50' fill='%23dfe6ff' opacity='0.35'/%3E%3Ccircle cx='342' cy='264' r='0.92' fill='%23ffd98a' opacity='0.40'/%3E%3Ccircle cx='23' cy='948' r='0.57' fill='%23f2b6dd' opacity='0.34'/%3E%3Ccircle cx='542' cy='27' r='0.57' fill='%23dfe6ff' opacity='0.74'/%3E%3Ccircle cx='861' cy='694' r='0.50' fill='%23ffd98a' opacity='0.50'/%3E%3Ccircle cx='167' cy='770' r='0.57' fill='%23f2b6dd' opacity='0.61'/%3E%3Ccircle cx='329' cy='222' r='0.89' fill='%23dfe6ff' opacity='0.74'/%3E%3Ccircle cx='850' cy='804' r='0.90' fill='%23ffd98a' opacity='0.68'/%3E%3Ccircle cx='226' cy='516' r='0.51' fill='%23f2b6dd' opacity='0.29'/%3E%3Ccircle cx='28' cy='279' r='0.50' fill='%23dfe6ff' opacity='0.61'/%3E%3Ccircle cx='954' cy='446' r='1.19' fill='%23ffd98a' opacity='0.79'/%3E%3Ccircle cx='952' cy='364' r='0.50' fill='%23f2b6dd' opacity='0.38'/%3E%3Ccircle cx='196' cy='204' r='0.64' fill='%23dfe6ff' opacity='0.71'/%3E%3Ccircle cx='838' cy='478' r='0.66' fill='%23ffd98a' opacity='0.70'/%3E%3Ccircle cx='85' cy='659' r='1.12' fill='%23f2b6dd' opacity='0.61'/%3E%3Ccircle cx='748' cy='477' r='0.50' fill='%23dfe6ff' opacity='0.66'/%3E%3Ccircle cx='332' cy='798' r='1.30' fill='%23ffd98a' opacity='0.51'/%3E%3Ccircle cx='400' cy='944' r='0.75' fill='%23f2b6dd' opacity='0.35'/%3E%3Ccircle cx='127' cy='151' r='1.10' fill='%23dfe6ff' opacity='0.66'/%3E%3Ccircle cx='146' cy='824' r='1.33' fill='%23ffd98a' opacity='0.64'/%3E%3Ccircle cx='349' cy='547' r='0.50' fill='%23f2b6dd' opacity='0.29'/%3E%3Ccircle cx='968' cy='648' r='0.57' fill='%23dfe6ff' opacity='0.72'/%3E%3Ccircle cx='433' cy='869' r='0.92' fill='%23ffd98a' opacity='0.42'/%3E%3Ccircle cx='251' cy='292' r='0.50' fill='%23f2b6dd' opacity='0.53'/%3E%3Ccircle cx='259' cy='418' r='0.50' fill='%23dfe6ff' opacity='0.71'/%3E%3Ccircle cx='353' cy='457' r='0.60' fill='%23ffd98a' opacity='0.75'/%3E%3Ccircle cx='419' cy='915' r='0.56' fill='%23f2b6dd' opacity='0.50'/%3E%3Ccircle cx='522' cy='19' r='0.53' fill='%23dfe6ff' opacity='0.38'/%3E%3Ccircle cx='4' cy='797' r='0.50' fill='%23ffd98a' opacity='0.55'/%3E%3Ccircle cx='723' cy='555' r='0.51' fill='%23f2b6dd' opacity='0.50'/%3E%3Ccircle cx='554' cy='782' r='0.50' fill='%23dfe6ff' opacity='0.55'/%3E%3Ccircle cx='248' cy='276' r='0.82' fill='%23ffd98a' opacity='0.56'/%3E%3Ccircle cx='560' cy='758' r='1.12' fill='%23f2b6dd' opacity='0.47'/%3E%3Ccircle cx='611' cy='504' r='0.56' fill='%23dfe6ff' opacity='0.61'/%3E%3Cpath transform='translate(451 532)' d='M0 -3.6Q0.4 -0.4 3.6 0Q0.4 0.4 0 3.6Q-0.4 0.4 -3.6 0Q-0.4 -0.4 0 -3.6Z' fill='%23ffd98a' opacity='0.96'/%3E%3Cpath transform='translate(939 697)' d='M0 -6.3Q0.8 -0.8 6.3 0Q0.8 0.8 0 6.3Q-0.8 0.8 -6.3 0Q-0.8 -0.8 0 -6.3Z' fill='%23f2b6dd' opacity='0.84'/%3E%3Cpath transform='translate(939 259)' d='M0 -4.1Q0.5 -0.5 4.1 0Q0.5 0.5 0 4.1Q-0.5 0.5 -4.1 0Q-0.5 -0.5 0 -4.1Z' fill='%23dfe6ff' opacity='0.90'/%3E%3Cpath transform='translate(940 837)' d='M0 -2.6Q0.3 -0.3 2.6 0Q0.3 0.3 0 2.6Q-0.3 0.3 -2.6 0Q-0.3 -0.3 0 -2.6Z' fill='%23ffd98a' opacity='0.96'/%3E%3Cpath transform='translate(121 441)' d='M0 -2.5Q0.3 -0.3 2.5 0Q0.3 0.3 0 2.5Q-0.3 0.3 -2.5 0Q-0.3 -0.3 0 -2.5Z' fill='%23f2b6dd' opacity='0.84'/%3E%3Cpath transform='translate(240 73)' d='M0 -4.7Q0.6 -0.6 4.7 0Q0.6 0.6 0 4.7Q-0.6 0.6 -4.7 0Q-0.6 -0.6 0 -4.7Z' fill='%23dfe6ff' opacity='0.90'/%3E%3Cpath transform='translate(782 894)' d='M0 -2.6Q0.3 -0.3 2.6 0Q0.3 0.3 0 2.6Q-0.3 0.3 -2.6 0Q-0.3 -0.3 0 -2.6Z' fill='%23ffd98a' opacity='0.96'/%3E%3Cpath transform='translate(714 658)' d='M0 -2.6Q0.3 -0.3 2.6 0Q0.3 0.3 0 2.6Q-0.3 0.3 -2.6 0Q-0.3 -0.3 0 -2.6Z' fill='%23f2b6dd' opacity='0.84'/%3E%3Cpath transform='translate(880 965)' d='M0 -2.7Q0.3 -0.3 2.7 0Q0.3 0.3 0 2.7Q-0.3 0.3 -2.7 0Q-0.3 -0.3 0 -2.7Z' fill='%23dfe6ff' opacity='0.90'/%3E%3C/svg%3E"), linear-gradient(in srgb, var(--sky-top), var(--sky-bot));
+  background-size: 997px 997px, 100% 100%;
 }
 :root:not(.dark) .space, .look-space:not(.dark) .world, .look-space:not(.dark) .fog {
-  background-image:
-    radial-gradient(1px 1px at 19px 23px, oklch(0.3 0.03 260 / 0.22) 99%, transparent),
-    radial-gradient(1.5px 1.5px at 131px 97px, oklch(0.3 0.03 260 / 0.16) 99%, transparent),
-    radial-gradient(1px 1px at 83px 191px, oklch(0.3 0.03 260 / 0.18) 99%, transparent),
-    radial-gradient(1px 1px at 241px 53px, oklch(0.3 0.03 260 / 0.14) 99%, transparent),
-    radial-gradient(2px 2px at 307px 263px, oklch(0.3 0.03 260 / 0.12) 99%, transparent),
-    radial-gradient(1px 1px at 173px 331px, oklch(0.3 0.03 260 / 0.2) 99%, transparent),
-    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.93 0.05 80 / 0.5), transparent 70%);
-  background-size: 211px 211px, 211px 211px, 293px 293px, 293px 293px, 389px 389px, 389px 389px, 100% 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='997' height='997'%3E%3Ccircle cx='451' cy='558' r='1.16' fill='%233d4470' opacity='0.24'/%3E%3Ccircle cx='506' cy='586' r='0.50' fill='%23c48f1f' opacity='0.42'/%3E%3Ccircle cx='628' cy='791' r='0.50' fill='%23b56a9c' opacity='0.26'/%3E%3Ccircle cx='90' cy='807' r='0.71' fill='%233d4470' opacity='0.15'/%3E%3Ccircle cx='979' cy='962' r='0.66' fill='%23c48f1f' opacity='0.46'/%3E%3Ccircle cx='157' cy='15' r='0.57' fill='%23b56a9c' opacity='0.20'/%3E%3Ccircle cx='190' cy='241' r='0.50' fill='%233d4470' opacity='0.24'/%3E%3Ccircle cx='439' cy='840' r='0.57' fill='%23c48f1f' opacity='0.47'/%3E%3Ccircle cx='498' cy='660' r='0.54' fill='%23b56a9c' opacity='0.26'/%3E%3Ccircle cx='995' cy='993' r='0.95' fill='%233d4470' opacity='0.29'/%3E%3Ccircle cx='314' cy='229' r='0.51' fill='%23c48f1f' opacity='0.27'/%3E%3Ccircle cx='764' cy='399' r='0.96' fill='%23b56a9c' opacity='0.28'/%3E%3Ccircle cx='955' cy='845' r='0.50' fill='%233d4470' opacity='0.18'/%3E%3Ccircle cx='908' cy='469' r='1.33' fill='%23c48f1f' opacity='0.38'/%3E%3Ccircle cx='73' cy='628' r='0.83' fill='%23b56a9c' opacity='0.25'/%3E%3Ccircle cx='87' cy='332' r='1.28' fill='%233d4470' opacity='0.30'/%3E%3Ccircle cx='118' cy='246' r='0.50' fill='%23c48f1f' opacity='0.26'/%3E%3Ccircle cx='795' cy='177' r='0.59' fill='%23b56a9c' opacity='0.30'/%3E%3Ccircle cx='190' cy='730' r='0.50' fill='%233d4470' opacity='0.28'/%3E%3Ccircle cx='116' cy='419' r='0.50' fill='%23c48f1f' opacity='0.34'/%3E%3Ccircle cx='968' cy='801' r='0.51' fill='%23b56a9c' opacity='0.42'/%3E%3Ccircle cx='210' cy='393' r='0.98' fill='%233d4470' opacity='0.27'/%3E%3Ccircle cx='100' cy='986' r='0.50' fill='%23c48f1f' opacity='0.33'/%3E%3Ccircle cx='770' cy='328' r='0.51' fill='%23b56a9c' opacity='0.20'/%3E%3Ccircle cx='90' cy='581' r='0.50' fill='%233d4470' opacity='0.27'/%3E%3Ccircle cx='371' cy='452' r='1.26' fill='%23c48f1f' opacity='0.41'/%3E%3Ccircle cx='573' cy='864' r='0.50' fill='%23b56a9c' opacity='0.22'/%3E%3Ccircle cx='906' cy='815' r='0.50' fill='%233d4470' opacity='0.18'/%3E%3Ccircle cx='737' cy='938' r='0.50' fill='%23c48f1f' opacity='0.58'/%3E%3Ccircle cx='880' cy='602' r='0.53' fill='%23b56a9c' opacity='0.21'/%3E%3Ccircle cx='39' cy='960' r='0.50' fill='%233d4470' opacity='0.29'/%3E%3Ccircle cx='256' cy='821' r='0.61' fill='%23c48f1f' opacity='0.35'/%3E%3Ccircle cx='175' cy='718' r='0.50' fill='%23b56a9c' opacity='0.24'/%3E%3Ccircle cx='558' cy='850' r='0.63' fill='%233d4470' opacity='0.20'/%3E%3Ccircle cx='915' cy='203' r='0.50' fill='%23c48f1f' opacity='0.34'/%3E%3Ccircle cx='444' cy='60' r='0.50' fill='%23b56a9c' opacity='0.28'/%3E%3Ccircle cx='570' cy='131' r='0.52' fill='%233d4470' opacity='0.33'/%3E%3Ccircle cx='978' cy='655' r='0.71' fill='%23c48f1f' opacity='0.45'/%3E%3Ccircle cx='140' cy='35' r='0.50' fill='%23b56a9c' opacity='0.43'/%3E%3Ccircle cx='699' cy='960' r='0.50' fill='%233d4470' opacity='0.27'/%3E%3Ccircle cx='481' cy='728' r='0.51' fill='%23c48f1f' opacity='0.60'/%3E%3Ccircle cx='75' cy='544' r='0.77' fill='%23b56a9c' opacity='0.42'/%3E%3Ccircle cx='735' cy='702' r='0.86' fill='%233d4470' opacity='0.33'/%3E%3Ccircle cx='351' cy='683' r='1.09' fill='%23c48f1f' opacity='0.55'/%3E%3Ccircle cx='416' cy='788' r='1.00' fill='%23b56a9c' opacity='0.33'/%3E%3Ccircle cx='623' cy='381' r='0.60' fill='%233d4470' opacity='0.27'/%3E%3Ccircle cx='80' cy='637' r='1.38' fill='%23c48f1f' opacity='0.56'/%3E%3Ccircle cx='726' cy='387' r='0.76' fill='%23b56a9c' opacity='0.34'/%3E%3Ccircle cx='439' cy='836' r='0.50' fill='%233d4470' opacity='0.30'/%3E%3Ccircle cx='30' cy='599' r='0.55' fill='%23c48f1f' opacity='0.32'/%3E%3Ccircle cx='696' cy='496' r='0.63' fill='%23b56a9c' opacity='0.43'/%3E%3Ccircle cx='255' cy='11' r='0.51' fill='%233d4470' opacity='0.28'/%3E%3Ccircle cx='202' cy='169' r='1.11' fill='%23c48f1f' opacity='0.48'/%3E%3Ccircle cx='441' cy='889' r='0.51' fill='%23b56a9c' opacity='0.36'/%3E%3Ccircle cx='198' cy='430' r='0.88' fill='%233d4470' opacity='0.33'/%3E%3Ccircle cx='878' cy='383' r='0.60' fill='%23c48f1f' opacity='0.35'/%3E%3Ccircle cx='136' cy='495' r='0.94' fill='%23b56a9c' opacity='0.41'/%3E%3Ccircle cx='709' cy='947' r='0.51' fill='%233d4470' opacity='0.18'/%3E%3Ccircle cx='449' cy='274' r='0.50' fill='%23c48f1f' opacity='0.39'/%3E%3Ccircle cx='624' cy='492' r='0.51' fill='%23b56a9c' opacity='0.41'/%3E%3Ccircle cx='979' cy='451' r='0.50' fill='%233d4470' opacity='0.15'/%3E%3Ccircle cx='870' cy='41' r='0.73' fill='%23c48f1f' opacity='0.45'/%3E%3Ccircle cx='308' cy='789' r='0.50' fill='%23b56a9c' opacity='0.22'/%3E%3Ccircle cx='453' cy='25' r='0.93' fill='%233d4470' opacity='0.19'/%3E%3Ccircle cx='140' cy='47' r='0.64' fill='%23c48f1f' opacity='0.40'/%3E%3Ccircle cx='628' cy='653' r='0.88' fill='%23b56a9c' opacity='0.44'/%3E%3Ccircle cx='682' cy='199' r='0.55' fill='%233d4470' opacity='0.18'/%3E%3Ccircle cx='11' cy='471' r='0.73' fill='%23c48f1f' opacity='0.30'/%3E%3Ccircle cx='272' cy='345' r='0.71' fill='%23b56a9c' opacity='0.32'/%3E%3Ccircle cx='613' cy='754' r='0.52' fill='%233d4470' opacity='0.31'/%3E%3Cpath transform='translate(904 87)' d='M0 -6.8Q0.8 -0.8 6.8 0Q0.8 0.8 0 6.8Q-0.8 0.8 -6.8 0Q-0.8 -0.8 0 -6.8Z' fill='%23c48f1f' opacity='0.72'/%3E%3Cpath transform='translate(720 130)' d='M0 -3.5Q0.4 -0.4 3.5 0Q0.4 0.4 0 3.5Q-0.4 0.4 -3.5 0Q-0.4 -0.4 0 -3.5Z' fill='%23b56a9c' opacity='0.54'/%3E%3Cpath transform='translate(624 907)' d='M0 -3.2Q0.4 -0.4 3.2 0Q0.4 0.4 0 3.2Q-0.4 0.4 -3.2 0Q-0.4 -0.4 0 -3.2Z' fill='%233d4470' opacity='0.42'/%3E%3Cpath transform='translate(567 877)' d='M0 -5.7Q0.7 -0.7 5.7 0Q0.7 0.7 0 5.7Q-0.7 0.7 -5.7 0Q-0.7 -0.7 0 -5.7Z' fill='%23c48f1f' opacity='0.72'/%3E%3Cpath transform='translate(941 462)' d='M0 -4.6Q0.6 -0.6 4.6 0Q0.6 0.6 0 4.6Q-0.6 0.6 -4.6 0Q-0.6 -0.6 0 -4.6Z' fill='%23b56a9c' opacity='0.54'/%3E%3Cpath transform='translate(204 720)' d='M0 -5.8Q0.7 -0.7 5.8 0Q0.7 0.7 0 5.8Q-0.7 0.7 -5.8 0Q-0.7 -0.7 0 -5.8Z' fill='%233d4470' opacity='0.42'/%3E%3Cpath transform='translate(640 716)' d='M0 -2.7Q0.3 -0.3 2.7 0Q0.3 0.3 0 2.7Q-0.3 0.3 -2.7 0Q-0.3 -0.3 0 -2.7Z' fill='%23c48f1f' opacity='0.72'/%3E%3Cpath transform='translate(897 978)' d='M0 -7.3Q0.9 -0.9 7.3 0Q0.9 0.9 0 7.3Q-0.9 0.9 -7.3 0Q-0.9 -0.9 0 -7.3Z' fill='%23b56a9c' opacity='0.54'/%3E%3Cpath transform='translate(535 788)' d='M0 -3.0Q0.4 -0.4 3.0 0Q0.4 0.4 0 3.0Q-0.4 0.4 -3.0 0Q-0.4 -0.4 0 -3.0Z' fill='%233d4470' opacity='0.42'/%3E%3C/svg%3E"), linear-gradient(in srgb, var(--sky-top), var(--sky-bot));
+  background-size: 997px 997px, 100% 100%;
 }
 .space.gl-ready { background-image: none; }
 .space .fallback-art { transition: opacity 300ms var(--ease-space); }
 .space.gl-ready .fallback-art { opacity: 0; }
+
+/* Fallback body inks, from the palette's hue and chroma (set inline as --h and --c). Mirrors bodyColors(). */
+.sp-sphere {
+  --ln: oklch(0.42 calc(var(--c) * 1.5) var(--h));
+  --fl: oklch(0.95 calc(var(--c) * 0.55) var(--h));
+  --sh: oklch(0.5 calc(var(--c) * 1.4) var(--h) / 0.2);
+}
+.dark .sp-sphere {
+  --ln: oklch(0.86 calc(var(--c) * 1.25) var(--h));
+  --fl: oklch(0.25 calc(var(--c) * 0.85) var(--h));
+  --sh: oklch(0.8 calc(var(--c) * 1.4) var(--h) / 0.26);
+}
+.sp-sphere.is-dim { --ln: oklch(0.6 0.01 var(--h)); }
+.dark .sp-sphere.is-dim { --ln: oklch(0.58 0.01 var(--h)); }
 
 /* ── Type: Geist for names, Geist Mono caps for metadata. */
 .sp-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -0.011em; color: var(--foreground); transition: color 150ms var(--ease-space); }
@@ -602,9 +598,11 @@
   .sp-fallback-hover, .space:not(.gl-ready) .group:hover .sp-fallback-hover, .space .group:active .sp-fallback-hover { transform: none; transition: none; }
 }
 
-.status-badge.is-running { background: var(--status-running-soft); color: var(--status-running); }
-.status-badge.is-attention { background: var(--status-attention); color: oklch(0.2 0.04 70); }
-.status-badge.is-error { background: var(--status-error); color: var(--status-error-ink); }
+/* Outlined, like the rest of the map: glyph and word in the status colour, on a patch of sky. */
+.status-badge { background: color-mix(in oklch, var(--void) 85%, transparent); box-shadow: inset 0 0 0 1px currentColor; }
+.status-badge.is-running { color: var(--status-running); }
+.status-badge.is-attention { color: var(--status-attention-ink); }
+.status-badge.is-error { color: var(--status-error); }
 .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; }
 .status-dot.is-ok { background: var(--status-ok); box-shadow: 0 0 0 2px var(--status-running-soft); }
 .status-cue.is-pass { color: var(--status-ok); }
@@ -619,28 +617,16 @@
 .satellite.is-error { background: var(--status-error); box-shadow: 0 0 0 3px var(--status-error-soft); }
 .sat-loop { stroke: var(--orbit); }
 
-/* On white, coloured glows read as smudges; keep only a trace. */
-:root:not(.dark) .sphere-glow { opacity: 0.35; }
 
-/* ── Glass: HUD panels and the section dock. */
+/* ── Chrome: HUD panels and the section dock are flat glass with a ruled edge, to sit with the line art. */
 .dock, .look-space .civ-panel {
-  background: color-mix(in oklch, var(--popover) 72%, transparent);
-  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--popover) 78%, transparent);
+  border: 1px solid var(--sp-rule);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.55),
-    0 1px 2px oklch(0.2 0.02 260 / 0.06),
-    0 4px 12px oklch(0.2 0.02 260 / 0.06),
-    0 16px 40px oklch(0.2 0.02 260 / 0.1);
+  box-shadow: 0 1px 2px oklch(0.2 0.05 270 / 0.08);
 }
-.dark .dock, .look-space.dark .civ-panel {
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.07),
-    0 1px 2px oklch(0 0 0 / 0.3),
-    0 8px 24px oklch(0 0 0 / 0.35),
-    0 24px 60px oklch(0 0 0 / 0.35);
-}
+.dark .dock, .look-space.dark .civ-panel { box-shadow: 0 1px 2px oklch(0 0 0 / 0.3); }
 .dock .is-selected { box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.18); }
 .dock .dock-count { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
 
