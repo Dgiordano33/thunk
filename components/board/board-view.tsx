@@ -1,4 +1,7 @@
 'use client';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { flattenChart, flattenDrawing, flattenImage } from "@/lib/board/flatten.client";
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -8,7 +11,7 @@ import { itemLabel } from './board-item';
 import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
 import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
-import { boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
+import { boardBase, boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
 import { useBoardPersistence } from '@/lib/client/use-board-persistence';
 import { useSession } from '@/lib/store/session-store';
 import { connectSession } from '@/lib/client/sse';
@@ -17,7 +20,7 @@ import { extendDrawing } from '@/lib/board/drawing';
 import { focusIds as focusIdsOf } from '@/lib/board/focus';
 import { OUTLINE, boxesOf, lassoFocus, movePatches, outlineFocus, positionsOf, stackGroup, widthPatch } from '@/lib/board/interaction';
 import { MAX_IMAGES, attachments, isFocus, pendingOf, visualKey, type Scope } from '@/lib/board/pending';
-import type { Card, Snapshot } from '@/lib/board/types';
+import type { CanvasSession, Card, Snapshot } from '@/lib/board/types';
 
 /** A stroke that starts this close (world px) to an existing drawing extends it instead of starting a new one. */
 const DRAWING_REACH = 48;
@@ -33,15 +36,36 @@ function focusEditor(id: string, tries = 60) {
     if (tries > 0) requestAnimationFrame(() => focusEditor(id, tries - 1));
 }
 
-export function BoardView({ projectId, slug, name, initial }: {
+export function BoardView({ projectId, slug, name, initial, boardId, sessions }: {
     projectId: string;
+    boardId: string;
+    sessions: CanvasSession[];
     slug: string;
     name: string;
     initial: Snapshot;
 }) {
     const router = useRouter();
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
-    const base = `/api/projects/${projectId}/board`;
+    const base = boardBase(projectId, boardId);
+    const [switching, setSwitching] = useState(false);
+    const [creating, setCreating] = useState(false), [sessionName, setSessionName] = useState('');
+    const switchSession = async (id: string) => {
+        setSwitching(true);
+        try {
+            await flushAll(projectId, boardId);
+            window.location.assign(`/${slug}/canvas?session=${id}`);
+        } catch (e) { fail(e); setSwitching(false); }
+    };
+    const newSession = async () => {
+        const name = sessionName.trim();
+        if (!name) return;
+        setSwitching(true);
+        try {
+            await flushAll(projectId, boardId);
+            const { session } = await boardRequest(`/api/projects/${projectId}/boards`, 'POST', { name });
+            window.location.assign(`/${slug}/canvas?session=${session.id}`);
+        } catch (e) { fail(e); setSwitching(false); }
+    };
     const space = useRef(false), imageInput = useRef<HTMLInputElement>(null);
     const focusIds = useFocusIds(), outline = useOutline(focusIds);
     const positions = useMemo(() => positionsOf(cards), [cards]), boxes = useMemo(() => boxesOf(cards, outline), [cards, outline]);
@@ -67,8 +91,8 @@ export function BoardView({ projectId, slug, name, initial }: {
     const [tool, setTool] = useState<Tool>('write');
     const deferredRef = useRef(false), sendRef = useRef<(scope?: Scope) => Promise<void>>(async () => { });
     useEffect(() => { useBoard.getState().init(initial); }, [initial]);
-    useBoardPersistence(projectId);
-    const reload = async () => { await flushAll(projectId); const state: Snapshot = await boardRequest(base); for (const c of state.cards)
+    useBoardPersistence(projectId, boardId);
+    const reload = async () => { await flushAll(projectId, boardId); const state: Snapshot = await boardRequest(base); for (const c of state.cards)
         useBoard.getState().merge(c); useBoard.setState({ board: state.board }); };
     const send = async (scope?: Scope) => {
         if (busy && !scope) {
@@ -77,7 +101,7 @@ export function BoardView({ projectId, slug, name, initial }: {
             return;
         }
         try {
-            await flushAll(projectId);
+            await flushAll(projectId, boardId);
             const state = useBoard.getState();
             const { attach } = attachments(pendingOf(state.board!, state.cards, scope).cards, scope);
             if (attach.length > MAX_IMAGES)
@@ -181,7 +205,7 @@ export function BoardView({ projectId, slug, name, initial }: {
         if (removing.current.has(c.id)) return;
         removing.current.add(c.id);
         void (async () => {
-            await flushAll(projectId);
+            await flushAll(projectId, boardId);
             const latest = useBoard.getState().cards.find(x => x.id === c.id);
             if (!latest) return;
             await boardRequest(`${base}/cards/${c.id}`, 'DELETE', { baseRev: latest.rev });
@@ -190,7 +214,7 @@ export function BoardView({ projectId, slug, name, initial }: {
         })().catch(fail).finally(() => removing.current.delete(c.id));
     };
     const revert = async (c: Card, keep: boolean) => { try {
-        await flushAll(projectId);
+        await flushAll(projectId, boardId);
         const latest = useBoard.getState().cards.find(x => x.id === c.id)!;
         const d = await boardRequest(`${base}/cards/${c.id}/revert`, 'POST', { baseRev: latest.rev, keep });
         useBoard.getState().merge(d.card);
@@ -205,7 +229,12 @@ export function BoardView({ projectId, slug, name, initial }: {
     const later = deferred || busy;
 
     return <div className="relative flex h-full flex-col">
-    <header className="z-20 flex items-center gap-3 border-b bg-background p-3"><BoardButton variant="ghost" onClick={() => void flushAll(projectId).then(() => router.push(`/${slug}`)).catch(fail)}>← {name}</BoardButton><h1 className="font-semibold">Canvas</h1>
+    <header className="z-20 flex items-center gap-3 border-b bg-background p-3"><BoardButton variant="ghost" onClick={() => void flushAll(projectId, boardId).then(() => router.push(`/${slug}`)).catch(fail)}>← {name}</BoardButton><h1 className="font-semibold">Canvas</h1>
+      <Select value={boardId} onValueChange={id => void switchSession(id)} disabled={switching}>
+        <SelectTrigger aria-label="Canvas session" className="max-w-48"><SelectValue /></SelectTrigger>
+        <SelectContent>{sessions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+      </Select>
+      <BoardButton variant="outline" size="sm" disabled={switching} onClick={() => { setSessionName(''); setCreating(true); }}>New session</BoardButton>
       <BoardSegmented<Tool> aria-label="Tool" value={tool} onValueChange={v => v && setTool(v)} items={[
           { value: 'write', label: <><TypeIcon aria-hidden="true"/>Write</>, hint: 'Write: click anywhere to type' },
           { value: 'draw', label: <><PencilIcon aria-hidden="true"/>Draw</>, hint: 'Draw; Esc to stop', shortcut: 'd' },
@@ -217,6 +246,16 @@ export function BoardView({ projectId, slug, name, initial }: {
       </BoardToolbar>
       <input ref={imageInput} className="sr-only" tabIndex={-1} aria-hidden="true" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files) void upload(e.target.files, center()); e.target.value = ''; }}/>
       <ZoomLabel board={handle}/></header>
+    <Dialog open={creating} onOpenChange={open => { if (!switching) setCreating(open); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>New canvas session</DialogTitle><DialogDescription>Start a separate canvas and conversation in this project.</DialogDescription></DialogHeader>
+        <form onSubmit={e => { e.preventDefault(); void newSession(); }}>
+          <label htmlFor="canvas-session-name" className="text-sm">Name</label>
+          <Input id="canvas-session-name" autoFocus maxLength={200} value={sessionName} onChange={e => setSessionName(e.target.value)} disabled={switching} />
+          <DialogFooter className="mt-4"><BoardButton type="button" variant="outline" disabled={switching} onClick={() => setCreating(false)}>Cancel</BoardButton><BoardButton type="submit" disabled={switching || !sessionName.trim()}>Create session</BoardButton></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
     {error && <div role="alert" className="z-30 bg-destructive/10 p-3 text-sm">{error} <BoardButton size="xs" onClick={() => useBoard.setState({ error: null })}>Dismiss</BoardButton></div>}
     <BoardSurface base={base} board={handle} space={space} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert}/>
     <footer className="z-20 flex items-center gap-3 border-t bg-background p-3"><p className="flex-1 truncate text-xs" aria-live="polite">{activity || 'Click anywhere to write, drop an image, or press D to draw. Drag the background or hold Space to pan, Shift-drag to select; pinch, ⌘-scroll or + / − to zoom.'}</p><span className="text-sm">{focused && !quiet ? `${focusIds.length} in focus · ` : ''}{count} pending</span>{focused && <Hint label="Send what's in the focus" shortcut="mod+enter"><BoardButton onClick={() => void send({ focus: focusIds })}>Send focus</BoardButton></Hint>}<Hint label="Send every pending edit, comment and deletion on the canvas" shortcut={focused ? 'shift+mod+enter' : 'mod+enter'}><BoardButton variant={focused ? 'outline' : 'default'} onClick={() => void send()} disabled={!count} focusableWhenDisabled>{later ? 'Send all after this turn' : 'Send all'}</BoardButton></Hint></footer>

@@ -9,7 +9,7 @@ test('pending excludes geometry and includes replies, images, strokes and deleti
 test('placement avoids existing cards and payload escapes untrusted XML',async t=>{const d=await dir(t),a=await store.addCard(d,{markdown:'</document><bad>',title:'A'}),b=await store.addCard(d,{title:'B'},a.id);assert.ok(b.x>=a.x+a.width+48);const p=placement([a,b],a);assert.notDeepEqual(p,{x:b.x,y:b.y});const text=payload(await store.snapshot(d));assert.match(text,/&lt;\/document&gt;/);assert.match(text,/canvas_update/);assert.equal(isHiddenSession({origin:{kind:'board'}}),true);assert.equal(isHiddenSession({origin:{kind:'chief'}}),false);});
 test('agent tools preserve snapshots, reject ambiguous edits, reply and emit persisted revisions',async t=>{
   const d=await dir(t),events=[];const load=Module._load;
-  Module._load=function(request,...rest){if(request==='@/lib/projects/paths')return{projectBoardsDir:()=>d};return load.call(this,request,...rest);};
+  Module._load=function(request,...rest){if(request==='@/lib/projects/paths')return{projectBoardsDir:(_,boardId)=>boardId&&boardId!=='main'?path.join(d,boardId):d};return load.call(this,request,...rest);};
   const {boardTools}=require('../lib/board/tools.ts');t.after(()=>{Module._load=load;});
   const live={meta:{origin:{kind:'board'}},ctx:{project:{dataKey:'test'}}};let broken=false;const tools=boardTools(live,(_,e)=>{if(broken)throw new Error('broadcast down');events.push(e);});const call=(name,args)=>tools.find(t=>t.name===name).handler(args);
   const c=await store.addCard(d,{markdown:'one one',baselineMarkdown:'one one'});
@@ -34,6 +34,11 @@ test('agent tools preserve snapshots, reject ambiguous edits, reply and emit per
   // A failed broadcast still reports the saved card, so the agent does not retry and duplicate it.
   broken=true;const before=(await store.snapshot(d)).cards.length,quiet=await call('canvas_add_card',{markdown:'once'});broken=false;
   assert.ok(!quiet.isError);assert.equal((await store.snapshot(d)).cards.length,before+1);
+  const isolated=boardTools({meta:{origin:{kind:'board',boardId:'research'}},ctx:{project:{dataKey:'test'}}},(_,e)=>events.push(e));
+  const response=await isolated.find(t=>t.name==='canvas_add_card').handler({markdown:'separate conversation'});
+  assert.ok(!response.isError);assert.equal(events.at(-1).boardId,'research');
+  assert.equal((await store.snapshot(path.join(d,'research'))).cards[0].markdown,'separate conversation');
+  assert.equal((await store.snapshot(d)).cards.some(c=>c.markdown==='separate conversation'),false);
   assert.deepEqual(boardTools({meta:{origin:null}},()=>{}),[]);
 });
 test('send stamps only the dispatched scope, preserves baseline for mentions, and retains pending work on dispatch failure',async t=>{

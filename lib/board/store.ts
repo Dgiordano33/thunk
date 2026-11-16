@@ -25,7 +25,7 @@ export async function atomic(file: string, value: string | Buffer) {
 export const lock = <T>(dir: string, fn: () => Promise<T>) => withFileLock(dir, fn);
 export async function readBoard(dir: string): Promise<Board> {
     const raw = await readOptional(path.join(dir, 'board.json'));
-    return raw ? JSON.parse(raw) : { id: 'main', rev: 0, viewport: { x: 0, y: 0, zoom: 1 }, edges: [], tombstones: [], agent: null, lastSend: null };
+    return raw ? JSON.parse(raw) : { id: path.basename(dir), rev: 0, viewport: { x: 0, y: 0, zoom: 1 }, edges: [], tombstones: [], agent: null, lastSend: null };
 }
 export async function saveBoard(dir: string, board: Board) { board.rev++; await atomic(path.join(dir, 'board.json'), JSON.stringify(board)); }
 export async function readCard(dir: string, id: string): Promise<Card> { const raw = await readOptional(cardFile(dir, id)); if (!raw)

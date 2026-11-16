@@ -1,11 +1,46 @@
 import 'server-only';
 import path from 'node:path';
+import { readFile, readdir } from 'node:fs/promises';
+import type { CanvasSession } from './types';
 import { getProject } from '@/lib/supabase/repo/projects';
 import { projectBoardsDir } from '@/lib/projects/paths';
 import { HttpError } from '@/lib/api/errors';
-import { addCard, atomic, lock } from './store';
-export async function boardFor(id: string) { const project = await getProject(id); if (!project)
-    throw new HttpError(404, 'Project not found'); return { project, dir: projectBoardsDir(project.dataKey) }; }
+import { addCard, atomic, lock, readBoard, saveBoard, validId } from './store';
+export async function boardFor(id: string, boardId = 'main') {
+    if (!validId(boardId)) throw new HttpError(400, 'Invalid canvas session id');
+    const project = await getProject(id);
+    if (!project) throw new HttpError(404, 'Project not found');
+    const dir = projectBoardsDir(project.dataKey, boardId);
+    if (boardId !== 'main') {
+        await readFile(path.join(dir, 'board.json')).catch((e: NodeJS.ErrnoException) => {
+            if (e.code === 'ENOENT') throw new HttpError(404, 'Canvas session not found');
+            throw e;
+        });
+    }
+    return { project, dir };
+}
+export async function listCanvases(key: string): Promise<CanvasSession[]> {
+    const root = path.dirname(projectBoardsDir(key));
+    const entries = await readdir(root, { withFileTypes: true }).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === 'ENOENT') return [];
+        throw e;
+    });
+    const sessions: CanvasSession[] = [{ id: 'main', name: 'Canvas' }];
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (!entry.isDirectory() || !validId(entry.name)) continue;
+        const board = await readBoard(path.join(root, entry.name));
+        if (entry.name === 'main') sessions[0].name = board.name ?? 'Canvas';
+        else sessions.push({ id: entry.name, name: board.name ?? 'Untitled canvas' });
+    }
+    return sessions;
+}
+export async function createCanvas(key: string, name: string): Promise<CanvasSession> {
+    const id = crypto.randomUUID(), dir = projectBoardsDir(key, id);
+    const board = await readBoard(dir);
+    board.name = name;
+    await saveBoard(dir, board);
+    return { id, name };
+}
 /** Height / width of an image, read from its header where that is cheap; null when unknown. */
 export function imageAspect(bytes: Buffer, mime: string): number | null {
     const ratio = (w: number, h: number) => w > 0 && h > 0 ? h / w : null;
