@@ -6,7 +6,7 @@ This guide captures the implemented homepage and town styling. Use it when exten
 
 Thunk presents coding work as a map you can move around. There are two looks, chosen in **Settings → Look** and stored in the `thunk.look` cookie (see [lib/look.ts](lib/look.ts)). The root layout puts `look-space` or `look-world` on `<html>`, and the server reads the cookie to decide which map to render.
 
-- **Solar system** (default, `look-space`): a clean star chart. Projects are planets around a star, workspaces are moons, sessions are satellites. A deep star field in dark, an observatory chart on cool paper in light; glass frames, Geist names with Geist Mono metadata, and lit planets drawn on a WebGL canvas. Light and dark get equal care.
+- **Solar system** (default, `look-space`): a star chart in line art. Projects are planets around a star, workspaces are moons, sessions are satellites. Everything pictorial is an outline with a hatched shadow, on a twilight sky with four-point sparkles: glowing lines on indigo-to-violet in dark, ink on pale dawn paper in light. Ruled glass frames, Geist names with Geist Mono metadata, and planets drawn on a WebGL canvas. Light and dark get equal care.
 - **Game world** (`look-world`): a small strategy-game world. Projects are cities, each project a town with workspaces as farms and sessions as fields. Bronze frames, pixel lettering, stepped sprites and terrain. Always dark (the moonlit palette).
 
 Both looks share every panel, form and route. Game words (Town hall, Workshop, Farmhouse, crop stages) appear only on the game map; panels, menus and empty states use the plain product terms in both looks. Keep the map treatment in navigation, headings, map objects and status cues, and give dense working content room to breathe.
@@ -18,7 +18,7 @@ In Tailwind, `space:` and `world:` variants target one look (defined in `app/glo
 Colors live in [app/globals.css](app/globals.css). Three families work together:
 
 - **Application tokens:** `background`, `foreground`, `card`, `popover`, `muted`, `border`, `input`, `ring`, `primary`, and `destructive`. Use their Tailwind classes for content, forms, and interactive states. `:root` holds the white palette and `.dark` the near-black one, both cool neutrals (hue ~255, very low chroma). The game look overrides them with the moonlit palette on its screens.
-- **Space tokens:** `--void` (map background), `--orbit` (orbit lines, fallback art), `--star-core` / `--star-glow`, `--sp-meta` (mono metadata), `--ease-space` (the one UI easing curve), and status colors `--status-running`, `--status-attention`, `--status-error`, `--status-ok` (each with a `-soft` tint). Amber and red also have an `-ink`: `--status-attention-ink` for amber text (the fill is too light for text on white) and `--status-error-ink` for text on the red fill. Use the status tokens, through `StatusBadge` or the `.satellite` / `.status-*` classes, rather than Tailwind palette colors.
+- **Space tokens:** `--sky-top` / `--sky-bot` (the sky gradient), `--void` (the middle of the sky, for label halos and flat fills), `--orbit` (orbit dots, fallback art), `--star-core` (the star's ink), `--sp-meta` (mono metadata), `--sp-rule` (panel edges), `--ease-space` (the one UI easing curve), and status colors `--status-running`, `--status-attention`, `--status-error`, `--status-ok` (each with a `-soft` tint). Amber and red also have an `-ink`: `--status-attention-ink` for amber text (the fill is too light for text on white) and `--status-error-ink` for text on a red fill. The canvas reads the sky, star and orbit colours from `SKY` in [lib/world/bodies.ts](lib/world/bodies.ts); keep it in step with the CSS tokens. Use the status tokens, through `StatusBadge` or the `.satellite` / `.status-*` classes, rather than Tailwind palette colors.
 - **Contrast on white:** small status text needs 4.5:1. Tailwind's amber, emerald, sky and green 600 shades fall short on white, so light-mode text uses the 700 shade (`text-emerald-700 dark:text-emerald-400`).
 - **World tokens:** `--w-*` properties for terrain, bronze framing, parchment, roads, and soil, used by the game look. In the solar-system look the bronze and parchment tokens are remapped to neutrals, so older screens that reference them still read as plain selected and hover states; don't use them in new work.
 
@@ -27,10 +27,13 @@ Solar-system values:
 | Token | White | Dark |
 | --- | --- | --- |
 | `--background` | `0.985 0.003 250` | `0.13 0.015 260` |
-| `--void` | `0.972 0.006 248` | `0.075 0.014 265` |
+| `--sky-top` → `--sky-bot` | `0.962 0.022 250` → `0.972 0.032 330` | `0.14 0.055 265` → `0.215 0.1 302` |
+| `--void` | `0.967 0.027 290` | `0.175 0.078 284` |
 | `--foreground` | `0.16 0.015 260` | `0.97 0.005 250` |
 | `--muted-foreground` | `0.45 0.02 255` | `0.72 0.02 255` |
-| `--border` / `--orbit` | black at 13% / ink `0.3 0.03 260` at 20% | white at 13% |
+| `--border` | black at 13% | white at 13% |
+| `--orbit` | ink `0.3 0.08 265` at 42% | `0.82 0.06 250` at 42% |
+| `--star-core` | `0.62 0.15 70` | `0.93 0.11 95` |
 | `--ring` | `0.5 0.14 245` | `0.78 0.11 235` |
 
 Representative game-world values:
@@ -119,17 +122,22 @@ Use [`Hint`](components/hint.tsx) (a tooltip, with an optional key) for icon but
 
 [SystemMap](components/space/system-map.tsx) and [PlanetView](components/space/planet-view.tsx) draw the default look; the layout maths is pure and tested in [lib/world/system.ts](lib/world/system.ts), [lib/world/planet.ts](lib/world/planet.ts) and [lib/world/bodies.ts](lib/world/bodies.ts). Both reuse `IsoViewport` for pan, zoom, keys and click-versus-drag, opting into its `underlay`, `onView` and `smooth` props (the game look doesn't use them).
 
-- **All projects:** a star in the middle and tilted orbit ellipses (`TILT` 0.58). Projects fill rings oldest first and take an angle from their id, so a planet never moves when another is added. A slot is skipped if a planet on another ring sits in its label box (`LABEL_BOX`). Planet size follows the city level (workspaces × 2 + sessions, thresholds 2, 6, 14, 30), radius 12, 17, 23, 30, 38. Colour is one of eight mostly cool palettes chosen by id. Light comes from the star.
-- **One project:** the core is the same planet as on the home map (its level and seed) at r=58; it opens the overview. Active workspaces are rock or ice moons on rings of 4, 8, 12, with `main` first; each shows its branch and PR mark. Up to 12 newest sessions per moon are satellites on two dotted loops; the rest are counted as `+N`. Satellites grow with spend (thresholds $0.01, $0.5, $2, $5); closed sessions are hollow. A fixed key light falls from the upper left, with a faint wash in that corner. Notes, Tasks, Routines, Vault and Canvas are a glass section bar at the bottom centre, counts in mono.
+- **All projects:** a star in the middle and one planet per project, floating free: no orbit lines, and each planet bobs gently (3px, 5–9s, off under reduced motion). New projects start at a spot from `placePlanets` (oldest first, angle from the id, labels clear of each other via `LABEL_BOX`), so a planet never moves when another is added. Drag a planet, or focus it and press Alt + arrow keys, to move it; the offset from the star is saved in the `thunk.planets` cookie ([lib/world/positions.ts](lib/world/positions.ts)) so the server renders the same layout. Drops are clamped inside the map and away from the star, so the map never resizes under you. “Reset planet layout” appears in the control column once anything has moved. Planet size follows the city level (workspaces × 2 + sessions, thresholds 2, 6, 14, 30), radius 12, 17, 23, 30, 38. Colour is one of eight mostly cool palettes chosen by id. Light comes from the star, and follows a planet while it is dragged.
+- **One project:** the core is the same planet as on the home map (its level and seed) at r=58; it opens the overview. Active workspaces are rock or ice moons on rings of 4, 8, 12, with `main` first; each shows its branch and PR mark. Up to 12 newest sessions per moon are satellites on two dotted loops; the rest are counted as `+N`. Satellites grow with spend (thresholds $0.01, $0.5, $2, $5); closed sessions are hollow. A fixed key light falls from the upper left, so every night side faces lower right. Notes, Tasks, Routines, Vault and Canvas are a ruled glass section bar at the bottom centre, counts in mono.
 
 ### Rendering
 
-One WebGL2 canvas per map ([components/space/scene](components/space/scene)) draws everything pictorial: nebula wash and vignette, a seeded star field in three parallax layers, orbits, the star, and every body. It sits behind the stage, is not panned, and applies the view itself. HTML stays on top for links, labels, focus rings, satellites and hover cards, so hit-testing, keyboard and screen readers don't depend on the canvas. A `SceneStore` passes view and hover by ref, so neither re-renders React.
+One WebGL2 canvas per map ([components/space/scene](components/space/scene)) draws everything pictorial: the sky gradient, a seeded field of specks and four-point sparkles in three parallax layers, orbits, the star, and every body. It sits behind the stage, is not panned, and applies the view itself. HTML stays on top for links, labels, focus rings, satellites and hover cards, so hit-testing, keyboard and screen readers don't depend on the canvas. A `SceneStore` passes view and hover by ref, so neither re-renders React.
 
-- **Bodies** are sphere impostors: one quad each, the shader rebuilds the normal per pixel, so they stay crisp at any zoom. Type follows size: rock (cratered, no atmosphere, hard terminator), ice world (two-tone continents, polar caps, thin atmosphere), cloud world (drifting cloud layer, atmosphere rim), gas giant (domain-warped bands, ring), great giant (bands, storm spot, wide ring with a gap). Tilt, spin period, band count and hue shift come from the id. Rings and planets shadow each other.
-- **Dark:** night sides fall to near-black, a fresnel atmosphere lights the sunward limb, the star is a white-hot core with two coronas and faint spikes. Orbits are 1px hairlines, brighter on the near half; the hovered planet's orbit brightens.
-- **Light:** ambient keeps night sides mid-tone, no additive glow, a soft cast shadow away from the star and an ink limb line. The star is a gold disc with an amber corona and one ring line; the outer orbit carries degree ticks.
-- **Fallback:** the server renders the SVG art ([Sphere](components/space/sphere.tsx), `Orbits`) and a CSS star field. When the canvas has drawn a frame, `.space` gets `gl-ready` and the SVG fades out over 300ms. Without WebGL2, or after a lost context, the SVG stays.
+The look is line art: outlines and hatching, no gradients on the bodies, no glows.
+
+- **Bodies** are sphere impostors: one quad each, the shader rebuilds the normal per pixel, so surface lines turn with the planet and stay crisp at any zoom. Each is a disc tinted with its palette colour, an outline, and a night side in a lighter tint with diagonal hatching, bounded by the terminator line. Three inks per body and theme come from `bodyColors()`. Lines are a fixed share of the radius with a 1px floor.
+- **Type follows size**, told by a few surface lines: rock (crater rims), ice world (coastlines and polar caps), cloud world (wandering streaks), gas giant (latitude bands, a ring), great giant (bands, a storm oval, a ring with a gap). Tilt, spin period and band count come from the id. Rings are edge lines with sky between them, passing behind and in front of the planet.
+- **Star:** a solid core in a ring, on two nested four-point sparkles, outlines only. It breathes slowly.
+- **Orbits** (project view): rows of evenly spaced dots, brighter on the near half; the hovered moon's orbit brightens.
+- **Dark and light** share every shape. Dark draws light lines on dark tints; light draws ink lines on pale tints, and its stars are ink, gold and rose marks.
+- **Dormant** bodies keep their drawing and lose their colour.
+- **Fallback:** the server renders the same drawing as SVG ([Sphere, StarMark](components/space/sphere.tsx), `Orbits`) over the CSS sky. When the canvas has drawn a frame, `.space` gets `gl-ready` and the SVG fades out over 300ms. Without WebGL2, or after a lost context, the SVG stays.
 - **Gallery:** `/mock/solar?gallery` and `/mock/solar-light?gallery` show every type × palette plus dormant bodies, for tuning.
 
 ### Type
@@ -140,7 +148,7 @@ One WebGL2 canvas per map ([components/space/scene](components/space/scene)) dra
 | Meta line | Geist Mono 10/14, 500, caps, tracking 0.08em, `--sp-meta` (`.sp-meta`): `9 WS · 22 SESS`, `IDLE 45D` |
 | Core name | Geist 20/24, 600, tracking −0.02em, with a mono `PROJECT · <TYPE>` eyebrow |
 | Moon | Geist 13/16, 500; branch in mono 10.5px |
-| Status badge | Geist Mono 10px caps, tracking 0.06em, glyph + word |
+| Status badge | Geist Mono 10px caps, tracking 0.06em, glyph + word, outlined in the status colour |
 | Hover card | Mono eyebrow, name 15/600, stat rows with hairline dividers and tabular mono values ([card.tsx](components/space/card.tsx)) |
 
 A 1px × 8px leader tick joins each body to its label. Labels keep a `--void` halo so they read over stars and orbits.
@@ -150,9 +158,9 @@ A 1px × 8px leader tick joins each body to its label. Labels keep a `--void` ha
 One curve for UI: `cubic-bezier(0.22, 1, 0.36, 1)` (`--ease-space`, `ease()` in [lib/ease.ts](lib/ease.ts)).
 
 - **Entrance** on mount (~1.1s): star blooms, orbits draw on from the front with an 80ms stagger, bodies scale 0.6→1 with a 40ms stagger, labels rise 6px. The CSS animation `space-clock` on `.space` is the shared clock, so the canvas stays in step even when WebGL starts late. `router.refresh()` doesn't remount, so it doesn't replay.
-- **Hover/focus:** the body scales to 1.08 and its atmosphere and orbit brighten; press is 0.97.
+- **Hover/focus:** the body scales to 1.08 and its lines and orbit brighten (darken, in light); press is 0.97.
 - **Camera:** fit, zoom buttons, keyboard zoom and double-click tween over 240ms; wheel and drag stay direct.
-- **Ambient:** surface spin, cloud drift, corona breathing, 5% twinkle, star parallax. 30fps when idle, full rate while panning, hovering or entering, paused when the tab is hidden.
+- **Ambient:** planet bob, surface spin, the star breathing, sparkles pulsing, star parallax. The renderer moves each planet's HTML twin with it (`translate`), so labels and hit areas stay on the body. 30fps when idle, full rate while panning, hovering or entering, paused when the tab is hidden.
 - **Reduced motion:** a single static frame redrawn on pan, zoom and hover; the entrance is a 150ms fade; the camera jumps; hover changes brightness only; the running pulse is static.
 
 | State | Solar-system cue |
@@ -160,7 +168,7 @@ One curve for UI: `cubic-bezier(0.22, 1, 0.36, 1)` (`--ease-space`, `ease()` in 
 | Running | Green pulsing halo (static under reduced motion); green satellite; “● RUNNING” badge |
 | Needs attention | Amber “! NEEDS YOU” badge; amber satellite |
 | Error | Red “× ERROR” badge; red satellite |
-| Idle 30+ days | Desaturated planet without atmosphere, “IDLE 45D” meta |
+| Idle 30+ days | Grey planet, “IDLE 45D” meta |
 | Dev server running | Green dot after the moon's name |
 
 Every state pairs a glyph and a word with its colour.

@@ -71,49 +71,33 @@ export function oklchToRgb(l: number, c: number, h: number): [number, number, nu
 }
 
 export type RGB = [number, number, number];
-/** The surface colours a body is painted with: base, secondary, pale accent, atmosphere, ring, storm. */
-export type BodyColors = { base: RGB; second: RGB; accent: RGB; atmosphere: RGB; ring: RGB; storm: RGB };
+/**
+ * The inks a body is drawn with, per theme: its outline and surface lines, the tint that fills the disc,
+ * and the lighter tint of its hatched night side. Line art, so three colours are the whole palette.
+ */
+export type BodyColors = { lineDark: RGB; fillDark: RGB; shadeDark: RGB; lineLight: RGB; fillLight: RGB; shadeLight: RGB };
 
-export function bodyColors(palette: PlanetPalette, spec: BodySpec): BodyColors {
-  const { h, c } = palette;
+const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+/** `dormant` bodies keep their shape but lose their colour. */
+export function bodyColors(palette: PlanetPalette, spec: BodySpec, dormant = false): BodyColors {
+  const { h } = palette;
+  const c = dormant ? 0.008 : palette.c;
   const h2 = h + spec.hueShift;
-  switch (spec.kind) {
-    case "rock":
-      return {
-        base: oklchToRgb(0.64, c * 0.45, h),
-        second: oklchToRgb(0.48, c * 0.35, h2),
-        accent: oklchToRgb(0.74, c * 0.3, h),
-        atmosphere: oklchToRgb(0.8, c * 0.4, h),
-        ring: oklchToRgb(0.8, 0.02, h),
-        storm: oklchToRgb(0.7, 0.1, 40),
-      };
-    case "ice":
-      return {
-        base: oklchToRgb(0.5, c * 1.05, h),
-        second: oklchToRgb(0.7, c * 0.75, h2 + 25),
-        accent: oklchToRgb(0.95, c * 0.12, h),
-        atmosphere: oklchToRgb(0.8, c * 0.9 + 0.03, h),
-        ring: oklchToRgb(0.8, 0.02, h),
-        storm: oklchToRgb(0.7, 0.1, 40),
-      };
-    case "cloud":
-      return {
-        base: oklchToRgb(0.52, c * 0.9, h),
-        second: oklchToRgb(0.66, c * 0.7, h2),
-        accent: oklchToRgb(0.96, c * 0.08, h),
-        atmosphere: oklchToRgb(0.82, c * 1.1 + 0.04, h),
-        ring: oklchToRgb(0.8, 0.02, h),
-        storm: oklchToRgb(0.7, 0.1, 40),
-      };
-    default:
-      // Gas and great giants: two band tones plus a pale one, a ring of dusty ice and a warm storm.
-      return {
-        base: oklchToRgb(0.66, c * 0.95, h),
-        second: oklchToRgb(0.5, c * 0.85, h2),
-        accent: oklchToRgb(0.86, c * 0.35, h - spec.hueShift * 0.5),
-        atmosphere: oklchToRgb(0.82, c * 0.8 + 0.03, h),
-        ring: oklchToRgb(0.82, c * 0.25 + 0.015, h + 10),
-        storm: oklchToRgb(0.62, 0.13, 35),
-      };
-  }
+  const fillDark = oklchToRgb(0.25, c * 0.85, h2);
+  const fillLight = oklchToRgb(0.95, c * 0.55, h2);
+  return {
+    lineDark: oklchToRgb(dormant ? 0.58 : 0.86, c * 1.25, h),
+    fillDark,
+    shadeDark: mix(fillDark, oklchToRgb(0.8, c * 1.4, h), 0.26),
+    lineLight: oklchToRgb(dormant ? 0.6 : 0.42, c * 1.5, h),
+    fillLight,
+    shadeLight: mix(fillLight, oklchToRgb(0.5, c * 1.4, h), 0.2),
+  };
 }
+
+/** The sky behind the map, top and bottom of a vertical gradient, and the star's ink. Mirrored in app/globals.css. */
+export const SKY = {
+  dark: { top: oklchToRgb(0.14, 0.055, 265), bottom: oklchToRgb(0.215, 0.1, 302), star: oklchToRgb(0.93, 0.11, 95), orbit: oklchToRgb(0.82, 0.06, 250) },
+  light: { top: oklchToRgb(0.962, 0.022, 250), bottom: oklchToRgb(0.972, 0.032, 330), star: oklchToRgb(0.62, 0.15, 70), orbit: oklchToRgb(0.3, 0.08, 265) },
+} as const;

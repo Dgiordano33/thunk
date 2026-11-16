@@ -11,8 +11,11 @@ export const FIRST_ORBIT = 170;
 export const ORBIT_GAP = 120;
 /** Arc length (px) each planet reserves on its ring, so labels don't collide. */
 export const PLANET_SPACING = 230;
-/** Screen box (px) a planet and its label need clear of planets on other rings: half-width, and height above + below. */
-export const LABEL_BOX = { halfW: 70, above: 45, below: 85 } as const;
+/** Screen box (px) a planet and its label need clear of planets on other rings: half-width, and height above + below
+ * its centre. Below covers the largest planet, the leader, name, meta line and a status badge. */
+export const LABEL_BOX = { halfW: 70, above: 45, below: 110 } as const;
+/** Half-size (px) of the star's busy middle (its ring and the thick part of its sparkle arms); no label box may cover it. */
+export const STAR_BOX = 50;
 /** Room around the outermost orbit for labels and the largest planet. */
 const MARGIN_X = 200;
 const MARGIN_Y = 140;
@@ -46,7 +49,10 @@ export function placePlanets(projects: { id: string; createdAt: string }[]): { s
   const spots = new Map<string, PlanetSpot>();
   const at = (ring: number, a: number) => ({ x: Math.cos(a) * orbitRadius(ring), y: Math.sin(a) * orbitRadius(ring) * TILT });
   // Two label boxes overlap when the planets are close horizontally and the lower one starts above the upper one's label.
+  const clearOfStar = (p: { x: number; y: number }) =>
+    Math.abs(p.x) >= LABEL_BOX.halfW + STAR_BOX || p.y + LABEL_BOX.below <= -STAR_BOX || p.y - LABEL_BOX.above >= STAR_BOX;
   const clear = (p: { x: number; y: number }) =>
+    clearOfStar(p) &&
     [...spots.values()].every((o) => {
       if (Math.abs(o.x - p.x) >= 2 * LABEL_BOX.halfW) return true;
       const [top, bottom] = o.y < p.y ? [o, p] : [p, o];

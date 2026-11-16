@@ -4,15 +4,16 @@ import { CivPanel } from "@/components/world/civ-panel";
 import { WorldMap } from "@/components/world/world-map";
 import { hasSupabase } from "@/lib/env";
 import { getLook } from "@/lib/look.server";
+import { getPlanetPositions } from "@/lib/world/positions.server";
 import { listProjects } from "@/lib/supabase/repo/projects";
 import { cityHue, cityLevel, cityMood, type WorldCity } from "@/lib/world/cities";
 import { generateTerrain, placeCities, territory } from "@/lib/world/terrain";
 
 export const dynamic = "force-dynamic";
 
-// Every project on one map: planets around a star (solar-system look) or cities on an island (game look).
+// Every project on one map: planets floating around a star (solar-system look) or cities on an island (game look).
 export default async function Home() {
-  const [projects, look] = await Promise.all([listProjects().catch(() => []), getLook()]);
+  const [projects, look, positions] = await Promise.all([listProjects().catch(() => []), getLook(), getPlanetPositions()]);
   const world = look === "world";
 
   const overlay = (
@@ -36,7 +37,7 @@ export default async function Home() {
     </>
   );
 
-  if (!world) return <SystemMap projects={projects}>{overlay}</SystemMap>;
+  if (!world) return <SystemMap projects={projects} positions={positions}>{overlay}</SystemMap>;
 
   const tiles = generateTerrain();
   const placed = placeCities(projects, tiles);

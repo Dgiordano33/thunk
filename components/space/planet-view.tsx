@@ -130,7 +130,7 @@ export function PlanetView({
         makeBody({ id: projectId, x: core.x, y: core.y, r: CORE_RADIUS, kind: bodyKind(level), palette: planetPalette(projectId), order: 0 }),
         ...moons.map((m, i) => makeBody({ id: m.id, x: m.x, y: m.y, r: moonRadius(m.sessionCount), kind: moonKind(m.id), palette: planetPalette(m.id), order: i + 2 })),
       ],
-      orbits: layout.orbits.map((r, i) => ({ cx: core.x, cy: core.y, r, tilt: TILT, bodies: moons.filter((m) => ringOf(m) === i).map((m) => m.id), ticks: i === layout.orbits.length - 1 })),
+      orbits: layout.orbits.map((r, i) => ({ cx: core.x, cy: core.y, r, tilt: TILT, bodies: moons.filter((m) => ringOf(m) === i).map((m) => m.id) })),
     };
   }, [projectId, level, core.x, core.y, layout.orbits, moons]);
   useEffect(() => scene.setData(data), [scene, data]);

@@ -1,8 +1,8 @@
 "use client";
 
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, RotateCcwIcon } from "lucide-react";
 import Link from "next/link";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,55 +13,93 @@ import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 import { bodyKind, type BodyKind } from "@/lib/world/bodies";
 import { LEVEL_THRESHOLDS, cityActivity, cityLevel, cityMood, type CityActivity } from "@/lib/world/cities";
-import { TILT, orbitRadius, placePlanets, planetPalette, planetRadius, systemSize } from "@/lib/world/system";
+import { POSITIONS_COOKIE, POSITIONS_MAX_AGE, clampOffset, encodePositions, floatLayout, positionKey, type Offset } from "@/lib/world/positions";
+import { TILT, planetPalette, planetRadius } from "@/lib/world/system";
 import { CardEyebrow, CardStats, shortAge } from "./card";
-import { SceneContext, makeBody, useBodyHover, useSceneStore, type SceneData } from "./scene/scene-store";
+import { SceneContext, makeBody, useBodyHover, useSceneStore, type SceneData, type SceneStore } from "./scene/scene-store";
 import { SpaceCanvas } from "./scene/space-canvas";
-import { Sphere } from "./sphere";
+import { Sphere, StarMark } from "./sphere";
 import { StatusBadge, statusTone } from "./status";
 
-type Placed = { project: ProjectSummary; x: number; y: number; ring: number; level: number; dormant: boolean; order: number };
+type Placed = { project: ProjectSummary; x: number; y: number; level: number; dormant: boolean; order: number };
+type Mover = { move: (id: string, at: Offset) => void; drop: (id: string, at: Offset) => void; scene: SceneStore; star: { x: number; y: number } };
+
+/** Pointer travel (px) before a press on a planet becomes a drag instead of a click. */
+const DRAG_SLOP = 4;
+/** Alt+arrow nudges a focused planet this far (map px). */
+const NUDGE = 24;
 
 export const KIND_LABEL: Record<BodyKind, string> = { rock: "Rock", ice: "Ice world", cloud: "Cloud world", gas: "Gas giant", giant: "Great giant" };
 
-/** The home map: a star, its orbits, and one planet per project. `activity` overrides live state (design mocks). */
-export function SystemMap({ projects, activity, children }: { projects: ProjectSummary[]; activity?: Record<string, CityActivity>; children?: React.ReactNode }) {
+/**
+ * The home map: a star and one planet per project, floating free. Drag a planet (or Alt+arrow it) to rearrange;
+ * the layout is saved in a cookie so the server renders it too. `positions` is that cookie, read on the server.
+ * `activity` overrides live state (design mocks).
+ */
+export function SystemMap({ projects, positions = {}, activity, children }: { projects: ProjectSummary[]; positions?: Record<string, Offset>; activity?: Record<string, CityActivity>; children?: React.ReactNode }) {
   const sessions = useAmbient((s) => s.sessions);
   const scene = useSceneStore();
-  const { planets, rings, w, h } = useMemo(() => {
-    const { spots, rings } = placePlanets(projects);
-    const { w, h } = systemSize(rings);
-    const planets: Placed[] = projects
-      .flatMap((project) => {
-        const s = spots.get(project.id);
-        if (!s) return [];
-        return [{ project, x: w / 2 + s.x, y: h / 2 + s.y, ring: s.ring, level: cityLevel(project), dormant: cityMood(project) === "dormant", order: 0 }];
-      })
-      // Entrance order: inner rings first, then around each ring.
-      .sort((a, b) => a.ring - b.ring || Math.atan2(a.y - h / 2, a.x - w / 2) - Math.atan2(b.y - h / 2, b.x - w / 2))
-      .map((p, order) => ({ ...p, order }));
-    return { planets, rings, w, h };
-  }, [projects]);
-  const live = useMemo(
-    () => new Map(planets.map((p) => [p.project.id, activity ? activity[p.project.id] ?? null : cityActivity(sessions, p.project.id)])),
-    [planets, activity, sessions],
+  // Saved layout (cookie) plus the drag in progress, by cookie key.
+  const [saved, setSaved] = useState(positions);
+  const [live, setLive] = useState<Record<string, Offset>>({});
+  const { w, h, base } = useMemo(() => {
+    const { offsets, w, h } = floatLayout(projects, saved);
+    return { w, h, base: offsets };
+  }, [projects, saved]);
+  const star = useMemo(() => ({ x: w / 2, y: h / 2 }), [w, h]);
+  // Entrance order: nearest the star first. From the resting layout, so a drag doesn't reshuffle it.
+  const orderOf = useMemo(() => {
+    const ids = [...base].sort(([, a], [, b]) => Math.hypot(a.x, a.y / TILT) - Math.hypot(b.x, b.y / TILT)).map(([id]) => id);
+    return new Map(ids.map((id, i) => [id, i]));
+  }, [base]);
+  const planets = useMemo<Placed[]>(
+    () =>
+      projects.flatMap((project) => {
+        const o = live[positionKey(project.id)] ?? base.get(project.id);
+        if (!o) return [];
+        return [{ project, x: w / 2 + o.x, y: h / 2 + o.y, level: cityLevel(project), dormant: cityMood(project) === "dormant", order: orderOf.get(project.id) ?? 0 }];
+      }),
+    [projects, base, live, w, h, orderOf],
+  );
+  const activityOf = useMemo(
+    () => new Map(projects.map((p) => [p.id, activity ? activity[p.id] ?? null : cityActivity(sessions, p.id)])),
+    [projects, activity, sessions],
   );
 
   const data = useMemo<SceneData>(() => ({
-    star: { x: w / 2, y: h / 2 },
+    star,
+    orbits: [],
     bodies: planets.map((p) =>
-      makeBody({ id: p.project.id, x: p.x, y: p.y, r: planetRadius(p.level), kind: bodyKind(p.level), palette: planetPalette(p.project.id), dormant: p.dormant && !live.get(p.project.id), order: p.order }),
+      makeBody({ id: p.project.id, x: p.x, y: p.y, r: planetRadius(p.level), kind: bodyKind(p.level), palette: planetPalette(p.project.id), dormant: p.dormant && !activityOf.get(p.project.id), order: p.order, float: true }),
     ),
-    orbits: Array.from({ length: rings }, (_, i) => ({
-      cx: w / 2,
-      cy: h / 2,
-      r: orbitRadius(i),
-      tilt: TILT,
-      bodies: planets.filter((p) => p.ring === i).map((p) => p.project.id),
-      ticks: i === rings - 1,
-    })),
-  }), [planets, rings, w, h, live]);
+  }), [planets, star, activityOf]);
   useEffect(() => scene.setData(data), [scene, data]);
+
+  const persist = useCallback((next: Record<string, Offset>) => {
+    const value = encodePositions(next);
+    document.cookie = value
+      ? `${POSITIONS_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=${POSITIONS_MAX_AGE}; samesite=lax`
+      : `${POSITIONS_COOKIE}=; path=/; max-age=0; samesite=lax`;
+  }, []);
+  const mover = useMemo<Mover>(() => ({
+    scene,
+    star,
+    move: (id, at) => setLive({ [positionKey(id)]: clampOffset(at, w, h) }),
+    drop: (id, at) => {
+      setLive({});
+      setSaved((prev) => {
+        // Unmoved planets don't need saving: their default spot never changes as projects are added.
+        const next = { ...prev, [positionKey(id)]: clampOffset(at, w, h) };
+        persist(next);
+        return next;
+      });
+    },
+  }), [scene, star, w, h, persist]);
+  const arranged = Object.keys(saved).length > 0;
+  const reset = () => {
+    setSaved({});
+    persist({});
+  };
 
   return (
     <SceneContext.Provider value={scene}>
@@ -69,20 +107,29 @@ export function SystemMap({ projects, activity, children }: { projects: ProjectS
         <IsoViewport
           width={w}
           height={h}
-          label="Projects"
+          label="Projects. Drag a planet, or press Alt and an arrow key on one, to move it"
           smooth
           underlay={<SpaceCanvas scene={scene} />}
           onView={scene.setView}
           controlsClassName="map-controls"
           stage={
             <>
-              <Orbits w={w} h={h} radii={Array.from({ length: rings }, (_, i) => orbitRadius(i))} />
+              <Orbits w={w} h={h} radii={[]} />
               {planets.map((p) => (
-                <Planet key={p.project.id} planet={p} star={{ x: w / 2, y: h / 2 }} activity={live.get(p.project.id) ?? null} />
+                <Planet key={p.project.id} planet={p} mover={mover} activity={activityOf.get(p.project.id) ?? null} />
               ))}
             </>
           }
-          controls={<Legend />}
+          controls={
+            <>
+              {arranged && (
+                <button type="button" aria-label="Reset planet layout" title="Reset planet layout" onClick={reset} className={CONTROL_BUTTON}>
+                  <RotateCcwIcon className="size-4" />
+                </button>
+              )}
+              <Legend />
+            </>
+          }
         >
           {children}
         </IsoViewport>
@@ -95,23 +142,10 @@ export function SystemMap({ projects, activity, children }: { projects: ProjectS
 export function Orbits({ w, h, radii, star = true }: { w: number; h: number; radii: number[]; star?: boolean }) {
   return (
     <svg width={w} height={h} className="fallback-art sp-enter-orbits absolute inset-0" aria-hidden="true">
-      <defs>
-        <radialGradient id="star-corona">
-          <stop offset="0" stopColor="var(--star-core)" stopOpacity="0.95" />
-          <stop offset="0.2" stopColor="var(--star-glow)" stopOpacity="0.45" />
-          <stop offset="0.5" stopColor="var(--star-glow)" stopOpacity="0.12" />
-          <stop offset="1" stopColor="var(--star-glow)" stopOpacity="0" />
-        </radialGradient>
-      </defs>
       {radii.map((r) => (
-        <ellipse key={r} cx={w / 2} cy={h / 2} rx={r} ry={r * TILT} fill="none" stroke="var(--orbit)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <ellipse key={r} cx={w / 2} cy={h / 2} rx={r} ry={r * TILT} fill="none" stroke="var(--orbit)" strokeWidth={1.7} strokeDasharray="0.1 6.5" strokeLinecap="round" />
       ))}
-      {star && (
-        <>
-          <circle cx={w / 2} cy={h / 2} r={84} fill="url(#star-corona)" />
-          <circle cx={w / 2} cy={h / 2} r={15} fill="var(--star-core)" />
-        </>
-      )}
+      {star && <StarMark cx={w / 2} cy={h / 2} />}
     </svg>
   );
 }
@@ -119,23 +153,85 @@ export function Orbits({ w, h, radii, star = true }: { w: number; h: number; rad
 const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
-const Planet = memo(function Planet({ planet, star, activity }: { planet: Placed; star: { x: number; y: number }; activity: CityActivity }) {
+const Planet = memo(function Planet({ planet, mover, activity }: { planet: Placed; mover: Mover; activity: CityActivity }) {
   const { project, x, y, level, order } = planet;
   const dormant = planet.dormant && !activity;
   const r = planetRadius(level);
-  const light = Math.atan2(star.y - y, star.x - x);
+  const light = Math.atan2(mover.star.y - y, mover.star.x - x);
   const tone = statusTone(activity);
   const hover = useBodyHover(project.id);
+  const scene = useContext(SceneContext);
   const meta = dormant ? (project.lastActivityAt ? `Idle ${shortAge(project.lastActivityAt)}` : "No activity") : `${project.workspaceCount} ws · ${project.sessionCount} sess`;
+  const [cardOpen, setCardOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; at: Offset; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const offset = (): Offset => ({ x: x - mover.star.x, y: y - mover.star.y });
+
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (event.button !== 0) return;
+    // Keep the viewport from panning: this press belongs to the planet.
+    event.stopPropagation();
+    const o = offset();
+    drag.current = { id: event.pointerId, sx: event.clientX, sy: event.clientY, ox: o.x, oy: o.y, at: o, moved: false };
+  };
+  const onPointerMove = (event: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== event.pointerId) return;
+    const dx = event.clientX - d.sx;
+    const dy = event.clientY - d.sy;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return;
+    if (!d.moved) {
+      d.moved = true;
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      setDragging(true);
+      mover.scene.setDragging(project.id);
+    }
+    const z = mover.scene.view.z || 1;
+    d.at = { x: d.ox + dx / z, y: d.oy + dy / z };
+    mover.move(project.id, d.at);
+  };
+  const onPointerUp = (event: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== event.pointerId) return;
+    drag.current = null;
+    if (!d.moved) return;
+    suppressClick.current = true;
+    setDragging(false);
+    mover.scene.setDragging(null);
+    mover.drop(project.id, d.at);
+  };
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const step: Record<string, [number, number]> = { ArrowLeft: [-NUDGE, 0], ArrowRight: [NUDGE, 0], ArrowUp: [0, -NUDGE], ArrowDown: [0, NUDGE] };
+    if (!event.altKey || !step[event.key]) return;
+    event.preventDefault();
+    const o = offset();
+    mover.drop(project.id, { x: o.x + step[event.key][0], y: o.y + step[event.key][1] });
+  };
+
   return (
-    <HoverCard openDelay={120} closeDelay={60}>
+    <HoverCard openDelay={120} closeDelay={60} open={cardOpen && !dragging} onOpenChange={setCardOpen}>
       <HoverCardTrigger asChild>
         <Link
+          ref={scene ? scene.float(project.id) : undefined}
           href={projectPath(project)}
           draggable={false}
           aria-label={`${project.name}, ${plural(project.workspaceCount, "workspace")}, ${plural(project.sessionCount, "session")}${activity ? `, ${activity}` : dormant ? ", idle" : ""}`}
-          className="sp-body group absolute flex flex-col items-center outline-none"
-          style={{ left: x, top: y, transform: `translate(-50%, -${r}px)`, zIndex: Math.round(y), "--i": order } as React.CSSProperties}
+          aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
+          className={cn("sp-body group absolute flex touch-none flex-col items-center outline-none", dragging && "is-dragging cursor-grabbing")}
+          style={{ left: x, top: y, transform: `translate(-50%, -${r}px)`, zIndex: dragging ? 10_000 : Math.round(y), "--i": order } as React.CSSProperties}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={onKeyDown}
+          onClick={(event) => {
+            // A drag that ends over the planet must not open it.
+            if (suppressClick.current) {
+              event.preventDefault();
+              suppressClick.current = false;
+            }
+          }}
           {...hover}
         >
           <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
@@ -208,6 +304,7 @@ function Legend() {
           <li className="flex items-center gap-2"><StatusBadge activity="Session error" /> a session failed</li>
           <li className="text-muted-foreground">Dim planets have been idle 30+ days.</li>
         </ul>
+        <p className="text-muted-foreground mt-2 border-t pt-2">Drag a planet to move it, or focus it and press Alt + arrow keys.</p>
       </PopoverContent>
     </Popover>
   );
