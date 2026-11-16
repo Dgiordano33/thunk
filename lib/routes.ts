@@ -87,7 +87,7 @@ export function pathsFor(projects: ProjectTree[]) {
 }
 
 export const RESERVED_WORKSPACE_SLUGS = ["canvas"];
-export const canvasPath = (project: Slugged) => `/${project.slug}/canvas`;
+export const canvasPath = (project: Slugged, boardId?: string) => `/${project.slug}/canvas${boardId && boardId !== "main" ? `?session=${encodeURIComponent(boardId)}` : ""}`;
 
 /** Read the editor path once, preserving literal percent signs and encoded filename characters. */
 export function filePathFromUrl(base: string, pathname: string) {
