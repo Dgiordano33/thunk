@@ -120,7 +120,7 @@ export function WorkshopRoutines({
         <p className="text-muted-foreground text-xs">Loading…</p>
       ) : list.length === 0 ? (
         <div className="text-muted-foreground flex flex-col gap-2 py-2 text-xs leading-relaxed">
-          <p>No routines yet. A routine is a prompt the workshop sends to an agent on a schedule, on demand, or when something happens: a new pull request, a failing Run script, a local webhook.</p>
+          <p>No routines yet. A routine is a prompt Thunk sends to an agent on a schedule, on demand, or when something happens: a new pull request, a failing Run script, a local webhook.</p>
           <p>Each run gets its own session (a fresh worktree by default), and its report lands in the Library.</p>
         </div>
       ) : (

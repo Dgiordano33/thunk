@@ -95,7 +95,7 @@ const ICONS = {
 export type PixelIconName = keyof typeof ICONS;
 
 /** The solar-system look's line icon for each pixel icon. */
-const PLAIN: Record<PixelIconName, LucideIcon> = {
+export const PLAIN_ICONS: Record<PixelIconName, LucideIcon> = {
   bell: BellIcon,
   checklist: ListChecksIcon,
   castle: OrbitIcon,
@@ -109,7 +109,7 @@ const PLAIN: Record<PixelIconName, LucideIcon> = {
 export function PixelIcon({ name, className }: { name: PixelIconName; className?: string }) {
   const { palette, rows } = ICONS[name];
   const width = Math.max(...rows.map((r) => r.length));
-  const Plain = PLAIN[name];
+  const Plain = PLAIN_ICONS[name];
   return (
     <>
     <Plain aria-hidden="true" strokeWidth={1.5} className={cn("text-muted-foreground world:hidden", className)} />

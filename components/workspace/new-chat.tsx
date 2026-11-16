@@ -1,7 +1,7 @@
 "use client";
 
 import { CivPanel } from "@/components/world/civ-panel";
-import { PixelIcon } from "@/components/world/pixel-icon";
+import { EmptyMark } from "@/components/space/orbit-mark";
 
 import { PromptComposer } from "@/components/chat/prompt-composer";
 import { useRouter } from "next/navigation";
@@ -56,7 +56,7 @@ export function NewChat({
           <p className="text-muted-foreground text-sm">This workspace is archived. Unarchive it to start a chat.</p>
         ) : (
           <>
-            <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5"><PixelIcon name="scroll" className="mx-auto mb-3 size-8" /><h1 className="pixel text-lg">New chat in {workspaceLabel}</h1></CivPanel>
+            <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5"><EmptyMark name="scroll" className="mx-auto mb-2" pixelClassName="mx-auto mb-3 size-8" /><h1 className="pixel text-lg">New chat in {workspaceLabel}</h1></CivPanel>
             <p className="text-muted-foreground mt-1 text-sm">
               {PROVIDER_LABELS[provider]}&apos;s replies arrive as documents you can edit and comment on.
             </p>

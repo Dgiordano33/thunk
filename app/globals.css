@@ -620,7 +620,7 @@
 
 /* ── Chrome: HUD panels and the section dock are flat glass with a ruled edge, to sit with the line art. */
 .dock, .look-space .civ-panel {
-  background: color-mix(in oklch, var(--popover) 78%, transparent);
+  background: color-mix(in oklch, var(--popover) 90%, transparent);
   border: 1px solid var(--sp-rule);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
@@ -630,16 +630,82 @@
 .dock .is-selected { box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.18); }
 .dock .dock-count { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
 
-/* Solar-system look chrome. The old bronze and parchment tokens become neutrals
-   so screens that still reference them read as plain selected and hover states. */
+/* ── The solar-system look across the whole app, not just the map. Application surfaces take the twilight
+   family (indigo in dark, dawn lavender in light) instead of neutral grey, so panels, dialogs and the workspace
+   read as part of the same sky. Selections use a periwinkle accent, `--sp-accent`. */
+:root.look-space:not(.dark) {
+  --background: oklch(0.975 0.012 285);
+  --foreground: oklch(0.2 0.06 272);
+  --card: oklch(0.99 0.006 285);
+  --card-foreground: oklch(0.2 0.06 272);
+  --popover: oklch(0.99 0.008 285 / 0.95);
+  --popover-foreground: oklch(0.2 0.06 272);
+  --primary: oklch(0.24 0.08 272);
+  --primary-foreground: oklch(0.98 0.01 285);
+  --secondary: oklch(0.945 0.02 285);
+  --secondary-foreground: oklch(0.2 0.06 272);
+  --muted: oklch(0.945 0.02 285);
+  --muted-foreground: oklch(0.45 0.06 272);
+  --accent: oklch(0.935 0.026 285);
+  --accent-foreground: oklch(0.2 0.06 272);
+  --border: oklch(0.3 0.08 270 / 0.16);
+  --input: oklch(0.3 0.08 270 / 0.24);
+  --ring: oklch(0.52 0.16 280);
+  --sidebar: oklch(0.975 0.014 282 / 0.78);
+  --sidebar-foreground: oklch(0.2 0.06 272);
+  --sidebar-primary: oklch(0.24 0.08 272);
+  --sidebar-primary-foreground: oklch(0.98 0.01 285);
+  --sidebar-accent: oklch(0.935 0.026 285);
+  --sidebar-accent-foreground: oklch(0.2 0.06 272);
+  --sidebar-border: oklch(0.3 0.08 270 / 0.16);
+  --sidebar-ring: oklch(0.52 0.16 280);
+  --sp-accent: oklch(0.5 0.15 280);
+}
+:root.look-space.dark {
+  --background: oklch(0.155 0.05 275);
+  --foreground: oklch(0.97 0.012 280);
+  --card: oklch(0.19 0.06 280);
+  --card-foreground: oklch(0.97 0.012 280);
+  --popover: oklch(0.185 0.06 282 / 0.94);
+  --popover-foreground: oklch(0.97 0.012 280);
+  --primary: oklch(0.96 0.02 280);
+  --primary-foreground: oklch(0.17 0.06 280);
+  --secondary: oklch(0.25 0.06 282);
+  --secondary-foreground: oklch(0.97 0.012 280);
+  --muted: oklch(0.25 0.06 282);
+  --muted-foreground: oklch(0.76 0.045 275);
+  --accent: oklch(0.27 0.07 282);
+  --accent-foreground: oklch(0.97 0.012 280);
+  --border: oklch(0.86 0.06 265 / 0.16);
+  --input: oklch(0.86 0.06 265 / 0.2);
+  --ring: oklch(0.8 0.11 280);
+  --sidebar: oklch(0.14 0.05 274 / 0.72);
+  --sidebar-foreground: oklch(0.97 0.012 280);
+  --sidebar-primary: oklch(0.96 0.02 280);
+  --sidebar-primary-foreground: oklch(0.17 0.06 280);
+  --sidebar-accent: oklch(0.27 0.07 282);
+  --sidebar-accent-foreground: oklch(0.97 0.012 280);
+  --sidebar-border: oklch(0.86 0.06 265 / 0.16);
+  --sidebar-ring: oklch(0.8 0.11 280);
+  --sp-accent: oklch(0.8 0.1 280);
+}
+/* The old bronze and parchment tokens become the accent and a faint accent tint, so selections, pressed toggles
+   and highlights that still reference them read as part of this look. */
 :root.look-space {
-  --w-bronze: color-mix(in oklch, var(--foreground) 38%, transparent);
-  --w-bronze-light: color-mix(in oklch, var(--foreground) 70%, transparent);
-  --w-bronze-dark: var(--card);
-  --w-parchment: color-mix(in oklch, var(--muted) 60%, transparent);
+  --w-bronze: var(--sp-accent);
+  --w-bronze-light: oklch(0.82 0.09 280);
+  --w-bronze-dark: oklch(0.42 0.15 280);
+  --w-parchment: color-mix(in oklch, var(--sp-accent) 10%, transparent);
   --w-parchment-ink: var(--foreground);
   --w-sea: var(--void);
 }
+/* Screens outside the map (the workspace shell, the canvas) sit on the same sky, without its stars. */
+.look-space .sky-surface { background-image: linear-gradient(in srgb, var(--sky-top), var(--sky-bot)); }
+/* Eyebrows: the game look's pixel caps become small mono caps, like the map's metadata. */
+.look-space .pixel.uppercase { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.1em; }
+/* Empty states: no parchment card around the message; the orbit mark carries it. */
+.look-space .is-parchment:not(.civ-panel) { background: transparent; }
+.sp-orbit-mark { color: var(--sp-accent); }
 .look-space .civ-panel {
   color: var(--popover-foreground);
   border-radius: 14px;

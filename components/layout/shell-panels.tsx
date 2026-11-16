@@ -7,7 +7,7 @@ import { usePanelLayoutStorage, ResizableHandle, ResizablePanel, ResizablePanelG
 export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; children: React.ReactNode }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-sidebar-layout", panelIds: ['sidebar', 'content'], storage: usePanelLayoutStorage() });
   return (
-    <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="moonlit bg-background h-dvh">
+    <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="moonlit sky-surface bg-background h-dvh">
       <ResizablePanel id="sidebar" defaultSize="17" minSize="12" maxSize="30">
         {sidebar}
       </ResizablePanel>
