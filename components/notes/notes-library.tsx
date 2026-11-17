@@ -58,6 +58,7 @@ export function NotesLibrary() {
     [pathname],
   );
 
+  const homeId = folders?.find((f) => f.home)?.project.id ?? null;
   const label = useMemo(() => {
     const names = new Map<string, string>();
     for (const f of folders ?? []) {
@@ -82,9 +83,10 @@ export function NotesLibrary() {
             selectedId={noteParam}
             onSelect={(id) => navigate({ scope, note: id })}
             listTitle={label.get(scopeKey(scope)) ?? "Notes"}
+            topLevel={scope.kind === "projects" && scope.id === homeId}
           />
         ) : (
-          <AllNotes folders={folders} selected={noteParam} label={label} onSelect={(s, id) => navigate({ scope: s, note: id })} />
+          <AllNotes folders={folders} homeId={homeId} selected={noteParam} label={label} onSelect={(s, id) => navigate({ scope: s, note: id })} />
         )}
       </CivPanel>
     </main>
@@ -94,11 +96,13 @@ export function NotesLibrary() {
 /** "All notes": every scope's notes in one list. Selection is `<scopeKey>/<noteId>`. */
 function AllNotes({
   folders,
+  homeId,
   selected,
   label,
   onSelect,
 }: {
   folders: NoteFolder[] | null;
+  homeId: string | null;
   selected: string | null;
   label: Map<string, string>;
   onSelect: (scope: NoteScope | null, note: string | null) => void;
@@ -124,12 +128,12 @@ function AllNotes({
           onSelect={select}
           onDelete={(n) => void remove(n)}
           createControl={<NewNoteMenu folders={folders} onCreate={(s) => void create(s)} />}
-          emptyText="No notes yet. Pick a project or workspace to start one."
+          emptyText="No notes yet. Start one at the top level, or in a project or workspace."
         />
       </CollapsiblePane>
       <div className="flex min-w-0 flex-1 flex-col">
         {current ? (
-          <NoteEditor key={keyOf(current)} scope={current.scope} noteId={current.id} onDeleted={() => select(null)} />
+          <NoteEditor key={keyOf(current)} scope={current.scope} noteId={current.id} onDeleted={() => select(null)} topLevel={current.scope.kind === "projects" && current.scope.id === homeId} />
         ) : (
           <EmptyNote />
         )}
@@ -162,6 +166,7 @@ function NewNoteMenu({
               {i > 0 && <DropdownMenuSeparator />}
               <DropdownMenuItem onSelect={() => onCreate(pScope)}>
                 <span className="truncate font-medium">{f.project.name}</span>
+                {f.home && <span className="text-muted-foreground ml-auto text-[10px]">routed by the top chief</span>}
               </DropdownMenuItem>
               {f.repos.map(({ notebook }) => <DropdownMenuItem key={notebook.id} onSelect={() => onCreate({ kind: "repos", id: notebook.id })}>{notebook.label} · repo</DropdownMenuItem>)}
               {f.workspaces.map(({ workspace }) => {

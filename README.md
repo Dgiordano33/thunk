@@ -141,3 +141,13 @@ Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write
 - **Cleanup.** Every 10 minutes Thunk archives worker workspaces that are finished: the task is done and its branch is merged (squash merges count), the task ended with nothing on the branch, or the worker lost a race. Archiving keeps the worktree and branch. Workspaces with an active session, that a person also used, or explicitly selected with `workspaceId` are left alone.
 
 Queue, stats, races, plans and the current integration live in the project's `config/workers/state.json`, so they survive restarts without Supabase.
+
+### The top chief: notes above projects
+
+The Library's **Top level** notebook holds notes that belong to no single project. **Route** on one of them sends its open checklist items to the top chief, which proposes where each item goes. The proposal appears in the inbox as a **Routing plan** with Approve and Reject. Approving hands each item to that project's chief as a `<routed_request>`, and the project chief delegates it as usual. When the work settles, the project chief calls `route_report` and the result flows back up.
+
+- **Routing tags.** `#project` or `#project/workspace` on a line pins that item to a project or workspace. A `## Project` heading pins the items under it. A tag beats a heading, and a heading that names no project ends the scope. The top chief must route pinned items where they are pinned. For anything ambiguous it asks you, then saves your answer as a rule in **Routing memory**.
+- **Write-back.** Routed lines get a mark such as `→ Thunk: routed (r:1a2b3c4d)`. The mark becomes `done`, `blocked` or `failed` when the project reports, and `done` ticks the box. Marked lines are never routed twice.
+- **Daily triage.** The calendar button beside **Top level** schedules triage (weekdays at 08:30 by default, off until you turn it on), or runs it now. Triage sends every unrouted item to the top chief, asks for one routing plan per note, and has it write the day's summary to the top-level **Work log**. It skips the model turn when nothing is new.
+
+The top chief lives in an internal Home project (`~/.thunk/projects/__home/`). That project is left out of every project list, map and picker. Its routing plans and routes live in `config/routing/state.json`. Claude top chiefs cannot use Edit, Write, NotebookEdit or Bash; Codex top chiefs follow the rule through their prompt. Routing plans reuse the `delegation_plan` notification kind, so no migration is needed.

@@ -4,15 +4,18 @@ import { listNotes, metaOf } from "@/lib/notes/store";
 import type { NoteFolder } from "@/lib/notes/types";
 import { listProjects } from "@/lib/supabase/repo/projects";
 import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { ensureHomeProject } from "@/lib/home/service";
 
 export const dynamic = "force-dynamic";
 
-/** Every project's notes and its active workspaces' notes, for the Library. */
+/** Top-level notes first, then every project's notes and its active workspaces' notes, for the Library. */
 export const GET = handle(async () => {
-  const projects = await listProjects();
+  const home = await ensureHomeProject();
+  const projects = [home, ...await listProjects()];
   const folders: NoteFolder[] = await Promise.all(
     projects.map(async (project) => {
-      const workspaces = (await listWorkspaces(project.id))
+      // Top-level notes are the Home project's own notes; its workspace is internal.
+      const workspaces = project.id === home.id ? [] : (await listWorkspaces(project.id))
         .filter((w) => w.status === "active")
         .sort((a, b) => Number(b.slug === "main") - Number(a.slug === "main") || a.createdAt.localeCompare(b.createdAt));
       const [notes, wsNotes] = await Promise.all([
@@ -21,6 +24,7 @@ export const GET = handle(async () => {
       ]);
       return {
         project: { id: project.id, name: project.name },
+        ...(project.id === home.id ? { home: true } : {}),
         notes: notes.map(metaOf),
         repos: await Promise.all(project.repoFolders.map(async (folder) => ({
           notebook: { ...folder, repoName: project.repos.find((r) => r.id === folder.repoId)!.name },

@@ -42,7 +42,10 @@ const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", j
 
 export const api = {
   openChief: (projectId: string, body: { fresh?: boolean; noteId?: string } = {}) => post<{ sessionId: string; workspaceId: string; href: string }>(`/api/projects/${projectId}/chief`, body),
-  delegateNote: (scope: import("@/lib/notes/types").NoteScope, noteId: string) => post<{ sessionId: string; workspaceId: string; href: string }>("/api/notes/delegate", { scope, noteId }),
+  delegateNote: (scope: import("@/lib/notes/types").NoteScope, noteId: string) => post<{ sessionId: string; workspaceId: string; href: string; top?: boolean; open?: number }>("/api/notes/delegate", { scope, noteId }),
+  getTriage: () => call<{ triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage"),
+  saveTriage: (body: { enabled: boolean; cron: string; tz?: string | null }) => call<{ triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage", { method: "PUT", json: body }),
+  runTriage: () => post<{ result: string; triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage", {}),
   listNotifications: (query = "status=all&limit=500") => call<{ notifications: Notification[]; counts: NotificationCounts }>(`/api/notifications?${query}`),
   readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
   dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),

@@ -78,7 +78,7 @@ you ──► chief (main workspace)        "ship the onboarding changes in the 
 ## Later (in the existing plans)
 - Workers ask the chief before asking you; escalation with a recommendation (lead-agent plan, workstream 3).
 - Reviewer sessions and the merge gate (lead-agent plan, workstream 6).
-- A chief across projects, in a repo-less project, with per-project chiefs as its managers.
+- A chief across projects, in a repo-less project, with per-project chiefs as its managers. Done: see `plans/top-chief-plan.md`.
 - Watches: a scheduled routine running in `main` with the chief's tools, so Linear or Sentry items become delegated tasks. Needs project connectors (`docs/projects-without-repos-plan.md`, phase 2).
 - Cost caps per project across chief and workers.
 - Codex chiefs beyond prompt-only enforcement.

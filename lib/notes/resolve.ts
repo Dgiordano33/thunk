@@ -1,4 +1,5 @@
 import "server-only";
+import { isHomeProject } from "@/lib/home/constants";
 import { HttpError } from "@/lib/api/http";
 import { getWorkspaceContext } from "@/lib/projects";
 import { projectMemoryFile, projectNotesDir, workspaceMemoryFile, workspaceNotesDir } from "@/lib/projects/paths";
@@ -14,7 +15,7 @@ export function projectNoteDirs(project: Project): NoteDirs {
     scope: { kind: "projects", id: project.id },
     notesDir: projectNotesDir(project.dataKey),
     memoryFile: projectMemoryFile(project.dataKey),
-    memoryTitle: "Project memory",
+    memoryTitle: isHomeProject(project) ? "Routing memory" : "Project memory",
   };
 }
 

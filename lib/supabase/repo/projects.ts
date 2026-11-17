@@ -6,6 +6,7 @@ import { db } from "../server";
 import { memForgetProject, memProjectRepos, PROJECT_REPO_COLUMNS, toProjectRepos, type ProjectRepoRow } from "./project-repos";
 import { deleteTask, listTasks } from "./tasks";
 import { emitTask } from "@/lib/tasks/events";
+import { HOME_DATA_KEY } from "@/lib/home/constants";
 
 type Row = {
   id: string;
@@ -132,7 +133,12 @@ export async function deleteProject(id: string): Promise<void> {
   for (const task of tasks) emitTask({ projectId: task.projectId, workspaceId: task.workspaceId, taskId: task.id, kind: "removed" });
 }
 
-export async function listProjects(): Promise<ProjectSummary[]> {
+/** Every project, newest activity first. The internal Home project is left out unless asked for. */
+export async function listProjects({ includeHome = false }: { includeHome?: boolean } = {}): Promise<ProjectSummary[]> {
+  return (await listAllProjects()).filter((p) => includeHome || p.dataKey !== HOME_DATA_KEY);
+}
+
+async function listAllProjects(): Promise<ProjectSummary[]> {
   const client = db();
   const folders = await listAllRepoFolders();
   const foldersOf = (p: Project) => attachFolders(p, folders.get(p.id) ?? []);

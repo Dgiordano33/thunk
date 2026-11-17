@@ -52,6 +52,7 @@ export function ScopeNotes({
   listHeader,
   listTitle,
   className,
+  topLevel,
 }: {
   scope: NoteScope;
   selectedId: string | null;
@@ -60,6 +61,7 @@ export function ScopeNotes({
   /** Render the list as a collapsible pane with this title (replaces listHeader). */
   listTitle?: string;
   className?: string;
+  topLevel?: boolean;
 }) {
   const { notes } = useScopeNotes(scope);
   const { create, remove, dialog } = useNoteActions(scope, onSelect);
@@ -81,7 +83,7 @@ export function ScopeNotes({
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         {selected ? (
-          <NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} />
+          <NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} />
         ) : (
           <EmptyNote onCreate={() => void create()} />
         )}

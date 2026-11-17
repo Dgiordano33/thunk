@@ -1,5 +1,6 @@
 import { BOARD_TOOL_NAMES } from "@/lib/board/tools";
-import { CHIEF_TOOL_NAMES, asksChiefFirst, chiefWriteCommand, readOnlySession } from "@/lib/workers/prompt";
+import { CHIEF_TOOL_NAMES, TOP_CHIEF_DISALLOWED_TOOLS, asksChiefFirst, chiefWriteCommand, readOnlySession } from "@/lib/workers/prompt";
+import { TOP_CHIEF_TOOL_NAMES } from "@/lib/home/prompt";
 import "server-only";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { emit, setState, type LiveSession, type PendingRequest } from "./session-registry";
@@ -14,6 +15,10 @@ import type { Question } from "./types";
  */
 export function buildCanUseTool(live: LiveSession): CanUseTool {
   return (toolName, input, opts) => {
+    if (live.meta.origin?.kind === "top_chief" && TOP_CHIEF_DISALLOWED_TOOLS.includes(toolName))
+      return Promise.resolve({ behavior: "deny", message: "The top chief routes work. Use route_plan; project chiefs do the work." });
+    if (live.meta.origin?.kind === "top_chief" && TOP_CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
+      return Promise.resolve({ behavior: "allow", updatedInput: input });
     if (readOnlySession(live.meta.origin) && chiefWriteCommand(toolName, input))
       return Promise.resolve({ behavior: "deny", message: live.meta.origin?.kind === "chief" ? "The chief coordinates work. Use delegate to edit code." : "Scouts are read-only. Report what should change instead." });
     if (live.meta.origin?.kind === "chief" && CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
