@@ -82,7 +82,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
               <span className={cn("font-medium", needsYou ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{NOTIFICATION_LABELS[n.kind]}</span>
               <span aria-hidden="true" className="text-muted-foreground/50">/</span>
-              <span className="text-muted-foreground truncate">{project?.name || "Project"}{workspace ? ` · ${workspace.name}` : ""}</span>
+              <span className="text-muted-foreground truncate">{project?.name || "Top level"}{workspace ? ` · ${workspace.name}` : ""}</span>
               <time className="text-muted-foreground ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
             </div>
             <Link href={n.href} className={cn("hover:text-primary inline-flex max-w-full items-start gap-2 leading-relaxed", needsYou ? "text-[15px] font-medium" : "text-[13px]")}>

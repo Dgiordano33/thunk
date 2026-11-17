@@ -1,6 +1,7 @@
 "use client";
 
-import { FolderIcon, GitBranchIcon } from "lucide-react";
+import { FolderIcon, GitBranchIcon, InboxIcon } from "lucide-react";
+import { TriageSettings } from "./triage-settings";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { scopeKey, type NoteFolder, type NoteScope } from "@/lib/notes/types";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const count = (n: number) => <span className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums">{n}</span>;
 
-/** Left pane of the Library: "All notes", then each project with its workspaces nested. */
+/** Left pane of the Library: "All notes", the top-level notebook, then each project with its workspaces nested. */
 export function LibraryFolders({
   folders,
   selected,
@@ -37,6 +38,17 @@ export function LibraryFolders({
       {folders === null && [0, 1].map((i) => <Skeleton key={i} className="mx-2 my-1 h-6" />)}
       {folders?.map((f) => {
         const pScope: NoteScope = { kind: "projects", id: f.project.id };
+        if (f.home) return (
+          <div key={f.project.id} className="mt-2 flex items-center gap-0.5">
+            <button type="button" className={row(active === scopeKey(pScope))} onClick={() => onSelect(pScope)} aria-current={active === scopeKey(pScope) ? "true" : undefined}
+              title="Notes above your projects. Tag items #project or put them under a ## Project heading, then Route.">
+              <InboxIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="min-w-0 truncate font-medium">{f.project.name}</span>
+              {count(f.notes.length)}
+            </button>
+            <TriageSettings />
+          </div>
+        );
         return (
           <div key={f.project.id} className="mt-2 flex flex-col gap-0.5">
             <button type="button" className={row(active === scopeKey(pScope))} onClick={() => onSelect(pScope)} aria-current={active === scopeKey(pScope) ? "true" : undefined}>
@@ -72,7 +84,7 @@ export function LibraryFolders({
           </div>
         );
       })}
-      {folders?.length === 0 && <p className="text-muted-foreground px-2 py-2 text-xs">Add a project to start a notebook.</p>}
+      {folders && !folders.some((f) => !f.home) && <p className="text-muted-foreground px-2 py-2 text-xs">Add a project to start a notebook.</p>}
     </nav>
   );
 }

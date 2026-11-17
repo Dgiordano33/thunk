@@ -8,6 +8,8 @@ export async function register() {
     void recoverWorkers().catch((err) => console.error("[thunk] worker recovery failed", err));
     const { ensureScheduler } = await import("./lib/routines/scheduler");
     ensureScheduler();
+    const { ensureTriageScheduler } = await import("./lib/home/triage");
+    ensureTriageScheduler();
     const { recoverVaultQueue } = await import("./lib/vault/service");
     void recoverVaultQueue().catch((err) => console.error("[thunk] vault recovery failed", err));
   }

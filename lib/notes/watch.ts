@@ -38,7 +38,7 @@ const FOLDER_RESCAN_MS = 60_000;
 const FOLDER_REPLACED_MS = 1000;
 
 async function refreshSlugs() {
-  const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
+  const [projects, workspaces] = await Promise.all([listProjects({ includeHome: true }).catch(() => []), listAllWorkspaces().catch(() => [])]);
   state.projects = new Map(projects.map((p) => [p.dataKey, p.id]));
   const keys = new Map(projects.map((p) => [p.id, p.dataKey]));
   state.workspaces = new Map(

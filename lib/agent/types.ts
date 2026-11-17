@@ -4,6 +4,8 @@ export type SessionOrigin =
   | { kind: "board"; boardId?: string }
   | { kind: "routine"; routineId: string; runId: string; routineName: string; trigger?: RunTrigger }
   | { kind: "chief" }
+  /** Routes top-level notes to project chiefs; lives in the internal Home project. */
+  | { kind: "top_chief" }
   /** `scout`: read-only in the main checkout. `raceId`: one of several workers racing the same task on different models. */
   | { kind: "worker"; chiefSessionId: string | null; taskId: string; scout?: boolean; raceId?: string; existingWorkspace?: boolean };
 // Shared between server and client. Keep free of server-only imports.

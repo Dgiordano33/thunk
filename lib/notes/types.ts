@@ -54,6 +54,8 @@ export type RepoNotebook = import("@/lib/projects/types").RepoFolder & { repoNam
 export type NoteFolder = {
   repos: { notebook: RepoNotebook; notes: NoteMeta[] }[];
   project: { id: string; name: string };
+  /** The top-level notebook: notes the top chief routes across projects. */
+  home?: boolean;
   notes: NoteMeta[];
   workspaces: { workspace: { id: string; name: string; slug: string }; notes: NoteMeta[] }[];
 };

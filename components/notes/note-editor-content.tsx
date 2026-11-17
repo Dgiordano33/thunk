@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Loader2Icon } from "lucide-react";
+import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MemoryEditor } from "@/components/memory/memory-editor";
 import { relativeTime } from "@/components/session/labels";
@@ -24,10 +25,13 @@ export function NoteEditor({
   scope,
   noteId,
   onDeleted,
+  topLevel = false,
 }: {
   scope: NoteScope;
   noteId: string;
   onDeleted?: () => void;
+  /** A top-level note: its button routes checklist items across projects through the top chief. */
+  topLevel?: boolean;
 }) {
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +58,12 @@ export function NoteEditor({
         <Loader2Icon className="size-4 animate-spin" />
       </div>
     );
-  return <NoteEditorBody key={key} scope={scope} initial={note} onDeleted={onDeleted} />;
+  return <NoteEditorBody key={key} scope={scope} initial={note} onDeleted={onDeleted} topLevel={topLevel} />;
 }
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
-function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initial: Note; onDeleted?: () => void }) {
+function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteScope; initial: Note; onDeleted?: () => void; topLevel: boolean }) {
   const router = useRouter();
   const [delegating, setDelegating] = useState(false);
   const memory = initial.id === MEMORY_NOTE_ID;
@@ -253,9 +257,14 @@ function NoteEditorBody({ scope, initial, onDeleted }: { scope: NoteScope; initi
     <div className="flex min-h-0 flex-1 flex-col">
       <NoteMetaBar note={note} onChange={patchFlags} onDelete={memory ? undefined : remove}
         delegateDisabled={delegating || save !== "saved" || Boolean(conflict) || broken}
+        delegateLabel={topLevel ? "Route" : "Delegate"}
         onDelegate={memory ? undefined : () => {
           setDelegating(true);
-          api.delegateNote(scope, note.id).then((r) => { router.push(r.href); router.refresh(); })
+          api.delegateNote(scope, note.id).then((r) => {
+            // Top-level notes stay put: the top chief's routing plan arrives in the inbox.
+            if (r.top) toast.success(`Sent ${r.open} item${r.open === 1 ? "" : "s"} to the top chief`, { description: "Approve its routing plan in your Inbox. Lines are marked as they are routed and settled." });
+            else { router.push(r.href); router.refresh(); }
+          })
             .catch((err: Error) => setSaveError(err.message)).finally(() => setDelegating(false));
         }} />
       {conflict && (

@@ -1,7 +1,8 @@
 import { boardTools, boardPrompt } from "@/lib/board/tools";
 import { projectBoardsDir } from "@/lib/projects/paths";
 import { chiefTools } from "@/lib/workers/tools";
-import { CHIEF_DISALLOWED_TOOLS, readOnlySession, teamPrompt } from "@/lib/workers/prompt";
+import { routeReportTool, topChiefTools } from "@/lib/home/tools";
+import { disallowedToolsFor, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
@@ -107,12 +108,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       tools: [
         ...boardTools(live, emit).map(t => tool(t.name, t.description, t.schema, t.handler)),
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...[...routeReportTool(live), ...topChiefTools(live)].map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine" }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],
     }) },
-    ...(readOnlySession(live.meta.origin) ? { disallowedTools: CHIEF_DISALLOWED_TOOLS } : {}),
+    ...(disallowedToolsFor(live.meta.origin) ? { disallowedTools: disallowedToolsFor(live.meta.origin)! } : {}),
     model: live.meta.model,
     permissionMode: live.meta.permissionMode as PermissionMode,
     // Lets the user switch to bypassPermissions from the mode picker later.
