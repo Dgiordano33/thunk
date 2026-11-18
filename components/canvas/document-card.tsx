@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckIcon, ChevronDownIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon } from "lucide-react";
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { useCallback, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,10 +27,11 @@ export function DocumentCard({ documentId }: { documentId: string }) {
   const active = useSession((s) => s.activeDocumentId === documentId);
   const request = useSession((s) => (doc?.requestId ? s.requests[doc.requestId] : undefined));
   const setActive = useSession((s) => s.setActiveDocument);
+  const desktop = useIsDesktop();
   const [expanded, setExpanded] = useState(false);
 
   const planPending = doc?.kind === "plan" && request?.status === "pending";
-  const editable = Boolean(doc && doc.status === "draft" && (doc.kind === "response" || planPending));
+  const editable = desktop && Boolean(doc && doc.status === "draft" && (doc.kind === "response" || planPending));
   const collapsed = !editable && !expanded && doc?.status === "sent";
 
   const send = useCallback(async () => {
@@ -47,7 +49,7 @@ export function DocumentCard({ documentId }: { documentId: string }) {
       onFocusCapture={() => setActive(documentId)}
       onMouseDown={() => !active && setActive(documentId)}
       className={cn(
-        "bg-card relative scroll-mt-4 rounded-lg border px-8 pt-5 pb-4 shadow-xs transition-[border-color,box-shadow]",
+        "bg-card relative scroll-mt-4 rounded-lg border px-4 md:px-8 pt-5 pb-4 shadow-xs transition-[border-color,box-shadow]",
         active && editable && "border-foreground/20 shadow-sm",
         !editable && "bg-muted/20",
       )}
@@ -110,6 +112,8 @@ function PlanActions({
   status: "pending" | "resolved" | "expired";
   decision?: "approve" | "changes" | "cancelled";
 }) {
+  const desktop = useIsDesktop();
+  const [feedback, setFeedback] = useState("");
   const stat = useRevisionStat(doc);
   const sessionId = useSession((s) => s.sessionId!);
   const [busy, setBusy] = useState<"approve" | "changes" | null>(null);
@@ -149,11 +153,13 @@ function PlanActions({
     setBusy("changes");
     setError(null);
     try {
+      const revision = collectRevision(doc);
+      if (!desktop && feedback.trim()) revision.comments.push({ id: crypto.randomUUID(), status: "open", kind: "change", quote: "", context: "", body: feedback.trim(), replies: [] });
       await api.requestPlanChanges(sessionId, {
         requestId,
         documentId: doc.id,
         version: doc.version,
-        ...collectRevision(doc),
+        ...revision,
       });
     } catch (err) {
       setError((err as Error).message);
@@ -163,19 +169,20 @@ function PlanActions({
 
   return (
     <div className="bg-muted/60 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+      {!desktop && <textarea aria-label="Requested plan changes" placeholder="Describe the changes you want…" className="w-full rounded border bg-background p-3" value={feedback} onChange={e => setFeedback(e.target.value)} />}
       <span className="text-muted-foreground">
         {stat.dirty
           ? `${plural(stat.hunks, "edit")}, ${plural(stat.comments, "comment")}`
-          : "Review the plan. Edit or comment to request changes."}
+          : desktop ? "Review the plan. Edit or comment to request changes." : "Approve the plan or describe your requested changes."}
       </span>
       {error && <span className="text-destructive text-xs">{error}</span>}
-      <div className="ml-auto flex items-center gap-2">
-        {stat.dirty && (
+      <div className="ml-auto flex w-full flex-col md:w-auto md:flex-row items-stretch md:items-center gap-2">
+        {desktop && stat.dirty && (
           <Button size="sm" variant="ghost" onClick={() => setReviewing(true)}>
             Review diff
           </Button>
         )}
-        <Button size="sm" variant="outline" disabled={!stat.dirty || busy !== null} onClick={requestChanges}>
+        <Button size="sm" variant="outline" disabled={!(stat.dirty || (!desktop && feedback.trim())) || busy !== null} onClick={requestChanges}>
           {busy === "changes" && <Loader2Icon className="animate-spin" />}
           Request changes
         </Button>

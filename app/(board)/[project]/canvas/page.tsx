@@ -1,3 +1,4 @@
+import { DesktopOnly } from "@/components/mobile/desktop-only";
 import { notFound } from 'next/navigation';
 import { getProjectBySlug } from '@/lib/supabase/repo/projects';
 import { boardFor, listCanvases } from '@/lib/board/service';
@@ -14,5 +15,5 @@ export default async function CanvasPage({ params, searchParams }: PageProps<'/[
     const sessions = await listCanvases(project.dataKey);
     if (!sessions.some(s => s.id === boardId)) notFound();
     const { dir } = await boardFor(project.id, boardId);
-    return <BoardView key={`${project.id}:${boardId}`} sessions={sessions} boardId={boardId} projectId={project.id} slug={project.slug} name={project.name} initial={await lock(dir, () => snapshot(dir))}/>;
+    return <DesktopOnly href={`/${project.slug}`}><BoardView key={`${project.id}:${boardId}`} sessions={sessions} boardId={boardId} projectId={project.id} slug={project.slug} name={project.name} initial={await lock(dir, () => snapshot(dir))}/></DesktopOnly>;
 }

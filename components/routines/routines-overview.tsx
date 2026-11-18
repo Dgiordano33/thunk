@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { projectSectionPath } from "@/lib/routes";
 
 import Link from "next/link";
@@ -24,6 +25,7 @@ export function RoutinesOverview({
   workspaceLabels: Record<string, string>;
   firstProjectId: string | null;
 }) {
+  const desktop = useIsDesktop();
   const { routines, refresh } = useRoutines(undefined, initial);
   const paths = usePaths();
   const list = routines ?? [];
@@ -48,6 +50,8 @@ export function RoutinesOverview({
         </CivPanel>
       </main>
     );
+
+  if (!desktop) return <main className="h-dvh overflow-auto px-4 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]"><h1 className="mb-4 text-xl">Routines</h1>{list.map(r => <article key={r.id} className="mb-3 rounded-lg border bg-background p-4"><Link className="block py-2 font-medium" href={projectSectionPath(paths.project(r.projectId), "workshop", { routine: r.id })}>{r.name}</Link><p>{r.projectName}</p><p className="my-2 text-sm">{triggerSummary(r)}</p><p className="text-sm">Next: {r.enabled && r.nextRunAt ? untilTime(r.nextRunAt) : "—"}</p><div className="mt-3 flex gap-4"><RunNowButton routine={r} onStarted={() => void refresh()} /><EnabledToggle routine={r} onChange={() => void refresh()} /></div></article>)}</main>;
 
   const head = "text-muted-foreground px-3 py-2 text-left text-[11px] font-medium";
   return (

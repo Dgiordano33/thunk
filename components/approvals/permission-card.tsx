@@ -98,7 +98,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
       </div>
       {denying ? (
         <form
-          className="flex gap-2"
+          className="flex flex-col md:flex-row gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             void decide("deny");
@@ -119,7 +119,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
           </Button>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2">
           {/* Decline first: an approval should never be one stray keystroke away. */}
           <Button size="sm" variant="outline" onClick={() => setDenying(true)} disabled={busy}>
             Deny…

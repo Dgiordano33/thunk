@@ -54,7 +54,7 @@ export function WorkspaceNotes({ workspaceId, projectId }: { workspaceId: string
       </section>
 
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="right" className="w-[min(760px,92vw)] gap-0 p-0 data-[side=right]:sm:max-w-none">
+        <SheetContent side="right" className="w-full md:w-[min(760px,92vw)] data-[side=right]:w-full gap-0 p-0 data-[side=right]:sm:max-w-none">
           <SheetTitle className="sr-only">Note</SheetTitle>
           <SheetDescription className="sr-only">Edit the note. Changes save automatically.</SheetDescription>
           <div className="flex h-full min-h-0 flex-col pt-10">

@@ -48,12 +48,13 @@ export function TownPanel({
   return (
     <aside
       className={cn(
-        "absolute top-20 right-4 z-30 flex",
-        !compact && (process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4"),
-        wide ? "w-[min(720px,calc(100vw-2rem))]" : medium ? "w-[min(560px,calc(100vw-2rem))]" : "w-[min(460px,calc(100vw-2rem))]",
+        "absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex md:inset-x-auto md:top-20 md:right-4",
+        compact && "md:bottom-auto",
+        !compact && (process.env.NODE_ENV === "development" ? "md:bottom-18" : "md:bottom-4"),
+        wide ? "w-full md:w-[min(720px,calc(100vw-2rem))]" : medium ? "w-full md:w-[min(560px,calc(100vw-2rem))]" : "w-full md:w-[min(460px,calc(100vw-2rem))]",
       )}
     >
-      <CivPanel className={cn("w-full", !compact && "h-full")} bodyClassName="flex h-full min-h-0 flex-col">
+      <CivPanel className={cn("w-full h-full", compact && "md:h-auto")} bodyClassName="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             {eyebrow && <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">{eyebrow}</p>}
@@ -64,7 +65,7 @@ export function TownPanel({
             href={closeHref}
             scroll={false}
             aria-label="Close panel"
-            className="hover:bg-muted focus-visible:ring-ring flex size-8 items-center justify-center outline-none focus-visible:ring-2"
+            className="hover:bg-muted focus-visible:ring-ring flex size-11 md:size-8 items-center justify-center outline-none focus-visible:ring-2"
           >
             <XIcon className="size-4" />
           </Link>

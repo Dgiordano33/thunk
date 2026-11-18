@@ -1,3 +1,4 @@
+import { DesktopOnly } from "@/components/mobile/desktop-only";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BodyGallery } from "@/components/space/body-gallery";
@@ -70,10 +71,10 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
     const planet = typeof query.planet === "string" ? query.planet : undefined;
     const ws = typeof query.ws === "string" ? query.ws : undefined;
     return (
-      <>
+      <DesktopOnly>
         <MockTheme variant={variant} dark={dark} look="space" />
         {"gallery" in query ? <BodyGallery /> : planet ? <MockPlanet base={`/mock/${variant}?planet=${planet}`} name={planet} ws={ws} /> : <SystemMap projects={[...PROJECTS, ...MORE]} positions={await getPlanetPositions()} activity={ACTIVITY} />}
-      </>
+      </DesktopOnly>
     );
   }
 
@@ -87,10 +88,10 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
   });
 
   return (
-    <>
+    <DesktopOnly>
       <MockTheme variant={variant} dark={dark} look="world" />
       <WorldMap tiles={tiles} cities={cities} />
-    </>
+    </DesktopOnly>
   );
 }
 

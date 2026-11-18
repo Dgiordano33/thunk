@@ -29,7 +29,7 @@ export function Timeline() {
 
   return (
     <Conversation initial="instant" resize="smooth" className="min-h-0">
-      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-6 pt-8 pb-16">
+      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-4 md:px-6 pt-8 pb-16">
         {items.length === 0 ? (
           <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5 text-center">
             <EmptyMark name="scroll" className="mx-auto mb-2" pixelClassName="mx-auto mb-3 size-8" />

@@ -72,7 +72,7 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
             <MessageCircleQuestionIcon className="mt-0.5 size-4 text-sky-700" />
             {q.question}
           </legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-2">
             {[...q.options, { label: OTHER, description: "Write your own answer" }].map((o) => {
               const selected = (picked[q.question] ?? []).includes(o.label);
               return (
@@ -102,7 +102,7 @@ export function AskQuestionForm({ requestId }: { requestId: string }) {
           )}
         </fieldset>
       ))}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
         <Button size="sm" onClick={() => submit()} disabled={!complete || busy}>
           Submit {req.questions.length > 1 ? "answers" : "answer"}
         </Button>

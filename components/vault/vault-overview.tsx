@@ -68,7 +68,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
     );
 
   return (
-    <main className="absolute inset-x-4 top-20 z-10 flex justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
       <CivPanel className="w-full max-w-6xl" bodyClassName="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
@@ -78,7 +78,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
             </h2>
           </div>
           <Select value={projectId ?? "all"} onValueChange={(v) => go({ project: v === "all" ? null : v, item: null })}>
-            <SelectTrigger size="sm" className="w-56 text-xs" aria-label="Project">
+            <SelectTrigger size="sm" className="w-full md:w-56 text-xs" aria-label="Project">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

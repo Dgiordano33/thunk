@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { useCallback, useState } from "react";
 import { EmptyMark } from "@/components/space/orbit-mark";
 import { api } from "@/lib/client/api";
@@ -63,11 +64,13 @@ export function ScopeNotes({
   className?: string;
   topLevel?: boolean;
 }) {
+  const desktop = useIsDesktop();
   const { notes } = useScopeNotes(scope);
   const { create, remove, dialog } = useNoteActions(scope, onSelect);
   const selected = selectedId;
   const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />;
 
+  if (!desktop) return <div className="flex min-h-0 min-w-0 flex-1 flex-col">{dialog}{selected ? <><button className="min-h-11 border-b px-4 text-left" onClick={() => onSelect(null)}>← Notes</button><NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} /></> : <>{listHeader}{list}</>}</div>;
   return (
     <div className={cn("flex min-h-0 flex-1", className)}>
       {dialog}

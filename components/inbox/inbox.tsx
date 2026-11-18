@@ -120,7 +120,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     </button>
   );
   return (
-    <main className="absolute inset-x-4 top-20 z-10 flex justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
       <CivPanel className="w-full max-w-7xl" bodyClassName="flex h-full min-h-0">
         <aside className="bg-muted/20 hidden w-52 shrink-0 flex-col border-r lg:flex" aria-label="Inbox projects">
           <div className="flex items-center gap-3 border-b px-5 py-5"><PixelIcon name="bell" className="size-7" /><span className="pixel text-lg">Inbox</span></div>
@@ -180,7 +180,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
               useNotifications.setState((s) => ({ items: [...s.items, ...data.notifications.filter((n) => !s.items.some((item) => item.id === n.id))].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)), before: data.notifications.length === 500 ? { at: data.notifications.at(-1)!.createdAt, id: data.notifications.at(-1)!.id } : null }));
             })}>Load earlier notifications</Button>}
           </div>
-          <footer className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[10px] sm:px-8"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> to move</span><span><Kbd>o</Kbd> to open</span><span><Kbd>e</Kbd> to dismiss</span><span className="ml-auto hidden sm:inline">Updates appear automatically</span></footer>
+          <footer className="text-muted-foreground hidden md:flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[10px] sm:px-8"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> to move</span><span><Kbd>o</Kbd> to open</span><span><Kbd>e</Kbd> to dismiss</span><span className="ml-auto hidden sm:inline">Updates appear automatically</span></footer>
         </div>
       </CivPanel>
     </main>

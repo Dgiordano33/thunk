@@ -1,4 +1,5 @@
 "use client";
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { extractTasks } from "@/lib/notes/frontmatter";
 import { parseRepoTaskLink } from "@/lib/notes/task-link";
 import { useEffect, useState } from "react";
@@ -21,6 +22,7 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
   workspaces: TaskWorkspace[]; sessions: SessionMeta[];
   onSave: (draft: TaskDraft) => Promise<void>; onClose: () => void;
 }) {
+  const desktop = useIsDesktop();
   const [title, setTitle] = useState(task?.title ?? initialTitle);
   const [body, setBody] = useState(task?.body ?? "");
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "open");
@@ -60,14 +62,14 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
     finally { setBusy(false); }
   };
   return <Sheet open onOpenChange={(open) => !open && !busy && onClose()}>
-    <SheetContent className="w-[min(600px,92vw)] overflow-y-auto p-5 data-[side=right]:sm:max-w-none">
+    <SheetContent side={desktop ? "right" : "bottom"} className="max-h-[95dvh] w-full md:w-[min(600px,92vw)] overflow-y-auto p-5 data-[side=right]:sm:max-w-none">
       <SheetTitle>{task ? "Edit task" : "New task"}</SheetTitle>
       <SheetDescription>Track the work and the session responsible for it.</SheetDescription>
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) { e.preventDefault(); void save(); } }}>
         <fieldset disabled={busy} className="space-y-4">
           <label className="grid gap-1.5 text-xs">Title<Input autoFocus required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
           <label className="grid gap-1.5 text-xs">Details (Markdown)<Textarea rows={8} maxLength={20000} value={body} onChange={(e) => setBody(e.target.value)} /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5 text-xs">Status<Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}><SelectTrigger aria-label="Status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{TASK_STATUSES.map((s) => <SelectItem key={s} value={s}>{TASK_STATUS_LABELS[s]}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1.5 text-xs">Priority<Select value={String(priority)} onValueChange={(v) => setPriority(Number(v) as TaskPriority)}><SelectTrigger aria-label="Priority" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{["None", "Low", "Medium", "High"].map((p, i) => <SelectItem key={p} value={String(i)}>{p}</SelectItem>)}</SelectContent></Select></div>
           </div>

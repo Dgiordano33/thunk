@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { Button } from "@/components/ui/button";
 
 import { WORLD_SELECTION } from "@/components/world/selection";
@@ -38,9 +39,11 @@ export function WorkspacePanel({ workspaceId, projectId, sessions, hasGit }: { w
 }
 
 function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { workspaceId: string; projectId: string; sessions: SessionMeta[]; hasGit: boolean }) {
+  const desktop = useIsDesktop();
   const params = useSearchParams();
   const pathname = usePathname();
-  const requestedTab = params.get("tab") ?? "sessions";
+  const requested = params.get("tab") ?? "sessions";
+  const requestedTab = !desktop && ["files", "changes", "checkpoints"].includes(requested) ? "sessions" : requested;
   // `tab=changes` is the Files tab filtered to changed files; it falls back to all files without git.
   const tab = !hasGit && requestedTab === "checkpoints" ? "sessions" : !hasGit && requestedTab === "changes" ? "files" : requestedTab;
   const filesView = tab === "changes" ? "changed" : "all";
@@ -90,13 +93,13 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
         <TabsList variant="line" className="h-full">
           <TabsTrigger className="pixel text-xs" value="sessions">Sessions</TabsTrigger>
           <TabsTrigger className="pixel text-xs" value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
+          {desktop && <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
             Files
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
-          </TabsTrigger>
+          </TabsTrigger>}
           <TabsTrigger className="pixel text-xs" value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
           <TabsTrigger className="pixel text-xs" value="notes">Notes</TabsTrigger>
-          {hasGit && <TabsTrigger className="pixel text-xs" value="checkpoints">Checkpoints</TabsTrigger>}
+          {desktop && hasGit && <TabsTrigger className="pixel text-xs" value="checkpoints">Checkpoints</TabsTrigger>}
         </TabsList>
       </div>
       <TabsContent forceMount value="sessions" className="data-[state=inactive]:hidden min-h-0 flex-1">
@@ -109,7 +112,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
           <Artifacts workspaceId={workspaceId} />
         </div>
       </TabsContent>
-      <TabsContent forceMount value="files" className="data-[state=inactive]:hidden flex min-h-0 flex-1 flex-col">
+      {desktop && <TabsContent forceMount value="files" className="data-[state=inactive]:hidden flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
           {hasGit && <div className="flex gap-1" role="group" aria-label="Files view">
             {(["all", "changed"] as const).map((v) => (
@@ -145,7 +148,8 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
             : <FileTree workspaceId={workspaceId} changes={changes} repos={repos} refreshKey={`${fileCount}:${treeRefresh}`} />}
         </div>
       </TabsContent>
-      {hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
+      }
+      {desktop && hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
       <TabsContent value="tasks" className="min-h-0 flex-1 overflow-y-auto"><WorkspaceTasks workspaceId={workspaceId} projectId={projectId} /></TabsContent>
       <TabsContent value="notes" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">

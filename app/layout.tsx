@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import { isMobileRequest } from "@/components/mobile/viewport.server";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Pixelify_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { DevTools } from "@/components/dev-tools";
@@ -12,6 +13,8 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 // Only used by the game look (Settings → Look), on its map and HUD.
 const pixel = Pixelify_Sans({ variable: "--font-pixel", subsets: ["latin"] });
 
+export const viewport: Viewport = { viewportFit: "cover", interactiveWidget: "resizes-content" };
+
 export const metadata: Metadata = {
   title: "Thunk",
   description: "A canvas-style coding harness: responses are documents you edit, comment on, and send back.",
@@ -19,11 +22,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const look = await getLook();
+  const initialDesktop = !(await isMobileRequest());
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} ${lookClass(look)} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="h-full" suppressHydrationWarning>
-        <Providers look={look}>{children}</Providers>
+        <Providers look={look} initialDesktop={initialDesktop}>{children}</Providers>
         <DevTools />
       </body>
     </html>

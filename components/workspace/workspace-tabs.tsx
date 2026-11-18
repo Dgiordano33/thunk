@@ -1,4 +1,6 @@
 "use client";
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { MobileDrawer } from "@/components/mobile/drawer";
 
 import { GitBranchIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
@@ -25,12 +27,15 @@ export function WorkspaceTabs({
   branch: string | null;
   dirty: number;
 }) {
+  const desktop = useIsDesktop();
   const pathname = usePathname();
   const onNew = pathname === `${base}/new`;
   // The open session's title and status stream in live; everything else comes from the server.
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
   const branched = workspace.repos.filter((r) => r.branch);
+
+  if (!desktop) return <header className="flex min-h-14 min-w-0 items-center border-b"><Link href={base.split("/").slice(0, -1).join("/")} className="p-3" aria-label="Back to project">←</Link><MobileDrawer title={sessions.find(s => pathname === `${base}/${s.id}`)?.title || "Sessions"}><nav className="flex flex-col">{sessions.map(s => <Link className="p-4" key={s.id} href={`${base}/${s.id}`}>{s.title || "Untitled"}</Link>)}<Link className="p-4" href={`${base}/new`}>New chat</Link></nav></MobileDrawer><MobileDrawer title="Branch and PR"><p className="p-4 break-words">{branch ?? workspace.name} · {dirty} changed</p>{branched.length > 1 ? branched.map(r => <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />) : workspace.repos.length > 0 && <PrButton workspaceId={workspace.id} />}</MobileDrawer></header>;
 
   return (
     <div className="flex h-10 shrink-0 items-stretch border-b">

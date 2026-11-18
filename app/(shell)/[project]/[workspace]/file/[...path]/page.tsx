@@ -1,3 +1,4 @@
+import { DesktopOnly } from "@/components/mobile/desktop-only";
 import { notFound } from "next/navigation";
 import { FileEditor } from "@/components/workspace/file-editor";
 import { getWorkspaceContextBySlugs } from "@/lib/projects";
@@ -32,12 +33,12 @@ export default async function FilePage(props: Props) {
   if (!found) notFound();
   const { ctx, root, path, multiRoot } = found;
   return (
-    <FileEditor
+    <DesktopOnly><FileEditor
       key={`${root.id}:${path}`}
       workspaceId={ctx.workspace.id}
       root={root.id}
       rootLabel={multiRoot ? root.name : null}
       path={path}
-    />
+    /></DesktopOnly>
   );
 }

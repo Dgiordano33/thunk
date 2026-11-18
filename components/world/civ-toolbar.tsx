@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { MobileTabBar } from "@/components/mobile/tab-bar";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -30,6 +32,7 @@ function Mark({ className }: { className?: string }) {
 
 /** Main menu, bottom-left: a round button that opens into Projects, Inbox, Notes, Routines and the Vault. Game look: a bronze orb with pixel icons. */
 export function CivToolbar({ projects, cityCount, noteCount, routineCount, vaultCount, notificationCount }: { projects: SidebarProject[]; cityCount: number; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
+  const desktop = useIsDesktop();
   const count = useNotifications((s) => s.loaded ? s.counts.action : notificationCount);
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
@@ -60,6 +63,8 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
     { href: "/routines", label: "Routines", icon: "hourglass", lucide: RepeatIcon, detail: `${routineCount} active` },
     { href: "/vault", label: "Vault", icon: "chest", lucide: ArchiveIcon, detail: `${vaultCount} ${vaultCount === 1 ? "item" : "items"}` },
   ];
+
+  if (!desktop) return <MobileTabBar count={count} projects={projects} />;
 
   return (
     // In dev, sit above the Next.js dev indicator that owns the bottom-left corner.

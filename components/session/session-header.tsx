@@ -35,7 +35,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   const chiefOwns = status === "awaiting" && meta.waitingOn === "chief";
 
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b px-3">
+    <header className="flex min-h-11 md:h-10 shrink-0 items-center gap-3 border-b px-3">
       <h1 className="min-w-0 truncate pixel text-base leading-tight">{meta.title || "Untitled session"}</h1>
       {meta.origin?.kind === "chief" && <Badge variant="outline">Chief</Badge>}
       {meta.origin?.kind === "top_chief" && <Badge variant="outline">Top chief</Badge>}
@@ -64,7 +64,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
       )}
       {connection === "reconnecting" && <span className="text-muted-foreground text-xs">Reconnecting…</span>}
       <div className="text-muted-foreground ml-auto flex items-center gap-3 text-xs">
-        <CommentsToggle />
+        <span className="hidden md:contents"><CommentsToggle /></span>
         {error && <span className="text-destructive">{error}</span>}
         {(!live || status === "error" || status === "closed") && (
           <Button

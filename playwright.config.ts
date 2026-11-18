@@ -25,7 +25,7 @@ export default defineConfig({
         viewport: { width: 1400, height: 900 },
         trace: 'retain-on-failure',
     },
-    projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 900 } } }],
+    projects: [{ name: 'mobile', expect: { timeout: 30000 }, testMatch: 'mobile.spec.ts', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } }, { name: 'chromium', testIgnore: 'mobile.spec.ts', use: { ...devices['Desktop Chrome'], viewport: { width: 1400, height: 900 } } }],
     webServer: {
         command: `npx next dev -H 127.0.0.1 --port ${PORT}`,
         url: `${process.env.THUNK_E2E_URL}/api/projects`,

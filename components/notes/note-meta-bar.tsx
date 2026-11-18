@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { MobileDrawer } from "@/components/mobile/drawer";
 import { BrainIcon, PinIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ export function NoteMetaBar({
   delegateDisabled?: boolean;
   delegateLabel?: string;
 }) {
+  const desktop = useIsDesktop();
   const memory = note.id === MEMORY_NOTE_ID;
   const joined = note.tags.join(", ");
   const [tags, setTags] = useState(joined);
@@ -69,15 +72,7 @@ export function NoteMetaBar({
     if (next.join() !== note.tags.join()) onChange({ tags: next });
   };
 
-  return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b px-4 py-2">
-      {memory ? (
-        <p className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
-          <BrainIcon className="size-3" /> Memory · always in every session&apos;s system prompt. Agents read and edit it too.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Toggle on={note.pinned} onClick={() => onChange({ pinned: !note.pinned })} icon={PinIcon} label="Pin" title="Keep at the top of the list" />
+  const extra = <>
           <Toggle
             on={note.inject}
             onClick={() => onChange({ inject: !note.inject })}
@@ -94,12 +89,23 @@ export function NoteMetaBar({
             aria-label="Tags"
             className="bg-background placeholder:text-muted-foreground focus-visible:ring-ring h-7 min-w-28 flex-1 rounded-md border px-2 text-[11px] outline-none focus-visible:ring-2"
           />
-          {onDelegate && <Button size="xs" variant="outline" disabled={delegateDisabled} onClick={onDelegate}>{delegateLabel}</Button>}
           {onDelete && (
             <Button size="icon-sm" variant="ghost" onClick={onDelete} aria-label="Delete note" title="Delete note">
               <Trash2Icon />
             </Button>
           )}
+  </>;
+  return (
+    <div className="flex shrink-0 flex-col gap-1.5 border-b px-4 py-2">
+      {memory ? (
+        <p className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+          <BrainIcon className="size-3" /> Memory · always in every session&apos;s system prompt. Agents read and edit it too.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Toggle on={note.pinned} onClick={() => onChange({ pinned: !note.pinned })} icon={PinIcon} label="Pin" title="Keep at the top of the list" />
+          {onDelegate && <Button size="xs" variant="outline" disabled={delegateDisabled} onClick={onDelegate}>{delegateLabel}</Button>}
+          {desktop ? extra : <MobileDrawer title="More note actions">{extra}</MobileDrawer>}
         </div>
       )}
       {note.source === "repo" && (
