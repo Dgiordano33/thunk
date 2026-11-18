@@ -1,6 +1,6 @@
 "use client";
 
-import { InfoIcon } from "lucide-react";
+import { EllipsisIcon, InfoIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useEffect, useMemo } from "react";
 import { relativeTime } from "@/components/session/labels";
@@ -23,6 +23,8 @@ import { KIND_LABEL, Orbits } from "./system-map";
 
 export type PlanetMoon = {
   id: string;
+  /** The workspace page; clicking the moon goes here. Without it, the moon opens the workspace menu. */
+  href?: string;
   label: string;
   branch: string | null;
   hasGit?: boolean;
@@ -160,7 +162,7 @@ export function PlanetView({
             {moons.map((m, i) => {
               const delivery = deliveries.find((d) => d.workspaceId === m.id);
               const cue = cues ? cues[m.id] ?? null : m.hasGit === false ? null : deliveryCue(delivery?.status.pr ?? null);
-              return <Moon key={m.id} order={i + 2} moon={m} href={link(`ws=${m.id}`)} selected={selected.ws === m.id} tone={moonTone(m.id)} cue={cue} serving={!!delivery?.running} />;
+              return <Moon key={m.id} order={i + 2} moon={m} href={m.href ?? link(`ws=${m.id}`)} menuHref={link(`ws=${m.id}`)} selected={selected.ws === m.id} tone={moonTone(m.id)} cue={cue} serving={!!delivery?.running} />;
             })}
             {satellites.map((s) => (
               <Satellite
@@ -218,11 +220,16 @@ function Core({ projectId, level, name, x, y, href, selected, tone }: { projectI
 /** Labels hang below the satellites' outer loop, so session dots never sit on the text. */
 const LABEL_DROP = SATELLITE_RINGS[SATELLITE_RINGS.length - 1].r * TILT + 6;
 
-const Moon = memo(function Moon({ moon, order, href, selected, tone, cue, serving }: { moon: PlanetMoon; order: number; href: string; selected: boolean; tone: Tone; cue: Cue | null; serving: boolean }) {
+const Moon = memo(function Moon({ moon, order, href, menuHref, selected, tone, cue, serving }: { moon: PlanetMoon; order: number; href: string; menuHref: string; selected: boolean; tone: Tone; cue: Cue | null; serving: boolean }) {
   const r = moonRadius(moon.sessionCount);
   const hover = useBodyHover(moon.id);
   const branch = moon.branch && moon.branch !== moon.label ? moon.branch : null;
   return (
+    <div
+      className="sp-body group/moon absolute flex flex-col items-center"
+      style={{ left: moon.x, top: moon.y, transform: `translate(-50%, -${r}px)`, zIndex: Math.round(moon.y) + 1, "--i": order } as React.CSSProperties}
+      {...hover}
+    >
     <HoverCard openDelay={150} closeDelay={60}>
       <HoverCardTrigger asChild>
         <Link
@@ -230,10 +237,7 @@ const Moon = memo(function Moon({ moon, order, href, selected, tone, cue, servin
           scroll={false}
           draggable={false}
           aria-label={`Workspace ${moon.label}${cue ? `, ${cue.label}` : ""}${tone === "attention" ? ", needs attention" : tone === "running" ? ", running" : tone === "error" ? ", error" : ""}${serving ? ", dev server running" : ""}`}
-          aria-current={selected ? "page" : undefined}
-          className="sp-body group absolute flex flex-col items-center outline-none"
-          style={{ left: moon.x, top: moon.y, transform: `translate(-50%, -${r}px)`, zIndex: Math.round(moon.y) + 1, "--i": order } as React.CSSProperties}
-          {...hover}
+          className="group flex flex-col items-center outline-none"
         >
           <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
             {tone === "running" && <span className="orbit-pulse absolute rounded-full" style={{ inset: -5 }} />}
@@ -272,6 +276,21 @@ const Moon = memo(function Moon({ moon, order, href, selected, tone, cue, servin
         <p className="mt-2 text-right font-medium">Open workspace →</p>
       </HoverCardContent>
     </HoverCard>
+      <Link
+        href={menuHref}
+        scroll={false}
+        draggable={false}
+        aria-label={`${moon.label} settings`}
+        title="Workspace settings"
+        aria-current={selected ? "page" : undefined}
+        className={cn(
+          "text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:ring-ring mt-0.5 flex h-5 w-7 items-center justify-center rounded-full opacity-0 outline-none transition-opacity group-hover/moon:opacity-100 focus-visible:opacity-100 focus-visible:ring-2",
+          selected && "text-foreground opacity-100",
+        )}
+      >
+        <EllipsisIcon className="size-4" />
+      </Link>
+    </div>
   );
 });
 

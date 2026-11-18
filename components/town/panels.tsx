@@ -1,6 +1,6 @@
 import { ChiefPanel } from "@/components/project/chief-panel";
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
-import { ArchiveIcon, ExternalLinkIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, ExternalLinkIcon, FolderGit2Icon, FolderIcon, MessagesSquareIcon, MonitorPlayIcon, NotebookPenIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
@@ -130,29 +130,34 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
       }))
     : [{ id: null, name: "Files", cwd: workspace.cwd, branch: null, kind: "scratch" }];
   const inPlace = rows.some((r) => r.kind === "checkout");
-  // PR actions start a session and land on it, so they need the workspace's page URL.
-  return <WorkspaceBaseProvider value={href}><TownPanel eyebrow="Workspace" title={label} closeHref={closeHref} actions={<WorkspaceMenu project={project} workspace={workspace} label={label} />}>
-      <div className="flex gap-2 border-b px-4 py-3">
-        <Button asChild className="flex-1">
-          <Link href={href}><ExternalLinkIcon /> Open workspace</Link>
-        </Button>
-        <Button asChild variant="outline" className="flex-1">
-          <Link href={newChatPath(project, workspace)}><PlusIcon /> New session</Link>
-        </Button>
-      </div>
-
-      <Section title={workspace.repos.length ? `Repos (${rows.length})` : "Folder"}>
+  const tabs: PanelTab[] = [
+    {
+      value: "repos",
+      name: workspace.repos.length ? "Repos" : "Folder",
+      label: workspace.repos.length ? "Repos" : "Folder",
+      icon: workspace.repos.length ? <FolderGit2Icon /> : <FolderIcon />,
+      content: <Section title={workspace.repos.length ? `Repos (${rows.length})` : "Folder"}>
         <WorkspaceRepos key={workspace.id} workspaceId={workspace.id} rows={rows} />
         {inPlace && <p className="text-muted-foreground mt-3 text-xs">
           {label} works directly in your own {rows.length > 1 ? "checkouts" : "checkout"}, on whatever branch {rows.length > 1 ? "each has" : "it has"} checked out. Add a workspace to get a separate worktree and branch per repo.
         </p>}
-      </Section>
-
-      <Section title="Preview">
+      </Section>,
+    },
+    {
+      value: "preview",
+      name: "Preview",
+      label: "Preview",
+      icon: <MonitorPlayIcon />,
+      content: <Section title="Preview">
         <DevServer key={workspace.id} workspaceId={workspace.id} />
-      </Section>
-
-      <Section title={`Sessions (${fields.length})`}>
+      </Section>,
+    },
+    {
+      value: "sessions",
+      name: `Sessions (${fields.length})`,
+      label: "Sessions",
+      icon: <MessagesSquareIcon />,
+      content: <Section title={`Sessions (${fields.length})`}>
         {fields.length === 0 ? (
           <p className="text-muted-foreground text-xs">No sessions yet.</p>
         ) : (
@@ -167,12 +172,40 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
             ))}
           </ul>
         )}
-      </Section>
-
-      <Section title="Notes">
+      </Section>,
+    },
+    {
+      value: "notes",
+      name: "Notes",
+      label: "Notes",
+      icon: <NotebookPenIcon />,
+      content: <Section title="Notes">
         <TownNotes townHref={projectPath(project)} scope={{ kind: "workspaces", id: workspace.id }} />
-      </Section>
-
+      </Section>,
+    },
+  ];
+  // PR actions start a session and land on it, so they need the workspace's page URL.
+  return <WorkspaceBaseProvider value={href}><TownPanel eyebrow="Workspace" title={label} closeHref={closeHref} medium actions={<>
+      <Link
+        href={href}
+        aria-label="Open workspace"
+        title="Open workspace"
+        className="hover:bg-muted focus-visible:ring-ring flex size-11 items-center justify-center outline-none focus-visible:ring-2 md:size-8"
+      >
+        <ExternalLinkIcon className="size-4" />
+      </Link>
+      <WorkspaceMenu project={project} workspace={workspace} label={label} />
+    </>}>
+      <div className="flex h-full flex-col">
+        <div className="min-h-0 flex-1">
+          <PanelTabs key={workspace.id} tabs={tabs} vertical />
+        </div>
+        <div className="shrink-0 border-t px-4 py-3">
+          <Button asChild className="w-full">
+            <Link href={newChatPath(project, workspace)}><PlusIcon /> New session</Link>
+          </Button>
+        </div>
+      </div>
     </TownPanel></WorkspaceBaseProvider>;
 }
 
