@@ -60,17 +60,17 @@ Phases 1 and 2 are done. Thunk moves to an always-on Droplet that is reachable o
 - `tildify`: use the server's home dir instead of `/Users/<name>`.
 - Preview: add `THUNK_PREVIEW_BASE`; when set, return `https://<host>:<port>` and run `tailscale serve --https=<port> localhost:<port>` on Run, removing it on stop.
 
-### Step 2: deployment
+### Step 2: deployment (done: [docs/server.md](../docs/server.md))
 
-- `scripts/server-setup.sh`: idempotent install of the Step 0 packages, a `thunk` user, and the systemd unit.
-- systemd unit: `npm start`, `Restart=always`, `HOSTNAME=127.0.0.1`, `PORT=4600`, `EnvironmentFile=/etc/thunk.env`.
+- `scripts/server/setup.sh`: idempotent; writes `/etc/thunk.env` defaults, the systemd unit, sudoers for the service, and the `thunk` command.
+- systemd unit: `next start`, user `danielgiordano`, `Restart=always`, `HOSTNAME=127.0.0.1`, `PORT=4600`, `EnvironmentFile=/etc/thunk.env`.
 - `tailscale serve --bg --https=443 http://127.0.0.1:4600`; `THUNK_TRUSTED_HOSTS=<droplet>.<tailnet>.ts.net`, `THUNK_TRUSTED_USER` unchanged.
-- `scripts/update.sh`: `git pull`, `npm ci`, `npm run build`, restart. Refuse to restart while agents or PTYs are live unless forced.
+- `thunk update [branch]` (`scripts/server/thunk`): builds into the idle of `.next-a`/`.next-b`, then restarts; `thunk rollback` swaps back.
 - `docs/server.md` with all of the above.
 
 ### Step 3: data cutover
 
-Recommended: keep absolute paths. Run the `thunk` user with `HOME=/Users/danielgiordano` so Supabase paths and `data_key` stay valid.
+Recommended: keep absolute paths. The server user is `danielgiordano` with home `/Users/danielgiordano`, so Supabase paths and `data_key` stay valid.
 
 1. Stop Thunk on the Mac.
 2. rsync `~/.thunk` and the repo checkouts to the same paths on the Droplet, excluding `node_modules` and `.next*`.

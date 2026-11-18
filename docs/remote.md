@@ -2,7 +2,7 @@
 
 Thunk runs on your Mac. To use it from an iPhone, iPad or another computer, put the devices on a private [Tailscale](https://tailscale.com) network and let Tailscale Serve forward an HTTPS address to Thunk. Thunk still listens on `127.0.0.1` only, and nothing is exposed to the public internet.
 
-Thunk is not deployed to Vercel or any other host. It spawns agents, terminals and git commands on the machine it runs on and uses that machine's CLI logins, so remote access works only while the Mac is awake and Thunk is running.
+Thunk is not deployed to Vercel or any other host. It spawns agents, terminals and git commands on the machine it runs on and uses that machine's CLI logins, so remote access works only while the Mac is awake and Thunk is running. To run Thunk on an always-on server instead, see [Run Thunk on a server](server.md).
 
 Setup takes about 10 minutes.
 

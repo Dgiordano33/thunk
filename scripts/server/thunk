@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Day-to-day control of a Thunk server set up by scripts/server/setup.sh (docs/server.md).
+set -euo pipefail
+
+REPO=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
+ENV_FILE=/etc/thunk.env
+STATE_DIR="$HOME/.config/thunk"
+DIST_FILE="$STATE_DIR/dist.env"
+PREV_FILE="$STATE_DIR/previous"
+cd "$REPO"
+
+say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+port() { sed -n 's/^PORT=//p' "$ENV_FILE" 2>/dev/null | tail -1 | grep . || echo 4600; }
+url() { echo "https://$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"; }
+active_dist() { sed -n 's/^THUNK_DIST_DIR=//p' "$DIST_FILE" 2>/dev/null | grep . || echo .next-a; }
+version() { echo "$(git rev-parse --abbrev-ref HEAD) @ $(git log -1 --format='%h %s')"; }
+http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$(port)/api/models" || true; }
+
+wait_up() {
+  for _ in $(seq 1 60); do
+    [ "$(http_code)" = 200 ] && return 0
+    sleep 1
+  done
+  return 1
+}
+
+restart() {
+  sudo systemctl restart thunk
+  if wait_up; then say "Running $(version)"; else die "Thunk did not come up; check 'thunk logs'"; fi
+}
+
+lock_of() { git rev-parse "$1:package-lock.json"; }
+
+cmd_status() {
+  echo "Service:  $(systemctl is-active thunk || true)"
+  echo "Health:   $([ "$(http_code)" = 200 ] && echo ok || echo 'not responding')"
+  echo "Version:  $(version)"
+  echo "Address:  $(url)"
+}
+
+cmd_update() {
+  local branch=${1:-}
+  git diff --quiet && git diff --cached --quiet || die "the checkout has local edits; commit or discard them first (git status)"
+  if [ -z "$branch" ] && ! git symbolic-ref -q HEAD >/dev/null; then branch=main; fi  # after a rollback
+
+  local old_sha old_lock
+  old_sha=$(git rev-parse HEAD)
+  old_lock=$(lock_of HEAD)
+
+  say "Fetching"
+  git fetch --prune --quiet origin
+  [ -n "$branch" ] && git switch --quiet "$branch"
+  git pull --ff-only --quiet
+  if [ "$(git rev-parse HEAD)" = "$old_sha" ] && [ -f "$(active_dist)/BUILD_ID" ]; then
+    say "Already up to date: $(version)"; return
+  fi
+
+  if [ "$(lock_of HEAD)" != "$old_lock" ]; then
+    say "Dependencies changed: stopping Thunk to reinstall them"
+    sudo systemctl stop thunk
+    npm ci
+  fi
+
+  # Build into the slot that is not live, so a running server is untouched and a failed build changes nothing.
+  local live next
+  live=$(active_dist)
+  next=$([ "$live" = .next-a ] && echo .next-b || echo .next-a)
+  say "Building $(version)"
+  if ! THUNK_DIST_DIR="$next" npm run build; then
+    systemctl is-active --quiet thunk || sudo systemctl start thunk
+    die "build failed; Thunk is still running the previous version"
+  fi
+
+  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$live" "$old_sha" > "$PREV_FILE"
+  echo "THUNK_DIST_DIR=$next" > "$DIST_FILE"
+  say "Restarting (running agents and terminals stop)"
+  restart
+}
+
+cmd_rollback() {
+  [ -f "$PREV_FILE" ] || die "nothing to roll back to"
+  local dist sha
+  dist=$(sed -n 's/^THUNK_DIST_DIR=//p' "$PREV_FILE")
+  sha=$(sed -n 's/^SHA=//p' "$PREV_FILE")
+  [ -f "$dist/BUILD_ID" ] || die "the previous build ($dist) is gone"
+  git diff --quiet && git diff --cached --quiet || die "the checkout has local edits; commit or discard them first (git status)"
+
+  local cur_lock
+  cur_lock=$(lock_of HEAD)
+  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$(active_dist)" "$(git rev-parse HEAD)" > "$PREV_FILE"
+  git checkout --quiet --detach "$sha"
+  if [ "$(lock_of HEAD)" != "$cur_lock" ]; then sudo systemctl stop thunk; npm ci; fi
+  echo "THUNK_DIST_DIR=$dist" > "$DIST_FILE"
+  say "Rolling back"
+  restart
+  echo "Run 'thunk update main' to return to the latest version."
+}
+
+cmd_env() {
+  "${EDITOR:-nano}" "$ENV_FILE"
+  say "Restarting to apply the settings"
+  restart
+}
+
+cmd_doctor() {
+  cmd_status
+  echo
+  local models
+  models=$(curl -s --max-time 20 "http://127.0.0.1:$(port)/api/models" || true)
+  grep -qE '^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=.' "$ENV_FILE" && echo "Claude:   token set" || echo "Claude:   no token (claude setup-token, then thunk env)"
+  case "$models" in
+    *'"codexError":null'*) echo "Codex:    ok" ;;
+    "") echo "Codex:    unknown (Thunk is not responding)" ;;
+    *) echo "Codex:    $(echo "$models" | python3 -c 'import json,sys; print(json.load(sys.stdin)["codexError"])' 2>/dev/null || echo error) (codex login --device-auth)" ;;
+  esac
+  gh auth status >/dev/null 2>&1 && echo "GitHub:   signed in" || echo "GitHub:   not signed in (gh auth login --with-token)"
+  grep -qE '^SUPABASE_URL=.' "$ENV_FILE" && echo "Data:     Supabase" || echo "Data:     in memory only; lost on restart"
+  tailscale serve status 2>/dev/null | grep -q "127.0.0.1:$(port)" && echo "Serve:    ok" || echo "Serve:    off (tailscale serve --bg --https=443 http://127.0.0.1:$(port))"
+  echo "Disk:     $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
+  echo "Memory:   $(free -h | awk '/^Mem:/ {print $7 " available of " $2}')"
+}
+
+cmd_help() {
+  cat <<'HELP'
+Usage: thunk <command>
+
+  status            Is it running, which version, and its address
+  update [branch]   Pull, build and restart. With a branch, switch to it first (thunk update main to go back)
+  rollback          Go back to the version before the last update
+  logs              Follow the server log (Ctrl-C to stop)
+  restart | stop | start
+  env               Edit settings (/etc/thunk.env), then restart
+  doctor            Check sign-ins, data, Serve, disk and memory
+
+Restarting stops running agents and terminals. See docs/server.md.
+HELP
+}
+
+case "${1:-help}" in
+  status) cmd_status ;;
+  update) cmd_update "${2:-}" ;;
+  rollback) cmd_rollback ;;
+  logs) journalctl -u thunk -f -n 100 ;;
+  restart) say "Restarting"; restart ;;
+  stop) sudo systemctl stop thunk ;;
+  start) sudo systemctl start thunk; wait_up && say "Running $(version)" || die "Thunk did not come up; check 'thunk logs'" ;;
+  env) cmd_env ;;
+  doctor) cmd_doctor ;;
+  help|-h|--help) cmd_help ;;
+  *) cmd_help; exit 1 ;;
+esac

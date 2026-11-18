@@ -18,6 +18,9 @@
 # next.js
 /.next/
 /.next-e2e/
+# server builds alternate between these (scripts/server/thunk)
+/.next-a/
+/.next-b/
 /out/
 
 # production
