@@ -35,13 +35,7 @@ Read `node_modules/next/dist/docs/` on `proxy` before editing (per `AGENTS.md`).
 
 ## Phase 2: mobile surface
 
-Scope to what is useful on a phone: direct agents, answer them, read results.
-
-1. Session view: single column, sidebar as a sheet, prompt composer pinned above the keyboard.
-2. Approvals: permission cards, `AskUserQuestion` forms and plan approve/request-changes at touch size.
-3. Inbox and Needs-you tray as the mobile landing page.
-4. Read-only document view; editing and comments stay desktop-first.
-5. Leave the world map, board canvas, terminal and diff review as they are.
+See [Mobile-friendly Thunk](mobile-plan.md) for the mobile layout and verification plan. It can be developed with emulated viewports before Phase 1 enables remote access.
 
 ## Phase 3: run on a VM
 

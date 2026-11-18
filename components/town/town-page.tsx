@@ -1,3 +1,6 @@
+import { ProjectHome } from "@/components/mobile/project-home";
+import { MobileSessionRedirect } from "@/components/mobile/session-redirect";
+import { ResponsiveView } from "@/components/mobile/viewport";
 import { ArchivedHarvestOffer } from "@/components/workspace/harvest-dialog";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -93,6 +96,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   };
   const closeHref = projectPath(project);
 
+  let mobileSessionHref: string | undefined;
   let panel: React.ReactNode = null;
   if (selected.session) {
     const sid = selected.session;
@@ -108,6 +112,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
         loadDocuments(sid).catch((): PersistedDocument[] => []),
       ]);
       const ws = workspaces.find((w) => w.id === meta.workspaceId);
+      if (ws) mobileSessionHref = `${workspacePath(project, ws)}/${sid}`;
       panel = <FieldPanel meta={meta} events={events} documents={documents} workspaceName={ws ? workspaceLabel(ws) : ""} workspaceHref={ws ? workspacePath(project, ws) : `/w/${meta.workspaceId}`} closeHref={closeHref} />;
     }
   } else if (selected.ws) {
@@ -136,14 +141,16 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
 
   const harvestOffers = archived.filter((w) => w.id === one(query.harvest)).map((w) => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />);
 
-  if (look === "space") {
-    const planet = layoutPlanet(active, townSessions);
-    const [noteCount, taskCounts, routines] = await Promise.all([
+  const [noteCount, taskCounts, routines] = await Promise.all([
       countNotes([projectNoteDirs(project)]).catch(() => undefined),
       countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
       listEnabledRoutines({ projectId: id }).catch(() => []),
     ]);
     const tasks = taskCounts[id];
+  const mobile = mobileSessionHref ? <MobileSessionRedirect href={mobileSessionHref} /> : panel ?? <ProjectHome project={project} workspaces={townWorkspaces} closeHref={closeHref} counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines.length, vault: vaultItems.length }} />;
+
+  if (look === "space") {
+    const planet = layoutPlanet(active, townSessions);
     const moons: PlanetMoon[] = planet.moons.flatMap(({ workspaceId, x, y }) => {
       const ws = townWorkspaces.find((w) => w.id === workspaceId);
       if (!ws) return [];
@@ -161,7 +168,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       { key: "canvas", label: "Canvas", href: `${closeHref}/canvas` },
     ];
     return (
-      <PlanetView
+      <ResponsiveView mobile={mobile}><PlanetView
         projectId={id}
         projectName={project.name}
         level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })}
@@ -176,12 +183,12 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       >
         {panel}
         {harvestOffers}
-      </PlanetView>
+      </PlanetView></ResponsiveView>
     );
   }
 
   return (
-    <TownView
+    <ResponsiveView mobile={mobile}><TownView
       projectId={id}
       townHref={closeHref}
       projectName={project.name}
@@ -199,6 +206,6 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     >
       {panel}
       {harvestOffers}
-    </TownView>
+    </TownView></ResponsiveView>
   );
 }

@@ -24,7 +24,7 @@ export function NewTaskInput({ onCreate, onEdit }: { onCreate: (title: string) =
       <Button type="submit" size="icon" variant="outline" disabled={busy || !title.trim()} aria-label="Add task"><PlusIcon /></Button>
       <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onEdit(title)}>Details</Button>
     </form>
-    <p className="text-muted-foreground text-[11px]">Enter to add · ⌘/Ctrl Enter for details</p>
+    <p className="hidden md:block text-muted-foreground text-[11px]">Enter to add · ⌘/Ctrl Enter for details</p>
     {error && <p role="alert" className="text-destructive text-xs">{error}</p>}
   </div>;
 }

@@ -135,7 +135,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     projectSlug={p.slug}
                     projectName={p.name}
                     repos={p.repos}
-                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-100"
+                    className="md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-100"
                   />
                 </div>
 
@@ -181,7 +181,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                           project={p}
                           workspace={w}
                           label={workspaceDisplayName(w)}
-                          className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/ws:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                          className="absolute top-1/2 right-1 -translate-y-1/2 md:opacity-0 group-hover/ws:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                         />
                       </li>
                       );

@@ -715,3 +715,14 @@
 /* The map's control column: hairlines between buttons. */
 .look-space .map-controls > * + * { border-top: 1px solid var(--border); }
 .sp-core-name { font-size: 20px; line-height: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+@utility pt-safe { padding-top: env(safe-area-inset-top); }
+
+@media (width < 768px) {
+  /* Touch controls retain the desktop sizing above md. */
+  button, [role="button"], [role="combobox"], [role="menuitem"] { min-height: 44px; }
+  button, [role="checkbox"] { min-width: 44px; }
+  input, textarea, select { font-size: 16px; }
+  [data-slot="kbd"] { display: none; }
+}

@@ -26,9 +26,13 @@ test("both panel layouts render on the server without a browser", () => {
   assert.equal(typeof window, "undefined");
   const { ShellPanels } = load("../components/layout/shell-panels.tsx", {
     "@/components/ui/resizable": resizable,
+    "@/components/mobile/viewport": load("../components/mobile/viewport.tsx"),
+    "@/components/mobile/drawer": { MobileDrawer: () => null },
   });
   const { WorkspaceShell } = load("../components/workspace/workspace-shell.tsx", {
     "@/components/ui/resizable": resizable,
+    "@/components/mobile/viewport": load("../components/mobile/viewport.tsx"),
+    "@/components/mobile/drawer": { MobileDrawer: () => null },
     "next/navigation": { useParams: () => ({}) },
     "@/components/comments/comments-panel": { CommentsPanel: () => null },
     "@/lib/store/ui-store": { useUi: () => false },
@@ -66,4 +70,13 @@ test("layouts are kept in cookies, read from the request on the server and docum
   assert.equal(browser.getItem(key), saved);
   jar = `${name}=%E0%A4%A`;
   assert.equal(browser.getItem(key), null);
+});
+
+test("viewport server snapshot mounts only the matching tree", () => {
+  const { ViewportProvider, ResponsiveView } = load("../components/mobile/viewport.tsx");
+  for (const desktop of [false, true]) {
+    const html = renderToStaticMarkup(React.createElement(ViewportProvider, { initialDesktop: desktop },
+      React.createElement(ResponsiveView, { mobile: "Mobile list" }, "Desktop map")));
+    assert.equal(html, desktop ? "Desktop map" : "Mobile list");
+  }
 });

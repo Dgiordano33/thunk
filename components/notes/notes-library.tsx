@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusIcon } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -42,6 +44,7 @@ export function useAllNotes() {
  * URL state: `?scope=p:<id>|w:<id>&note=<id>` so the town and sidebar can deep-link.
  */
 export function NotesLibrary() {
+  const desktop = useIsDesktop();
   const pathname = usePathname();
   const params = useSearchParams();
   const scope = parseScopeKey(params.get("scope"));
@@ -71,11 +74,12 @@ export function NotesLibrary() {
   }, [folders]);
 
   return (
-    <main className="absolute inset-x-4 top-20 z-10 flex" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
-      <CivPanel className="w-full" bodyClassName="flex h-full min-h-0">
+    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex md:inset-x-4 md:top-20" style={{ bottom: !desktop ? "calc(4rem + env(safe-area-inset-bottom))" : process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+      <CivPanel className="w-full" bodyClassName="flex h-full min-h-0 flex-col md:flex-row">
         <CollapsiblePane title="Notebooks" defaultOpen={false} className="hidden w-60 md:flex">
           <LibraryFolders folders={folders} selected={scope} onSelect={(s) => navigate({ scope: s, note: null })} />
         </CollapsiblePane>
+        {!desktop && !noteParam && <div className="p-2"><Select value={scope ? scopeKey(scope) : "all"} onValueChange={value => navigate({ scope: parseScopeKey(value), note: null })}><SelectTrigger aria-label="Notebook" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All notes</SelectItem>{[...label].map(([key, name]) => <SelectItem key={key} value={key}>{name}</SelectItem>)}</SelectContent></Select></div>}
         {scope ? (
           <ScopeNotes
             key={scopeKey(scope)}
@@ -107,6 +111,7 @@ function AllNotes({
   label: Map<string, string>;
   onSelect: (scope: NoteScope | null, note: string | null) => void;
 }) {
+  const desktop = useIsDesktop();
   const notes = useMemo<NoteMeta[] | null>(
     () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.workspaces.flatMap((w) => w.notes), ...f.repos.flatMap((r) => r.notes)])) : null),
     [folders],
@@ -119,7 +124,7 @@ function AllNotes({
   return (
     <div className="flex min-h-0 flex-1">
       {dialog}
-      <CollapsiblePane title="All notes" className="w-72">
+      <CollapsiblePane title="All notes" className={desktop ? "w-72" : selected ? "hidden" : "w-full"}>
         <NoteList
           notes={notes}
           selectedId={selected}
@@ -131,7 +136,8 @@ function AllNotes({
           emptyText="No notes yet. Start one at the top level, or in a project or workspace."
         />
       </CollapsiblePane>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={!desktop && !selected ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
+        {!desktop && <button className="min-h-11 border-b text-left px-4" onClick={() => select(null)}>← Notes</button>}
         {current ? (
           <NoteEditor key={keyOf(current)} scope={current.scope} noteId={current.id} onDeleted={() => select(null)} topLevel={current.scope.kind === "projects" && current.scope.id === homeId} />
         ) : (

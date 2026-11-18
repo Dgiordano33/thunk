@@ -1,4 +1,5 @@
 "use client";
+import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { Button } from "@/components/ui/button";
 
@@ -41,7 +42,7 @@ export function PromptBox() {
     api.control(sessionId, body).catch((err: Error) => setError(err.message));
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 pb-5">
+    <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
       <PromptComposer
         workspaceId={meta?.workspaceId ?? ""}
         disabled={!live || submitting}
@@ -62,7 +63,7 @@ export function PromptBox() {
       >
         <PromptInputFooter>
           <PromptInputTools>
-            <ModelSelect
+<ComposerOptions>            <ModelSelect
               models={models}
               value={meta?.model}
               onValueChange={(value) => {
@@ -87,7 +88,7 @@ export function PromptBox() {
                   </PromptInputSelectItem>
                 ))}
               </PromptInputSelectContent>
-            </PromptInputSelect>
+            </PromptInputSelect></ComposerOptions>
             {error && <span className="text-destructive truncate text-xs">{error}</span>}
           </PromptInputTools>
           {running && <Button variant="ghost" size="xs" type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</Button>}

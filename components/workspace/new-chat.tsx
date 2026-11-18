@@ -1,4 +1,5 @@
 "use client";
+import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { CivPanel } from "@/components/world/civ-panel";
 import { EmptyMark } from "@/components/space/orbit-mark";
@@ -63,7 +64,7 @@ export function NewChat({
           </>
         )}
       </div>
-      <div className="mx-auto w-full max-w-3xl px-6 pb-5">
+      <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
         <PromptComposer
           workspaceId={workspaceId}
           disabled={disabled || submitting}
@@ -86,7 +87,7 @@ export function NewChat({
         >
           <PromptInputFooter>
             <PromptInputTools>
-              <ModelSelect models={models} value={model} onValueChange={setModel} disabled={disabled} />
+  <ComposerOptions>            <ModelSelect models={models} value={model} onValueChange={setModel} disabled={disabled} />
               <PromptInputSelect value={mode} onValueChange={setMode} disabled={disabled}>
                 <PromptInputSelectTrigger className="h-7 text-xs">
                   <PromptInputSelectValue />
@@ -98,7 +99,7 @@ export function NewChat({
                     </PromptInputSelectItem>
                   ))}
                 </PromptInputSelectContent>
-              </PromptInputSelect>
+              </PromptInputSelect></ComposerOptions>
               {error && <span className="text-destructive truncate text-xs">{error}</span>}
             </PromptInputTools>
             <PromptInputSubmit disabled={disabled || submitting} status={submitting ? "submitted" : "ready"} />

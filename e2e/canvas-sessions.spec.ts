@@ -42,13 +42,13 @@ test('create and switch canvas sessions, preserving existing cards and saving ed
     await expect(page.locator('[data-card]')).toHaveCount(0);
 });
 
-test('many canvases scroll without hiding creation or overflowing a narrow screen', async ({ page, request }) => {
+test('many canvases scroll without hiding creation or overflowing the smallest supported canvas screen', async ({ page, request }) => {
     const board = await newBoard(request);
     for (let i = 1; i <= 8; i++) {
         const response = await request.post(`/api/projects/${board.projectId}/boards`, { data: { name: `Research and planning ${i}` } });
         expect(response.ok()).toBe(true);
     }
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: 768, height: 1024 });
     await openCanvas(page, board, 0);
     const canvases = page.getByRole('navigation', { name: 'Project canvases' });
     await expect(canvases.getByRole('button')).toHaveCount(9);

@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Loader2Icon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,6 +32,9 @@ export function NewWorkspaceButton({
   hud?: boolean;
   className?: string;
 }) {
+  const desktop = useIsDesktop();
+  const Container = desktop ? Popover : Sheet;
+  const Trigger = desktop ? PopoverTrigger : SheetTrigger;
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
@@ -75,24 +80,7 @@ export function NewWorkspaceButton({
       New workspace
     </Button>
   );
-  if (!needsPicker) return trigger;
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        if (pending) return;
-        if (next) {
-          try {
-            const saved: unknown = JSON.parse(localStorage.getItem(`thunk:workspace-repos:${projectId}`) ?? "null");
-            setChosen(new Set(Array.isArray(saved) ? repos.filter((r) => saved.includes(r.id)).map((r) => r.id) : repos.map((r) => r.id)));
-          } catch { setChosen(new Set(repos.map((r) => r.id))); }
-        }
-        setOpen(next);
-      }}
-    >
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align={hud ? "end" : "start"} className="w-64 p-3">
+  const form = (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -125,7 +113,27 @@ export function NewWorkspaceButton({
             Create workspace
           </Button>
         </form>
-      </PopoverContent>
-    </Popover>
+  );
+  if (!needsPicker) return trigger;
+
+  return (
+    <Container
+      open={open}
+      onOpenChange={(next) => {
+        if (pending) return;
+        if (next) {
+          try {
+            const saved: unknown = JSON.parse(localStorage.getItem(`thunk:workspace-repos:${projectId}`) ?? "null");
+            setChosen(new Set(Array.isArray(saved) ? repos.filter((r) => saved.includes(r.id)).map((r) => r.id) : repos.map((r) => r.id)));
+          } catch { setChosen(new Set(repos.map((r) => r.id))); }
+        }
+        setOpen(next);
+      }}
+    >
+      <Trigger asChild>{trigger}</Trigger>
+      {desktop ? <PopoverContent align={hud ? "end" : "start"} className="w-64 p-3">
+        {form}
+      </PopoverContent> : <SheetContent side="bottom" className="p-4 pb-safe" aria-describedby={undefined}><SheetTitle>New workspace</SheetTitle>{form}</SheetContent>}
+    </Container>
   );
 }

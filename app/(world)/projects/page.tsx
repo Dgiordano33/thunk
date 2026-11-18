@@ -1,3 +1,6 @@
+import { ResponsiveView } from "@/components/mobile/viewport";
+import { ProjectList } from "@/components/mobile/project-list";
+import { loadSidebarProjects } from "@/components/layout/sidebar-tree";
 import { AddProjectForm } from "@/components/home/add-project-form";
 import { SystemMap } from "@/components/space/system-map";
 import { CivPanel } from "@/components/world/civ-panel";
@@ -14,6 +17,7 @@ export const dynamic = "force-dynamic";
 // Every project on one map: planets floating around a star (solar-system look) or cities on an island (game look).
 export default async function Home() {
   const [projects, look, positions] = await Promise.all([listProjects().catch(() => []), getLook(), getPlanetPositions()]);
+  const mobile = <ProjectList projects={await loadSidebarProjects()} />;
   const world = look === "world";
 
   const overlay = (
@@ -37,7 +41,7 @@ export default async function Home() {
     </>
   );
 
-  if (!world) return <SystemMap projects={projects} positions={positions}>{overlay}</SystemMap>;
+  if (!world) return <ResponsiveView mobile={mobile}><SystemMap projects={projects} positions={positions}>{overlay}</SystemMap></ResponsiveView>;
 
   const tiles = generateTerrain();
   const placed = placeCities(projects, tiles);
@@ -49,8 +53,8 @@ export default async function Home() {
   });
 
   return (
-    <WorldMap tiles={tiles} cities={cities}>
+    <ResponsiveView mobile={mobile}><WorldMap tiles={tiles} cities={cities}>
       {overlay}
-    </WorldMap>
+    </WorldMap></ResponsiveView>
   );
 }

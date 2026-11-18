@@ -1,4 +1,6 @@
 "use client";
+import { useIsDesktop } from "@/components/mobile/viewport";
+import { MobileDrawer } from "@/components/mobile/drawer";
 
 import { useDefaultLayout } from "react-resizable-panels";
 
@@ -32,8 +34,11 @@ export function WorkspaceShell({
 }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-chat-layout", panelIds: ['chat', 'tools'], storage: usePanelLayoutStorage() });
   const { session } = useParams<{ session?: string }>();
+  const desktop = useIsDesktop();
   const commentsOpen = useUi((s) => s.commentsOpen);
   const showComments = commentsOpen && !!session;
+
+  if (!desktop) return <WorkspaceBaseProvider value={base}><div className="flex h-full min-w-0 flex-col">{tabs}<MobileDrawer title="Workspace tools"><WorkspacePanel hasGit={false} workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></MobileDrawer><div className="min-h-0 flex-1 overflow-y-auto">{children}</div></div></WorkspaceBaseProvider>;
 
   return (
     <WorkspaceBaseProvider value={base}>

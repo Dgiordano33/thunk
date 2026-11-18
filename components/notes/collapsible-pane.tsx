@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,9 +21,10 @@ export function CollapsiblePane({
   className?: string;
   children: React.ReactNode;
 }) {
+  const desktop = useIsDesktop();
   const [open, setOpen] = useState(defaultOpen);
 
-  if (!open)
+  if (desktop && !open)
     return (
       <div className={cn("flex shrink-0 flex-col items-center border-r", className, "w-9")}>
         <div className="flex h-9 shrink-0 items-center justify-center self-stretch border-b">
@@ -44,7 +46,7 @@ export function CollapsiblePane({
     <div className={cn("flex shrink-0 flex-col border-r", className)}>
       <h2 className={cn(PANE_HEAD, "gap-2 pr-1.5")}>
         <span className="min-w-0 flex-1 truncate">{title}</span>
-        <Button size="icon-xs" variant="ghost" onClick={() => setOpen(false)} aria-label={`Collapse ${title}`} title={`Collapse ${title}`}>
+        <Button className="hidden md:flex" size="icon-xs" variant="ghost" onClick={() => setOpen(false)} aria-label={`Collapse ${title}`} title={`Collapse ${title}`}>
           <PanelLeftCloseIcon />
         </Button>
       </h2>

@@ -112,7 +112,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
             setDismissed(true);
           }
         }} />
-      <p className="text-muted-foreground px-3 pb-1 text-[10px]">@ files and notes · / commands · ↑ prompt history · paste or drop images</p>
+      <p className="hidden md:block text-muted-foreground px-3 pb-1 text-[10px]">@ files and notes · / commands · ↑ prompt history · paste or drop images</p>
       {error && <p role="alert" className="text-destructive px-3 text-xs">{error}</p>}
     </PromptInputBody>
     {children}
