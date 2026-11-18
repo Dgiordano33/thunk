@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 
 // Every project on one map: planets floating around a star (solar-system look) or cities on an island (game look).
 export default async function Home() {
-  const [projects, look, positions] = await Promise.all([listProjects().catch(() => []), getLook(), getPlanetPositions()]);
-  const mobile = <ProjectList projects={await loadSidebarProjects()} />;
+  const [projects, look, positions, sidebarProjects] = await Promise.all([listProjects().catch(() => []), getLook(), getPlanetPositions(), loadSidebarProjects()]);
+  const mobile = <ProjectList projects={sidebarProjects} />;
   const world = look === "world";
 
   const overlay = (

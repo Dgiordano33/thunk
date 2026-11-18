@@ -1,6 +1,7 @@
 import { ProjectHome } from "@/components/mobile/project-home";
 import { MobileSessionRedirect } from "@/components/mobile/session-redirect";
 import { ResponsiveView } from "@/components/mobile/viewport";
+import { isMobileRequest } from "@/components/mobile/viewport.server";
 import { ArchivedHarvestOffer } from "@/components/workspace/harvest-dialog";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -141,13 +142,17 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
 
   const harvestOffers = archived.filter((w) => w.id === one(query.harvest)).map((w) => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />);
 
-  const [noteCount, taskCounts, routines] = await Promise.all([
-      countNotes([projectNoteDirs(project)]).catch(() => undefined),
-      countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
-      listEnabledRoutines({ projectId: id }).catch(() => []),
-    ]);
-    const tasks = taskCounts[id];
-  const mobile = mobileSessionHref ? <MobileSessionRedirect href={mobileSessionHref} /> : panel ?? <ProjectHome project={project} workspaces={townWorkspaces} closeHref={closeHref} counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines.length, vault: vaultItems.length }} />;
+  // The space look's dock and the mobile project home show these counts; skip them for the game look on desktop.
+  const needCounts = look === "space" || (await isMobileRequest());
+  const [noteCount, taskCounts, routines] = needCounts
+    ? await Promise.all([
+        countNotes([projectNoteDirs(project)]).catch(() => undefined),
+        countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
+        listEnabledRoutines({ projectId: id }).catch(() => []),
+      ])
+    : [undefined, {} as Awaited<ReturnType<typeof countOpenTasks>>, undefined];
+  const tasks = taskCounts[id];
+  const mobile = mobileSessionHref ? <MobileSessionRedirect href={mobileSessionHref} /> : panel ?? <ProjectHome project={project} workspaces={townWorkspaces} closeHref={closeHref} counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines?.length, vault: vaultItems.length }} />;
 
   if (look === "space") {
     const planet = layoutPlanet(active, townSessions);
@@ -163,7 +168,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     const sections: PlanetSection[] = [
       { key: "notes", label: "Notes", href: projectSectionPath(closeHref, "library"), count: noteCount, selected: selected.building === "library" },
       { key: "tasks", label: "Tasks", href: projectSectionPath(closeHref, "tasks"), count: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, selected: selected.building === "tasks" },
-      { key: "routines", label: "Routines", href: projectSectionPath(closeHref, "workshop"), count: routines.length, selected: selected.building === "workshop" },
+      { key: "routines", label: "Routines", href: projectSectionPath(closeHref, "workshop"), count: routines?.length ?? 0, selected: selected.building === "workshop" },
       { key: "vault", label: "Vault", href: projectSectionPath(closeHref, "vault"), count: vaultItems.length, attention: vaultItems.some((i) => i.status === "failed"), selected: selected.building === "vault" },
       { key: "canvas", label: "Canvas", href: `${closeHref}/canvas` },
     ];

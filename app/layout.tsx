@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { isMobileRequest } from "@/components/mobile/viewport.server";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Pixelify_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const look = await getLook();
-  const initialDesktop = !/Mobile|iPhone|Android.*Mobile/i.test((await headers()).get("user-agent") ?? "");
+  const initialDesktop = !(await isMobileRequest());
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} ${lookClass(look)} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
