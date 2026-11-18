@@ -143,7 +143,7 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppLogsPath();
     mkdirSync(app.getPath("logs"), { recursive: true });
     const config = path.join(userData, ".env");
-    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR\n", { mode: 0o600, flag: "wx" });
+    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER\n", { mode: 0o600, flag: "wx" });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu", submenu: [
         { role: "about" }, { type: "separator" },

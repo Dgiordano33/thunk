@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
+import { parseTrustedHosts } from "./lib/access";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // `next dev` blocks dev assets for non-localhost origins; allow the Tailscale names (docs/remote.md).
+  allowedDevOrigins: parseTrustedHosts(process.env.THUNK_TRUSTED_HOSTS),
   // Browser tests run their own dev server beside yours; Next allows one dev server per build directory.
   ...(process.env.THUNK_DIST_DIR ? { distDir: process.env.THUNK_DIST_DIR } : {}),
   outputFileTracingExcludes: {

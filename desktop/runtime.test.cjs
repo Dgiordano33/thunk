@@ -30,6 +30,22 @@ test("starts on loopback, loads external config, and stops its child", async (t)
   await assert.rejects(fetch(backend.url));
 });
 
+test("THUNK_PORT in the config pins the backend port", async (t) => {
+  const options = fixture(t, `
+    require('node:http').createServer((req, res) => res.end('ok')).listen(Number(process.env.PORT), process.env.HOSTNAME);
+  `);
+  const probe = require("node:net").createServer().listen(0, "127.0.0.1");
+  await new Promise((resolve) => probe.once("listening", resolve));
+  const port = probe.address().port;
+  await new Promise((resolve) => probe.close(resolve));
+  writeFileSync(options.config, `THUNK_PORT=${port}\n`);
+  const backend = await startBackend(options);
+  t.after(() => backend.stop());
+  assert.equal(backend.url, `http://127.0.0.1:${port}`);
+  writeFileSync(options.config, "THUNK_PORT=nope\n");
+  await assert.rejects(startBackend(options), /THUNK_PORT must be a port number/);
+});
+
 test("reports startup exit instead of waiting for readiness", async (t) => {
   await assert.rejects(startBackend(fixture(t, "process.exit(7)")), /stopped \(7\)/);
 });

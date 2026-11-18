@@ -38,6 +38,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 CODEX_BIN=/absolute/path/to/codex
 # Optional; defaults to the existing ~/.thunk directory
 THUNK_DATA_DIR=/absolute/path/to/thunk-data
+# Optional remote access over Tailscale; see docs/remote.md
+THUNK_PORT=4600
+THUNK_TRUSTED_HOSTS=your-mac.tail1234.ts.net
+THUNK_TRUSTED_USER=you@example.com
 ```
 
 Checkout `.env*` files and credentials are not copied into the app. Copy the settings you need into the external config yourself. As with any Next.js build, `NEXT_PUBLIC_*` values are public and embedded at build time. Configuration is shared across local builds and lives outside the app. Project files keep using `~/.thunk` (or `THUNK_DATA_DIR`); rebuilding or replacing the app does not erase them. Without Supabase, existing in-memory session/routine limitations still apply.
@@ -46,7 +50,7 @@ Avoid running web and desktop instances against the same data at the same time: 
 
 ## Window and server lifecycle
 
-The backend binds only to `127.0.0.1` on an available port and retains Thunk's existing Host/Origin API protections. Electron uses a sandboxed renderer with no Node integration or preload bridge. External HTTP, HTTPS, and mail links open in the system browser; other external protocols are blocked.
+The backend binds only to `127.0.0.1`, on `THUNK_PORT` if set and otherwise on an available port. It keeps Thunk's Host/Origin protections on every page and API route; [remote access](remote.md) extends them to your Tailscale name. Electron uses a sandboxed renderer with no Node integration or preload bridge. External HTTP, HTTPS, and mail links open in the system browser; other external protocols are blocked.
 
 Closing the window keeps the app, agents, and routines running, as expected on macOS. Click its Dock icon to reopen. **Quit Thunk / ⌘Q** sends SIGTERM to the backend so existing agent and PTY shutdown hooks run, then forces termination after five seconds if needed. Quit stops active work. Startup/server failures display an error; **Show Server Log** reveals `~/Library/Logs/Thunk/server.log` (replaced on each launch).
 
