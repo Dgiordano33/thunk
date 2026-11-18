@@ -78,3 +78,29 @@ test('mobile and tablet screenshots have no horizontal overflow', async ({ page,
     }
   }
 });
+
+test('a remote phone can add a project and browse host folders', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'e2e@thunk.test' });
+  await page.goto(`${process.env.THUNK_E2E_REMOTE_URL}/projects`);
+  await page.getByLabel('Add project').last().tap();
+  const name = `Phone ${Date.now().toString(36)}`;
+  await page.getByPlaceholder('My project').fill(name);
+  await page.getByRole('button', { name: 'Add repository', exact: true }).tap();
+  // Remote clients get the in-page browser, not the host's Finder dialog.
+  await page.getByText('No folder chosen', { exact: true }).tap();
+  const browser = page.getByRole('dialog', { name: 'Choose a repo or folder' });
+  await expect(browser.getByRole('textbox', { name: 'Folder path' })).toHaveValue('~');
+  await expect(browser.getByRole('button', { name: 'Up one folder' })).toBeDisabled();
+  await expect(browser.getByRole('list', { name: 'Subfolders' }).getByRole('button').first()).toBeVisible();
+  await fits(page);
+  await browser.getByRole('button', { name: 'Cancel', exact: true }).tap();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).tap();
+  await page.getByRole('button', { name: 'Create project', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: 'Workspaces', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
+  // Reveal in Finder would open on the host, so remote clients don't get it.
+  await page.locator('main a[href*="?ws="]').first().tap();
+  await expect(page.getByRole('link', { name: 'New session', exact: true })).toBeVisible();
+  await expect(page.getByText('Reveal in Finder')).toHaveCount(0);
+});

@@ -20,7 +20,7 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount, notifi
   const project = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
   return (
     <>
-      {!desktop ? <MobileTopBar title={project?.name ?? (home ? "Projects" : pathname.split("/").filter(Boolean).at(-1) ?? "Thunk")} actions={<AmbientHub projects={projects} variant="hud" />} /> : <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
+      {!desktop ? <MobileTopBar title={project?.name ?? (home ? "Projects" : pathname.split("/").filter(Boolean).at(-1) ?? "Thunk")} back={home ? null : undefined} actions={<><AmbientHub projects={projects} variant="hud" />{home && <AddProjectForm compact />}</>} /> : <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
         <CivPanel className="pointer-events-auto" bodyClassName="flex items-center gap-3 px-3 py-2">
           <HudTitle projects={projects} noteCount={noteCount} />
         </CivPanel>

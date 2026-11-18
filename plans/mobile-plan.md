@@ -38,7 +38,7 @@ Same URLs, one codebase, a single breakpoint: below `md` (768px) is the mobile l
 - Mobile: `ProjectList`, one card per project: name, workspace count, running/waiting dots, open-task and note counts. Tap opens the project. "Add project" in the top bar.
 - Data: `loadSidebarProjects()` (`components/layout/sidebar-tree.ts`), `useAmbient`, `useTaskCounts`.
 - Files: `app/(world)/projects/page.tsx`, new `components/mobile/project-list.tsx`.
-- Limit: adding a project uses a macOS folder dialog on the host, so it will not work from a phone until the remote plan's folder picker lands. Hide the button below `md` until then.
+- Adding a project: the "+" in the top bar (and the empty state) opens the same dialog. Folders are chosen with an in-page browser (`components/project/folder-browser.tsx`, backed by `GET /api/fs/list`) whenever the browser is not on the host, since the macOS dialog would open on the Mac.
 
 ### 2. Project — `/{project}`
 - Today: `PlanetView` (moons, satellites, bottom dock) with floating panels.

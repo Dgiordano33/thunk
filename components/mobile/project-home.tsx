@@ -28,7 +28,7 @@ export function ProjectHome({ project, workspaces, closeHref, counts }: {
           return (
             <Link className="block rounded-lg border bg-background p-4" key={w.id} href={`${closeHref}?ws=${w.id}`}>
               <strong>{w.label}</strong>
-              <p className="break-words text-sm">{w.branch} · {w.sessionCount} sessions</p>
+              <p className="break-words text-sm">{[w.branch, `${w.sessionCount} ${w.sessionCount === 1 ? "session" : "sessions"}`].filter(Boolean).join(" · ")}</p>
               <p className="mt-1 text-sm"><span className={waiting ? "text-amber-600" : running ? "text-emerald-600" : "text-muted-foreground"}>●</span> {waiting ? "Waiting" : running ? "Running" : "Idle"}</p>
             </Link>
           );

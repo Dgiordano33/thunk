@@ -10,6 +10,7 @@ import { api } from "@/lib/client/api";
 import type { RuntimeSnapshot } from "@/lib/projects/runtime-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { toast } from "sonner";
+import { useLocalClient } from "@/components/mobile/local-client";
 
 /** One checkout the workspace works in: a git repo (worktree or main checkout), a shared folder, or its scratch folder. */
 export type RepoRow = { id: string | null; name: string; cwd: string; kind: "worktree" | "checkout" | "folder" | "scratch"; branch: string | null };
@@ -26,6 +27,7 @@ const KIND_TITLE: Record<RepoRow["kind"], string> = {
 export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; rows: RepoRow[] }) {
   const delivery = useAmbient((s) => s.deliveries.find((d) => d.workspaceId === workspaceId));
   const multiGit = rows.filter((r) => r.kind === "worktree" || r.kind === "checkout").length > 1;
+  const local = useLocalClient();
   return <div className="space-y-3 text-xs">
     <ul className="space-y-2">
       {rows.map((row) => {
@@ -50,14 +52,14 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
             {repo?.deployedPreviewUrl && <a href={repo.deployedPreviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline"><ExternalLinkIcon className="size-3" />Deployed preview</a>}
           </div>}
           {reason && <p role="status" className="text-muted-foreground mt-1">{reason}</p>}
-          <button
+          {local ? <button
             type="button"
             title="Reveal in Finder"
             className="text-muted-foreground hover:text-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono"
             onClick={() => void api.revealWorkspace(workspaceId, row.id ?? undefined).catch((err: Error) => toast.error("Couldn’t reveal the folder", { description: err.message }))}
           >
             <FolderIcon className="size-3 shrink-0" /><span className="truncate">{row.cwd.replace(/^\/(Users|home)\/[^/]+/, "~")}</span>
-          </button>
+          </button> : <p className="text-muted-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono"><FolderIcon className="size-3 shrink-0" /><span className="truncate">{row.cwd.replace(/^\/(Users|home)\/[^/]+/, "~")}</span></p>}
         </li>;
       })}
     </ul>
