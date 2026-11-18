@@ -2,6 +2,22 @@ const { spawn, execFileSync } = require("node:child_process");
 const { createServer } = require("node:net");
 const { setTimeout: delay } = require("node:timers/promises");
 const path = require("node:path");
+const { readFileSync } = require("node:fs");
+const { parseEnv } = require("node:util");
+
+/** THUNK_PORT from the desktop config pins the port so Tailscale Serve can target it (docs/remote.md). */
+function configuredPort(config) {
+  let value;
+  try {
+    value = parseEnv(readFileSync(config, "utf8")).THUNK_PORT;
+  } catch {
+    return undefined;
+  }
+  if (!value?.trim()) return undefined;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`THUNK_PORT must be a port number, got "${value}".`);
+  return port;
+}
 
 function loginPath() {
   // Finder does not inherit the user's terminal PATH (nvm, Homebrew, Codex, gh).
@@ -27,7 +43,7 @@ async function freePort() {
 }
 
 async function startBackend({ root, config, log, env = process.env, timeout = 60000 }) {
-  const port = await freePort();
+  const port = configuredPort(config) ?? await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(path.join(root, "bin/node"), [
     `--env-file-if-exists=${config}`, path.join(root, "server/server.js"),

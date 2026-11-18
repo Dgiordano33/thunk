@@ -1,28 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { accessConfigFromEnv, denyReason, TAILSCALE_USER_HEADER } from "./lib/access";
 
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-
-function isLoopback(urlish: string) {
-  try {
-    return LOOPBACK.has(new URL(urlish).hostname.toLowerCase());
-  } catch {
-    return false;
-  }
-}
+const access = accessConfigFromEnv(process.env);
 
 /**
- * The API can spawn agents with arbitrary cwd and permission modes, so only serve it locally.
- * The Host check blocks LAN access and DNS rebinding; the Origin check blocks cross-site requests.
+ * Every route (pages and API) is guarded: loopback only, plus the Tailscale names and user in
+ * THUNK_TRUSTED_HOSTS / THUNK_TRUSTED_USER. See lib/access.ts and docs/remote.md.
  */
 export function proxy(req: NextRequest) {
-  const host = req.headers.get("host") ?? "";
-  const origin = req.headers.get("origin");
-  if (!isLoopback(`http://${host}`) || (origin && !isLoopback(origin))) {
-    return NextResponse.json({ error: "Forbidden: local access only" }, { status: 403 });
-  }
-  return NextResponse.next();
+  const request = {
+    host: req.headers.get("host"),
+    origin: req.headers.get("origin"),
+    tailscaleUser: req.headers.get(TAILSCALE_USER_HEADER),
+  };
+  const reason = denyReason(request, access);
+  if (!reason) return NextResponse.next();
+  console.warn(`[access] denied ${req.method} ${req.nextUrl.pathname}: ${reason} (host=${request.host ?? "-"}, origin=${request.origin ?? "-"})`);
+  const message = access.trustedHosts.length ? "Forbidden" : "Forbidden: local access only";
+  return req.nextUrl.pathname.startsWith("/api/")
+    ? NextResponse.json({ error: message }, { status: 403 })
+    : new NextResponse(message, { status: 403, headers: { "content-type": "text/plain" } });
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  // Build output under _next/static is public code; everything else, including pages, is checked.
+  matcher: "/((?!_next/static|_next/image).*)",
 };
