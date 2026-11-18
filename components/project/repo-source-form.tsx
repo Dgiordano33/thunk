@@ -1,11 +1,14 @@
 "use client";
 
 import { FolderGit2Icon, FolderPlusIcon, GitForkIcon } from "lucide-react";
+import { useState } from "react";
+import { useLocalClient } from "@/components/mobile/local-client";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client/api";
 import type { RepoSpec } from "@/lib/projects/repo-spec";
 import { repoNameFromUrl } from "@/lib/projects/repo-name";
 import { cn } from "@/lib/utils";
+import { FolderBrowser } from "./folder-browser";
 import { DEFAULT_PARENT, Field, FolderPicker } from "./form-fields";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -46,14 +49,20 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
   onError: (message: string | null) => void;
 }) {
   const set = (patch: Partial<RepoDraft>) => onChange({ ...draft, ...patch });
+  // The macOS dialog opens on the host, so only use it when this browser is on the host too.
+  const local = useLocalClient();
+  const [browsing, setBrowsing] = useState<{ prompt: string; current: string; field: "path" | "parent" } | null>(null);
   const pick = async (prompt: string, current: string, field: "path" | "parent") => {
     onError(null);
+    if (!local) return setBrowsing({ prompt, current, field });
     onPicking(true);
     try {
       const picked = (await api.pickFolder({ prompt, defaultPath: current || undefined })).path;
       if (picked) set({ [field]: picked });
     } catch (err) {
-      onError((err as Error).message);
+      // No native dialog on this host (not macOS): browse in the page instead.
+      if (/only available on macOS/.test((err as Error).message)) setBrowsing({ prompt, current, field });
+      else onError((err as Error).message);
     } finally {
       onPicking(false);
     }
@@ -81,7 +90,7 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
       </div>
       {draft.source === "existing" && (
         <Field label="Folder" hint="Inside a git repo, its main checkout is used (even from a worktree).">
-          <FolderPicker value={draft.path} picking={picking} onPick={() => void pick("Choose a repo or folder", draft.path, "path")} />
+          <FolderPicker value={draft.path} picking={picking} native={local} onPick={() => void pick("Choose a repo or folder", draft.path, "path")} />
         </Field>
       )}
       {draft.source === "github" && (
@@ -99,6 +108,7 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
           <FolderPicker
             value={draft.parent}
             picking={picking}
+            native={local}
             onPick={() => void pick(draft.source === "github" ? "Choose where to clone the repo" : "Choose where to create the folder", draft.parent, "parent")}
           />
         </Field>
@@ -112,6 +122,14 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
       <Field label="Name (optional)" hint="How agents and the UI refer to it. Defaults to the folder name.">
         <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="api" className="font-mono text-sm" />
       </Field>
+      {browsing && (
+        <FolderBrowser
+          onOpenChange={(open) => { if (!open) setBrowsing(null); }}
+          title={browsing.prompt}
+          start={browsing.current}
+          onChoose={(picked) => set({ [browsing.field]: picked })}
+        />
+      )}
     </div>
   );
 }

@@ -17,7 +17,7 @@ type Row = { key: number; spec: RepoSpec; status: "draft" | "adding" | "added" |
 const SOURCE_ICON = { existing: FolderGit2Icon, github: GitForkIcon, new: FolderPlusIcon };
 
 /** The create-project wizard: a name and any number of repos, zero included. */
-export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }) {
+export function AddProjectForm({ size = "default", compact = false }: { size?: "default" | "lg"; compact?: boolean }) {
   const router = useRouter();
   const nextKey = useRef(0);
   const [open, setOpen] = useState(false);
@@ -99,12 +99,18 @@ export function AddProjectForm({ size = "default" }: { size?: "default" | "lg" }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size={size}>
-          <PlusIcon />
-          Add project
-        </Button>
+        {compact ? (
+          <Button size="icon" variant="ghost" aria-label="Add project" className="size-11">
+            <PlusIcon />
+          </Button>
+        ) : (
+          <Button size={size}>
+            <PlusIcon />
+            Add project
+          </Button>
+        )}
       </DialogTrigger>
-      <DialogContent className="grid-cols-1 sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto sm:max-w-md">
         <form onSubmit={submit} className="contents">
           <DialogHeader>
             <DialogTitle>{projectId ? `${name} is ready` : "Create a project"}</DialogTitle>

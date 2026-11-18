@@ -1,3 +1,4 @@
+import type { DirListing } from "@/lib/fs/list-dirs";
 import type { Notification, NotificationCounts } from "@/lib/notifications/types";
 import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
 import type { NoteImportScope, Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
@@ -79,6 +80,7 @@ export const api = {
     post<{ project: Project; workspace: Workspace; repos: RepoResult<ProjectRepo>[] }>("/api/projects", body),
   pickFolder: (body: { prompt?: string; defaultPath?: string } = {}) =>
     post<{ path: string | null }>("/api/fs/pick-folder", body),
+  listDirs: (path: string) => call<DirListing>(`/api/fs/list?path=${encodeURIComponent(path)}`),
   renameProject: (id: string, name: string) => call(`/api/projects/${id}`, { method: "PATCH", json: { name } }),
   deleteProject: (id: string) => call(`/api/projects/${id}`, { method: "DELETE" }),
   // The repos of a project

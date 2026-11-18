@@ -11,7 +11,7 @@ Thunk stays a single-user, single-host app. No multi-tenant auth, no distributed
 | Access boundary | `proxy.ts` allows only loopback `Host` and `Origin`, and only matches `/api/*` | Pages are unguarded; they are safe only because `next dev/start` binds `127.0.0.1` |
 | Agents | Claude via Agent SDK (`lib/agent/options.ts`), Codex via `codex app-server` (`lib/agent/codex/rpc.ts`); both inherit `process.env` and the host's CLI logins | Portable to Linux as long as the logins exist on the host |
 | Preview | `lib/projects/runtime.ts` returns `http://127.0.0.1:<port>` | Dead link from any other device |
-| Folder picker | `app/api/fs/pick-folder` shells out to `osascript`; `FolderPicker` has no text fallback | Cannot add a repo on Linux, or from a phone |
+| Folder picker | `app/api/fs/pick-folder` shells out to `osascript` for local clients; remote clients and non-macOS hosts use the in-page browser over `GET /api/fs/list` | Done |
 | Reveal in Finder | `app/api/workspaces/[id]/reveal` is darwin-only | Needs hiding off macOS |
 | Paths | Supabase rows hold absolute paths; `data_key` is derived from the project root; `tildify` assumes `/Users/` | Existing Mac data does not move to a VM as-is |
 | State | `~/.thunk` on disk, Supabase optional, live sessions and PTYs in process memory | Needs a persistent disk; restarts kill running agents |
@@ -37,28 +37,54 @@ Read `node_modules/next/dist/docs/` on `proxy` before editing (per `AGENTS.md`).
 
 See [Mobile-friendly Thunk](mobile-plan.md) for the mobile layout and verification plan. It can be developed with emulated viewports before Phase 1 enables remote access.
 
-## Phase 3: run on a VM
+## Phase 3: run on a DigitalOcean Droplet
 
-1. Host-independence fixes
-   - Folder picker: add `GET /api/fs/list?path=` (directories only, under the home dir) and a browser dialog with a text field; keep `osascript` as the macOS shortcut.
-   - Hide Reveal in Finder when the server is not darwin.
-   - `tildify`: use the server's home dir instead of `/Users/<name>`.
-   - Preview: add `THUNK_PREVIEW_BASE`; when set, return `https://<host>:<port>` and run `tailscale serve --https=<port> localhost:<port>` on Run, removing it on stop.
-2. Deployment
-   - Ubuntu VM with a persistent disk, Node 22.16+ or 24, `git`, `gh`, `codex`, Tailscale.
-   - `npm ci && npm run build`, started by a systemd unit with `Restart=always`, `HOSTNAME=127.0.0.1`, and an env file.
-   - Add `docs/server.md` with the unit file and an update script (`git pull`, build, restart).
-3. Sign-ins on the VM
-   - Claude: sign in with the official CLI flow. Fallback is `ANTHROPIC_API_KEY`.
-   - Codex: `codex login --device-auth`, or copy `~/.codex/auth.json`.
-   - GitHub: `gh auth login` plus `gh auth setup-git`.
-4. Data
-   - Start the VM on a fresh Supabase project and re-add repos by GitHub URL. Absolute paths and `data_key` make an in-place move fragile.
-   - Optionally copy `~/.thunk/projects/*/notes`, `memory` and `vault` into the new keys by hand.
-   - Run one instance only. Two instances on the same data double-fire the scheduler and delivery polling.
-5. Operations
-   - Nightly backup of `THUNK_DATA_DIR` and repo checkouts with unpushed work.
-   - Restarts kill live agents and PTYs. Routines marked interrupted recover on start; sessions resume manually.
+Phases 1 and 2 are done. Thunk moves to an always-on Droplet that is reachable only over the tailnet. The Mac becomes a client.
+
+### Step 0: prove the host (no Thunk code)
+
+1. Droplet: Ubuntu 24.04 LTS, Basic Regular, 4 vCPU and 8 GB (about $48/mo) or 8 vCPU and 16 GB (about $96/mo), in the region closest to you. Several agent sessions plus a dev server and `next build` need the memory. Enable weekly Droplet backups.
+2. Add an SSH key only for first boot. Install Tailscale, run `tailscale up --ssh`, and confirm `ssh <droplet>` works over the tailnet.
+3. Attach a DigitalOcean Cloud Firewall with no inbound rules. Tailscale needs outbound only, so SSH and every other port are closed to the internet from then on. Recovery is the Droplet console in the DigitalOcean dashboard.
+4. Install Node 24, `git`, `gh`, `codex`, the `claude` CLI and `build-essential` (for `node-pty`).
+5. Sign in:
+   - Claude: `claude setup-token`, stored as `CLAUDE_CODE_OAUTH_TOKEN` in the env file. Fallback is `ANTHROPIC_API_KEY`.
+   - Codex: `codex login --device-auth`.
+   - GitHub: a fine-grained token scoped to the repos Thunk uses, then `gh auth setup-git`.
+6. Exit check: one headless Agent SDK turn and one Codex turn succeed on the Droplet. This settles the headless sign-in open question. Stop here if it fails.
+
+### Step 1: host-independence fixes (testable on the Mac)
+
+- Done: folder picker. `GET /api/fs/list?path=` (directories only, under the home dir) and a browser dialog with a text field; `osascript` stays the shortcut for a browser on the host.
+- Done: Reveal in Finder is hidden for clients that are not on the host (covers a Linux host too, since every client is remote there).
+- `tildify`: use the server's home dir instead of `/Users/<name>`.
+- Preview: add `THUNK_PREVIEW_BASE`; when set, return `https://<host>:<port>` and run `tailscale serve --https=<port> localhost:<port>` on Run, removing it on stop.
+
+### Step 2: deployment
+
+- `scripts/server-setup.sh`: idempotent install of the Step 0 packages, a `thunk` user, and the systemd unit.
+- systemd unit: `npm start`, `Restart=always`, `HOSTNAME=127.0.0.1`, `PORT=4600`, `EnvironmentFile=/etc/thunk.env`.
+- `tailscale serve --bg --https=443 http://127.0.0.1:4600`; `THUNK_TRUSTED_HOSTS=<droplet>.<tailnet>.ts.net`, `THUNK_TRUSTED_USER` unchanged.
+- `scripts/update.sh`: `git pull`, `npm ci`, `npm run build`, restart. Refuse to restart while agents or PTYs are live unless forced.
+- `docs/server.md` with all of the above.
+
+### Step 3: data cutover
+
+Recommended: keep absolute paths. Run the `thunk` user with `HOME=/Users/danielgiordano` so Supabase paths and `data_key` stay valid.
+
+1. Stop Thunk on the Mac.
+2. rsync `~/.thunk` and the repo checkouts to the same paths on the Droplet, excluding `node_modules` and `.next*`.
+3. Run `npm ci` in every checkout (Mac native modules do not run on Linux).
+4. Point the Droplet at the existing Supabase project and start it.
+5. Do not start the Mac server again on the same data. Two instances double-fire the scheduler and delivery polling.
+
+Fallback: a fresh Supabase project, repos re-added by GitHub URL, and notes, memory and vault copied by hand.
+
+### Step 4: operations
+
+- Weekly Droplet backups (Step 0) plus a nightly copy of `THUNK_DATA_DIR` to DigitalOcean Spaces or another off-box target.
+- Restarts kill live agents and PTYs. Routines marked interrupted recover on start; sessions resume manually. Running terminals in tmux can come later.
+- Edit code by hand with Remote-SSH (VS Code or Cursor) over the tailnet, or by pushing and pulling.
 
 ## Order and size
 
@@ -66,12 +92,12 @@ See [Mobile-friendly Thunk](mobile-plan.md) for the mobile layout and verificati
 |---|---|---|
 | 1. Tailscale access | none | 0.5–1 day |
 | 2. Mobile surface | 1 | 2–3 days |
-| 3. VM | 1 | 2–3 days |
+| 3. DigitalOcean Droplet | 1 | 2–3 days |
 
 Phase 1 alone gives phone access while the Mac is awake. Phases 2 and 3 are independent of each other.
 
 ## Open questions
 
-- Subscription terms: Anthropic's help page says signed-in Agent SDK use draws from subscription limits and names no restriction; it does not cover headless sign-in. Confirm the sign-in flow on the VM before committing to Phase 3.
-- Agents on the VM run with the VM user's full access. Decide whether `bypassPermissions` stays available when remote.
+- Subscription terms: Anthropic's help page says signed-in Agent SDK use draws from subscription limits and names no restriction. `claude setup-token` is the headless path; Step 0 confirms it works before any code is written.
+- Agents on the Droplet run with the `thunk` user's full access. Decide whether `bypassPermissions` stays available when remote. The blast radius is the Droplet, not the Mac.
 - Dev-server previews that hard-code `localhost` in redirects or asset URLs will not work through Serve.

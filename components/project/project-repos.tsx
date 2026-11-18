@@ -116,7 +116,7 @@ function AddRepoDialog({ projectId, primary }: { projectId: string; primary: boo
       <DialogTrigger asChild>
         <Button size="sm" variant={primary ? "default" : "outline"}><PlusIcon /> {primary ? "Add a folder or repository" : "Add repository"}</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <form onSubmit={submit} className="contents">
           <DialogHeader>
             <DialogTitle>Add a repo to this project</DialogTitle>
