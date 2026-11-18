@@ -158,8 +158,9 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     const planet = layoutPlanet(active, townSessions);
     const moons: PlanetMoon[] = planet.moons.flatMap(({ workspaceId, x, y }) => {
       const ws = townWorkspaces.find((w) => w.id === workspaceId);
-      if (!ws) return [];
-      return [{ id: ws.id, label: ws.label, branch: ws.branch, hasGit: ws.hasGit, sessionCount: ws.sessionCount, overflow: planet.overflow[ws.id] ?? 0, lastActivityAt: ws.lastActivityAt, x, y }];
+      const row = active.find((w) => w.id === workspaceId);
+      if (!ws || !row) return [];
+      return [{ id: ws.id, href: workspacePath(project, row), label: ws.label, branch: ws.branch, hasGit: ws.hasGit, sessionCount: ws.sessionCount, overflow: planet.overflow[ws.id] ?? 0, lastActivityAt: ws.lastActivityAt, x, y }];
     });
     const satellites: PlanetSatellite[] = fields.flatMap((f) => {
       const at = planet.satellites[f.id];

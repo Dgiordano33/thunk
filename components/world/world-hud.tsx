@@ -24,11 +24,13 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount, notifi
         <CivPanel className="pointer-events-auto" bodyClassName="flex items-center gap-3 px-3 py-2">
           <HudTitle projects={projects} noteCount={noteCount} />
         </CivPanel>
-        <CivPanel className="pointer-events-auto" bodyClassName="flex items-center gap-1 p-1">
-          <AmbientHub projects={projects} variant="hud" />
+        <div className="pointer-events-auto flex items-center gap-2">
+          <CivPanel bodyClassName="flex items-center p-1">
+            <AmbientHub projects={projects} variant="hud" />
+          </CivPanel>
           {home && <AddProjectForm />}
           {project && <NewWorkspaceButton hud projectId={project.id} projectSlug={project.slug} projectName={project.name} repos={project.repos} />}
-        </CivPanel>
+        </div>
       </div>}
       <CivToolbar projects={projects} cityCount={projects.length} noteCount={noteCount} routineCount={routineCount} vaultCount={vaultCount} notificationCount={notificationCount} />
     </>
