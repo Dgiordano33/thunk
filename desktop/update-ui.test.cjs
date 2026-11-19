@@ -35,7 +35,7 @@ function fixture(prepare) {
           showErrorBox: (...args) => { assert.ok(windows[0].destroyed); errors.push(args); },
         },
       };
-      if (name === "./updater.cjs") return { prepareUpdate: (options) => prepare(options, windows), installUpdate() {} };
+      if (name === "./updater.cjs") return { prepareUpdate: (options) => prepare(options, windows), installUpdate() {}, configuredUpdateSource: () => ({ repo: "https://example.com/thunk.git", branch: "main" }) };
       if (name === "./runtime.cjs") return { loginPath: () => "/usr/bin" };
       if (name === "node:fs") return { ...fs, readFileSync: () => '{"revision":"old"}', rmSync() {} };
       return require(name);

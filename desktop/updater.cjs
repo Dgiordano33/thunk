@@ -1,7 +1,32 @@
 const { spawn, execFileSync } = require("node:child_process");
-const { mkdtempSync, cpSync, renameSync, rmSync, openSync, closeSync, accessSync, realpathSync, constants } = require("node:fs");
+const { mkdtempSync, cpSync, renameSync, rmSync, openSync, closeSync, accessSync, realpathSync, readFileSync, constants } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
+const { parseEnv } = require("node:util");
+
+const DEFAULT_UPDATE_SOURCE = { repo: "https://github.com/Dgiordano33/thunk.git", branch: "main" };
+
+/**
+ * Where Check for Updates builds from. THUNK_UPDATE_REPO (a git URL, a local path, or GitHub
+ * `owner/repo` shorthand) and THUNK_UPDATE_BRANCH in the desktop config point a fork at itself.
+ */
+function configuredUpdateSource(config) {
+  let values = {};
+  try {
+    values = parseEnv(readFileSync(config, "utf8"));
+  } catch {
+    // A missing or unreadable config uses the defaults.
+  }
+  const repoValue = values.THUNK_UPDATE_REPO?.trim();
+  const branch = values.THUNK_UPDATE_BRANCH?.trim() || DEFAULT_UPDATE_SOURCE.branch;
+  let repo = DEFAULT_UPDATE_SOURCE.repo;
+  if (repoValue) {
+    if (repoValue.startsWith("-")) throw new Error(`THUNK_UPDATE_REPO must be a git URL or owner/repo, got "${repoValue}".`);
+    repo = /^[\w.-]+\/[\w.-]+$/.test(repoValue) && !repoValue.startsWith(".") ? `https://github.com/${repoValue.replace(/\.git$/, "")}.git` : repoValue;
+  }
+  if (branch.startsWith("-") || /[\s~^:?*[\\]|\.\.|@\{/.test(branch)) throw new Error(`THUNK_UPDATE_BRANCH must be a branch name, got "${branch}".`);
+  return { repo, branch };
+}
 
 function run(command, args, { cwd, env, log, signal }) {
   return new Promise((resolve, reject) => {
@@ -24,24 +49,24 @@ function run(command, args, { cwd, env, log, signal }) {
   });
 }
 
-async function prepareUpdate({ target, revision, env, logFile, signal, onProgress = () => {} }) {
+async function prepareUpdate({ target, revision, env, logFile, signal, source = DEFAULT_UPDATE_SOURCE, onProgress = () => {} }) {
   accessSync(path.dirname(target), constants.W_OK);
   const work = realpathSync(mkdtempSync(path.join(tmpdir(), "thunk-update-")));
   const log = openSync(logFile, "w", 0o600);
   let staging;
   try {
-    const source = path.join(work, "source");
+    const checkout = path.join(work, "source");
     const options = { cwd: work, env: { ...env, THUNK_DATA_DIR: path.join(work, "data"), NEXT_TELEMETRY_DISABLED: "1", GIT_TERMINAL_PROMPT: "0" }, log, signal };
-    await run("git", ["clone", "--depth=1", "--branch=main", "--single-branch", "--", "https://github.com/Dgiordano33/thunk.git", source], options);
-    const latest = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, env: options.env, encoding: "utf8", timeout: 10000 }).trim();
+    await run("git", ["clone", "--depth=1", `--branch=${source.branch}`, "--single-branch", "--", source.repo, checkout], options);
+    const latest = execFileSync("git", ["rev-parse", "HEAD"], { cwd: checkout, env: options.env, encoding: "utf8", timeout: 10000 }).trim();
     if (latest === revision) return null;
-    options.cwd = source;
+    options.cwd = checkout;
     onProgress("Downloading what’s new…");
     await run("npm", ["ci", "--include=dev"], options);
     onProgress("Building your update…");
     await run("npm", ["run", "desktop:pack"], options);
     onProgress("Verifying your update…");
-    const built = path.join(source, "dist-desktop", process.arch === "arm64" ? "mac-arm64" : "mac", "Thunk.app");
+    const built = path.join(checkout, "dist-desktop", process.arch === "arm64" ? "mac-arm64" : "mac", "Thunk.app");
     await run("node", ["scripts/smoke-desktop.mjs", path.join(built, "Contents/Resources/backend")], options);
     await run("codesign", ["--verify", "--deep", "--strict", built], options);
     signal.throwIfAborted();
@@ -75,4 +100,4 @@ function installUpdate(staged, target) {
   return backup;
 }
 
-module.exports = { prepareUpdate, installUpdate, run };
+module.exports = { prepareUpdate, installUpdate, run, configuredUpdateSource, DEFAULT_UPDATE_SOURCE };
