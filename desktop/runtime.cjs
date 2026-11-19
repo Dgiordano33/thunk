@@ -19,6 +19,28 @@ function configuredPort(config) {
   return port;
 }
 
+/**
+ * THUNK_REMOTE_URL from the desktop config makes the app a window onto a Thunk server (docs/server.md)
+ * instead of starting its own. Returns the server's origin, or undefined when unset.
+ */
+function configuredRemote(config) {
+  let value;
+  try {
+    value = parseEnv(readFileSync(config, "utf8")).THUNK_REMOTE_URL;
+  } catch {
+    return undefined;
+  }
+  if (!value?.trim()) return undefined;
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new Error(`THUNK_REMOTE_URL must be a URL such as https://thunk.example.ts.net, got "${value}".`);
+  }
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error(`THUNK_REMOTE_URL must start with https://, got "${value}".`);
+  return url.origin;
+}
+
 function loginPath() {
   // Finder does not inherit the user's terminal PATH (nvm, Homebrew, Codex, gh).
   try {
@@ -95,4 +117,4 @@ function externalUrl(value) {
   }
 }
 
-module.exports = { startBackend, loginPath, externalUrl };
+module.exports = { startBackend, configuredRemote, loginPath, externalUrl };

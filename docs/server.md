@@ -29,6 +29,10 @@ Restarting stops running agents and terminals, so update when nothing is running
 
 `thunk update` builds the new version beside the running one and switches over only when the build succeeds. A failed build leaves the running version alone. The only time Thunk stops during an update is when `package-lock.json` changed and dependencies have to be reinstalled.
 
+### Open it in the Mac app
+
+Set `THUNK_REMOTE_URL=https://thunk.tailbae5bb.ts.net` in the desktop app's configuration and reopen it. The app then opens the server in its own window and starts nothing locally; see [Use a Thunk server instead](desktop.md#use-a-thunk-server-instead).
+
 ### From the Mac without logging in
 
 Add this to `~/.zshrc` on the Mac:
