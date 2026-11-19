@@ -48,6 +48,18 @@ Checkout `.env*` files and credentials are not copied into the app. Copy the set
 
 Avoid running web and desktop instances against the same data at the same time: they would both run background schedulers and delivery polling. The desktop enforces one desktop instance, but cannot lock out a separately launched web server.
 
+## Use a Thunk server instead
+
+If Thunk runs on a server ([Run Thunk on a server](server.md)), the app can open it instead of starting its own backend. Add one line with **Thunk → Show Configuration**, then quit and reopen Thunk:
+
+```dotenv
+THUNK_REMOTE_URL=https://thunk.tail1234.ts.net
+```
+
+With `THUNK_REMOTE_URL` set, the app starts nothing on your Mac and ignores the other settings in the file. Agents, terminals and data all live on the server. Requests go through Tailscale Serve and are checked as described in [remote access](remote.md), so Tailscale must be connected on the Mac. When the server cannot be reached, the window shows a retry page and tries again every 15 seconds. Quitting the app does not stop anything on the server, and **Show Server Log** is hidden; use `thunk logs` on the server instead.
+
+Remove the line to go back to a local backend. Do not point the local backend at the server's Supabase project while the server is running.
+
 ## Window and server lifecycle
 
 The backend binds only to `127.0.0.1`, on `THUNK_PORT` if set and otherwise on an available port. It keeps Thunk's Host/Origin protections on every page and API route; [remote access](remote.md) extends them to your Tailscale name. Electron uses a sandboxed renderer with no Node integration or preload bridge. External HTTP, HTTPS, and mail links open in the system browser; other external protocols are blocked.

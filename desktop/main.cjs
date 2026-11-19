@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, shell, session } = require("electron");
 const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync, rmSync } = require("node:fs");
 const path = require("node:path");
-const { startBackend, loginPath, externalUrl } = require("./runtime.cjs");
+const { startBackend, configuredRemote, loginPath, externalUrl } = require("./runtime.cjs");
 
 const { prepareUpdate, installUpdate } = require("./updater.cjs");
 
@@ -103,8 +103,13 @@ async function openWindow() {
       openExternal(url);
     }
   });
+  // A remote server can be unreachable (Tailscale off, server restarting); show a retry page instead of failing.
+  window.webContents.on("did-fail-load", (_event, code, description, validatedURL, isMainFrame) => {
+    if (!backend.remote || !isMainFrame || code === -3 || !validatedURL.startsWith(backend.url)) return;
+    void window?.loadFile(path.join(__dirname, "offline.html"), { query: { url: backend.url, error: description } }).catch(console.error);
+  });
   window.on("closed", () => { window = null; });
-  await window.loadURL(backend.url);
+  await window.loadURL(backend.url).catch((error) => { if (!backend.remote) throw error; });
   window.show();
 }
 
@@ -143,7 +148,8 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppLogsPath();
     mkdirSync(app.getPath("logs"), { recursive: true });
     const config = path.join(userData, ".env");
-    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER\n", { mode: 0o600, flag: "wx" });
+    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER, THUNK_REMOTE_URL\n", { mode: 0o600, flag: "wx" });
+    const remote = configuredRemote(config);
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu", submenu: [
         { role: "about" }, { type: "separator" },
@@ -151,22 +157,27 @@ if (!app.requestSingleInstanceLock()) {
         { label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) },
         { type: "separator" },
         { label: "Show Configuration", click: () => shell.showItemInFolder(config) },
-        { label: "Show Server Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "server.log")) },
+        ...(remote ? [] : [{ label: "Show Server Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "server.log")) }]),
         { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },
         { type: "separator" }, { role: "quit" },
       ] },
       { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
     ]));
-    const root = app.isPackaged ? path.join(process.resourcesPath, "backend") : path.resolve(__dirname, "../build/desktop");
-    const log = openSync(path.join(app.getPath("logs"), "server.log"), "w", 0o600);
-    try {
-      backend = await startBackend({ root, config, log, env: { ...process.env, PATH: loginPath() } });
-    } finally {
-      closeSync(log);
+    if (remote) {
+      // THUNK_REMOTE_URL: open a Thunk server (docs/server.md) and start nothing locally.
+      backend = { url: remote, remote: true, stop: async () => {}, exited: new Promise(() => {}) };
+    } else {
+      const root = app.isPackaged ? path.join(process.resourcesPath, "backend") : path.resolve(__dirname, "../build/desktop");
+      const log = openSync(path.join(app.getPath("logs"), "server.log"), "w", 0o600);
+      try {
+        backend = await startBackend({ root, config, log, env: { ...process.env, PATH: loginPath() } });
+      } finally {
+        closeSync(log);
+      }
+      backend.exited.then(() => { if (!quitting) fail(new Error("The local server exited unexpectedly. Restart Thunk.")); });
     }
     starting = false;
     if (quitting) { app.quit(); return; }
-    backend.exited.then(() => { if (!quitting) fail(new Error("The local server exited unexpectedly. Restart Thunk.")); });
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
       callback(contents === window?.webContents && new URL(contents.getURL()).origin === backend.url && permission === "notifications");
     });

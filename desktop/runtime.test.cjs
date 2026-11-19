@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
-const { startBackend, externalUrl } = require("./runtime.cjs");
+const { startBackend, configuredRemote, externalUrl } = require("./runtime.cjs");
 
 function fixture(t, source) {
   const root = mkdtempSync(path.join(tmpdir(), "thunk-desktop-"));
@@ -58,4 +58,18 @@ test("kills a backend that never becomes ready", async (t) => {
 test("external links cannot launch file or executable protocols", () => {
   for (const value of ["https://github.com", "http://localhost:3000", "mailto:hello@example.com"]) assert.equal(externalUrl(value), true);
   for (const value of ["file:///etc/passwd", "javascript:alert(1)", "vscode://file/foo", "not a URL"]) assert.equal(externalUrl(value), false);
+});
+
+test("THUNK_REMOTE_URL in the config selects a server origin", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thunk-remote-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const config = path.join(dir, ".env");
+  const remote = (text) => { writeFileSync(config, text); return configuredRemote(config); };
+  assert.equal(configuredRemote(path.join(dir, "missing.env")), undefined);
+  assert.equal(remote("THUNK_PORT=4600\n"), undefined);
+  assert.equal(remote("THUNK_REMOTE_URL=\n"), undefined);
+  assert.equal(remote("THUNK_REMOTE_URL=https://thunk.tail1234.ts.net/projects?x=1\n"), "https://thunk.tail1234.ts.net");
+  assert.equal(remote("THUNK_REMOTE_URL= https://thunk.tail1234.ts.net:8443/ \n"), "https://thunk.tail1234.ts.net:8443");
+  assert.throws(() => remote("THUNK_REMOTE_URL=thunk.tail1234.ts.net\n"), /must be a URL/);
+  assert.throws(() => remote("THUNK_REMOTE_URL=file:///etc/passwd\n"), /must start with https/);
 });
