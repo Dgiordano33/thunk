@@ -26,7 +26,7 @@ let backend;
 try {
   backend = await runtime.startBackend({ root, config, log, env: {
     PATH: process.env.PATH, HOME: temporary, SHELL: "/bin/zsh",
-    THUNK_DATA_DIR: path.join(temporary, "data"), SUPABASE_URL: "", SUPABASE_SERVICE_ROLE_KEY: "",
+    THUNK_DATA_DIR: path.join(temporary, "data"), DATABASE_URL: "", SUPABASE_URL: "",
   } });
   const html = await (await fetch(backend.url)).text();
   const asset = html.match(/src="([^" ]*\/_next\/static\/[^" ]+)"/);

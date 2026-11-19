@@ -3,7 +3,7 @@ import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { readMemory, writeMemory } from "@/lib/projects/memory";
 import { projectInstructionsFile } from "@/lib/projects/paths";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 
 export const dynamic = "force-dynamic";
 

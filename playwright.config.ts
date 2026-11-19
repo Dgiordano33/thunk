@@ -40,9 +40,9 @@ export default defineConfig({
             NEXT_PUBLIC_THUNK_E2E: '1',
             THUNK_TRUSTED_HOSTS: REMOTE_HOST,
             THUNK_TRUSTED_USER: 'e2e@thunk.test',
-            // Empty overrides .env.local, so projects live in memory instead of your Supabase.
-            SUPABASE_URL: '',
-            SUPABASE_SERVICE_ROLE_KEY: '',
+            // Overrides .env.local, so projects live in memory instead of your database.
+            THUNK_DATABASE: 'memory',
+            DATABASE_URL: '',
         },
     },
 });

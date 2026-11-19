@@ -3,7 +3,7 @@ import { emit, resolvePending, setState } from "@/lib/agent";
 import { handle, HttpError, parseBody, requireLive } from "@/lib/api/http";
 import { RevisionBodySchema } from "@/lib/api/schemas";
 import { buildRevisionPayload } from "@/lib/revisions/build-payload";
-import { insertRevision, updateDocument } from "@/lib/supabase/repo/documents";
+import { insertRevision, updateDocument } from "@/lib/db/repo/documents";
 
 const Body = z.discriminatedUnion("decision", [
   z.object({

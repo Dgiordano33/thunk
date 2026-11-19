@@ -1,6 +1,6 @@
 import { DesktopOnly } from "@/components/mobile/desktop-only";
 import { notFound } from 'next/navigation';
-import { getProjectBySlug } from '@/lib/supabase/repo/projects';
+import { getProjectBySlug } from '@/lib/db/repo/projects';
 import { boardFor, listCanvases } from '@/lib/board/service';
 import { lock, snapshot } from '@/lib/board/store';
 import { BoardView } from '@/components/board/board-view';

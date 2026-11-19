@@ -5,7 +5,7 @@ import type { ActivitySession } from "@/lib/ambient/types";
 import { handle } from "@/lib/api/http";
 import { ensureScheduler } from "@/lib/routines/scheduler";
 import type { RoutineRunActivity } from "@/lib/routines/types";
-import { listRecentRuns, listRoutineRows } from "@/lib/supabase/repo/routines";
+import { listRecentRuns, listRoutineRows } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

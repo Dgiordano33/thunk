@@ -2,7 +2,7 @@ import "server-only";
 import { deliveryHistories, workspaceDeliveries } from "@/lib/projects/delivery";
 import type { DeliveryHistory } from "@/lib/projects/delivery-history";
 import type { WorkspaceDelivery } from "@/lib/projects/delivery-types";
-import { listEnabledRoutines, updateRoutine } from "@/lib/supabase/repo/routines";
+import { listEnabledRoutines, updateRoutine } from "@/lib/db/repo/routines";
 import { fire } from "./runner";
 import { DELIVERY_ROUTINE_EVENTS, type Routine } from "./types";
 

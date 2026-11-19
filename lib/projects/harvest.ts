@@ -7,7 +7,7 @@ import { isNoteId, listNotes, metaOf, newNoteId } from "../notes/store";
 import { NoteConflictError, readOptional, withFileLock } from "../notes/file-write";
 import { writeMemory } from "./memory";
 import { headerOnly } from "./granary";
-import { listTasks, updateTask } from "../supabase/repo/tasks";
+import { listTasks, updateTask } from "../db/repo/tasks";
 import { emitNote } from "../notes/watch";
 
 /** The log minus lines project memory already holds, so harvesting again doesn't repeat them. */

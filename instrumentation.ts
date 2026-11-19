@@ -1,5 +1,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { describeDatabase } = await import("./lib/db/server");
+    console.log(`[thunk] database: ${describeDatabase()}`);
     const { ensureNotificationProducers } = await import("./lib/notifications/producers");
     ensureNotificationProducers();
     const { ensureDeliveryPolling } = await import("./lib/projects/delivery");

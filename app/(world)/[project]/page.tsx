@@ -1,4 +1,4 @@
-import { getProjectBySlug } from "@/lib/supabase/repo/projects";
+import { getProjectBySlug } from "@/lib/db/repo/projects";
 import { redirect } from "next/navigation";
 import { TownPage } from "@/components/town/town-page";
 import { PROJECT_SECTIONS, projectSectionPath } from "@/lib/routes";

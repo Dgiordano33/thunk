@@ -5,8 +5,8 @@ import { reconcileDeclaredFolders } from "./folders";
 import { repoNoteDirs } from "./resolve";
 import path from "node:path";
 import { DATA_DIR } from "@/lib/projects/paths";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listAllWorkspaces } from "@/lib/db/repo/workspaces";
 import { MEMORY_NOTE_ID, type NoteEvent, type NoteScope } from "./types";
 
 type Listener = (e: NoteEvent) => void;

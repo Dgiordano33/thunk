@@ -155,7 +155,7 @@ function setDocStatus(s: SessionData, id: string | undefined, status: DocumentSt
   return { documents: { ...s.documents, [id]: { ...s.documents[id], status } } };
 }
 
-/** Pure event reducer: (state, event) → patch. Shared by live SSE and Supabase hydration. */
+/** Pure event reducer: (state, event) → patch. Shared by live SSE and database hydration. */
 function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
   switch (e.type) {
     case "board_op": return {};

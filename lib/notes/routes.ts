@@ -4,7 +4,7 @@ import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { dirsForScope } from "./resolve";
 import { NoteConflictError, createNote, deleteNote, isNoteId, listNotes, metaOf, readNote, writeNote } from "./store";
 import { MEMORY_NOTE_ID, type NoteScopeKind } from "./types";
-import { getRepoFolder, setRepoFolderFiles } from "@/lib/supabase/repo/repo-folders";
+import { getRepoFolder, setRepoFolderFiles } from "@/lib/db/repo/repo-folders";
 
 // Route handlers shared by /api/projects/[id]/notes and /api/workspaces/[id]/notes.
 

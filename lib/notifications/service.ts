@@ -1,5 +1,5 @@
 import "server-only";
-import * as repo from "@/lib/supabase/repo/notifications";
+import * as repo from "@/lib/db/repo/notifications";
 import { emitNotification } from "./events";
 import type { NewNotification, Notification } from "./types";
 

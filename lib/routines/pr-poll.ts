@@ -2,8 +2,8 @@ import "server-only";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { gitRepos } from "@/lib/projects/repos";
-import { getProject } from "@/lib/supabase/repo/projects";
-import { listEnabledRoutines, updateRoutine } from "@/lib/supabase/repo/routines";
+import { getProject } from "@/lib/db/repo/projects";
+import { listEnabledRoutines, updateRoutine } from "@/lib/db/repo/routines";
 import { fire } from "./runner";
 import type { Routine } from "./types";
 

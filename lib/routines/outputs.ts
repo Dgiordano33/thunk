@@ -3,7 +3,7 @@ import { harvestWorkspace } from "@/lib/projects/harvest";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { workspaceNoteDirs } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
-import { listTasks, updateTask } from "@/lib/supabase/repo/tasks";
+import { listTasks, updateTask } from "@/lib/db/repo/tasks";
 import type { Task } from "@/lib/tasks/types";
 
 export type KeptNote = { id: string; title: string };

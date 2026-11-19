@@ -96,7 +96,7 @@ const fired = [];
 Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/routines/delivery-poll.ts")) {
     if (request === "@/lib/projects/delivery") return { deliveryHistories: () => histories, workspaceDeliveries: () => deliveries };
-    if (request === "@/lib/supabase/repo/routines") return {
+    if (request === "@/lib/db/repo/routines") return {
       listEnabledRoutines: async () => routines,
       updateRoutine: async (id, patch) => { const routine = routines.find((r) => r.id === id); Object.assign(routine, patch); return routine; },
     };

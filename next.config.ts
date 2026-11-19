@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
     "/*": ["./build/**/*", "./dist-desktop/**/*", "./.context/**/*", "./.git/**/*", "./desktop/**/*"],
   },
   // The Agent SDK spawns a native `claude` binary over stdio; never bundle it.
-  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk", "node-pty"],
+  // PGlite loads its Postgres WebAssembly and data files from its own package directory.
+  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk", "node-pty", "@electric-sql/pglite", "pg"],
+  // lib/db/server.ts reads the migrations at startup.
+  outputFileTracingIncludes: { "/*": ["./db/migrations/*.sql"] },
   // The proxy buffers API bodies; Vault uploads send one file (up to 25MB) per request.
   experimental: { proxyClientMaxBodySize: "30mb" },
 };

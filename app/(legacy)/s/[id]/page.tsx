@@ -1,7 +1,7 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import { liveMeta } from "@/lib/agent";
 import { hrefForSession } from "@/lib/routes.server";
-import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { getSessionRow } from "@/lib/db/repo/sessions";
 
 export const dynamic = "force-dynamic";
 

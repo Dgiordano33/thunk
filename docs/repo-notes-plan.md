@@ -66,7 +66,7 @@ Acceptance: `npm run test:notes` passes with new cases for memoryless scopes, fi
 - Migration `0007_repo_notebooks.sql`:
   - `project_repo_folders`: `id uuid pk`, `project_id` (fk cascade), `repo_id uuid null` (fk `project_repos` on delete cascade; `null` means the primary repo), `path text` (relative, normalized, no `..`, no leading slash), `label text`, `created_at`, `updated_at`; unique `(project_id, repo_id, path)` with `repo_id` coalesced for the primary repo; RLS and `set_updated_at` like `0006`.
   - No change to `tasks`. `note_id` already holds the filename.
-- `lib/projects/types.ts`: `Project.repoFolders: RepoFolder[]`. `lib/supabase/repo/projects.ts` loads them with `extraRepos`, with the same in-memory fallback the other repos have.
+- `lib/projects/types.ts`: `Project.repoFolders: RepoFolder[]`. `lib/db/repo/projects.ts` loads them with `extraRepos`, with the same in-memory fallback the other repos have.
 - `lib/notes/resolve.ts`: `repoNoteDirs(project, folder)` returns `{ scope: { kind: "repos", id: folder.id }, notesDir: path.join(checkoutRoot, folder.path) }` where `checkoutRoot` is `project.root` for the primary repo or the matching `ProjectRepo.path`. Guard with `realpath` that the resolved dir is inside the checkout, mirroring `copyWorkspaceFiles`. `dirsForScope` handles `"repos"` and 404s when the folder row or its repo is gone. Add `notesDirsFor(project, workspace)` → also returns `repos: NoteDirs[]` so sessions and the prompt block can list them.
 - Routes: `GET/POST /api/projects/[id]/repo-folders` (`{ repoId?, path, label? }`; validates the path, requires the directory to exist or offers to create it), `DELETE …/repo-folders/[folderId]` (unregisters only; never deletes files). Notes routes: `app/api/repos/[id]/notes` and `…/notes/[noteId]` built from `notesCollection("repos")` and `noteItem("repos")` in `lib/notes/routes.ts`; `PATCH` rejects `MEMORY_NOTE_ID` for this kind.
 - `lib/client/api.ts`: `listRepoFolders`, `addRepoFolder`, `removeRepoFolder`; the existing note helpers take the new scope kind.
@@ -131,7 +131,7 @@ Acceptance: import from `.claude/tasks/board.md`, complete a task in the Tasks t
 - `lib/notes/prompt.ts`, `lib/agent/options.ts`: repo notebooks in the prompt block and extra-repo dirs.
 - `lib/notes/routes.ts` + `app/api/repos/[id]/notes/**`: routes for the new kind.
 - `app/api/projects/[id]/repo-folders/**`: register, remove, suggest.
-- `lib/projects/types.ts`, `lib/projects/lifecycle-config.ts`, `lib/supabase/repo/projects.ts`: `repoFolders`, `thunk.json` `notebooks`.
+- `lib/projects/types.ts`, `lib/projects/lifecycle-config.ts`, `lib/db/repo/projects.ts`: `repoFolders`, `thunk.json` `notebooks`.
 - `lib/tasks/service.ts`: repo notes in import candidates, status write-back.
 - `components/notes/*`, `components/tasks/import-notes.tsx`, project page: UI.
 - `supabase/migrations/0007_repo_notebooks.sql`.

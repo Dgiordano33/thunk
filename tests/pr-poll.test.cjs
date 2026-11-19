@@ -20,8 +20,8 @@ function loadPoll({ project, routine, listings, failing = new Set() }) {
   const stubs = {
     "node:child_process": { execFile },
     "@/lib/projects/repos": { gitRepos: (p) => p.repos.filter((r) => r.kind === "repo") },
-    "@/lib/supabase/repo/projects": { getProject: async () => project },
-    "@/lib/supabase/repo/routines": {
+    "@/lib/db/repo/projects": { getProject: async () => project },
+    "@/lib/db/repo/routines": {
       listEnabledRoutines: async () => [routine],
       updateRoutine: async (_id, patch) => { updates.push(patch); routine.triggerState = patch.triggerState; },
     },

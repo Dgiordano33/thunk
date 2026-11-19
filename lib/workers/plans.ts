@@ -3,7 +3,7 @@ import { getSession, pushUserMessage, resumeSession } from "@/lib/agent";
 import { withFileLock } from "@/lib/notes/file-write";
 import { notify, resolveBySubject } from "@/lib/notifications/service";
 import { sessionPath } from "@/lib/routes";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 import { appendWorkLog } from "./log";
 import { currentChiefId } from "./report-up";
 import { DelegationPlanSchema, type DelegationPlanInput } from "./schema";

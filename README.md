@@ -12,15 +12,30 @@ A personal Claude Code harness where assistant responses aren't chat bubbles: ea
 
 ```bash
 npm install
-cp .env.local.example .env.local   # fill in Supabase keys (optional)
+cp .env.local.example .env.local   # every setting is optional
 npm run dev
 ```
 
 - **Auth:** set `ANTHROPIC_API_KEY`, or leave it empty to use your local `claude` login.
-- **Persistence:** with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, projects, workspaces, sessions, documents, and comments survive restarts and sessions can be resumed (SDK `resume`). Without them, they live in memory. Schema: `supabase/migrations/`.
-- **Memory and notes files:** always on disk under `~/.thunk` (override with `THUNK_DATA_DIR`), with or without Supabase.
+- **Database:** projects, workspaces, sessions, documents, comments, tasks, routines and notifications are stored in Postgres, so they survive restarts and sessions can be resumed (SDK `resume`). With no settings, Thunk runs an embedded Postgres (PGlite) in `~/.thunk/db`: nothing to install. To use your own Postgres (Supabase, Neon, RDS, a local server), set `DATABASE_URL`. See [Database](#database).
+- **Memory and notes files:** always on disk under `~/.thunk` (override with `THUNK_DATA_DIR`).
 - **Remote access:** set `THUNK_TRUSTED_HOSTS` and `THUNK_TRUSTED_USER` to reach Thunk through Tailscale Serve. See [docs/remote.md](docs/remote.md).
 - **Browser tests:** `npx playwright install chromium` once, then `npm run test:e2e`. They start their own dev server (port 4517, build dir `.next-e2e`) with in-memory projects and a temp data dir, so they run beside your dev server without touching your data.
+
+## Database
+
+Thunk creates and updates its tables itself. On startup it applies any migrations in `db/migrations/` that haven't run yet, each in its own transaction, and records them in a `thunk_migrations` table. There is nothing to apply by hand.
+
+| Setting | What it does |
+|---|---|
+| *(none)* | Embedded Postgres in `~/.thunk/db` (or `$THUNK_DATA_DIR/db`). One Thunk process can open it at a time; a second one, such as a dev server beside the Mac app, keeps its data in memory and logs why. |
+| `DATABASE_URL=postgres://…` | Any recent Postgres (tested with 17, which the embedded database also runs). For Supabase, use **Connect → Session pooler** (port 5432); the transaction pooler (6543) is not supported. |
+| `THUNK_DATABASE=memory` | Keep everything in memory, as browser tests do. |
+| `THUNK_DATABASE=embedded` | Use the embedded database even if `DATABASE_URL` is set. |
+
+Thunk runs a scheduler and delivery polling, so point only one running Thunk at a database.
+
+**Moving from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.** Those settings are no longer read. Thunk refuses to start a database while they are set without `DATABASE_URL`, so data is never silently left behind. Replace them with the project's Session pooler connection string as `DATABASE_URL`. On first start, Thunk reads Supabase's migration history to see what is already applied, then applies whatever is missing. If you applied migrations through the SQL editor so there is no history, set `THUNK_DB_BASELINE` to the last migration you applied, for example `20261111000000_0013_delegation_plans`.
 
 ## Hierarchy
 
@@ -52,7 +67,7 @@ Enter a title to create a task; use ⌘↵ to add details. Open a task to edit i
 
 Existing actionable notes are not migrated automatically. The workspace Tasks tab offers to import unchecked checklist items from workspace and project notes, preserving the note text and linking each imported task to its note.
 
-Apply `supabase/migrations/20261108050000_0004_tasks.sql` for persistent storage. Without Supabase, tasks live in server memory and are lost on restart. Task events use an in-process SSE feed, like other local runtime features.
+Tasks are stored in the database. Task events use an in-process SSE feed, like other local runtime features.
 
 Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/[id]/send`, `GET /api/tasks/tree?projectId=…`, `GET /api/tasks/counts`, `GET /api/tasks/events`, and `GET/POST /api/tasks/import-notes`. Run `npm run test:tasks` for task checks.
 
@@ -63,7 +78,7 @@ Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/
 - `lib/projects/`: project detection (`git.ts`), worktree create/remove/status, memory file paths (`paths.ts`), and the project/workspace service (`index.ts`) incl. importing external SDK sessions via `listSessions({ dir, includeWorktrees })`.
 - `lib/agent/`: one long-lived `query()` per session (streaming input via `AsyncQueue`), pinned to `globalThis` so HMR doesn't orphan subprocesses. `event-bridge.ts` turns SDK messages into `HarnessEvent`s; `permissions.ts` parks `canUseTool` calls (tool approvals, `AskUserQuestion`, `ExitPlanMode`) until the UI answers. Sessions load the workspace's CLAUDE.md and `.claude/settings*.json`, but not `~/.claude`.
 - `app/api/sessions/[id]/stream`: SSE with `since=<seq>` / `Last-Event-ID` replay. POST routes handle input, permissions, answers, plan decisions, and control (interrupt, model, mode, close).
-- `lib/store/session-store.ts`: a single event reducer, used for both live SSE and hydrating from Supabase.
+- `lib/store/session-store.ts`: a single event reducer, used for both live SSE and hydrating from the database.
 - `components/canvas/`: TipTap editor per document. Comments are a `comment` mark, so anchors move with edits. Diffs run against the editor's own round-tripped markdown, so untouched documents show zero edits.
 - `lib/revisions/build-payload.ts`: the `<document_revision>` message format.
 
@@ -102,11 +117,11 @@ Workspaces on the project map show PR/check marks (– draft, … running, ✓ p
 
 The scheduler caches open PRs per project through `gh api graphql`, polling about every 60 seconds, or 10 seconds while checks are pending. Local Git/runtime status refreshes about every 10 seconds. GitHub failures retain the last result with an explicit warning and back off to 60 seconds. GitHub CLI authentication is required; folder projects and repositories without an origin still show local runtime status. Preview links come from successful deployments on the PR head commit; providers must publish GitHub Deployments for these links to appear.
 
-PR lists are paginated. Each head includes up to 100 checks and the last 20 deployments; truncated check lists show an additional pending row linking to GitHub, never an all-green result. Delivery snapshots and the last 200 activity events per project persist in `~/.thunk/projects/<project>/delivery.json` (or `THUNK_DATA_DIR`). Game-look hover cards show the latest event; Delivery panels show the latest ten events for their branch. Events cover CI passing/failing, posted reviews, new review requests, successful deployments, and confirmed PR merges. Reviews inspect the latest 20 submissions and up to 100 outstanding requests. A missing open PR is checked separately before reporting a merge. First observations are quiet baselines; polling can miss transitions that begin and end between polls. The **Inbox** (`/inbox`) keeps session requests, routine outcomes, delivery updates, script failures, and agent notifications. Action items resolve when their cause clears; informational items resolve on read. Active projects keep polling while the server runs, even with no browser tab open. Notifications persist in Supabase after applying `0008_notifications`; without Supabase the latest 500 survive for the server process lifetime. Desktop alerts are opt-in, can be muted by kind in Settings, and only fire for new notifications while a tab is connected. Session silence is flagged after 10 minutes; pending CI after 30 minutes of observation (the CI timer restarts with the server).
+PR lists are paginated. Each head includes up to 100 checks and the last 20 deployments; truncated check lists show an additional pending row linking to GitHub, never an all-green result. Delivery snapshots and the last 200 activity events per project persist in `~/.thunk/projects/<project>/delivery.json` (or `THUNK_DATA_DIR`). Game-look hover cards show the latest event; Delivery panels show the latest ten events for their branch. Events cover CI passing/failing, posted reviews, new review requests, successful deployments, and confirmed PR merges. Reviews inspect the latest 20 submissions and up to 100 outstanding requests. A missing open PR is checked separately before reporting a merge. First observations are quiet baselines; polling can miss transitions that begin and end between polls. The **Inbox** (`/inbox`) keeps session requests, routine outcomes, delivery updates, script failures, and agent notifications. Action items resolve when their cause clears; informational items resolve on read. Active projects keep polling while the server runs, even with no browser tab open. Notifications persist in the database; in memory-only mode the latest 500 survive for the server process lifetime. Desktop alerts are opt-in, can be muted by kind in Settings, and only fire for new notifications while a tab is connected. Session silence is flagged after 10 minutes; pending CI after 30 minutes of observation (the CI timer restarts with the server).
 
-Apply `supabase/migrations/20261108114108_0005_delivery_triggers.sql` before enabling delivery routines with Supabase. Apply `0013_routine_context` before attaching context or using task triggers. The Workshop routine form supports `ci_failed`, `review_requested` (a reviewer/team is requested, not a changes-requested decision), and `deploy_ready`. Prompts can use `{{event.pr.url}}`, `{{event.pr.branch}}`, `{{event.pr.head}}`, `{{event.checks}}`, `{{event.previewUrl}}`, or `{{payload}}`. Workspace targets match their current branch; fresh-worktree targets ignore `thunk/*` branches to prevent automation loops. Existing run limits still apply. Subscription changes and re-enabling a routine establish a new baseline; recovered CI and superseded commits are skipped.
+The Workshop routine form supports `ci_failed`, `review_requested` (a reviewer/team is requested, not a changes-requested decision), and `deploy_ready`. Prompts can use `{{event.pr.url}}`, `{{event.pr.branch}}`, `{{event.pr.head}}`, `{{event.checks}}`, `{{event.previewUrl}}`, or `{{payload}}`. Workspace targets match their current branch; fresh-worktree targets ignore `thunk/*` branches to prevent automation loops. Existing run limits still apply. Subscription changes and re-enabling a routine establish a new baseline; recovered CI and superseded commits are skipped.
 
-Routine cursors are persisted in existing `trigger_state` storage before firing, matching the PR trigger's at-most-once policy: a crash between consumption and start can skip a job, and rejected jobs are not retried. With no Supabase, routines/cursors remain in memory; local delivery history still survives restarts. Run `node --conditions=react-server --test tests/delivery.test.cjs tests/delivery-history.test.cjs tests/routines.test.cjs` for delivery and routine checks.
+Routine cursors are persisted in existing `trigger_state` storage before firing, matching the PR trigger's at-most-once policy: a crash between consumption and start can skip a job, and rejected jobs are not retried. In memory-only mode, routines/cursors remain in memory; local delivery history still survives restarts. Run `node --conditions=react-server --test tests/delivery.test.cjs tests/delivery-history.test.cjs tests/routines.test.cjs` for delivery and routine checks.
 
 ### Repo notebooks
 
@@ -116,7 +131,7 @@ Repo files remain the source of truth: saves and deletes change the working tree
 
 Use the Tasks import banner to import unchecked items from repo boards into project tasks. Completing or cancelling an imported task checks its box; reopening unchecks it. Repo task links include the notebook id and filename, so identical filenames in different folders do not collide. Write-back verifies the current text and follows moved lines; if a board or item disappears, the task remains and its detail view shows “Not in board” or “Board unavailable.” Write-back failures are logged and do not roll back the task status. The file wins for existence; Thunk wins for status during a session of edits. Headings are ordinary Markdown, not task columns.
 
-Apply `supabase/migrations/20261108200000_0007_repo_notebooks.sql` before using this version with Supabase. Memory-only mode needs no database migration. Repo notes are included in session indexes, note mentions, and the shared 24k-character injection budget. Agents in worktrees should edit their branch's copy; the Library reflects those edits after merge.
+Repo notes are included in session indexes, note mentions, and the shared 24k-character injection budget. Agents in worktrees should edit their branch's copy; the Library reflects those edits after merge.
 
 Pick the map's look in **Settings → Look**; it is stored in the `thunk.look` cookie. The default **Solar system** look shows every project as a planet around a star (bigger planets have more workspaces and sessions). Inside a project, the project is the planet in the middle (open it for the overview), active workspaces are moons and sessions are satellites that grow with spend; closed sessions are hollow. Notes, Tasks, Routines, Vault and Canvas sit in a bar along the bottom. It supports light and dark. The **Game world** look keeps the strategy-game map: projects are cities, each project a town with a Town center, farmhouses for active workspaces and fields for sessions (closed or errored sessions become fallow), and it is always dark. Both looks open the same panels. Archived workspaces remain accessible in the project overview.
 
@@ -129,7 +144,7 @@ Use **Delegate** on a saved note to ask the chief to split its unchecked checkli
 
 Reports appear in the inbox and are pushed to the originating chief in 20-second batches. Questions and permission prompts still go to you. The daily project **Work log** records lifecycle milestones and decisions; `chief_log` lets the chief record outcomes and update its workspace plan without file-edit tools. The chief accepts successful task completion; workers without a chief complete their tasks directly.
 
-Apply `supabase/migrations/20261110010000_0010_worker_reports.sql` before using workers with Supabase. Report outboxes live under the project's `config/worker-reports` directory. On restart, live sessions regain watchers, persisted results are reported, and interrupted workers are marked blocked for inspection and continuation. Memory-only sessions and tasks still disappear on restart. Delivery is retryable; a crash between dispatching a message and persisting its receipt can repeat a report.
+Report outboxes live under the project's `config/worker-reports` directory. On restart, live sessions regain watchers, persisted results are reported, and interrupted workers are marked blocked for inspection and continuation. Memory-only sessions and tasks still disappear on restart. Delivery is retryable; a crash between dispatching a message and persisting its receipt can repeat a report.
 
 Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write commands in permission checks. This is not an OS security boundary; shell patterns are incomplete and permission bypass can weaken them. Codex chiefs follow the coordination rule through their prompt. Workers time out after 60 minutes and keep their worktree.
 
@@ -140,10 +155,10 @@ Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write
 - **Scouts.** `delegate({ mode: "scout" })` runs a read-only worker in the main checkout, with no worktree or setup, and gets a report back. It works in projects without Git repositories. Claude scouts use the chief's write restrictions; Codex scouts are prompt-only.
 - **Races.** `delegate({ race: [modelA, modelB] })` runs the same task on two or three models, each in its own worktree. Their reports leave the task open. `workers_pick` hands the task to the winner, stops the others and archives their workspaces, keeping their branches.
 - **History.** Each task records cost, duration, rounds (reports that needed another pass) and models. Reports show cost for the round and the task. `workers_history` summarizes this per model, and the project overview shows today's worker cost and queue length.
-- **Delegation plans.** For a request that needs several workers, the chief proposes the split with `delegate_plan`. It appears in the inbox as a **Chief plan** with Approve and Reject. Approving delegates the tasks in order, mapping plan keys to task IDs for dependencies. Either decision goes back to the chief. Apply `supabase/migrations/20261111000000_0013_delegation_plans.sql` for the new notification kind.
+- **Delegation plans.** For a request that needs several workers, the chief proposes the split with `delegate_plan`. It appears in the inbox as a **Chief plan** with Approve and Reject. Approving delegates the tasks in order, mapping plan keys to task IDs for dependencies. Either decision goes back to the chief.
 - **Cleanup.** Every 10 minutes Thunk archives worker workspaces that are finished: the task is done and its branch is merged (squash merges count), the task ended with nothing on the branch, or the worker lost a race. Archiving keeps the worktree and branch. Workspaces with an active session, that a person also used, or explicitly selected with `workspaceId` are left alone.
 
-Queue, stats, races, plans and the current integration live in the project's `config/workers/state.json`, so they survive restarts without Supabase.
+Queue, stats, races, plans and the current integration live in the project's `config/workers/state.json`, so they survive restarts even in memory-only mode.
 
 ### The top chief: notes above projects
 

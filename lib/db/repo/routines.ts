@@ -10,6 +10,7 @@ import type {
 import { OPEN_RUN_STATUSES, type RoutineContext } from "@/lib/routines/types";
 import type { Json, TablesUpdate } from "../types";
 import { db } from "../server";
+import { insertSql, run, updateSql } from "../sql";
 import { getProject } from "./projects";
 
 type Row = {
@@ -158,7 +159,7 @@ function runToRow(p: Partial<RoutineRun>): TablesUpdate<"routine_runs"> {
   return row;
 }
 
-// Memory-only mode (no Supabase): routines live for the server's lifetime. Pinned to globalThis for HMR.
+// Memory-only mode (THUNK_DATABASE=memory, or the embedded database is held by another process): routines live for the server's lifetime. Pinned to globalThis for HMR.
 const g = globalThis as typeof globalThis & {
   __thunkMemRoutines?: Map<string, Routine>;
   __thunkMemRoutineRuns?: Map<string, RoutineRun>;
@@ -178,21 +179,15 @@ export async function insertRoutine(input: NewRoutine): Promise<Routine> {
     mem.set(r.id, r);
     return r;
   }
-  const { data, error } = await client
-    .from("routines")
-    .insert({ ...routineToRow(input), project_id: input.projectId, name: input.name, prompt: input.prompt, model: input.model })
-    .select(COLUMNS)
-    .single();
-  if (error) throw error;
-  return toRoutine(data as Row);
+  const [row] = await run<Row>(client, insertSql("routines", { ...routineToRow(input), project_id: input.projectId, name: input.name, prompt: input.prompt, model: input.model }, { returning: COLUMNS }));
+  return toRoutine(row);
 }
 
 export async function getRoutine(id: string): Promise<Routine | null> {
   const client = db();
   if (!client) return mem.get(id) ?? null;
-  const { data, error } = await client.from("routines").select(COLUMNS).eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data ? toRoutine(data as Row) : null;
+  const [row] = await client.query<Row>(`select ${COLUMNS} from routines where id = $1`, [id]);
+  return row ? toRoutine(row) : null;
 }
 
 export async function updateRoutine(id: string, patch: Partial<Routine>): Promise<Routine | null> {
@@ -204,9 +199,10 @@ export async function updateRoutine(id: string, patch: Partial<Routine>): Promis
     mem.set(id, next);
     return next;
   }
-  const { data, error } = await client.from("routines").update(routineToRow(patch)).eq("id", id).select(COLUMNS).maybeSingle();
-  if (error) throw error;
-  return data ? toRoutine(data as Row) : null;
+  const statement = updateSql("routines", routineToRow(patch), "id = $1", [id], COLUMNS);
+  if (!statement) return getRoutine(id);
+  const [row] = await run<Row>(client, statement);
+  return row ? toRoutine(row) : null;
 }
 
 export async function deleteRoutine(id: string): Promise<void> {
@@ -216,8 +212,7 @@ export async function deleteRoutine(id: string): Promise<void> {
     for (const [runId, run] of memRuns) if (run.routineId === id) memRuns.delete(runId);
     return;
   }
-  const { error } = await client.from("routines").delete().eq("id", id);
-  if (error) throw error;
+  await client.query("delete from routines where id = $1", [id]);
 }
 
 /** Routines with their project name, in one query. */
@@ -229,15 +224,17 @@ export async function listRoutineRows(opts: { projectId?: string; ids?: string[]
     for (const r of rows) if (!names.has(r.projectId)) names.set(r.projectId, (await getProject(r.projectId))?.name ?? "");
     return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((r) => ({ ...r, projectName: names.get(r.projectId) ?? "" }));
   }
-  let q = client.from("routines").select(`${COLUMNS}, projects(name)`).order("created_at", { ascending: true });
-  if (opts.projectId) q = q.eq("project_id", opts.projectId);
-  if (opts.ids) q = q.in("id", opts.ids);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data as unknown as (Row & { projects: { name: string } | null })[]).map((r) => ({
-    ...toRoutine(r),
-    projectName: r.projects?.name ?? "",
-  }));
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (opts.projectId) { params.push(opts.projectId); where.push(`r.project_id = $${params.length}`); }
+  if (opts.ids) { params.push(opts.ids); where.push(`r.id::text = any($${params.length})`); }
+  const columns = COLUMNS.split(",").map((c) => `r.${c.trim()}`).join(", ");
+  const rows = await client.query<Row & { project_name: string | null }>(
+    `select ${columns}, p.name as project_name from routines r left join projects p on p.id = r.project_id` +
+      `${where.length ? ` where ${where.join(" and ")}` : ""} order by r.created_at`,
+    params,
+  );
+  return rows.map((r) => ({ ...toRoutine(r), projectName: r.project_name ?? "" }));
 }
 
 /** Rows the scheduler writes when it declines to fire, so the skip is visible in history. */
@@ -265,15 +262,12 @@ export async function listRoutines(opts: { projectId?: string } = {}): Promise<R
     // The latest few per routine is enough for the summary; today's count needs everything since midnight.
     // Open runs are read separately because skip rows can push one out of the recent window.
     const [recent, open, todays] = await Promise.all([
-      client.from("routine_runs").select(RUN_COLUMNS).in("routine_id", ids).order("created_at", { ascending: false }).limit(Math.max(50, ids.length * 5)),
-      client.from("routine_runs").select(RUN_COLUMNS).in("routine_id", ids).in("status", [...OPEN_RUN_STATUSES]),
-      client.from("routine_runs").select("routine_id, error").in("routine_id", ids).gte("created_at", since),
+      client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where routine_id = any($1) order by created_at desc limit $2`, [ids, Math.max(50, ids.length * 5)]),
+      client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where routine_id = any($1) and status = any($2)`, [ids, [...OPEN_RUN_STATUSES]]),
+      client.query<{ routine_id: string; error: string | null }>("select routine_id, error from routine_runs where routine_id = any($1) and created_at >= $2", [ids, since]),
     ]);
-    if (recent.error) throw recent.error;
-    if (open.error) throw open.error;
-    if (todays.error) throw todays.error;
-    runs = [...new Map([...(recent.data as RunRow[]), ...(open.data as RunRow[])].map((row) => [row.id, toRun(row)])).values()];
-    for (const t of todays.data) if (!t.error?.startsWith("Skipped")) today.set(t.routine_id, (today.get(t.routine_id) ?? 0) + 1);
+    runs = [...new Map([...recent, ...open].map((row) => [row.id, toRun(row)])).values()];
+    for (const t of todays) if (!t.error?.startsWith("Skipped")) today.set(t.routine_id, (today.get(t.routine_id) ?? 0) + 1);
   }
   return routines.map((r) => {
     const mine = runs.filter((run) => run.routineId === r.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -290,9 +284,7 @@ export async function listDueRoutines(now: Date): Promise<Routine[]> {
   const client = db();
   const iso = now.toISOString();
   if (!client) return [...mem.values()].filter((r) => r.enabled && r.nextRunAt && r.nextRunAt <= iso);
-  const { data, error } = await client.from("routines").select(COLUMNS).eq("enabled", true).not("next_run_at", "is", null).lte("next_run_at", iso);
-  if (error) throw error;
-  return (data as Row[]).map(toRoutine);
+  return (await client.query<Row>(`select ${COLUMNS} from routines where enabled and next_run_at is not null and next_run_at <= $1`, [iso])).map(toRoutine);
 }
 
 /** Enabled routines, optionally only those listening for an event. */
@@ -302,20 +294,18 @@ export async function listEnabledRoutines(opts: { projectId?: string; event?: Ro
     return [...mem.values()].filter(
       (r) => r.enabled && (!opts.projectId || r.projectId === opts.projectId) && (!opts.event || r.events.includes(opts.event)),
     );
-  let q = client.from("routines").select(COLUMNS).eq("enabled", true);
-  if (opts.projectId) q = q.eq("project_id", opts.projectId);
-  if (opts.event) q = q.contains("events", [opts.event]);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data as Row[]).map(toRoutine);
+  const where = ["enabled"];
+  const params: unknown[] = [];
+  if (opts.projectId) { params.push(opts.projectId); where.push(`project_id = $${params.length}`); }
+  if (opts.event) { params.push([opts.event]); where.push(`events @> $${params.length}::text[]`); }
+  return (await client.query<Row>(`select ${COLUMNS} from routines where ${where.join(" and ")}`, params)).map(toRoutine);
 }
 
 export async function countEnabledRoutines(): Promise<number> {
   const client = db();
   if (!client) return [...mem.values()].filter((r) => r.enabled).length;
-  const { count, error } = await client.from("routines").select("id", { count: "exact", head: true }).eq("enabled", true);
-  if (error) throw error;
-  return count ?? 0;
+  const [{ count }] = await client.query<{ count: number }>("select count(*) as count from routines where enabled");
+  return count;
 }
 
 export async function insertRun(input: Pick<RoutineRun, "routineId" | "triggerSource"> & Partial<RoutineRun>): Promise<RoutineRun> {
@@ -343,13 +333,8 @@ export async function insertRun(input: Pick<RoutineRun, "routineId" | "triggerSo
     memRuns.set(run.id, run);
     return run;
   }
-  const { data, error } = await client
-    .from("routine_runs")
-    .insert({ ...runToRow(input), routine_id: input.routineId, trigger_source: input.triggerSource })
-    .select(RUN_COLUMNS)
-    .single();
-  if (error) throw error;
-  return toRun(data as RunRow);
+  const [row] = await run<RunRow>(client, insertSql("routine_runs", { ...runToRow(input), routine_id: input.routineId, trigger_source: input.triggerSource }, { returning: RUN_COLUMNS }));
+  return toRun(row);
 }
 
 export async function updateRun(id: string, patch: Partial<RoutineRun>): Promise<RoutineRun | null> {
@@ -363,9 +348,9 @@ export async function updateRun(id: string, patch: Partial<RoutineRun>): Promise
     return next;
   }
   const previous = patch.status ? await getRun(id) : null;
-  const { data, error } = await client.from("routine_runs").update(runToRow(patch)).eq("id", id).select(RUN_COLUMNS).maybeSingle();
-  if (error) throw error;
-  const next = data ? toRun(data as RunRow) : null;
+  const statement = updateSql("routine_runs", runToRow(patch), "id = $1", [id], RUN_COLUMNS);
+  const [row] = statement ? await run<RunRow>(client, statement) : await client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where id = $1`, [id]);
+  const next = row ? toRun(row) : null;
   if (next && patch.status && previous?.status !== patch.status) await publishRunNotification(next);
   return next;
 }
@@ -373,9 +358,8 @@ export async function updateRun(id: string, patch: Partial<RoutineRun>): Promise
 export async function getRun(id: string): Promise<RoutineRun | null> {
   const client = db();
   if (!client) return memRuns.get(id) ?? null;
-  const { data, error } = await client.from("routine_runs").select(RUN_COLUMNS).eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data ? toRun(data as RunRow) : null;
+  const [row] = await client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where id = $1`, [id]);
+  return row ? toRun(row) : null;
 }
 
 export async function listRuns(routineId: string, limit = 20): Promise<RoutineRun[]> {
@@ -385,17 +369,13 @@ export async function listRuns(routineId: string, limit = 20): Promise<RoutineRu
       .filter((r) => r.routineId === routineId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
-  const { data, error } = await client.from("routine_runs").select(RUN_COLUMNS).eq("routine_id", routineId).order("created_at", { ascending: false }).limit(limit);
-  if (error) throw error;
-  return (data as RunRow[]).map(toRun);
+  return (await client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where routine_id = $1 order by created_at desc limit $2`, [routineId, limit])).map(toRun);
 }
 
 export async function listOpenRuns(): Promise<RoutineRun[]> {
   const client = db();
   if (!client) return [...memRuns.values()].filter((r) => OPEN_RUN_STATUSES.includes(r.status));
-  const { data, error } = await client.from("routine_runs").select(RUN_COLUMNS).in("status", [...OPEN_RUN_STATUSES]);
-  if (error) throw error;
-  return (data as RunRow[]).map(toRun);
+  return (await client.query<RunRow>(`select ${RUN_COLUMNS} from routine_runs where status = any($1)`, [[...OPEN_RUN_STATUSES]])).map(toRun);
 }
 
 /** Open runs plus runs that finished since `since`, newest first. */
@@ -407,14 +387,10 @@ export async function listRecentRuns(since: Date, limit = 20): Promise<RoutineRu
       .filter((r) => OPEN_RUN_STATUSES.includes(r.status) || (r.finishedAt && r.finishedAt >= iso))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
-  const { data, error } = await client
-    .from("routine_runs")
-    .select(RUN_COLUMNS)
-    .or(`status.in.(${OPEN_RUN_STATUSES.join(",")}),finished_at.gte.${iso}`)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data as RunRow[]).map(toRun);
+  return (await client.query<RunRow>(
+    `select ${RUN_COLUMNS} from routine_runs where status = any($1) or finished_at >= $2 order by created_at desc limit $3`,
+    [[...OPEN_RUN_STATUSES], iso, limit],
+  )).map(toRun);
 }
 
 /** Runs that actually started since `since` (skip rows don't count against the daily limit). */
@@ -423,14 +399,11 @@ export async function countRunsSince(routineId: string, since: Date): Promise<nu
   const client = db();
   if (!client)
     return [...memRuns.values()].filter((r) => r.routineId === routineId && r.createdAt >= iso && !r.error?.startsWith("Skipped")).length;
-  const { count, error } = await client
-    .from("routine_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("routine_id", routineId)
-    .gte("created_at", iso)
-    .or("error.is.null,error.not.like.Skipped*");
-  if (error) throw error;
-  return count ?? 0;
+  const [{ count }] = await client.query<{ count: number }>(
+    "select count(*) as count from routine_runs where routine_id = $1 and created_at >= $2 and (error is null or error not like 'Skipped%')",
+    [routineId, iso],
+  );
+  return count;
 }
 
 async function publishRunNotification(run: RoutineRun) {

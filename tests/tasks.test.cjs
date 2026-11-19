@@ -37,12 +37,12 @@ Module._load = function (request, parent, isMain) {
   if (request === "@/lib/notes/resolve") return { dirsForScope: async (scope) => scope.kind === "projects" ? projectNoteDirs : noteDirs, repoDirsFor: async () => [] };
   return load.call(this, request, parent, isMain);
 };
-const repo = require("../lib/supabase/repo/tasks.ts");
+const repo = require("../lib/db/repo/tasks.ts");
 const service = require("../lib/tasks/service.ts");
 const schemas = require("../lib/tasks/schema.ts");
 const events = require("../lib/tasks/events.ts");
-const projects = require("../lib/supabase/repo/projects.ts");
-const workspaces = require("../lib/supabase/repo/workspaces.ts");
+const projects = require("../lib/db/repo/projects.ts");
+const workspaces = require("../lib/db/repo/workspaces.ts");
 const notes = require("../lib/notes/store.ts");
 const collection = require("../app/api/tasks/route.ts");
 const itemRoute = require("../app/api/tasks/[id]/route.ts");
@@ -206,7 +206,7 @@ test("memory-only deletions mirror task foreign-key cleanup", async () => {
   const { p, w } = await fixture();
   const sessionId = crypto.randomUUID();
   const owned = await repo.insertTask({ projectId: p.id, workspaceId: w.id, title: "Owned", sessionId, createdInSessionId: sessionId });
-  await require("../lib/supabase/repo/sessions.ts").deleteSessionRow(sessionId);
+  await require("../lib/db/repo/sessions.ts").deleteSessionRow(sessionId);
   assert.equal((await repo.getTask(owned.id)).sessionId, null);
   assert.equal((await repo.getTask(owned.id)).createdInSessionId, null);
   const shared = await service.createTask({ projectId: p.id, title: "Shared" });

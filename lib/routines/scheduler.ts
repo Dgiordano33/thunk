@@ -3,7 +3,7 @@ import { ensureDeliveryPolling } from "@/lib/projects/delivery";
 import { getSession, isTerminated } from "@/lib/agent";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { projectEvents } from "@/lib/projects/events";
-import { getRoutine, listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/supabase/repo/routines";
+import { getRoutine, listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/db/repo/routines";
 import { computeNextRun } from "./cron";
 import { pollDeliveryRoutines } from "./delivery-poll";
 import { pollPullRequests } from "./pr-poll";

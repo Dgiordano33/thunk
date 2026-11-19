@@ -1,7 +1,7 @@
 import "server-only";
 import { projectNoteDirs, repoDirsFor, workspaceNoteDirs } from "@/lib/notes/resolve";
 import { readNote } from "@/lib/notes/store";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 import type { Project } from "@/lib/projects/types";
 import { INJECT_LIMIT } from "@/lib/notes/prompt";
 

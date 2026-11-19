@@ -1,8 +1,8 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
-import { loadEvents, maxSeq } from "@/lib/supabase/repo/messages";
-import { deleteSessionRow, getSessionRow, listSessionRows, type SessionRow } from "@/lib/supabase/repo/sessions";
+import { loadEvents, maxSeq } from "@/lib/db/repo/messages";
+import { deleteSessionRow, getSessionRow, listSessionRows, type SessionRow } from "@/lib/db/repo/sessions";
 import "./persist";
 import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
 import { deleteTranscripts } from "./transcripts";
@@ -53,7 +53,7 @@ export async function startSession(input: StartSessionInput) {
   });
 }
 
-/** Return the live session, recreating it from Supabase (SDK `resume` / Codex `thread/resume`) if needed. */
+/** Return the live session, recreating it from the database (SDK `resume` / Codex `thread/resume`) if needed. */
 export async function resumeSession(id: string) {
   const live = getSession(id);
   if (live && !isTerminated(live)) return live;

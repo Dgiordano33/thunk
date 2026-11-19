@@ -5,7 +5,7 @@ import { mkdir, rename, rmdir, stat } from "node:fs/promises";
 import { moveToGranary } from "./granary";
 import path from "node:path";
 import { HttpError } from "@/lib/api/errors";
-import { getProject, getProjectByKey, getProjectBySlug, insertProject, upsertProjectByKey } from "@/lib/supabase/repo/projects";
+import { getProject, getProjectByKey, getProjectBySlug, insertProject, upsertProjectByKey } from "@/lib/db/repo/projects";
 import { freshSlug, projectUrlSlug, RESERVED_WORKSPACE_SLUGS } from "@/lib/routes";
 import {
   deleteProjectRepo,
@@ -15,7 +15,7 @@ import {
   insertWorkspaceRepos,
   listCheckoutsOfRepo,
   updateProjectRepo,
-} from "@/lib/supabase/repo/project-repos";
+} from "@/lib/db/repo/project-repos";
 import {
   deleteWorkspace as deleteWorkspaceRow,
   findWorkspace,
@@ -24,7 +24,7 @@ import {
   insertWorkspace,
   listWorkspaces,
   updateWorkspace,
-} from "@/lib/supabase/repo/workspaces";
+} from "@/lib/db/repo/workspaces";
 import { branchExists, git, cloneDestination, cloneRepo, createFolder, createWorktree, detectProject, folderDestination, pickBaseRef, removeWorktree, resolveDirectory } from "./git";
 import { reconcileDeclaredFolders } from "@/lib/notes/folders";
 import { ensureMemory } from "./memory";

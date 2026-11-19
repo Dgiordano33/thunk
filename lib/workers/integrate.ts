@@ -8,7 +8,7 @@ import { readLifecycleConfig } from "@/lib/projects/lifecycle-config";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { sessionConfigRoot } from "@/lib/projects/repos";
 import { processEnvironment } from "@/lib/projects/runtime";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 import { appendWorkLog } from "./log";
 import { ownedWorker } from "./service";
 import { updateWorkerState } from "./state";

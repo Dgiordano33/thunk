@@ -20,8 +20,8 @@ const otherWorkspace = "44444444-4444-4444-8444-444444444444";
 const ctx = { projectId, workspaceId, sessionId };
 let rows, writes, requests, rpc;
 const mocks = {
-  "@/lib/supabase/repo/tasks": { listTasks: async ({ projectId }) => rows.filter((t) => t.projectId === projectId) },
-  "@/lib/supabase/repo/workspaces": { getWorkspace: async (id) => ({ id, projectId }) },
+  "@/lib/db/repo/tasks": { listTasks: async ({ projectId }) => rows.filter((t) => t.projectId === projectId) },
+  "@/lib/db/repo/workspaces": { getWorkspace: async (id) => ({ id, projectId }) },
   "@/lib/tasks/service": {
     createTask: async (input, meta) => { const task = { ...input, ...meta, id: crypto.randomUUID(), status: "open" }; rows.push(task); writes.push(task); return task; },
     patchTask: async (id, patch) => { const task = rows.find((t) => t.id === id); Object.assign(task, patch); writes.push(patch); return task; },

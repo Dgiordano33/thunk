@@ -5,7 +5,7 @@ import { z } from "zod";
 import { HttpError } from "@/lib/api/errors";
 import { readLifecycleConfig } from "@/lib/projects/lifecycle-config";
 import type { Project, RepoFolder } from "@/lib/projects/types";
-import { insertRepoFolder } from "@/lib/supabase/repo/repo-folders";
+import { insertRepoFolder } from "@/lib/db/repo/repo-folders";
 
 export function validateFolderPath(value: string) {
   if (path.isAbsolute(value) || value.includes("\\") || value.includes("\0") || value.split("/").some((p) => !p || p === "." || p === ".." || p === ".git"))

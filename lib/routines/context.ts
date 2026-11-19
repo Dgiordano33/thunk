@@ -4,8 +4,8 @@ import { dirsForScope, projectNoteDirs } from "@/lib/notes/resolve";
 import { readNote } from "@/lib/notes/store";
 import type { Note } from "@/lib/notes/types";
 import type { Project } from "@/lib/projects/types";
-import { getTask } from "@/lib/supabase/repo/tasks";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getTask } from "@/lib/db/repo/tasks";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { TASK_STATUS_LABELS, type Task } from "@/lib/tasks/types";
 import type { RoutineContext, RoutineNoteRef, RunTrigger } from "./types";
 

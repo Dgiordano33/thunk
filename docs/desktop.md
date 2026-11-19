@@ -44,9 +44,8 @@ The **Thunk → Show Configuration** menu reveals `~/Library/Application Support
 ```dotenv
 # Optional; omit to use your Claude login
 ANTHROPIC_API_KEY=
-# Optional; use the same values as your web installation for persisted sessions
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+# Optional; any Postgres. Without it, data lives in an embedded database in ~/.thunk/db
+DATABASE_URL=
 # Optional absolute path if Codex is not on your login shell PATH
 CODEX_BIN=/absolute/path/to/codex
 # Optional; defaults to the existing ~/.thunk directory
@@ -60,7 +59,7 @@ THUNK_UPDATE_REPO=you/thunk
 THUNK_UPDATE_BRANCH=main
 ```
 
-Checkout `.env*` files and credentials are not copied into the app. Copy the settings you need into the external config yourself. As with any Next.js build, `NEXT_PUBLIC_*` values are public and embedded at build time. Configuration is shared across local builds and lives outside the app. Project files keep using `~/.thunk` (or `THUNK_DATA_DIR`); rebuilding or replacing the app does not erase them. Without Supabase, existing in-memory session/routine limitations still apply.
+Checkout `.env*` files and credentials are not copied into the app. Copy the settings you need into the external config yourself. As with any Next.js build, `NEXT_PUBLIC_*` values are public and embedded at build time. Configuration is shared across local builds and lives outside the app. Project files keep using `~/.thunk` (or `THUNK_DATA_DIR`); rebuilding or replacing the app does not erase them. Projects, sessions and routines persist in the embedded database in `~/.thunk/db` unless `DATABASE_URL` is set.
 
 Avoid running web and desktop instances against the same data at the same time: they would both run background schedulers and delivery polling. The desktop enforces one desktop instance, but cannot lock out a separately launched web server.
 
@@ -74,7 +73,7 @@ THUNK_REMOTE_URL=https://thunk.tail1234.ts.net
 
 With `THUNK_REMOTE_URL` set, the app starts nothing on your Mac and ignores the other settings in the file. Agents, terminals and data all live on the server. Requests go through Tailscale Serve and are checked as described in [remote access](remote.md), so Tailscale must be connected on the Mac. When the server cannot be reached, the window shows a retry page and tries again every 15 seconds. Quitting the app does not stop anything on the server, and **Show Server Log** is hidden; use `thunk logs` on the server instead.
 
-Remove the line to go back to a local backend. Do not point the local backend at the server's Supabase project while the server is running.
+Remove the line to go back to a local backend. Do not point the local backend at the server's database while the server is running.
 
 ## Window and server lifecycle
 

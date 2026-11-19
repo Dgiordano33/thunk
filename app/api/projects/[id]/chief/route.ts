@@ -11,7 +11,7 @@ const Body = z.object({ fresh: z.boolean().optional(), noteId: TaskInputSchema.s
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const projectId = taskId((await ctx.params).id);
   const body = await parseBody(req, Body);
-  const { getProject } = await import("@/lib/supabase/repo/projects");
+  const { getProject } = await import("@/lib/db/repo/projects");
   const project = await getProject(projectId);
   if (!project) throw new HttpError(404, "Project not found");
   const brief = body.noteId ? await noteBrief(project, body.noteId) : null;
@@ -23,8 +23,8 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
   const projectId = taskId((await ctx.params).id);
   const sessions = await listSessions({ projectId, limit: 10_000 });
   const chief = sessions.find((s) => s.origin?.kind === "chief") ?? null;
-  const { getSessionRow } = await import("@/lib/supabase/repo/sessions");
-  const { loadEvents } = await import("@/lib/supabase/repo/messages");
+  const { getSessionRow } = await import("@/lib/db/repo/sessions");
+  const { loadEvents } = await import("@/lib/db/repo/messages");
   const live = chief ? getSession(chief.id) : null;
   const events = chief ? live?.events ?? await loadEvents(chief.id) : [];
   const prose = events.findLast((e) => e.type === "turn_complete");

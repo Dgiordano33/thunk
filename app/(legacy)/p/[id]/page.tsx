@@ -1,7 +1,7 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import { queryString } from "@/lib/legacy-redirect";
 import { projectPath } from "@/lib/routes";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 
 export const dynamic = "force-dynamic";
 

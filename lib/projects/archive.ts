@@ -1,6 +1,6 @@
 import "server-only";
 import { closeSession, listLiveSessions } from "@/lib/agent";
-import { updateWorkspace } from "@/lib/supabase/repo/workspaces";
+import { updateWorkspace } from "@/lib/db/repo/workspaces";
 import { getWorkspaceContext } from "./index";
 import { archiveWorkspaceProcesses, withWorkspaceLock } from "./runtime";
 

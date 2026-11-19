@@ -2,7 +2,7 @@ import 'server-only';
 import path from 'node:path';
 import { readFile, readdir } from 'node:fs/promises';
 import type { CanvasSession } from './types';
-import { getProject } from '@/lib/supabase/repo/projects';
+import { getProject } from '@/lib/db/repo/projects';
 import { projectBoardsDir } from '@/lib/projects/paths';
 import { HttpError } from '@/lib/api/errors';
 import { addCard, atomic, lock, readBoard, saveBoard, validId } from './store';

@@ -2,7 +2,7 @@ import { listSessions } from "@/lib/agent";
 import { handle, HttpError } from "@/lib/api/http";
 import type { Artifact } from "@/lib/documents/types";
 import { getWorkspaceContext } from "@/lib/projects";
-import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
+import { listDocumentsForSessions } from "@/lib/db/repo/documents";
 
 export const dynamic = "force-dynamic";
 

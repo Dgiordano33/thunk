@@ -2,6 +2,7 @@ import "server-only";
 import type { HarnessEvent } from "@/lib/agent/types";
 import type { Json } from "../types";
 import { db } from "../server";
+import { insertSql, run } from "../sql";
 
 export function roleFor(e: HarnessEvent): "user" | "assistant" | "tool" | "system" {
   switch (e.type) {
@@ -39,55 +40,33 @@ export async function insertEvents(sessionId: string, events: HarnessEvent[]): P
   const client = db();
   const ids = new Map<number, string>();
   if (!client || events.length === 0) return ids;
-  const { data, error } = await client
-    .from("messages")
-    .upsert(
-      events.map((e) => ({
-        session_id: sessionId,
-        seq: e.seq,
-        type: e.type,
-        role: roleFor(e),
-        content_json: e as unknown as Json,
-        markdown: markdownFor(e),
-        created_at: new Date(e.ts).toISOString(),
-      })),
-      { onConflict: "session_id,seq" },
-    )
-    .select("id, seq");
-  if (error) throw error;
-  for (const row of data) ids.set(row.seq, row.id);
+  const rows = await run<{ id: string; seq: number }>(client, insertSql(
+    "messages",
+    events.map((e) => ({
+      session_id: sessionId,
+      seq: e.seq,
+      type: e.type,
+      role: roleFor(e),
+      content_json: e as unknown as Json,
+      markdown: markdownFor(e),
+      created_at: new Date(e.ts).toISOString(),
+    })),
+    { onConflict: "session_id,seq", returning: "id, seq" },
+  ));
+  for (const row of rows) ids.set(row.seq, row.id);
   return ids;
 }
 
 export async function loadEvents(sessionId: string): Promise<HarnessEvent[]> {
   const client = db();
   if (!client) return [];
-  const out: HarnessEvent[] = [];
-  const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await client
-      .from("messages")
-      .select("content_json")
-      .eq("session_id", sessionId)
-      .order("seq", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    for (const row of data) out.push(row.content_json as unknown as HarnessEvent);
-    if (data.length < PAGE) break;
-  }
-  return out;
+  const rows = await client.query<{ content_json: Json }>("select content_json from messages where session_id = $1 order by seq", [sessionId]);
+  return rows.map((row) => row.content_json as unknown as HarnessEvent);
 }
 
 export async function maxSeq(sessionId: string): Promise<number> {
   const client = db();
   if (!client) return 0;
-  const { data, error } = await client
-    .from("messages")
-    .select("seq")
-    .eq("session_id", sessionId)
-    .order("seq", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.seq ?? 0;
+  const [row] = await client.query<{ seq: number }>("select seq from messages where session_id = $1 order by seq desc limit 1", [sessionId]);
+  return row?.seq ?? 0;
 }

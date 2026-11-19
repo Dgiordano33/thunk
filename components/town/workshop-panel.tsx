@@ -4,7 +4,7 @@ import { isLocalWorkspace, workspaceLabel } from "@/components/session/labels";
 import { env } from "@/lib/env";
 import { gitRepos } from "@/lib/projects/repos";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
-import { listRoutines } from "@/lib/supabase/repo/routines";
+import { listRoutines } from "@/lib/db/repo/routines";
 import { TownPanel } from "./town-panel";
 
 /** The town Workshop: this project's routines, their form and run history. */

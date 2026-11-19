@@ -3,6 +3,7 @@ import { emitTask } from "@/lib/tasks/events";
 import { OPEN_TASK_STATUSES, type Task, type TaskCounts, type TaskEvent, type TaskStatus } from "@/lib/tasks/types";
 import type { Tables, TablesUpdate } from "../types";
 import { db } from "../server";
+import { insertSql, run, updateSql } from "../sql";
 type Row = Tables<"tasks">;
 const COLUMNS = "id, project_id, workspace_id, title, body, status, priority, position, created_by, session_id, created_in_session_id, note_id, due_at, completed_at, created_at, updated_at";
 function toTask(r: Row): Task { return {
@@ -80,18 +81,16 @@ async function insertTaskNow(input: NewTask): Promise<Task> {
     changed(task, "changed", "created");
     return task;
   }
-  const { data, error } = await client.from("tasks").insert({ ...taskToRow(task), project_id: task.projectId, title: task.title }).select(COLUMNS).single();
-  if (error) throw error;
-  const result = toTask(data as Row);
+  const [row] = await run<Row>(client, insertSql("tasks", { ...taskToRow(task), project_id: task.projectId, title: task.title }, { returning: COLUMNS }));
+  const result = toTask(row);
   changed(result, "changed", "created");
   return result;
 }
 export async function getTask(id: string): Promise<Task | null> {
   const client = db();
   if (!client) return mem.get(id) ?? null;
-  const { data, error } = await client.from("tasks").select(COLUMNS).eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data ? toTask(data as Row) : null;
+  const [row] = await client.query<Row>(`select ${COLUMNS} from tasks where id = $1`, [id]);
+  return row ? toTask(row) : null;
 }
 export async function updateTask(id: string, patch: Partial<Omit<Task, "id" | "projectId" | "createdAt" | "createdBy">>): Promise<Task | null> {
   const before = await getTask(id);
@@ -104,10 +103,9 @@ export async function updateTask(id: string, patch: Partial<Omit<Task, "id" | "p
     result = { ...before, ...next };
     mem.set(id, result);
   } else {
-    const { data, error } = await client.from("tasks").update(taskToRow(next)).eq("id", id).select(COLUMNS).maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    result = toTask(data as Row);
+    const [row] = await run<Row>(client, updateSql("tasks", taskToRow(next), "id = $1", [id], COLUMNS)!);
+    if (!row) return null;
+    result = toTask(row);
   }
   if (before.workspaceId !== result.workspaceId) changed(before, "removed");
   changed(result, "changed", before.status !== "done" && result.status === "done" ? "completed" : undefined);
@@ -119,8 +117,7 @@ export async function deleteTask(id: string): Promise<void> {
   const client = db();
   if (!client) mem.delete(id);
   else {
-    const { error } = await client.from("tasks").delete().eq("id", id);
-    if (error) throw error;
+    await client.query("delete from tasks where id = $1", [id]);
   }
   changed(task, "removed");
 }
@@ -133,19 +130,16 @@ export async function listTasks(opts: TaskFilter = {}): Promise<Task[]> {
     (opts.workspaceId === undefined || t.workspaceId === opts.workspaceId) &&
     (!opts.sessionId || t.sessionId === opts.sessionId) && (!statuses || statuses.includes(t.status)),
   ).sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
-  let q = client.from("tasks").select(COLUMNS).order("position").order("id");
-  if (opts.projectId) q = q.eq("project_id", opts.projectId);
-  if (opts.workspaceId === null) q = q.is("workspace_id", null);
-  else if (opts.workspaceId !== undefined) q = q.eq("workspace_id", opts.workspaceId);
-  if (opts.sessionId) q = q.eq("session_id", opts.sessionId);
-  if (statuses) q = q.in("status", [...statuses]);
-  const rows: Task[] = [];
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await q.range(offset, offset + 999);
-    if (error) throw error;
-    rows.push(...(data as Row[]).map(toTask));
-    if (data.length < 1000) return rows;
-  }
+  const where: string[] = [];
+  const params: unknown[] = [];
+  const add = (sql: string, value: unknown) => { params.push(value); where.push(sql.replace("?", `$${params.length}`)); };
+  if (opts.projectId) add("project_id = ?", opts.projectId);
+  if (opts.workspaceId === null) where.push("workspace_id is null");
+  else if (opts.workspaceId !== undefined) add("workspace_id = ?", opts.workspaceId);
+  if (opts.sessionId) add("session_id = ?", opts.sessionId);
+  if (statuses) add("status = any(?)", [...statuses]);
+  const rows = await client.query<Row>(`select ${COLUMNS} from tasks${where.length ? ` where ${where.join(" and ")}` : ""} order by position, id`, params);
+  return rows.map(toTask);
 }
 export async function countOpenTasks(): Promise<TaskCounts> {
   const counts: TaskCounts = {};
@@ -160,11 +154,8 @@ export async function countOpenTasks(): Promise<TaskCounts> {
     return counts;
   }
   // Runs on every task event for the sidebar badges, so leave task bodies behind.
-  const q = client.from("tasks").select("project_id, workspace_id").in("status", [...OPEN_TASK_STATUSES]).order("id");
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await q.range(offset, offset + 999);
-    if (error) throw error;
-    for (const row of data) add(row.project_id, row.workspace_id);
-    if (data.length < 1000) return counts;
-  }
+  const rows = await client.query<{ project_id: string; workspace_id: string | null }>(
+    "select project_id, workspace_id from tasks where status = any($1)", [[...OPEN_TASK_STATUSES]]);
+  for (const row of rows) add(row.project_id, row.workspace_id);
+  return counts;
 }

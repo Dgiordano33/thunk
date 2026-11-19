@@ -5,7 +5,7 @@ import { getWorkspaceContext, removeWorkspace } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { withWorkspaceLock } from "@/lib/projects/runtime";
 import { worktreeStatus } from "@/lib/projects/git";
-import { updateWorkspace } from "@/lib/supabase/repo/workspaces";
+import { updateWorkspace } from "@/lib/db/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 

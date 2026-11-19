@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, parseBody } from "@/lib/api/http";
 import { DocCommentSchema } from "@/lib/api/schemas";
-import { syncComments } from "@/lib/supabase/repo/documents";
+import { syncComments } from "@/lib/db/repo/documents";
 
 const Body = z.object({ comments: z.array(DocCommentSchema) });
 

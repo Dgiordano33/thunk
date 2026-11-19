@@ -1,13 +1,13 @@
 import "server-only";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
 import { createWorkspace, ensureMainWorkspace, getWorkspaceContext } from "@/lib/projects";
-import { getProject, listProjects } from "@/lib/supabase/repo/projects";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getProject, listProjects } from "@/lib/db/repo/projects";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { subscribeTasks } from "@/lib/tasks/events";
-import { getTask, listTasks } from "@/lib/supabase/repo/tasks";
+import { getTask, listTasks } from "@/lib/db/repo/tasks";
 import { createTask, patchTask } from "@/lib/tasks/service";
 import { withFileLock } from "@/lib/notes/file-write";
-import { loadEvents } from "@/lib/supabase/repo/messages";
+import { loadEvents } from "@/lib/db/repo/messages";
 import { notify } from "@/lib/notifications/service";
 import { routineSlug } from "@/lib/routines/types";
 import type { SessionMeta } from "@/lib/agent/types";

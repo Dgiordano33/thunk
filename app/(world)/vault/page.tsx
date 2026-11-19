@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { VaultOverview } from "@/components/vault/vault-overview";
-import { listProjects } from "@/lib/supabase/repo/projects";
+import { listProjects } from "@/lib/db/repo/projects";
 import { listAllItems } from "@/lib/vault/service";
 
 export const metadata = { title: "Vault · Thunk" };

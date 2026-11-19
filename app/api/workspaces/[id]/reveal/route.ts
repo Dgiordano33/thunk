@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { handle, HttpError } from "@/lib/api/http";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/workspaces/[id]/reveal">) => {
   const workspace = await getWorkspace((await ctx.params).id);

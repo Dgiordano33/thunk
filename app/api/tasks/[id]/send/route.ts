@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { getSession, pushUserMessage, resumeSession, startSession } from "@/lib/agent";
-import { getTask } from "@/lib/supabase/repo/tasks";
-import { getSessionRow, upsertSession } from "@/lib/supabase/repo/sessions";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getTask } from "@/lib/db/repo/tasks";
+import { getSessionRow, upsertSession } from "@/lib/db/repo/sessions";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { patchTask, taskId } from "@/lib/tasks/service";
 import { hrefForSession } from "@/lib/routes.server";
 const Body = z.object({ sessionId: z.uuid().optional(), workspaceId: z.uuid().optional(), worker: z.boolean().optional() }).strict();

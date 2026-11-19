@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { handle, parseBody } from "@/lib/api/http";
-import { updateDocument } from "@/lib/supabase/repo/documents";
+import { updateDocument } from "@/lib/db/repo/documents";
 
 const Body = z.object({
   currentMarkdown: z.string().optional(),

@@ -36,7 +36,7 @@ const { moveToGranary } = require("../lib/projects/granary.ts");
 const { harvestWorkspace, readHarvest } = require("../lib/projects/harvest.ts");
 const { workspaceNoteDirs, projectNoteDirs } = require("../lib/notes/resolve.ts");
 const { createNote, readNote } = require("../lib/notes/store.ts");
-const { insertTask, getTask } = require("../lib/supabase/repo/tasks.ts");
+const { insertTask, getTask } = require("../lib/db/repo/tasks.ts");
 const { hierarchyPrompt, buildOptions } = require("../lib/agent/options.ts");
 
 async function context(name) {
