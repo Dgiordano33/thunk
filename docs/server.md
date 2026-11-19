@@ -2,7 +2,18 @@
 
 Thunk can run around the clock on a Linux server, so you can use it from your phone or any computer without keeping your Mac awake. The server is a DigitalOcean Droplet named `thunk`. It is reachable only over your private Tailscale network, at **https://thunk.tailbae5bb.ts.net**. Requests are checked the same way as in [Use Thunk from your phone](remote.md).
 
-Day to day you need one command, `thunk`, which runs on the server.
+Merging to `main` is enough to deploy: the server picks up new commits within about five minutes and switches to them once nothing is running. For everything else there is one command, `thunk`, which runs on the server.
+
+## Deploying
+
+A timer on the server checks GitHub every five minutes. When the checkout's branch (normally `main`) has new commits, it builds them beside the running version straight away. It restarts onto the new build only when no agent is working, no routine is running and no workspace is being set up or archived. Agents waiting for your answer, open terminals and Run previews do not hold it back; terminals and previews have to be reopened after the restart.
+
+- `thunk status` shows what the server is doing (`Activity`) and whether automatic updates are on.
+- `thunk auto` lists recent automatic updates, including "waiting to restart: 1 agent working".
+- `thunk update` deploys right away without waiting.
+- `thunk auto off` and `thunk auto on` turn automatic updates off and on.
+- After `thunk rollback`, automatic updates pause until you run `thunk update main`. A commit whose build fails is not retried until the next commit lands.
+- If `package-lock.json` changed, the whole update waits for an idle moment, because reinstalling dependencies stops Thunk for a few minutes.
 
 ## Everyday use
 
@@ -16,16 +27,17 @@ On the server:
 
 | Command | What it does |
 |---|---|
-| `thunk status` | Whether Thunk is running, which version, and its address |
-| `thunk update` | Get the latest code, build it and restart |
+| `thunk status` | Whether Thunk is running, which version, what it is doing, and its address |
+| `thunk update` | Get the latest code, build it and restart now |
 | `thunk update <branch>` | Switch to a branch, then build and restart. `thunk update main` goes back |
-| `thunk rollback` | Go back to the version before the last update, in seconds |
+| `thunk rollback` | Go back to the version before the last update, in seconds. Pauses automatic updates |
+| `thunk auto` | Show recent automatic updates. `thunk auto off` / `thunk auto on` |
 | `thunk logs` | Follow the server log. Press `Ctrl-C` to stop |
 | `thunk restart`, `thunk stop`, `thunk start` | Control the service |
 | `thunk env` | Edit settings in `/etc/thunk.env`, then restart |
 | `thunk doctor` | Check the Claude, Codex and GitHub sign-ins, data, Serve, disk and memory |
 
-Restarting stops running agents and terminals, so update when nothing is running. Routines that were interrupted recover on their own; sessions can be resumed by hand.
+A manual restart or update stops running agents and terminals, so use it when nothing is running. Routines that were interrupted recover on their own; sessions can be resumed by hand.
 
 `thunk update` builds the new version beside the running one and switches over only when the build succeeds. A failed build leaves the running version alone. The only time Thunk stops during an update is when `package-lock.json` changed and dependencies have to be reinstalled.
 
@@ -47,9 +59,11 @@ Then run any command from your Mac, for example `thunk-vm update` or `thunk-vm l
 
 | What | Where |
 |---|---|
-| Thunk checkout | `~/Documents/checkly/thunk` (home is `/Users/danielgiordano`, the same as on the Mac) |
+| Thunk server checkout | `~/thunk-server`. Keep it separate from your Thunk project at `~/Documents/checkly/thunk`, where agents edit code |
+| Project repos | `~/Documents/checkly/...`, the same paths as on the Mac (home is `/Users/danielgiordano`) |
 | Settings and secrets | `/etc/thunk.env`; edit with `thunk env` |
-| Builds | `.next-a` and `.next-b` in the checkout; one is live. `~/.config/thunk/` records which |
+| Builds | `.next-a` and `.next-b` in the server checkout; one is live. `~/.config/thunk/` records which |
+| Automatic updates | `thunk-autoupdate.timer` and `thunk-autoupdate.service` in `/etc/systemd/system/`; log with `thunk auto` |
 | Memory, notes and vault files | `~/.thunk` |
 | Service definition | `/etc/systemd/system/thunk.service`, written by `scripts/server/setup.sh` |
 | Logs | `thunk logs`, or `journalctl -u thunk` |
@@ -147,11 +161,10 @@ Then sign in to Claude, Codex and GitHub as described in [Sign-ins](#sign-ins). 
 ### 4. Install Thunk as a service
 
 ```sh
-mkdir -p ~/Documents/checkly && cd ~/Documents/checkly
-gh repo clone Dgiordano33/thunk && cd thunk
+gh repo clone Dgiordano33/thunk ~/thunk-server && cd ~/thunk-server
 scripts/server/setup.sh
 thunk env              # paste CLAUDE_CODE_OAUTH_TOKEN=<token> if setup warned about it
 thunk doctor
 ```
 
-`setup.sh` fills in the Tailscale settings, builds Thunk, installs the `thunk` service so it starts on boot and restarts if it crashes, starts Tailscale Serve, and adds the `thunk` command. It is safe to run again.
+`setup.sh` fills in the Tailscale settings, builds Thunk, installs the `thunk` service so it starts on boot and restarts if it crashes, turns on automatic updates, starts Tailscale Serve, and adds the `thunk` command. It is safe to run again, for example after a change to `scripts/server/`.

@@ -131,6 +131,15 @@ export async function startWorkspaceProcess(ctx: WorkspaceContext, kind: "run" |
   });
 }
 
+/** Every workspace process and held lock, for the deploy idle check (app/api/server/activity). */
+export function runtimeActivity() {
+  const states = [...runtimes.values()];
+  return {
+    processes: states.flatMap((state) => [...state.processes.values()].map(({ kind, running }) => ({ kind, running }))),
+    locks: states.filter((state) => state.busy).length,
+  };
+}
+
 export function terminalSnapshot(id: string, processId: string): ProcessSnapshot | null {
   const proc = [...runtime(id).processes.values()].find((p) => p.id === processId);
   if (!proc) return null;

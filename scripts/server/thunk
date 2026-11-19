@@ -7,7 +7,7 @@ ENV_FILE=/etc/thunk.env
 STATE_DIR="$HOME/.config/thunk"
 DIST_FILE="$STATE_DIR/dist.env"
 PREV_FILE="$STATE_DIR/previous"
-cd "$REPO"
+SHA_MARK=.thunk-sha   # written into each build directory: the commit it was built from
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -15,8 +15,21 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 port() { sed -n 's/^PORT=//p' "$ENV_FILE" 2>/dev/null | tail -1 | grep . || echo 4600; }
 url() { echo "https://$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"; }
 active_dist() { sed -n 's/^THUNK_DIST_DIR=//p' "$DIST_FILE" 2>/dev/null | grep . || echo .next-a; }
+other_dist() { [ "$(active_dist)" = .next-a ] && echo .next-b || echo .next-a; }
+built_sha() { cat "$1/$SHA_MARK" 2>/dev/null || true; }
 version() { echo "$(git rev-parse --abbrev-ref HEAD) @ $(git log -1 --format='%h %s')"; }
 http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$(port)/api/models" || true; }
+lock_of() { git rev-parse "$1:package-lock.json"; }
+clean_checkout() { git diff --quiet && git diff --cached --quiet; }
+on_branch() { git symbolic-ref -q HEAD >/dev/null; }
+
+# One update at a time: manual updates wait, the timer skips its turn.
+take_lock() {
+  mkdir -p "$STATE_DIR"
+  exec 9>"$STATE_DIR/lock"
+  if [ "${1:-}" = try ]; then flock -n 9 || exit 0; return; fi
+  flock -n 9 || { say "Waiting for another update to finish"; flock 9; }
+}
 
 wait_up() {
   for _ in $(seq 1 60); do
@@ -31,71 +44,139 @@ restart() {
   if wait_up; then say "Running $(version)"; else die "Thunk did not come up; check 'thunk logs'"; fi
 }
 
-lock_of() { git rev-parse "$1:package-lock.json"; }
+# Prints why a restart would cut off work, or nothing when it is safe. A server that is down is safe.
+busy_reasons() {
+  curl -s --max-time 10 "http://127.0.0.1:$(port)/api/server/activity" 2>/dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(", ".join(d["reasons"]) if d.get("busy") else "")' 2>/dev/null || true
+}
+
+# Build the checkout into the slot that is not live, so a running server is untouched and a failed build changes nothing.
+build_idle_slot() {
+  local next
+  next=$(other_dist)
+  [ "$(built_sha "$next")" = "$(git rev-parse HEAD)" ] && [ -f "$next/BUILD_ID" ] && return 0
+  rm -f "$next/$SHA_MARK"
+  say "Building $(version)"
+  THUNK_DIST_DIR="$next" npm run build || return 1
+  git rev-parse HEAD > "$next/$SHA_MARK"
+}
+
+switch_to_idle_slot() {
+  local live
+  live=$(active_dist)
+  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$live" "$(built_sha "$live")" > "$PREV_FILE"
+  echo "THUNK_DIST_DIR=$(other_dist)" > "$DIST_FILE"
+  say "Restarting (running agents and terminals stop)"
+  restart
+}
+
+reinstall_deps() {
+  say "Dependencies changed: stopping Thunk to reinstall them"
+  sudo systemctl stop thunk
+  npm ci --no-audit --no-fund
+}
 
 cmd_status() {
+  local reasons auto
+  reasons=$(busy_reasons)
+  auto=$(systemctl is-enabled thunk-autoupdate.timer 2>/dev/null || true)
   echo "Service:  $(systemctl is-active thunk || true)"
   echo "Health:   $([ "$(http_code)" = 200 ] && echo ok || echo 'not responding')"
   echo "Version:  $(version)"
+  echo "Activity: ${reasons:-idle}"
+  if [ "$auto" != enabled ]; then echo "Auto:     off"
+  elif ! on_branch; then echo "Auto:     paused by rollback ('thunk update main' resumes)"
+  else echo "Auto:     on (deploys new commits on $(git rev-parse --abbrev-ref HEAD) when idle)"; fi
   echo "Address:  $(url)"
 }
 
 cmd_update() {
   local branch=${1:-}
-  git diff --quiet && git diff --cached --quiet || die "the checkout has local edits; commit or discard them first (git status)"
-  if [ -z "$branch" ] && ! git symbolic-ref -q HEAD >/dev/null; then branch=main; fi  # after a rollback
+  take_lock
+  clean_checkout || die "the checkout has local edits; commit or discard them first (git status)"
+  if [ -z "$branch" ] && ! on_branch; then branch=main; fi  # after a rollback
 
-  local old_sha old_lock
-  old_sha=$(git rev-parse HEAD)
+  local old_lock
   old_lock=$(lock_of HEAD)
-
   say "Fetching"
   git fetch --prune --quiet origin
   [ -n "$branch" ] && git switch --quiet "$branch"
   git pull --ff-only --quiet
-  if [ "$(git rev-parse HEAD)" = "$old_sha" ] && [ -f "$(active_dist)/BUILD_ID" ]; then
+  if [ "$(built_sha "$(active_dist)")" = "$(git rev-parse HEAD)" ]; then
     say "Already up to date: $(version)"; return
   fi
 
-  if [ "$(lock_of HEAD)" != "$old_lock" ]; then
-    say "Dependencies changed: stopping Thunk to reinstall them"
-    sudo systemctl stop thunk
-    npm ci
-  fi
-
-  # Build into the slot that is not live, so a running server is untouched and a failed build changes nothing.
-  local live next
-  live=$(active_dist)
-  next=$([ "$live" = .next-a ] && echo .next-b || echo .next-a)
-  say "Building $(version)"
-  if ! THUNK_DIST_DIR="$next" npm run build; then
+  [ "$(lock_of HEAD)" != "$old_lock" ] && reinstall_deps
+  if ! build_idle_slot; then
     systemctl is-active --quiet thunk || sudo systemctl start thunk
     die "build failed; Thunk is still running the previous version"
   fi
+  switch_to_idle_slot
+}
 
-  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$live" "$old_sha" > "$PREV_FILE"
-  echo "THUNK_DIST_DIR=$next" > "$DIST_FILE"
-  say "Restarting (running agents and terminals stop)"
-  restart
+# Run by thunk-autoupdate.timer every few minutes. Builds new commits right away; restarts only when idle.
+cmd_autoupdate() {
+  take_lock try
+  on_branch || { echo "Pinned by 'thunk rollback'; run 'thunk update main' to resume automatic updates."; return; }
+  clean_checkout || { echo "Skipped: the checkout has local edits."; return; }
+  git fetch --prune --quiet origin
+  local upstream
+  upstream=$(git rev-parse -q --verify '@{upstream}') || { echo "Skipped: $(git rev-parse --abbrev-ref HEAD) has no upstream branch."; return; }
+  [ "$upstream" = "$(git rev-parse HEAD)" ] && [ "$(built_sha "$(active_dist)")" = "$upstream" ] && return
+
+  # Don't rebuild a commit that already failed every few minutes; the next push gets a fresh try.
+  [ "$(cat "$STATE_DIR/failed" 2>/dev/null || true)" = "$upstream" ] && return
+
+  local reasons
+  reasons=$(busy_reasons)
+  if [ "$(lock_of "$upstream")" != "$(lock_of HEAD)" ]; then
+    # Reinstalling dependencies stops Thunk, so the whole update waits for an idle moment.
+    [ -n "$reasons" ] && { echo "New commits need a dependency reinstall; waiting: $reasons."; return; }
+    git merge --ff-only --quiet "$upstream"
+    reinstall_deps
+  else
+    git merge --ff-only --quiet "$upstream"
+  fi
+  if ! build_idle_slot; then
+    systemctl is-active --quiet thunk || sudo systemctl start thunk
+    git rev-parse HEAD > "$STATE_DIR/failed"
+    die "build of $(git rev-parse --short HEAD) failed; still running the previous version"
+  fi
+  rm -f "$STATE_DIR/failed"
+  reasons=$(busy_reasons)
+  [ -n "$reasons" ] && { echo "Built $(git rev-parse --short HEAD); waiting to restart: $reasons."; return; }
+  switch_to_idle_slot
 }
 
 cmd_rollback() {
+  take_lock
   [ -f "$PREV_FILE" ] || die "nothing to roll back to"
   local dist sha
   dist=$(sed -n 's/^THUNK_DIST_DIR=//p' "$PREV_FILE")
   sha=$(sed -n 's/^SHA=//p' "$PREV_FILE")
-  [ -f "$dist/BUILD_ID" ] || die "the previous build ($dist) is gone"
-  git diff --quiet && git diff --cached --quiet || die "the checkout has local edits; commit or discard them first (git status)"
+  # A newer build may have reused that slot since; the commit marker shows whether it is still intact.
+  [ -n "$sha" ] && [ -f "$dist/BUILD_ID" ] && [ "$(built_sha "$dist")" = "$sha" ] || die "the previous build was replaced by a newer one; use 'thunk update <branch>' instead"
+  clean_checkout || die "the checkout has local edits; commit or discard them first (git status)"
 
-  local cur_lock
+  local cur_lock live
   cur_lock=$(lock_of HEAD)
-  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$(active_dist)" "$(git rev-parse HEAD)" > "$PREV_FILE"
+  live=$(active_dist)
+  printf 'THUNK_DIST_DIR=%s\nSHA=%s\n' "$live" "$(built_sha "$live")" > "$PREV_FILE"
   git checkout --quiet --detach "$sha"
-  if [ "$(lock_of HEAD)" != "$cur_lock" ]; then sudo systemctl stop thunk; npm ci; fi
+  [ "$(lock_of HEAD)" != "$cur_lock" ] && reinstall_deps
   echo "THUNK_DIST_DIR=$dist" > "$DIST_FILE"
   say "Rolling back"
   restart
-  echo "Run 'thunk update main' to return to the latest version."
+  echo "Automatic updates are paused. Run 'thunk update main' to return to the latest version."
+}
+
+cmd_auto() {
+  case "${1:-}" in
+    on) sudo systemctl enable --now thunk-autoupdate.timer && say "Automatic updates on" ;;
+    off) sudo systemctl disable --now thunk-autoupdate.timer && say "Automatic updates off" ;;
+    log|"") journalctl -u thunk-autoupdate --no-pager -n 40 -o short ;;
+    *) die "usage: thunk auto [on|off|log]" ;;
+  esac
 }
 
 cmd_env() {
@@ -115,7 +196,7 @@ cmd_doctor() {
     "") echo "Codex:    unknown (Thunk is not responding)" ;;
     *) echo "Codex:    $(echo "$models" | python3 -c 'import json,sys; print(json.load(sys.stdin)["codexError"])' 2>/dev/null || echo error) (codex login --device-auth)" ;;
   esac
-  gh auth status >/dev/null 2>&1 && echo "GitHub:   signed in" || echo "GitHub:   not signed in (gh auth login --with-token)"
+  gh auth status >/dev/null 2>&1 && echo "GitHub:   signed in" || echo "GitHub:   not signed in (gh auth login --web)"
   grep -qE '^SUPABASE_URL=.' "$ENV_FILE" && echo "Data:     Supabase" || echo "Data:     in memory only; lost on restart"
   tailscale serve status 2>/dev/null | grep -q "127.0.0.1:$(port)" && echo "Serve:    ok" || echo "Serve:    off (tailscale serve --bg --https=443 http://127.0.0.1:$(port))"
   echo "Disk:     $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
@@ -126,28 +207,39 @@ cmd_help() {
   cat <<'HELP'
 Usage: thunk <command>
 
-  status            Is it running, which version, and its address
-  update [branch]   Pull, build and restart. With a branch, switch to it first (thunk update main to go back)
-  rollback          Go back to the version before the last update
+  status            Is it running, which version, what it is doing, and its address
+  update [branch]   Pull, build and restart now. With a branch, switch to it first (thunk update main to go back)
+  rollback          Go back to the version before the last update (pauses automatic updates)
+  auto [on|off]     Turn automatic updates on or off; with no argument, show recent automatic updates
   logs              Follow the server log (Ctrl-C to stop)
   restart | stop | start
   env               Edit settings (/etc/thunk.env), then restart
   doctor            Check sign-ins, data, Serve, disk and memory
 
-Restarting stops running agents and terminals. See docs/server.md.
+New commits on the current branch are deployed automatically once no agent,
+routine or workspace task is running. Restarting stops terminals and previews.
+See docs/server.md.
 HELP
 }
 
-case "${1:-help}" in
-  status) cmd_status ;;
-  update) cmd_update "${2:-}" ;;
-  rollback) cmd_rollback ;;
-  logs) journalctl -u thunk -f -n 100 ;;
-  restart) say "Restarting"; restart ;;
-  stop) sudo systemctl stop thunk ;;
-  start) sudo systemctl start thunk; wait_up && say "Running $(version)" || die "Thunk did not come up; check 'thunk logs'" ;;
-  env) cmd_env ;;
-  doctor) cmd_doctor ;;
-  help|-h|--help) cmd_help ;;
-  *) cmd_help; exit 1 ;;
-esac
+main() {
+  cd "$REPO"
+  case "${1:-help}" in
+    status) cmd_status ;;
+    update) cmd_update "${2:-}" ;;
+    autoupdate) cmd_autoupdate ;;
+    rollback) cmd_rollback ;;
+    auto) cmd_auto "${2:-}" ;;
+    logs) journalctl -u thunk -f -n 100 ;;
+    restart) say "Restarting"; restart ;;
+    stop) sudo systemctl stop thunk ;;
+    start) sudo systemctl start thunk; if wait_up; then say "Running $(version)"; else die "Thunk did not come up; check 'thunk logs'"; fi ;;
+    env) cmd_env ;;
+    doctor) cmd_doctor ;;
+    help|-h|--help) cmd_help ;;
+    *) cmd_help; exit 1 ;;
+  esac
+}
+
+# `git pull` rewrites this file while it runs; bash has parsed this whole line, so it exits cleanly.
+main "$@"; exit $?

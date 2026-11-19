@@ -47,11 +47,23 @@ mkdir -p "$STATE_DIR"
 [ -f "$STATE_DIR/dist.env" ] || echo "THUNK_DIST_DIR=.next-a" > "$STATE_DIR/dist.env"
 DIST=$(sed -n 's/^THUNK_DIST_DIR=//p' "$STATE_DIR/dist.env")
 cd "$REPO"
-[ -d node_modules ] || npm ci
-[ -f "$DIST/BUILD_ID" ] || THUNK_DIST_DIR="$DIST" npm run build
+[ -d node_modules ] || npm ci --no-audit --no-fund
+if [ ! -f "$DIST/BUILD_ID" ]; then
+  THUNK_DIST_DIR="$DIST" npm run build
+  git rev-parse HEAD > "$DIST/.thunk-sha"
+fi
 
-say "systemd service 'thunk'"
-sudo tee "$UNIT" >/dev/null <<UNIT_EOF
+# Writes a root-owned file only when its content changes; returns 0 when it changed.
+CHANGED=0
+put() {
+  if ! sudo cmp -s "$2" "$1" 2>/dev/null; then sudo install -m 644 "$2" "$1"; CHANGED=1; fi
+  rm -f "$2"
+}
+SERVICE_PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+say "systemd services"
+TMP=$(mktemp)
+cat > "$TMP" <<UNIT_EOF
 [Unit]
 Description=Thunk
 After=network-online.target tailscaled.service
@@ -63,7 +75,7 @@ WorkingDirectory=$REPO
 EnvironmentFile=$ENV_FILE
 EnvironmentFile=-$STATE_DIR/dist.env
 Environment=NODE_ENV=production
-Environment=PATH=$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=$SERVICE_PATH
 ExecStart=$REPO/node_modules/.bin/next start -H 127.0.0.1
 Restart=always
 RestartSec=3
@@ -72,11 +84,44 @@ TimeoutStopSec=10
 [Install]
 WantedBy=multi-user.target
 UNIT_EOF
+put "$UNIT" "$TMP"
+SERVICE_CHANGED=$CHANGED
+
+# Automatic updates: build new commits on the checkout's branch, restart once nothing is running.
+TMP=$(mktemp)
+cat > "$TMP" <<UNIT_EOF
+[Unit]
+Description=Deploy new Thunk commits when idle (thunk autoupdate)
+After=thunk.service
+
+[Service]
+Type=oneshot
+User=$ME
+WorkingDirectory=$REPO
+Environment=PATH=$SERVICE_PATH
+ExecStart=/usr/local/bin/thunk autoupdate
+TimeoutStartSec=45min
+Nice=10
+UNIT_EOF
+put /etc/systemd/system/thunk-autoupdate.service "$TMP"
+TMP=$(mktemp)
+cat > "$TMP" <<UNIT_EOF
+[Unit]
+Description=Check for new Thunk commits every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target
+UNIT_EOF
+put /etc/systemd/system/thunk-autoupdate.timer "$TMP"
 
 say "Passwordless control for '$ME'"
 SUDOERS=$(mktemp)
 cat > "$SUDOERS" <<SUDO_EOF
-$ME ALL=(root) NOPASSWD: /usr/bin/systemctl start thunk, /usr/bin/systemctl stop thunk, /usr/bin/systemctl restart thunk
+$ME ALL=(root) NOPASSWD: /usr/bin/systemctl start thunk, /usr/bin/systemctl stop thunk, /usr/bin/systemctl restart thunk, /usr/bin/systemctl enable --now thunk-autoupdate.timer, /usr/bin/systemctl disable --now thunk-autoupdate.timer
 SUDO_EOF
 sudo visudo -cf "$SUDOERS" >/dev/null && sudo install -m 440 "$SUDOERS" /etc/sudoers.d/thunk
 rm -f "$SUDOERS"
@@ -88,9 +133,14 @@ say "Start"
 tmux kill-session -t thunk 2>/dev/null && echo "    stopped the old tmux session" || true
 sudo systemctl daemon-reload
 sudo systemctl enable thunk >/dev/null 2>&1
-sudo systemctl restart thunk
+if [ "$SERVICE_CHANGED" = 1 ] || ! systemctl is-active --quiet thunk; then sudo systemctl restart thunk; fi
+sudo systemctl enable --now thunk-autoupdate.timer >/dev/null 2>&1
 tailscale serve --bg --https=443 "http://127.0.0.1:$PORT" >/dev/null
+
+# Bring the live build up to this checkout (a no-op when it already is).
+"$REPO/scripts/server/thunk" update
 
 say "Done: https://$TS_NAME"
 echo "    'thunk' is now a command on this server. Run 'thunk help' to see what it does."
+echo "    New commits on $(git rev-parse --abbrev-ref HEAD) deploy automatically when idle; 'thunk auto off' stops that."
 echo "    Log out and back in once so 'thunk logs' works without sudo."
