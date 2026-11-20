@@ -105,12 +105,30 @@ test("an existing Supabase database is picked up from its migration history, and
   const logs = [];
   await migrate(db.exec, db.query, MIGRATIONS, { log: (m) => logs.push(m) });
   assert.deepEqual(logs, [
-    `recorded ${upTo - 1} migrations that were applied before Thunk tracked them`,
+    `recorded ${upTo - 1} migrations applied outside Thunk: ${MIGRATIONS.slice(0, upTo).map((m) => m.name.replace(/^\d+_/, "")).filter((n) => n !== "0010_worker_reports").join(", ")}`,
     `applied ${MIGRATIONS.find((m) => m.name.endsWith("0010_worker_reports")).name}`,
     ...MIGRATIONS.slice(upTo).map((m) => `applied ${m.name}`),
   ]);
   const [{ def }] = await db.query("select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'notifications_kind_check'");
   assert.match(def, /delegation_plan/);
+});
+
+test("migrations applied through Supabase after Thunk started tracking are recorded, not re-run", async (t) => {
+  const db = await rawDb({ supabaseRoles: true });
+  t.after(() => db.pg.close());
+  const later = { name: "20991231000000_0099_later", sql: "create table later_table (id int);" };
+  await migrate(db.exec, db.query, MIGRATIONS);
+  // Applied by hand in Supabase (dashboard or MCP), which records it under its own version.
+  await db.exec("create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, name text);");
+  await db.exec(later.sql);
+  await db.query("insert into supabase_migrations.schema_migrations values ('20991231120000', '0099_later')");
+  const logs = [];
+  await migrate(db.exec, db.query, [...MIGRATIONS, later], { log: (m) => logs.push(m) });
+  assert.deepEqual(logs, ["recorded 1 migration applied outside Thunk: 0099_later"]);
+  assert.equal((await db.query("select count(*)::int as n from thunk_migrations where name = $1", [later.name]))[0].n, 1);
+  logs.length = 0;
+  await migrate(db.exec, db.query, [...MIGRATIONS, later], { log: (m) => logs.push(m) });
+  assert.deepEqual(logs, []);
 });
 
 test("an existing database without history needs THUNK_DB_BASELINE", async (t) => {
