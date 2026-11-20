@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { installUpdate, prepareUpdate, run } = require("./updater.cjs");
+const { installUpdate, prepareUpdate, run, configuredUpdateSource, DEFAULT_UPDATE_SOURCE } = require("./updater.cjs");
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "thunk-updater-test-"));
@@ -74,4 +74,29 @@ test("cancel stops the running build command", async () => {
   const task = run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { env: process.env, log: "ignore", signal: controller.signal });
   controller.abort();
   await assert.rejects(task, /abort/i);
+});
+
+test("update source defaults to the upstream repo and main", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "thunk-update-source-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const config = path.join(dir, ".env");
+  const source = (text) => { fs.writeFileSync(config, text); return configuredUpdateSource(config); };
+  assert.deepEqual(configuredUpdateSource(path.join(dir, "missing.env")), DEFAULT_UPDATE_SOURCE);
+  assert.deepEqual(source("THUNK_UPDATE_REPO=\n"), DEFAULT_UPDATE_SOURCE);
+  assert.deepEqual(source("THUNK_UPDATE_REPO=someone/thunk\n"), { repo: "https://github.com/someone/thunk.git", branch: "main" });
+  assert.deepEqual(source("THUNK_UPDATE_REPO=someone/thunk.git\nTHUNK_UPDATE_BRANCH=stable\n"), { repo: "https://github.com/someone/thunk.git", branch: "stable" });
+  assert.deepEqual(source("THUNK_UPDATE_REPO=git@github.com:someone/thunk.git\n"), { repo: "git@github.com:someone/thunk.git", branch: "main" });
+  assert.deepEqual(source("THUNK_UPDATE_REPO=/Users/me/thunk\n"), { repo: "/Users/me/thunk", branch: "main" });
+  assert.throws(() => source("THUNK_UPDATE_REPO=--upload-pack=x\n"), /THUNK_UPDATE_REPO/);
+  assert.throws(() => source("THUNK_UPDATE_BRANCH=-x\n"), /THUNK_UPDATE_BRANCH/);
+  assert.throws(() => source("THUNK_UPDATE_BRANCH=a..b\n"), /THUNK_UPDATE_BRANCH/);
+});
+
+test("preparation clones the configured repo and branch", async (t) => {
+  const { root, target } = fixture(t);
+  const env = fakeTools(root);
+  const calls = path.join(root, "git-calls");
+  fs.writeFileSync(path.join(root, "bin", "git"), `#!/bin/sh\necho "$@" >> "${calls}"\nif [ "$1" = "clone" ]; then for last; do :; done; mkdir -p "$last"; else printf abc123; fi\n`, { mode: 0o755 });
+  await prepareUpdate({ target, revision: "abc123", env, logFile: path.join(root, "log"), signal: new AbortController().signal, source: { repo: "https://example.com/fork.git", branch: "stable" } });
+  assert.match(fs.readFileSync(calls, "utf8"), /^clone --depth=1 --branch=stable --single-branch -- https:\/\/example\.com\/fork\.git /);
 });

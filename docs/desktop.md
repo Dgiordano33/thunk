@@ -16,13 +16,26 @@ You can copy the generated app to `/Applications` and launch it from Finder. The
 
 ## Updating
 
-Choose **Thunk → Check for Updates…**. A small dialog with a rotating hourglass shows the current step while Thunk fetches the latest `main` from `Dgiordano33/thunk`, builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock also show that a build is running. Close the progress dialog to keep using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
+Choose **Thunk → Check for Updates…**. A small dialog with a rotating hourglass shows the current step while Thunk fetches the latest `main` from `Dgiordano33/thunk` (or [your fork](#update-from-a-fork)), builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock also show that a build is running. Close the progress dialog to keep using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
 
 The update replaces the app at its existing location, including an Applications copy. Your source checkout, desktop `.env`, and data are untouched. A failed build leaves the current app running. A failed replacement restores the previous app. The previous bundle is retained in a hidden `.thunk-previous-*` folder beside the app; `~/Library/Application Support/Thunk/previous-app.txt` records its path for recovery. You can remove those backup folders once satisfied with an update.
 
-This is a local source updater: you still need Git, npm, an official Node installation, network access, and Git access to the repository. Updates follow `main`, not the branch you originally built. No paid Apple account is needed. **Show Update Log** reveals build errors. Quitting during a build cancels it. If the installation folder is not writable, move Thunk to a folder you own before updating.
+This is a local source updater: you still need Git, npm, an official Node installation, network access, and Git access to the repository. Updates follow `main` (or `THUNK_UPDATE_BRANCH`), not the branch you originally built. No paid Apple account is needed. **Show Update Log** reveals build errors. Quitting during a build cancels it. If the installation folder is not writable, move Thunk to a folder you own before updating.
 
 For an older app without this menu, build and install this version once using the commands above. Thereafter, use the menu. Updates are checked only when you request them; no background downloads or automatic restarts occur.
+
+### Update from a fork
+
+By default, updates come from the upstream repo. If you forked Thunk, add these lines with **Thunk → Show Configuration** so updates build your fork instead. Without them, an update replaces your changes with upstream `main`:
+
+```dotenv
+# GitHub owner/repo, any git URL, or an absolute path to a local clone
+THUNK_UPDATE_REPO=you/thunk
+# Optional; defaults to main
+THUNK_UPDATE_BRANCH=main
+```
+
+The settings are read each time you choose **Check for Updates…**, so no restart is needed.
 
 ## Configuration and data
 
@@ -42,6 +55,9 @@ THUNK_DATA_DIR=/absolute/path/to/thunk-data
 THUNK_PORT=4600
 THUNK_TRUSTED_HOSTS=your-mac.tail1234.ts.net
 THUNK_TRUSTED_USER=you@example.com
+# Optional; build updates from a fork (see "Update from a fork")
+THUNK_UPDATE_REPO=you/thunk
+THUNK_UPDATE_BRANCH=main
 ```
 
 Checkout `.env*` files and credentials are not copied into the app. Copy the settings you need into the external config yourself. As with any Next.js build, `NEXT_PUBLIC_*` values are public and embedded at build time. Configuration is shared across local builds and lives outside the app. Project files keep using `~/.thunk` (or `THUNK_DATA_DIR`); rebuilding or replacing the app does not erase them. Without Supabase, existing in-memory session/routine limitations still apply.

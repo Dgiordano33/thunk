@@ -3,7 +3,7 @@ const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync,
 const path = require("node:path");
 const { startBackend, configuredRemote, loginPath, externalUrl } = require("./runtime.cjs");
 
-const { prepareUpdate, installUpdate } = require("./updater.cjs");
+const { prepareUpdate, installUpdate, configuredUpdateSource } = require("./updater.cjs");
 
 app.setName("Thunk");
 let backend;
@@ -46,12 +46,13 @@ async function checkForUpdates(item) {
     const target = path.resolve(process.execPath, "../../..");
     // Only pass build essentials, not runtime database or agent credentials.
     const env = { HOME: app.getPath("home"), PATH: loginPath(), SHELL: process.env.SHELL || "/bin/zsh", TMPDIR: process.env.TMPDIR, LANG: process.env.LANG };
-    prepared = await prepareUpdate({ target, revision, env, logFile, signal: updateController.signal, onProgress });
+    const source = configuredUpdateSource(path.join(app.getPath("userData"), ".env"));
+    prepared = await prepareUpdate({ target, revision, env, logFile, source, signal: updateController.signal, onProgress });
     closeProgress();
     if (quitting) return;
     window?.setProgressBar(-1);
     if (!prepared) {
-      await dialog.showMessageBox({ message: "Thunk is up to date", detail: "You are running the latest commit on main." });
+      await dialog.showMessageBox({ message: "Thunk is up to date", detail: `You are running the latest commit on ${source.branch}.` });
       return;
     }
     const { response } = await dialog.showMessageBox({
@@ -148,7 +149,7 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppLogsPath();
     mkdirSync(app.getPath("logs"), { recursive: true });
     const config = path.join(userData, ".env");
-    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER, THUNK_REMOTE_URL\n", { mode: 0o600, flag: "wx" });
+    if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER, THUNK_REMOTE_URL, THUNK_UPDATE_REPO, THUNK_UPDATE_BRANCH\n", { mode: 0o600, flag: "wx" });
     const remote = configuredRemote(config);
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu", submenu: [

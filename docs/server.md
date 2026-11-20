@@ -1,8 +1,19 @@
 # Run Thunk on a server
 
-Thunk can run around the clock on a Linux server, so you can use it from your phone or any computer without keeping your Mac awake. The server is a DigitalOcean Droplet named `thunk`. It is reachable only over your private Tailscale network, at **https://thunk.tailbae5bb.ts.net**. Requests are checked the same way as in [Use Thunk from your phone](remote.md).
+Thunk can run around the clock on a Linux server, so you can use it from your phone or any computer without keeping your Mac awake. These steps use a DigitalOcean Droplet, but any Ubuntu 24.04 machine works. The server is reachable only over your private Tailscale network. Requests are checked the same way as in [Use Thunk from your phone](remote.md).
 
-Merging to `main` is enough to deploy: the server picks up new commits within about five minutes and switches to them once nothing is running. For everything else there is one command, `thunk`, which runs on the server.
+Pushing to the branch the server follows (normally `main` of the repo it was cloned from) is enough to deploy: the server picks up new commits within about five minutes and switches to them once nothing is running. For everything else there is one command, `thunk`, which runs on the server.
+
+Replace these placeholders with your own values throughout:
+
+| Placeholder | What it is | Example |
+|---|---|---|
+| `<user>` | Your user on the server | `alex` |
+| `<host>` | The server's Tailscale machine name | `thunk` |
+| `<tailnet>` | Your tailnet's DNS name, shown in the Tailscale admin console under **DNS** | `tail1234.ts.net` |
+| `<repo>` | The GitHub repo the server deploys from: upstream, or your fork | `Dgiordano33/thunk` |
+
+The server's address is `https://<host>.<tailnet>`. `scripts/server/setup.sh` works out the user, address and Tailscale login on its own, so only the commands below need the placeholders.
 
 ## Deploying
 
@@ -20,7 +31,7 @@ A timer on the server checks GitHub every five minutes. When the checkout's bran
 Connect from your Mac. There is no password; Tailscale handles sign-in, and the first connection of the day may open a browser to confirm:
 
 ```sh
-ssh danielgiordano@thunk
+ssh <user>@<host>
 ```
 
 On the server:
@@ -43,14 +54,14 @@ A manual restart or update stops running agents and terminals, so use it when no
 
 ### Open it in the Mac app
 
-Set `THUNK_REMOTE_URL=https://thunk.tailbae5bb.ts.net` in the desktop app's configuration and reopen it. The app then opens the server in its own window and starts nothing locally; see [Use a Thunk server instead](desktop.md#use-a-thunk-server-instead).
+Set `THUNK_REMOTE_URL=https://<host>.<tailnet>` in the desktop app's configuration and reopen it. The app then opens the server in its own window and starts nothing locally; see [Use a Thunk server instead](desktop.md#use-a-thunk-server-instead).
 
 ### From the Mac without logging in
 
 Add this to `~/.zshrc` on the Mac:
 
 ```sh
-alias thunk-vm='ssh -t danielgiordano@thunk thunk'
+alias thunk-vm='ssh -t <user>@<host> thunk'
 ```
 
 Then run any command from your Mac, for example `thunk-vm update` or `thunk-vm logs`.
@@ -59,8 +70,8 @@ Then run any command from your Mac, for example `thunk-vm update` or `thunk-vm l
 
 | What | Where |
 |---|---|
-| Thunk server checkout | `~/thunk-server`. Keep it separate from your Thunk project at `~/Documents/checkly/thunk`, where agents edit code |
-| Project repos | `~/Documents/checkly/...`, the same paths as on the Mac (home is `/Users/danielgiordano`) |
+| Thunk server checkout | `~/thunk-server`. If you also work on Thunk itself from this server, keep that project in a separate clone, where agents edit code |
+| Project repos | Wherever you clone them, for example `~/code/...`. See [Same paths as your Mac](#optional-same-paths-as-your-mac) |
 | Settings and secrets | `/etc/thunk.env`; edit with `thunk env` |
 | Builds | `.next-a` and `.next-b` in the server checkout; one is live. `~/.config/thunk/` records which |
 | Automatic updates | `thunk-autoupdate.timer` and `thunk-autoupdate.service` in `/etc/systemd/system/`; log with `thunk auto` |
@@ -72,8 +83,8 @@ Settings in `/etc/thunk.env`:
 
 ```dotenv
 PORT=4600
-THUNK_TRUSTED_HOSTS=thunk.tailbae5bb.ts.net
-THUNK_TRUSTED_USER=Dgiordano33@github
+THUNK_TRUSTED_HOSTS=<host>.<tailnet>   # filled in by setup.sh
+THUNK_TRUSTED_USER=you@example.com     # your Tailscale login, filled in by setup.sh
 CLAUDE_CODE_OAUTH_TOKEN=...            # from `claude setup-token`
 # SUPABASE_URL=...                     # see "Keep your data"
 # SUPABASE_SERVICE_ROLE_KEY=...
@@ -103,7 +114,7 @@ Each sign-in is stored on the server. `thunk doctor` shows which ones work.
 | `thunk status` says `failed` or `not responding` | Run `thunk logs` and read the last lines. `thunk restart` often clears it. |
 | A bad update | `thunk rollback` |
 | `Forbidden` (403) | `thunk logs` shows a line starting with `[access] denied` with the reason; see [remote.md](remote.md#troubleshooting). |
-| `ssh danielgiordano@thunk` hangs | Tailscale is off on the Mac, or the Droplet is down. In DigitalOcean, use **Access → Droplet Console** to get a shell and run `sudo tailscale up --ssh`. |
+| `ssh <user>@<host>` hangs | Tailscale is off on the Mac, or the server is down. In DigitalOcean, use **Access → Droplet Console** to get a shell and run `sudo tailscale up --ssh`. |
 | `thunk logs` says permission denied | Log out and back in once after setup. |
 
 ## Build the server
@@ -118,7 +129,7 @@ In DigitalOcean, click **Create → Droplets**:
 - **Size:** **Basic**, **Regular**, 4 vCPU / 8 GB or larger.
 - **Authentication:** SSH key, from `~/.ssh/id_ed25519.pub` on the Mac.
 - **Backups:** weekly.
-- **Hostname:** `thunk`.
+- **Hostname:** `<host>`, for example `thunk`.
 
 ### 2. Tailscale and your user (as root)
 
@@ -127,17 +138,16 @@ ssh root@<droplet IP>
 apt update && apt upgrade -y
 apt install -y build-essential git curl unzip tmux
 curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --ssh --hostname=thunk          # open the printed link on the Mac and approve
+tailscale up --ssh --hostname=<host>         # open the printed link on the Mac and approve
 
-mkdir -p /Users
-useradd -m -d /Users/danielgiordano -s /bin/bash danielgiordano
-usermod -aG sudo danielgiordano
-passwd danielgiordano
+useradd -m -s /bin/bash <user>
+usermod -aG sudo <user>
+passwd <user>
 ```
 
-Check that `ssh danielgiordano@thunk` works from the Mac. Then, in DigitalOcean, open **Networking → Firewalls → Create Firewall**, delete every inbound rule, keep the outbound rules, and apply it to the `thunk` Droplet. From then on, nothing on the server can be reached from the internet. Tailscale works through outbound connections only.
+Check that `ssh <user>@<host>` works from the Mac. Then, in DigitalOcean, open **Networking → Firewalls → Create Firewall**, delete every inbound rule, keep the outbound rules, and apply it to the Droplet. From then on, nothing on the server can be reached from the internet. Tailscale works through outbound connections only.
 
-### 3. Tools (as `danielgiordano`, over Tailscale)
+### 3. Tools (as `<user>`, over Tailscale)
 
 ```sh
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
@@ -161,10 +171,16 @@ Then sign in to Claude, Codex and GitHub as described in [Sign-ins](#sign-ins). 
 ### 4. Install Thunk as a service
 
 ```sh
-gh repo clone Dgiordano33/thunk ~/thunk-server && cd ~/thunk-server
+gh repo clone <repo> ~/thunk-server && cd ~/thunk-server
 scripts/server/setup.sh
 thunk env              # paste CLAUDE_CODE_OAUTH_TOKEN=<token> if setup warned about it
 thunk doctor
 ```
 
 `setup.sh` fills in the Tailscale settings, builds Thunk, installs the `thunk` service so it starts on boot and restarts if it crashes, turns on automatic updates, starts Tailscale Serve, and adds the `thunk` command. It is safe to run again, for example after a change to `scripts/server/`.
+
+To deploy your own changes, fork the repo and clone the fork here. The server follows whatever `origin` and branch the checkout has. To switch an existing server to a fork, run `git -C ~/thunk-server remote set-url origin https://github.com/<repo>.git`, then `thunk update`.
+
+### Optional: same paths as your Mac
+
+Thunk stores each project's absolute path. If you move data from a Mac to the server, or point both at the same database, give the server user the same home directory as on the Mac so those paths still resolve. In step 2, create the user with `mkdir -p /Users && useradd -m -d /Users/<user> -s /bin/bash <user>` instead, and clone repos to the same places as on the Mac. A server that starts with its own data does not need this.
