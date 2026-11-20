@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -H 127.0.0.1 --port ${PORT:-0}",
     "build": "next build",
+    "db:pull": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db-pull.mjs",
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "postinstall": "node scripts/prepare-pty.mjs",

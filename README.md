@@ -35,6 +35,14 @@ Thunk creates and updates its tables itself. On startup it applies any migration
 
 Thunk runs a scheduler and delivery polling, so point only one running Thunk at a database.
 
+**Developing with production data.** Don't point a dev server at the production database: its scheduler would run beside the real one, and anything you try would change real data. Copy it instead:
+
+```bash
+npm run db:pull   # asks for the source connection string, e.g. Supabase's Session pooler string
+```
+
+This reads the source in one read-only snapshot and replaces the local embedded database (`~/.thunk/db`) with the copy, keeping the previous one as `~/.thunk/db.backup-…`. Routines are turned off in the copy so nothing fires twice. Stop the Mac app and local dev servers first; the command refuses to run while one holds the database. Run it again whenever you want fresh data. Notes, memory and vault files live under `~/.thunk/projects` on the server and are not copied. Set `THUNK_PULL_URL` to skip the prompt.
+
 **Moving from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.** Those settings are no longer read. Thunk refuses to start a database while they are set without `DATABASE_URL`, so data is never silently left behind. Replace them with the project's Session pooler connection string as `DATABASE_URL`. On first start, Thunk reads Supabase's migration history to see what is already applied, then applies whatever is missing. If you applied migrations through the SQL editor so there is no history, set `THUNK_DB_BASELINE` to the last migration you applied, for example `20261111000000_0013_delegation_plans`.
 
 ## Hierarchy
