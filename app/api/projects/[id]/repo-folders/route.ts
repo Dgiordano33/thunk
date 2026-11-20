@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { getProject } from "@/lib/supabase/repo/projects";
-import { insertRepoFolder, setRepoFolderFiles } from "@/lib/supabase/repo/repo-folders";
+import { getProject } from "@/lib/db/repo/projects";
+import { insertRepoFolder, setRepoFolderFiles } from "@/lib/db/repo/repo-folders";
 import { FilesBody, reconcileDeclaredFolders, resolveRepoFolder } from "@/lib/notes/folders";
 import { refreshFolders } from "@/lib/notes/watch";
 export const dynamic = "force-dynamic";

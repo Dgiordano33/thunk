@@ -4,8 +4,8 @@ import { getWorkspaceContext, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { git, tryGit, workspaceChanges } from "@/lib/projects/git";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
-import { getProject, listProjects } from "@/lib/supabase/repo/projects";
-import { getTask } from "@/lib/supabase/repo/tasks";
+import { getProject, listProjects } from "@/lib/db/repo/projects";
+import { getTask } from "@/lib/db/repo/tasks";
 import { appendWorkLog } from "./log";
 import { readWorkerState } from "./state";
 

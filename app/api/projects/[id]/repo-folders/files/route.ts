@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 import { resolveRepoFolder } from "@/lib/notes/folders";
 import { listNotes } from "@/lib/notes/store";
 export const dynamic = "force-dynamic";

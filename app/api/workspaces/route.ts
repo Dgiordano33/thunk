@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { createWorkspace } from "@/lib/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 

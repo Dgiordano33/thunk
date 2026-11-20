@@ -5,10 +5,10 @@ import { AddProjectForm } from "@/components/home/add-project-form";
 import { SystemMap } from "@/components/space/system-map";
 import { CivPanel } from "@/components/world/civ-panel";
 import { WorldMap } from "@/components/world/world-map";
-import { hasSupabase } from "@/lib/env";
+import { hasDatabase } from "@/lib/db/server";
 import { getLook } from "@/lib/look.server";
 import { getPlanetPositions } from "@/lib/world/positions.server";
-import { listProjects } from "@/lib/supabase/repo/projects";
+import { listProjects } from "@/lib/db/repo/projects";
 import { cityHue, cityLevel, cityMood, type WorldCity } from "@/lib/world/cities";
 import { generateTerrain, placeCities, territory } from "@/lib/world/terrain";
 
@@ -33,9 +33,9 @@ export default async function Home() {
           </CivPanel>
         </div>
       )}
-      {!hasSupabase && (
+      {!hasDatabase() && (
         <p className="pixel text-muted-foreground pointer-events-none absolute inset-x-0 top-20 z-10 px-6 text-center text-xs world:text-white/80 world:[text-shadow:1px_1px_0_#0008]">
-          Supabase isn&apos;t configured: projects, tasks, routines and session history won&apos;t survive a server restart. Notes, vault files and memory remain on disk.
+          Thunk is running without a database: projects, tasks, routines and session history won&apos;t survive a server restart. Notes, vault files and memory remain on disk.
         </p>
       )}
     </>

@@ -27,14 +27,14 @@ const mocks = {
     readNote: async (dirs, id) => notes[`${dirs.scope.kind}:${dirs.scope.id}:${id}`] ?? null,
     listNotes: async (dirs) => Object.entries(notes).filter(([k]) => k.startsWith(`${dirs.scope.kind}:${dirs.scope.id}:`)).map(([k, n]) => ({ ...n, id: k.split(":")[2] })),
   },
-  "@/lib/supabase/repo/tasks": {
+  "@/lib/db/repo/tasks": {
     getTask: async (id) => tasks[id] ?? null,
     listTasks: async ({ projectId, workspaceId }) => Object.values(tasks).filter((t) => t.projectId === projectId && (workspaceId === undefined || t.workspaceId === workspaceId)),
     updateTask: async (id, patch) => Object.assign(tasks[id], patch),
   },
   "@/lib/projects/harvest": { harvestWorkspace: async (_ctx, input) => { harvested.push(input); return { memory: null, notes: input.noteIds.map((id) => ({ from: id, to: `${id}-p` })) }; } },
-  "@/lib/supabase/repo/workspaces": { getWorkspace: async (id) => (id === otherWs ? { id, projectId: "p2" } : { id, projectId: project.id, name: "ws", branch: "b" }) },
-  "@/lib/supabase/repo/routines": { listEnabledRoutines: async ({ event }) => routines.filter((r) => r.events.includes(event)) },
+  "@/lib/db/repo/workspaces": { getWorkspace: async (id) => (id === otherWs ? { id, projectId: "p2" } : { id, projectId: project.id, name: "ws", branch: "b" }) },
+  "@/lib/db/repo/routines": { listEnabledRoutines: async ({ event }) => routines.filter((r) => r.events.includes(event)) },
   "./runner": { fire: async (routine, trigger, payload) => { fired.push({ routine: routine.id, trigger, payload }); } },
 };
 const load = Module._load;

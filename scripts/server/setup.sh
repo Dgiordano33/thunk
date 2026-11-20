@@ -38,8 +38,9 @@ if [ -n "$TS_LOGIN" ]; then add_default THUNK_TRUSTED_USER "$TS_LOGIN"
 elif ! grep -q "^THUNK_TRUSTED_USER=" "$ENV_FILE"; then echo "    warning: set THUNK_TRUSTED_USER to your Tailscale login with 'thunk env'"; fi
 grep -qE '^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=.' "$ENV_FILE" \
   || echo "    warning: no CLAUDE_CODE_OAUTH_TOKEN; run 'claude setup-token' and add it with 'thunk env'"
-grep -qE '^SUPABASE_URL=.' "$ENV_FILE" \
-  || echo "    note: no SUPABASE_URL, so projects and sessions are lost on every restart (docs/server.md, 'Keep your data')"
+if grep -qE '^SUPABASE_URL=.' "$ENV_FILE" && ! grep -qE '^DATABASE_URL=.' "$ENV_FILE"; then
+  echo "    warning: SUPABASE_URL is no longer used; set DATABASE_URL with 'thunk env' (docs/server.md, 'Keep your data')"
+fi
 PORT=$(sed -n 's/^PORT=//p' "$ENV_FILE" | tail -1)
 
 say "Build"

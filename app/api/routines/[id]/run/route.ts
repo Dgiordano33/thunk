@@ -1,7 +1,7 @@
 import { handle, HttpError } from "@/lib/api/http";
 import { RunRejected, startRun } from "@/lib/routines/runner";
 import { ensureScheduler } from "@/lib/routines/scheduler";
-import { getRoutine } from "@/lib/supabase/repo/routines";
+import { getRoutine } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

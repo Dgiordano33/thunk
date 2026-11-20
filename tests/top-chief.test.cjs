@@ -46,14 +46,14 @@ const mocks = {
   },
   "@/lib/notifications/service": { notify: async (n) => notifications.push(n), resolveBySubject: async (s) => { resolved.push(s); return []; } },
   "@/lib/routes": { sessionPath: () => "/__home/main/s" },
-  "@/lib/supabase/repo/projects": {
+  "@/lib/db/repo/projects": {
     getProject: async (pid) => [thunk, site, home].find((p) => p?.id === pid) ?? null,
     getProjectByKey: async (key) => home?.dataKey === key ? home : null,
     upsertProjectByKey: async (input) => (home ??= { id: id(), ...input, repos: [], repoFolders: [] }),
     listProjects: async () => [thunk, site],
   },
-  "@/lib/supabase/repo/workspaces": { listWorkspaces: async (pid) => pid === thunk.id ? [onboarding] : [] },
-  "@/lib/supabase/repo/tasks": { listTasks: async () => [] },
+  "@/lib/db/repo/workspaces": { listWorkspaces: async (pid) => pid === thunk.id ? [onboarding] : [] },
+  "@/lib/db/repo/tasks": { listTasks: async () => [] },
   "@/lib/workers/start": { startWorkerSession: async (input) => newLive(input, home) },
   "@/lib/workers/log": { appendWorkLog: async (p, entry) => { logs.push([p.name, entry]); return { path: `${p.dataKey}/work-log` }; } },
   "@/lib/workers/service": { openChief: async (pid) => { const project = [thunk, site].find((p) => p.id === pid); if (!chiefs.has(pid)) chiefs.set(pid, newLive({ workspaceId: id(), origin: { kind: "chief" } }, project)); return chiefs.get(pid); } },

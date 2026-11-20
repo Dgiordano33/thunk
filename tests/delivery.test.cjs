@@ -53,8 +53,8 @@ Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/projects/delivery.ts")) {
     if (request === "node:child_process") return { execFile: fakeExec };
     if (request === "@/lib/notifications/delivery") return { deliveryNotifications: async () => {} };
-    if (request === "../supabase/repo/projects") return { listProjects: async () => projects };
-    if (request === "../supabase/repo/workspaces") return { listAllWorkspaces: async () => workspaces };
+    if (request === "../db/repo/projects") return { listProjects: async () => projects };
+    if (request === "../db/repo/workspaces") return { listAllWorkspaces: async () => workspaces };
     if (request === "./runtime") return { runtimeSnapshot: async () => ({ processes: [{ kind: "run", running: true }], previewUrl: "http://127.0.0.1:3000", setupError: null }) };
   }
   return load.call(this, request, parent, ...rest);

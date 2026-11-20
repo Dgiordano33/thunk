@@ -2,7 +2,7 @@ import "server-only";
 import { closeSession, startSession, pushUserMessage, type StartSessionInput } from "@/lib/agent";
 import { expandCommand } from "@/lib/prompts/context";
 import { sessionConfigRoot } from "@/lib/projects/repos";
-import { upsertSession } from "@/lib/supabase/repo/sessions";
+import { upsertSession } from "@/lib/db/repo/sessions";
 
 export async function startWorkerSession(input: StartSessionInput) {
   const live = await startSession(input);

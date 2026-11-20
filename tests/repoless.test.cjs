@@ -26,7 +26,7 @@ const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "thunk-repoless-"))
 process.env.THUNK_DATA_DIR = path.join(base, "data");
 const projects = require("../lib/projects/index.ts");
 const paths = require("../lib/projects/paths.ts");
-const { getProject } = require("../lib/supabase/repo/projects.ts");
+const { getProject } = require("../lib/db/repo/projects.ts");
 const { workspaceRepoTargets } = require("../lib/projects/repo-targets.ts");
 const { anchorRepo, sessionConfigRoot } = require("../lib/projects/repos.ts");
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { getProject } from "@/lib/supabase/repo/projects";
-import { deleteRepoFolder, setRepoFolderFiles } from "@/lib/supabase/repo/repo-folders";
+import { getProject } from "@/lib/db/repo/projects";
+import { deleteRepoFolder, setRepoFolderFiles } from "@/lib/db/repo/repo-folders";
 import { refreshFolders } from "@/lib/notes/watch";
 import { FilesBody } from "@/lib/notes/folders";
 type Ctx = { params: Promise<{ id: string; folderId: string }> };

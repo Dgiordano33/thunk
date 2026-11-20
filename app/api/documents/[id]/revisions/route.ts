@@ -3,7 +3,7 @@ import { pushUserMessage } from "@/lib/agent";
 import { handle, parseBody, requireLive } from "@/lib/api/http";
 import { RevisionBodySchema } from "@/lib/api/schemas";
 import { buildRevisionPayload } from "@/lib/revisions/build-payload";
-import { insertRevision, updateDocument } from "@/lib/supabase/repo/documents";
+import { insertRevision, updateDocument } from "@/lib/db/repo/documents";
 
 /** Build the <document_revision> payload and push it as the next user message. */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/documents/[id]/revisions">) => {

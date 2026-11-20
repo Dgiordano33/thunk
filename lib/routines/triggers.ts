@@ -1,9 +1,9 @@
 import "server-only";
 import type { RunFailedEvent } from "@/lib/projects/events";
-import { getTask } from "@/lib/supabase/repo/tasks";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getTask } from "@/lib/db/repo/tasks";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import type { TaskEvent } from "@/lib/tasks/types";
-import { listEnabledRoutines } from "@/lib/supabase/repo/routines";
+import { listEnabledRoutines } from "@/lib/db/repo/routines";
 import { fire } from "./runner";
 import { routinesState as state } from "./state";
 

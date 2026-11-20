@@ -3,8 +3,8 @@ import { z } from "zod";
 
 const schema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
-  SUPABASE_URL: z.url().optional().or(z.literal("").transform(() => undefined)),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  /** Postgres for projects and sessions; without it Thunk uses an embedded database (lib/db/config.ts). */
+  DATABASE_URL: z.string().optional(),
   DEFAULT_MODEL: z.string().min(1).default("claude-opus-5-5"),
   /** Codex CLI used for Codex models (`codex app-server`). */
   CODEX_BIN: z.string().min(1).optional(),
@@ -14,5 +14,3 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
-
-export const hasSupabase = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);

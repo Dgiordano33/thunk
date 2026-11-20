@@ -140,15 +140,15 @@ const stubs = {
   "@/lib/projects/git": { tryGit: async () => null },
   "@/lib/projects/runtime": { prepareWorkspace: (ctx) => fakes.prepareWorkspace(ctx) },
   "@/lib/prompts/context": { expandCommand: async (text) => text },
-  "@/lib/supabase/repo/messages": { loadEvents: async () => [], maxSeq: async () => 0 },
-  "@/lib/supabase/repo/projects": { getProject: async () => project },
-  "@/lib/supabase/repo/sessions": { upsertSession: async () => {}, getSessionRow: (id) => fakes.getSessionRow(id), listSessionRows: async () => [], deleteSessionRow: async () => {} },
+  "@/lib/db/repo/messages": { loadEvents: async () => [], maxSeq: async () => 0 },
+  "@/lib/db/repo/projects": { getProject: async () => project },
+  "@/lib/db/repo/sessions": { upsertSession: async () => {}, getSessionRow: (id) => fakes.getSessionRow(id), listSessionRows: async () => [], deleteSessionRow: async () => {} },
 };
 const load = Module._load;
 Module._load = function (request, parent, isMain) {
   return Object.hasOwn(stubs, request) ? stubs[request] : load.call(this, request, parent, isMain);
 };
-const repo = require("../lib/supabase/repo/routines.ts");
+const repo = require("../lib/db/repo/routines.ts");
 const { routinesState } = require("../lib/routines/state.ts");
 const runner = require("../lib/routines/runner.ts");
 const { ensureScheduler } = require("../lib/routines/scheduler.ts");
@@ -198,27 +198,20 @@ test("a failed run on a fresh worktree archives it and keeps the worktree", asyn
   assert.equal(routinesState.active.has(routine.id), false);
 });
 
-test("an open run stays active even when skip rows fill the recent window", async () => {
-  const row = (id, status, created_at) => ({ id, routine_id: "r", status, created_at, cost_usd: 0, error: status === "cancelled" ? "Skipped: busy" : null });
-  const skips = Array.from({ length: 50 }, (_, i) => row(`skip-${i}`, "cancelled", "2026-11-08T12:00:00Z"));
-  const open = row("open", "running", "2026-11-08T08:00:00Z");
-  const query = (table) => {
-    const q = {};
-    const chain = {
-      select: () => chain, order: () => chain, gte: () => chain, eq: () => chain,
-      limit: (n) => ((q.limit = n), chain),
-      in: (column, values) => ((q[column] = values), chain),
-      then: (resolve) => resolve({
-        error: null,
-        data: table === "routines" ? [{ id: "r", projects: { name: "Town" } }] : q.status ? [open] : q.limit ? skips : [],
-      }),
-    };
-    return chain;
-  };
-  fakes.db = { from: query };
+test("an open run stays active even when skip rows fill the recent window", async (t) => {
+  const { testDb } = require("./helpers/test-db.cjs");
+  const db = await testDb();
+  t.after(() => db.close());
+  const [project] = await db.query("insert into projects (name, data_key, slug) values ('Town', 'town', 'town') returning id");
+  const [routine] = await db.query("insert into routines (project_id, name, prompt, model) values ($1, 'Nightly', 'go', 'm') returning id", [project.id]);
+  await db.query("insert into routine_runs (routine_id, trigger_source, status, created_at) values ($1, 'cron', 'running', '2026-11-08T08:00:00Z')", [routine.id]);
+  await db.query("insert into routine_runs (routine_id, trigger_source, status, error, created_at) select $1, 'cron', 'cancelled', 'Skipped: busy', '2026-11-08T12:00:00Z' from generate_series(1, 50)", [routine.id]);
+  fakes.db = db;
   try {
     const [summary] = await repo.listRoutines();
-    assert.equal(summary.activeRun.id, "open");
+    assert.equal(summary.projectName, "Town");
+    assert.equal(summary.activeRun.status, "running");
+    assert.equal(summary.lastRun.status, "running");
   } finally {
     fakes.db = null;
   }

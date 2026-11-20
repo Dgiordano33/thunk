@@ -2,7 +2,7 @@ import { handle, parseBody } from "@/lib/api/http";
 import { RoutineInputSchema } from "@/lib/routines/schema";
 import { ensureScheduler } from "@/lib/routines/scheduler";
 import { createRoutine } from "@/lib/routines/service";
-import { listRoutines } from "@/lib/supabase/repo/routines";
+import { listRoutines } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

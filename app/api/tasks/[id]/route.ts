@@ -1,5 +1,5 @@
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { deleteTask, getTask } from "@/lib/supabase/repo/tasks";
+import { deleteTask, getTask } from "@/lib/db/repo/tasks";
 import { TaskPatchSchema } from "@/lib/tasks/schema";
 import { patchTask, taskId } from "@/lib/tasks/service";
 export const dynamic = "force-dynamic";

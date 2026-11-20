@@ -20,7 +20,7 @@ Module._resolveFilename = function (request, ...rest) {
 const projects = new Map();
 const mocks = {
   "@/lib/env": { env: { DEFAULT_MODEL: "test-model" } },
-  "@/lib/supabase/repo/projects": { getProject: async (id) => projects.get(id) ?? null, listProjects: async () => [...projects.values()] },
+  "@/lib/db/repo/projects": { getProject: async (id) => projects.get(id) ?? null, listProjects: async () => [...projects.values()] },
 };
 const load = Module._load;
 Module._load = function (request, ...rest) {

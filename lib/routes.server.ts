@@ -1,6 +1,6 @@
 import "server-only";
-import { getProject } from "@/lib/supabase/repo/projects";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { getProject } from "@/lib/db/repo/projects";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { projectPath, sessionPath, workspacePath } from "./routes";
 
 // Page URLs for code that only holds ids. A failed lookup falls back to the legacy id URL, which redirects.

@@ -24,14 +24,14 @@ Module._load = function (request, parent, isMain) {
   if (request === "@/lib/projects") return { getWorkspaceContext: async () => null };
   return load.call(this, request, parent, isMain);
 };
-const projects = require("../lib/supabase/repo/projects.ts");
-const repos = require("../lib/supabase/repo/project-repos.ts");
-const folders = require("../lib/supabase/repo/repo-folders.ts");
+const projects = require("../lib/db/repo/projects.ts");
+const repos = require("../lib/db/repo/project-repos.ts");
+const folders = require("../lib/db/repo/repo-folders.ts");
 const resolution = require("../lib/notes/resolve.ts");
 const discovery = require("../lib/notes/folders.ts");
 const store = require("../lib/notes/store.ts");
 const service = require("../lib/tasks/service.ts");
-const tasks = require("../lib/supabase/repo/tasks.ts");
+const tasks = require("../lib/db/repo/tasks.ts");
 const routes = require("../lib/notes/routes.ts");
 const registration = require("../app/api/projects/[id]/repo-folders/route.ts");
 const removal = require("../app/api/projects/[id]/repo-folders/[folderId]/route.ts");

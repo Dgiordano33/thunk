@@ -1,8 +1,8 @@
 import { handle } from "@/lib/api/http";
 import { projectNoteDirs, workspaceNoteDirs, repoDirsFor } from "@/lib/notes/resolve";
 import { countNotes } from "@/lib/notes/store";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 

@@ -1,6 +1,6 @@
 import { deleteSession, liveMeta } from "@/lib/agent";
 import { handle, HttpError } from "@/lib/api/http";
-import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { getSessionRow } from "@/lib/db/repo/sessions";
 
 export const dynamic = "force-dynamic";
 

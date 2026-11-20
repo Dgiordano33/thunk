@@ -3,7 +3,7 @@ import { cancelRun } from "@/lib/routines/runner";
 import { RoutinePatchSchema } from "@/lib/routines/schema";
 import { patchRoutine } from "@/lib/routines/service";
 import { routinesState } from "@/lib/routines/state";
-import { deleteRoutine, getRoutine, listRuns } from "@/lib/supabase/repo/routines";
+import { deleteRoutine, getRoutine, listRuns } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { Connectors, maskConnectors, readConnectors, saveConnectors } from "@/lib/projects/connectors";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 
 export const dynamic = "force-dynamic";
 async function key(id: string) {

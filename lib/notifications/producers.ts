@@ -1,6 +1,6 @@
 import "server-only";
 import { listLiveSessions, onSessionCreated, subscribe, type LiveSession } from "@/lib/agent";
-import { listNotifications } from "@/lib/supabase/repo/notifications";
+import { listNotifications } from "@/lib/db/repo/notifications";
 import { projectEvents } from "@/lib/projects/events";
 import { notify, resolveWhere } from "./service";
 import { sessionNotification } from "./session";

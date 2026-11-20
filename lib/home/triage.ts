@@ -6,7 +6,7 @@ import { projectConfigDir } from "@/lib/projects/paths";
 import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
 import { projectNoteDirs } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
-import { getProjectByKey } from "@/lib/supabase/repo/projects";
+import { getProjectByKey } from "@/lib/db/repo/projects";
 import { HOME_DATA_KEY } from "./constants";
 import { computeNextRun, cronError, isValidTimezone } from "@/lib/routines/cron";
 import { ensureHomeProject, openTopChief, readRoutingState, routeRequest } from "./service";

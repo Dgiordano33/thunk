@@ -19,6 +19,7 @@ other_dist() { [ "$(active_dist)" = .next-a ] && echo .next-b || echo .next-a; }
 built_sha() { cat "$1/$SHA_MARK" 2>/dev/null || true; }
 version() { echo "$(git rev-parse --abbrev-ref HEAD) @ $(git log -1 --format='%h %s')"; }
 http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$(port)/api/models" || true; }
+db_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "http://127.0.0.1:$(port)/api/projects" || true; }
 lock_of() { git rev-parse "$1:package-lock.json"; }
 clean_checkout() { git diff --quiet && git diff --cached --quiet; }
 on_branch() { git symbolic-ref -q HEAD >/dev/null; }
@@ -42,6 +43,7 @@ wait_up() {
 restart() {
   sudo systemctl restart thunk
   if wait_up; then say "Running $(version)"; else die "Thunk did not come up; check 'thunk logs'"; fi
+  [ "$(db_code)" = 200 ] || echo "warning: Thunk is up but its database is not answering; run 'thunk doctor'" >&2
 }
 
 # Prints why a restart would cut off work, or nothing when it is safe. A server that is down is safe.
@@ -197,7 +199,10 @@ cmd_doctor() {
     *) echo "Codex:    $(echo "$models" | python3 -c 'import json,sys; print(json.load(sys.stdin)["codexError"])' 2>/dev/null || echo error) (codex login --device-auth)" ;;
   esac
   gh auth status >/dev/null 2>&1 && echo "GitHub:   signed in" || echo "GitHub:   not signed in (gh auth login --web)"
-  grep -qE '^SUPABASE_URL=.' "$ENV_FILE" && echo "Data:     Supabase" || echo "Data:     in memory only; lost on restart"
+  if grep -qE '^DATABASE_URL=.' "$ENV_FILE"; then echo "Data:     Postgres (DATABASE_URL)"
+  elif grep -qE '^SUPABASE_URL=.' "$ENV_FILE"; then echo "Data:     NOT CONNECTED: SUPABASE_URL is no longer used; set DATABASE_URL (docs/server.md, 'Keep your data')"
+  else echo "Data:     embedded database in ~/.thunk/db"; fi
+  [ "$(db_code)" = 200 ] && echo "Database: ok" || echo "Database: failing; see 'thunk logs' for [thunk] database lines"
   tailscale serve status 2>/dev/null | grep -q "127.0.0.1:$(port)" && echo "Serve:    ok" || echo "Serve:    off (tailscale serve --bg --https=443 http://127.0.0.1:$(port))"
   echo "Disk:     $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
   echo "Memory:   $(free -h | awk '/^Mem:/ {print $7 " available of " $2}')"

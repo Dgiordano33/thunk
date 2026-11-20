@@ -86,15 +86,16 @@ PORT=4600
 THUNK_TRUSTED_HOSTS=<host>.<tailnet>   # filled in by setup.sh
 THUNK_TRUSTED_USER=you@example.com     # your Tailscale login, filled in by setup.sh
 CLAUDE_CODE_OAUTH_TOKEN=...            # from `claude setup-token`
-# SUPABASE_URL=...                     # see "Keep your data"
-# SUPABASE_SERVICE_ROLE_KEY=...
+# DATABASE_URL=postgres://...          # optional; see "Keep your data"
 ```
 
 ## Keep your data
 
-Without Supabase settings, projects, workspaces and sessions live in memory and are lost on every restart, including every `thunk update`. Files under `~/.thunk` (memory, notes, vault) stay on disk either way.
+Projects, workspaces, sessions, tasks and routines are kept in an embedded database in `~/.thunk/db`, beside the memory, notes and vault files, so they survive restarts and updates with no setup. Back up `~/.thunk` to keep everything; the Droplet's weekly backups already include it.
 
-To keep them, add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` with `thunk env`. Do not point the server and the Mac at the same Supabase project while both are running: both would run the scheduler and delivery polling.
+To use your own Postgres instead, such as Supabase, add `DATABASE_URL` with `thunk env`. For Supabase, copy the **Session pooler** string from **Connect** in the dashboard; Supabase's direct connection is IPv6-only unless you add its IPv4 add-on. Do not point the server and the Mac at the same database while both are running: both would run the scheduler and delivery polling.
+
+**Upgrading a server that used `SUPABASE_URL`.** Add `DATABASE_URL` with `thunk env` *before* deploying a version that needs it; older versions ignore it. A new version that finds only `SUPABASE_URL` keeps Thunk running but refuses to use any database, and `thunk doctor` shows `Data: NOT CONNECTED`. Remove the `SUPABASE_*` lines once `thunk doctor` shows `Database: ok`.
 
 ## Sign-ins
 

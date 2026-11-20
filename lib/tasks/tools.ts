@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { listTasks } from "@/lib/supabase/repo/tasks";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { listTasks } from "@/lib/db/repo/tasks";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { TaskInputSchema, TaskPatchSchema } from "./schema";
 import { createTask, patchTask } from "./service";
 import { OPEN_TASK_STATUSES, type Task } from "./types";

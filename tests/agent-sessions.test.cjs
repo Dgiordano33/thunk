@@ -19,8 +19,8 @@ function fixture() {
     "server-only": {},
     "@/lib/env": {},
     "@/lib/projects": {},
-    "@/lib/supabase/repo/messages": {},
-    "@/lib/supabase/repo/sessions": {
+    "@/lib/db/repo/messages": {},
+    "@/lib/db/repo/sessions": {
       listSessionRows: async () => { reads++; if (fail) throw new Error("offline"); return stored; },
     },
     "./persist": {},

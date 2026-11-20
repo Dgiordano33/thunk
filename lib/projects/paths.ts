@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * Thunk keeps project and workspace memory as files under one data dir so it
- * works the same with or without Supabase. Directories are keyed by stable
+ * works the same with or without a database. Directories are keyed by stable
  * names (the project's data key, workspace slug), not database ids.
  */
 export const DATA_DIR = (process.env.THUNK_DATA_DIR ?? path.join(os.homedir(), ".thunk")).replace(

@@ -141,8 +141,8 @@ test("watcher retries with backoff for existing subscribers and cancels on unsub
     if (id === "server-only") return {};
     if (id === "node:fs") return fakeFs;
     if (id === "@/lib/projects/paths") return { DATA_DIR: "/tmp/watch-test", projectSlug: (s) => s };
-    if (id === "@/lib/supabase/repo/projects") return { listProjects: async () => [] };
-    if (id === "@/lib/supabase/repo/workspaces") return { listAllWorkspaces: async () => [] };
+    if (id === "@/lib/db/repo/projects") return { listProjects: async () => [] };
+    if (id === "@/lib/db/repo/workspaces") return { listAllWorkspaces: async () => [] };
     if (id === "./resolve") return {};
     if (id === "./folders") return { reconcileDeclaredFolders: async (p) => p };
     if (id === "./types") return { MEMORY_NOTE_ID: "memory" };

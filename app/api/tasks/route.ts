@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { listTasks } from "@/lib/supabase/repo/tasks";
+import { listTasks } from "@/lib/db/repo/tasks";
 import { TaskInputSchema } from "@/lib/tasks/schema";
 import { createTask } from "@/lib/tasks/service";
 import { TASK_STATUSES } from "@/lib/tasks/types";

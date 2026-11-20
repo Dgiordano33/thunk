@@ -4,11 +4,11 @@ import { handle, HttpError } from "@/lib/api/http";
 import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
 import { scopeKey } from "@/lib/notes/types";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
-import { listDocumentsForSessions } from "@/lib/supabase/repo/documents";
-import { db } from "@/lib/supabase/server";
-import { listTasks } from "@/lib/supabase/repo/tasks";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listAllWorkspaces } from "@/lib/db/repo/workspaces";
+import { listDocumentsForSessions } from "@/lib/db/repo/documents";
+import { db } from "@/lib/db/server";
+import { listTasks } from "@/lib/db/repo/tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -22,20 +22,23 @@ export const GET = handle(async (req: Request) => {
   const live = listLiveSessions().filter(s => s.meta.origin?.kind !== "board");
   if (client) {
     const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+    type Origin = { kind?: string } | null;
     const [sessions, documents, messages] = await Promise.all([
-      client.from("sessions").select("id, title, workspace_id, cwd, origin").ilike("title", pattern).order("updated_at", { ascending: false }).limit(30),
-      client.from("documents").select("id, session_id, current_markdown, kind, sessions(workspace_id, origin)").ilike("current_markdown", pattern).order("created_at", { ascending: false }).limit(30),
-      client.from("messages").select("id, seq, session_id, markdown, sessions(workspace_id, origin)").eq("type", "user_message").ilike("markdown", pattern).order("created_at", { ascending: false }).limit(30),
+      client.query<{ id: string; title: string | null; workspace_id: string; cwd: string; origin: Origin }>(
+        "select id, title, workspace_id, cwd, origin from sessions where title ilike $1 order by updated_at desc limit 30", [pattern]),
+      client.query<{ id: string; session_id: string; current_markdown: string; kind: string; workspace_id: string; origin: Origin }>(
+        "select d.id, d.session_id, d.current_markdown, d.kind, s.workspace_id, s.origin from documents d join sessions s on s.id = d.session_id where d.current_markdown ilike $1 order by d.created_at desc limit 30", [pattern]),
+      client.query<{ id: string; seq: number; session_id: string; markdown: string | null; workspace_id: string; origin: Origin }>(
+        "select m.id, m.seq, m.session_id, m.markdown, s.workspace_id, s.origin from messages m join sessions s on s.id = m.session_id where m.type = 'user_message' and m.markdown ilike $1 order by m.created_at desc limit 30", [pattern]),
     ]);
-    for (const response of [sessions, documents, messages]) if (response.error) throw response.error;
-    for (const s of (sessions.data ?? []).filter(s => (s.origin as { kind?: string } | null)?.kind !== "board")) results.set(s.id, { id: s.id, label: s.title || "Untitled session", detail: s.cwd, href: `/w/${s.workspace_id}/s/${s.id}`, kind: "Session" });
-    for (const d of documents.data ?? []) {
-      if (!d.sessions || (d.sessions.origin as { kind?: string } | null)?.kind === "board") continue;
-      results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.current_markdown, term), href: `/w/${d.sessions.workspace_id}/s/${d.session_id}#doc-${d.id}`, kind: "Document" });
+    for (const s of sessions.filter(s => s.origin?.kind !== "board")) results.set(s.id, { id: s.id, label: s.title || "Untitled session", detail: s.cwd, href: `/w/${s.workspace_id}/s/${s.id}`, kind: "Session" });
+    for (const d of documents) {
+      if (d.origin?.kind === "board") continue;
+      results.set(d.id, { id: d.id, label: `${d.kind} document`, detail: excerpt(d.current_markdown, term), href: `/w/${d.workspace_id}/s/${d.session_id}#doc-${d.id}`, kind: "Document" });
     }
-    for (const m of messages.data ?? []) {
-      if (!m.sessions || (m.sessions.origin as { kind?: string } | null)?.kind === "board") continue;
-      results.set(`${m.session_id}:${m.seq}`, { id: `${m.session_id}:${m.seq}`, label: "Session prompt", detail: excerpt(m.markdown ?? "", term), href: `/w/${m.sessions.workspace_id}/s/${m.session_id}`, kind: "Prompt" });
+    for (const m of messages) {
+      if (m.origin?.kind === "board") continue;
+      results.set(`${m.session_id}:${m.seq}`, { id: `${m.session_id}:${m.seq}`, label: "Session prompt", detail: excerpt(m.markdown ?? "", term), href: `/w/${m.workspace_id}/s/${m.session_id}`, kind: "Prompt" });
     }
   }
   for (const s of live) {

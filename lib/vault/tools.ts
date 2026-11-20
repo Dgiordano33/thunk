@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 import { listItems, readItem } from "./store";
 import { vaultDirOf } from "./dir";
 import { IDEA_LABELS, KIND_LABELS, type VaultItem } from "./types";

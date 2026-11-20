@@ -1,7 +1,7 @@
 import "server-only";
 import { HttpError } from "@/lib/api/http";
 import type { Project } from "@/lib/projects/types";
-import { getProject, listProjects } from "@/lib/supabase/repo/projects";
+import { getProject, listProjects } from "@/lib/db/repo/projects";
 import { vaultDirOf } from "./dir";
 import { enqueue } from "./extract";
 import { listItems, readItem, updateItem, type VaultDir } from "./store";

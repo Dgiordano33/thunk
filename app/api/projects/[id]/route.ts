@@ -3,8 +3,8 @@ import { allSessions, closeSession, deleteTranscripts, listLiveSessions, listSes
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { forgetWorkspaceRuntime, stopWorkspaceProcesses } from "@/lib/projects/runtime";
 import { listExternalSessions } from "@/lib/projects";
-import { deleteProject, getProject, updateProject } from "@/lib/supabase/repo/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { deleteProject, getProject, updateProject } from "@/lib/db/repo/projects";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 

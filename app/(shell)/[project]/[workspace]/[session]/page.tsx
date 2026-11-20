@@ -3,9 +3,9 @@ import { SessionView } from "@/components/session/session-view";
 import { liveMeta } from "@/lib/agent";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import type { PersistedDocument } from "@/lib/documents/types";
-import { loadDocuments } from "@/lib/supabase/repo/documents";
-import { loadEvents } from "@/lib/supabase/repo/messages";
-import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { loadDocuments } from "@/lib/db/repo/documents";
+import { loadEvents } from "@/lib/db/repo/messages";
+import { getSessionRow } from "@/lib/db/repo/sessions";
 import { getWorkspaceContextBySlugs } from "@/lib/projects";
 import { hrefForSession } from "@/lib/routes.server";
 

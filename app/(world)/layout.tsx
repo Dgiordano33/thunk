@@ -4,8 +4,8 @@ import { pathTree } from "@/components/layout/sidebar-tree-paths";
 import { WorldHud } from "@/components/world/world-hud";
 import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
 import { countNotes } from "@/lib/notes/store";
-import { countEnabledRoutines } from "@/lib/supabase/repo/routines";
-import { countOpen } from "@/lib/supabase/repo/notifications";
+import { countEnabledRoutines } from "@/lib/db/repo/routines";
+import { countOpen } from "@/lib/db/repo/notifications";
 import { countVaultItems } from "@/lib/vault/service";
 
 export const dynamic = "force-dynamic";

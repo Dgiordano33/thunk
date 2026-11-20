@@ -2,8 +2,8 @@ import { handle } from "@/lib/api/http";
 import { projectNoteDirs, workspaceNoteDirs, repoNoteDirs } from "@/lib/notes/resolve";
 import { listNotes, metaOf } from "@/lib/notes/store";
 import type { NoteFolder } from "@/lib/notes/types";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 import { ensureHomeProject } from "@/lib/home/service";
 
 export const dynamic = "force-dynamic";

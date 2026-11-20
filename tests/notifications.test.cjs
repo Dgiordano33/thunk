@@ -15,7 +15,7 @@ Module._resolveFilename = function (request, ...rest) {
   if (request.startsWith("@/")) request = path.join(__dirname, "..", `${request.slice(2)}.ts`);
   return resolve.call(this, request, ...rest);
 };
-const repo = require("../lib/supabase/repo/notifications.ts");
+const repo = require("../lib/db/repo/notifications.ts");
 const service = require("../lib/notifications/service.ts");
 const { subscribeNotifications } = require("../lib/notifications/events.ts");
 const { sessionNotification } = require("../lib/notifications/session.ts");
@@ -197,27 +197,27 @@ test("delivery batch errors propagate and reconciliation can be retried", async 
   assert.equal(service.resolveWhere, original);
 });
 
-test("database reconciliation sends one scoped PATCH with all subjects and surfaces failures", async (t) => {
-  const { createClient } = require("@supabase/supabase-js");
-  const requests = [];
-  let fail = false;
-  const client = createClient("https://database.example", "test-key", {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: async (url, init) => {
-      requests.push({ url: new URL(url), init });
-      return new Response(JSON.stringify(fail ? { message: "offline" } : []), {
-        status: fail ? 400 : 200, headers: { "content-type": "application/json" },
-      });
-    } },
-  });
-  t.mock.method(require("../lib/supabase/server.ts"), "db", () => client);
-  assert.deepEqual(await repo.resolveWhere({ projectId: "p", subjectKeys: ["pr:1:ci", "pr:2:ci"] }), []);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].init.method, "PATCH");
-  assert.equal(requests[0].url.searchParams.get("project_id"), "eq.p");
-  assert.equal(requests[0].url.searchParams.get("status"), "eq.open");
-  assert.equal(requests[0].url.searchParams.get("subject_key"), 'in.(pr:1:ci,pr:2:ci)');
-  assert.equal(requests[0].url.searchParams.get("select"), "*");
-  fail = true;
-  await assert.rejects(repo.resolveWhere({ projectId: "p", subjectKeys: ["pr:1:ci"] }), { message: "offline" });
+test("database reconciliation resolves exactly the scoped subjects in one statement and surfaces failures", async (t) => {
+  const { testDb } = require("./helpers/test-db.cjs");
+  const db = await testDb();
+  t.after(() => db.close());
+  const [p] = await db.query("insert into projects (name, data_key, slug) values ('P', 'p', 'p') returning id");
+  const [q] = await db.query("insert into projects (name, data_key, slug) values ('Q', 'q', 'q') returning id");
+  const statements = [];
+  const client = { kind: "pglite", query: (sql, params) => { statements.push(sql); return db.query(sql, params); } };
+  t.mock.method(require("../lib/db/server.ts"), "db", () => client);
+  for (const key of ["pr:1:ci", "pr:2:ci", "pr:3:ci"]) await repo.openNotification({ ...base, projectId: p.id, subjectKey: key, sessionId: undefined, actions: [{ label: "Open", href: "/x" }] });
+  await repo.openNotification({ ...base, projectId: q.id, subjectKey: "q:pr:1:ci", sessionId: undefined });
+  statements.length = 0;
+  const resolved = await repo.resolveWhere({ projectId: p.id, subjectKeys: ["pr:1:ci", "pr:2:ci"] });
+  assert.equal(statements.length, 1);
+  assert.match(statements[0], /^update "notifications"/);
+  assert.deepEqual(resolved.map((n) => n.subjectKey).sort(), ["pr:1:ci", "pr:2:ci"]);
+  assert.ok(resolved.every((n) => n.status === "resolved" && n.resolvedAt));
+  assert.deepEqual(resolved[0].actions, [{ label: "Open", href: "/x" }]);
+  const open = await repo.listNotifications();
+  assert.deepEqual(open.map((n) => n.subjectKey).sort(), ["pr:3:ci", "q:pr:1:ci"]);
+  assert.deepEqual(await repo.resolveWhere({ projectId: p.id, subjectKeys: ["pr:1:ci"] }), []);
+  t.mock.method(require("../lib/db/server.ts"), "db", () => ({ kind: "pglite", query: async () => { throw new Error("offline"); } }));
+  await assert.rejects(repo.resolveWhere({ projectId: p.id, subjectKeys: ["pr:1:ci"] }), { message: "offline" });
 });

@@ -1,5 +1,5 @@
 import { projectSectionPath } from "@/lib/routes";
-import { getRoutine } from "@/lib/supabase/repo/routines";
+import { getRoutine } from "@/lib/db/repo/routines";
 import type { RoutineRun } from "@/lib/routines/types";
 import { notify, resolveWhere } from "./service";
 import { hrefForProject, hrefForSession } from "@/lib/routes.server";

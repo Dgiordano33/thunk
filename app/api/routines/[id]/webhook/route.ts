@@ -3,7 +3,7 @@ import { handle, HttpError } from "@/lib/api/http";
 import { fire } from "@/lib/routines/runner";
 import { ensureScheduler } from "@/lib/routines/scheduler";
 import { routinesState } from "@/lib/routines/state";
-import { getRoutine } from "@/lib/supabase/repo/routines";
+import { getRoutine } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

@@ -1,5 +1,5 @@
 import { handle } from "@/lib/api/http";
-import { listRuns } from "@/lib/supabase/repo/routines";
+import { listRuns } from "@/lib/db/repo/routines";
 
 export const dynamic = "force-dynamic";
 

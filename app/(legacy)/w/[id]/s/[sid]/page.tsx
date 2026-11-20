@@ -3,7 +3,7 @@ import { queryString } from "@/lib/legacy-redirect";
 import { liveMeta } from "@/lib/agent";
 import { getWorkspaceContext } from "@/lib/projects";
 import { sessionPath } from "@/lib/routes";
-import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { getSessionRow } from "@/lib/db/repo/sessions";
 
 export const dynamic = "force-dynamic";
 

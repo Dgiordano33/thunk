@@ -5,8 +5,8 @@ import type { SessionMeta } from "@/lib/agent/types";
 import type { Project } from "@/lib/projects/types";
 import { projectConfigDir } from "@/lib/projects/paths";
 import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
-import { insertEvents } from "@/lib/supabase/repo/messages";
-import { getSessionRow } from "@/lib/supabase/repo/sessions";
+import { insertEvents } from "@/lib/db/repo/messages";
+import { getSessionRow } from "@/lib/db/repo/sessions";
 
 type Report = { seq: number; createdAt: string; content: string; chiefSessionId: string | null; delivered: boolean };
 const g = globalThis as typeof globalThis & { __thunkReportBatches?: Map<string, { reports: Map<string, { file: string; report: Report }>; timer: ReturnType<typeof setTimeout> }> };

@@ -1,9 +1,9 @@
 import "server-only";
 import { cache } from "react";
-import { workerWorkspaceIds } from "@/lib/supabase/repo/sessions";
+import { workerWorkspaceIds } from "@/lib/db/repo/sessions";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listAllWorkspaces } from "@/lib/supabase/repo/workspaces";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listAllWorkspaces } from "@/lib/db/repo/workspaces";
 
 /** Every project with its active workspaces, for the sidebar, ⌘K search and settings. Includes persisted worker ownership. */
 export const loadSidebarProjects = cache(async (): Promise<SidebarProject[]> => {

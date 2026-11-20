@@ -1,8 +1,8 @@
 import { RoutinesOverview } from "@/components/routines/routines-overview";
 import { workspaceLabel } from "@/components/session/labels";
-import { listProjects } from "@/lib/supabase/repo/projects";
-import { listRoutines } from "@/lib/supabase/repo/routines";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
+import { listProjects } from "@/lib/db/repo/projects";
+import { listRoutines } from "@/lib/db/repo/routines";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
 
 export const metadata = { title: "Routines · Thunk" };
 export const dynamic = "force-dynamic";

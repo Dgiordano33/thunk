@@ -1,7 +1,7 @@
 import { handle, parseBody } from "@/lib/api/http";
 import { createProject } from "@/lib/projects";
 import { CreateProjectBody } from "@/lib/projects/repo-spec";
-import { listProjects } from "@/lib/supabase/repo/projects";
+import { listProjects } from "@/lib/db/repo/projects";
 
 export const dynamic = "force-dynamic";
 

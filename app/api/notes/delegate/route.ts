@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, parseBody, HttpError } from "@/lib/api/http";
-import { getWorkspace } from "@/lib/supabase/repo/workspaces";
-import { getRepoFolder } from "@/lib/supabase/repo/repo-folders";
+import { getWorkspace } from "@/lib/db/repo/workspaces";
+import { getRepoFolder } from "@/lib/db/repo/repo-folders";
 import { openChief } from "@/lib/workers/service";
 import { noteBrief } from "@/lib/workers/notes";
 import { pushUserMessage } from "@/lib/agent";
@@ -12,7 +12,7 @@ export const POST = handle(async (req: Request) => {
   const { scope, noteId } = await parseBody(req, Body);
   const projectId = scope.kind === "projects" ? scope.id : scope.kind === "workspaces" ? (await getWorkspace(scope.id))?.projectId : (await getRepoFolder(scope.id))?.projectId;
   if (!projectId) throw new HttpError(404, "Note scope not found");
-  const { getProject } = await import("@/lib/supabase/repo/projects");
+  const { getProject } = await import("@/lib/db/repo/projects");
   const project = await getProject(projectId);
   if (!project) throw new HttpError(404, "Project not found");
   if (isHomeProject(project)) {

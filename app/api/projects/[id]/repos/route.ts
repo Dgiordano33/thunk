@@ -2,7 +2,7 @@ import { suggestRepoFolders } from "@/lib/notes/folders";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
 import { addRepoFromSpec } from "@/lib/projects";
 import { RepoSpec } from "@/lib/projects/repo-spec";
-import { getProject } from "@/lib/supabase/repo/projects";
+import { getProject } from "@/lib/db/repo/projects";
 
 export const dynamic = "force-dynamic";
 

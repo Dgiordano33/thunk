@@ -1,23 +1,26 @@
 import "server-only";
-import { hasSupabase } from "@/lib/env";
-import { insertDocument, updateDocument } from "@/lib/supabase/repo/documents";
-import { insertEvents } from "@/lib/supabase/repo/messages";
-import { addSessionCost, updateSession, upsertSession } from "@/lib/supabase/repo/sessions";
-import { touchWorkspace } from "@/lib/supabase/repo/workspaces";
-import { db } from "@/lib/supabase/server";
-import type { Json } from "@/lib/supabase/types";
+import { insertDocument, updateDocument } from "@/lib/db/repo/documents";
+import { insertEvents } from "@/lib/db/repo/messages";
+import { addSessionCost, updateSession, upsertSession } from "@/lib/db/repo/sessions";
+import { touchWorkspace } from "@/lib/db/repo/workspaces";
+import { db, hasDatabase } from "@/lib/db/server";
+import { insertSql, run, updateSql } from "@/lib/db/sql";
+import type { Json } from "@/lib/db/types";
 import { onSessionCreated, subscribe, type LiveSession } from "./session-registry";
 import type { HarnessEvent } from "./types";
 
 const FLUSH_MS = 300;
 
+/** Tool-call rows are a side record; a failed write shouldn't stop the rest of the batch. */
+const toolCalls = (write: Promise<unknown>) => write.catch((err) => console.error("[thunk] persist tool call failed", err));
+
 /**
- * Mirrors a live session's event stream into Supabase. Writes are batched and
+ * Mirrors a live session's event stream into the database. Writes are batched and
  * serialized per session; streaming deltas merge into one row per text run so
  * the messages table stays small but still replays through the client reducer.
  */
 function persistSession(live: LiveSession) {
-  if (!hasSupabase) return trackMemoryDocuments(live);
+  if (!hasDatabase()) return trackMemoryDocuments(live);
 
   let queue: HarnessEvent[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -60,22 +63,16 @@ function persistSession(live: LiveSession) {
           });
           break;
         case "tool_use":
-          await client.from("tool_calls").upsert(
-            {
-              session_id: live.id,
-              tool_use_id: e.toolUseId,
-              name: e.name,
-              input: e.input as Json,
-              status: "running",
-            },
-            { onConflict: "tool_use_id" },
-          );
+          await toolCalls(run(client, insertSql("tool_calls", {
+            session_id: live.id,
+            tool_use_id: e.toolUseId,
+            name: e.name,
+            input: e.input as Json,
+            status: "running",
+          }, { onConflict: "tool_use_id" })));
           break;
         case "tool_result":
-          await client
-            .from("tool_calls")
-            .update({ output: e.content, is_error: e.isError, status: e.isError ? "error" : "done" })
-            .eq("tool_use_id", e.toolUseId);
+          await toolCalls(run(client, updateSql("tool_calls", { output: e.content, is_error: e.isError, status: e.isError ? "error" : "done" }, "tool_use_id = $1", [e.toolUseId])!));
           break;
         case "permission_request":
           permissionToolUse.set(e.requestId, e.toolUseId);
@@ -83,7 +80,7 @@ function persistSession(live: LiveSession) {
         case "permission_resolved": {
           const toolUseId = permissionToolUse.get(e.requestId);
           if (toolUseId)
-            await client.from("tool_calls").update({ approval: e.decision }).eq("tool_use_id", toolUseId);
+            await toolCalls(run(client, updateSql("tool_calls", { approval: e.decision }, "tool_use_id = $1", [toolUseId])!));
           break;
         }
         case "turn_complete":

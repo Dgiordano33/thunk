@@ -1,6 +1,6 @@
 import { handle, HttpError } from "@/lib/api/http";
 import { cancelRun } from "@/lib/routines/runner";
-import { getRun } from "@/lib/supabase/repo/routines";
+import { getRun } from "@/lib/db/repo/routines";
 import { OPEN_RUN_STATUSES } from "@/lib/routines/types";
 
 export const dynamic = "force-dynamic";
