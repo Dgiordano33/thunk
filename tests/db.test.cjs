@@ -141,6 +141,42 @@ test("an existing database without history needs THUNK_DB_BASELINE", async (t) =
   assert.equal((await db.query("select count(*)::int as n from thunk_migrations"))[0].n, MIGRATIONS.length);
 });
 
+test("db:pull copies every table exactly, leaves the source alone, and turns routines off", async (t) => {
+  const { pullDatabase } = await import("../scripts/db-pull-core.mjs");
+  const wrap = (db) => ({ query: db.query, exec: db.exec });
+  const source = await testDb();
+  const target = await testDb();
+  t.after(() => Promise.all([source.close(), target.close()]));
+  const [p] = await source.query("insert into projects (name, data_key, slug, updated_at) values ('Prod', 'prod', 'prod', '2026-01-02T03:04:05.123456Z') returning id");
+  const [w] = await source.query("insert into workspaces (project_id, name, slug, cwd) values ($1, 'main', 'main', '/src') returning id", [p.id]);
+  const sessionId = crypto.randomUUID();
+  await source.query("insert into sessions (id, workspace_id, cwd, model, permission_mode, total_cost_usd, origin) values ($1, $2, '/src', 'm', 'default', 1.234567, $3)", [sessionId, w.id, JSON.stringify({ kind: "worker", tags: ["a"] })]);
+  const parent = crypto.randomUUID(), child = crypto.randomUUID();
+  // The child is inserted first, so a naive in-order copy would break its foreign key.
+  await source.query("insert into documents (id, session_id, original_markdown, current_markdown) values ($1, $2, 'p', 'p')", [parent, sessionId]);
+  await source.query("insert into documents (id, session_id, parent_document_id, original_markdown, current_markdown) values ($1, $2, $3, 'c', 'c')", [child, sessionId, parent]);
+  await source.query("insert into routines (project_id, name, prompt, model, enabled, events) values ($1, 'Nightly', 'go', 'm', true, '{pr_opened}')", [p.id]);
+  await target.query("insert into projects (name, data_key, slug) values ('Stale', 'stale', 'stale')");
+  const before = await source.query("select to_jsonb(t) as row from projects t");
+
+  const counts = await pullDatabase({ source: wrap(source), target: wrap(target), batch: 1 });
+  assert.equal(counts.projects, 1);
+  assert.equal(counts.documents, 2);
+  const [project] = await target.query("select name, updated_at from projects");
+  assert.deepEqual([project.name, project.updated_at], ["Prod", "2026-01-02T03:04:05.123456+00:00"]);
+  const [session] = await target.query("select total_cost_usd, origin from sessions");
+  assert.deepEqual([session.total_cost_usd, session.origin], [1.234567, { kind: "worker", tags: ["a"] }]);
+  const [routine] = await target.query("select enabled, events from routines");
+  assert.deepEqual([routine.enabled, routine.events], [false, ["pr_opened"]]);
+  assert.deepEqual(await source.query("select to_jsonb(t) as row from projects t"), before);
+  assert.equal((await source.query("select enabled from routines"))[0].enabled, true);
+  // Triggers and foreign keys work again on the copy afterwards.
+  await assert.rejects(target.query("insert into workspaces (project_id, name, slug, cwd) values ($1, 'x', 'x', '/x')", [crypto.randomUUID()]), /foreign key/);
+
+  await source.query("insert into thunk_migrations (name) values ('29990101000000_9999_future')");
+  await assert.rejects(pullDatabase({ source: wrap(source), target: wrap(target) }), /9999_future\. Pull the latest main first/);
+});
+
 test("the embedded database persists across restarts and is held by one process at a time", async (t) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "thunk-db-"));
   t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));

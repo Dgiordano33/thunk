@@ -43,7 +43,7 @@ Project memory is also Claude’s auto-memory, so what agents learn on their own
 **Current facts, not commitments**
 
 - The API accepts loopback requests only, and agents, terminals, and memory run on the user's machine. Whether Thunk stays local-only is undecided.
-- Supabase is optional today, and without it most state lives in memory. Whether memory-only operation remains a supported mode is undecided.
+- State lives in Postgres: an embedded database in `~/.thunk/db` by default, or any Postgres through `DATABASE_URL`. Memory-only mode (`THUNK_DATABASE=memory`) remains for tests.
 - Terminals and agent processes need a long-lived local Node server with native `node-pty`, so this version cannot run serverless.
 - Routines fire only while the Thunk server is running.
 
