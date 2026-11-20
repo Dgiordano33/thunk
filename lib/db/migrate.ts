@@ -19,9 +19,10 @@ const shortName = (name: string) => name.replace(/^\d+_/, "");
 
 /**
  * Applies migrations that haven't run yet, each in its own transaction, recorded in
- * `thunk_migrations`. Databases set up before this runner existed are recognised once:
- * migrations listed in Supabase's history (matched by name) or up to `baseline` are
- * recorded without running.
+ * `thunk_migrations`. Migrations already applied through Supabase (dashboard, CLI or MCP)
+ * are matched by name in Supabase's history on every start and recorded without running.
+ * A database with Thunk tables but no history at all needs `baseline`: the last migration
+ * it has, which is recorded along with everything before it.
  */
 export async function migrate(exec: Exec, query: Query, migrations: Migration[], opts: { baseline?: string; log?: (message: string) => void } = {}) {
   const log = opts.log ?? (() => {});
@@ -41,28 +42,30 @@ end $$;
 create table if not exists public.thunk_migrations (name text primary key, applied_at timestamptz not null default now());`);
 
   const applied = new Set((await query<{ name: string }>("select name from public.thunk_migrations")).map((row) => row.name));
-  if (!applied.size) {
+  const [{ tracked }] = await query<{ tracked: boolean }>("select to_regclass('supabase_migrations.schema_migrations') is not null as tracked");
+  const history = tracked
+    ? new Set((await query<{ name: string | null }>("select name from supabase_migrations.schema_migrations")).map((row) => row.name))
+    : new Set<string | null>();
+  const known = new Set(migrations.filter((m) => !applied.has(m.name) && history.has(shortName(m.name))).map((m) => m.name));
+
+  if (!applied.size && !known.size) {
     const [{ existing }] = await query<{ existing: boolean }>("select to_regclass('public.projects') is not null as existing");
     if (existing) {
-      const known = new Set<string>();
-      if (opts.baseline) {
-        if (!migrations.some((m) => m.name === opts.baseline)) throw new Error(`THUNK_DB_BASELINE: no migration named ${opts.baseline}`);
-        for (const m of migrations) { known.add(m.name); if (m.name === opts.baseline) break; }
-      } else {
-        const [{ tracked }] = await query<{ tracked: boolean }>("select to_regclass('supabase_migrations.schema_migrations') is not null as tracked");
-        const history = tracked ? new Set((await query<{ name: string | null }>("select name from supabase_migrations.schema_migrations")).map((row) => row.name)) : new Set();
-        for (const m of migrations) if (history.has(shortName(m.name))) known.add(m.name);
-        if (!known.size) {
-          throw new Error(
-            "This database already has Thunk tables but no migration history. Set THUNK_DB_BASELINE to the last migration " +
-            "you applied (for example 20261111000000_0013_delegation_plans) so Thunk knows where to continue.",
-          );
-        }
+      if (!opts.baseline) {
+        throw new Error(
+          "This database already has Thunk tables but no migration history. Set THUNK_DB_BASELINE to the last migration " +
+          "you applied (for example 20261111000000_0013_delegation_plans) so Thunk knows where to continue.",
+        );
       }
-      await query(`insert into public.thunk_migrations (name) select unnest($1::text[]) on conflict do nothing`, [[...known]]);
-      for (const name of known) applied.add(name);
-      log(`recorded ${known.size} migrations that were applied before Thunk tracked them`);
+      if (!migrations.some((m) => m.name === opts.baseline)) throw new Error(`THUNK_DB_BASELINE: no migration named ${opts.baseline}`);
+      for (const m of migrations) { known.add(m.name); if (m.name === opts.baseline) break; }
     }
+  }
+
+  if (known.size) {
+    await query(`insert into public.thunk_migrations (name) select unnest($1::text[]) on conflict do nothing`, [[...known]]);
+    for (const name of known) applied.add(name);
+    log(`recorded ${known.size} migration${known.size === 1 ? "" : "s"} applied outside Thunk: ${[...known].map(shortName).join(", ")}`);
   }
 
   for (const m of migrations) {

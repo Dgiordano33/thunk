@@ -24,7 +24,7 @@ npm run dev
 
 ## Database
 
-Thunk creates and updates its tables itself. On startup it applies any migrations in `db/migrations/` that haven't run yet, each in its own transaction, and records them in a `thunk_migrations` table. There is nothing to apply by hand.
+Thunk creates and updates its tables itself. On startup it applies any migrations in `db/migrations/` that haven't run yet, each in its own transaction, and records them in a `thunk_migrations` table. There is nothing to apply by hand. If you do apply one by hand through Supabase (dashboard, CLI or MCP), name it like the file without its timestamp, for example `0014_something`; Thunk finds it in Supabase's migration history on its next start and records it instead of running it again.
 
 | Setting | What it does |
 |---|---|
