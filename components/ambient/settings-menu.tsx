@@ -1,4 +1,8 @@
 "use client";
+import { useDesktopAlerts } from "@/lib/client/use-desktop-alerts";
+import { useRouter } from "next/navigation";
+import { useOnboarding } from "@/components/onboarding/provider";
+import { AgentStatus } from "@/components/onboarding/agent-status";
 
 import { BellIcon, ChartNoAxesColumnIcon, OrbitIcon, SettingsIcon, SunMoonIcon } from "lucide-react";
 import { useLook } from "@/components/look-context";
@@ -26,21 +30,18 @@ const usd = (cost: number) => new Intl.NumberFormat("en-US", { style: "currency"
 /** Sidebar footer: app-wide settings. */
 export function SettingsMenu({ projects, className }: { projects: SidebarProject[]; className?: string }) {
   const paths = usePaths();
+  const router = useRouter();
+  const onboarding = useOnboarding();
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const muted = useNotifications((s) => s.muted);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
   const { look, setLook } = useLook();
-  const notifications = useAmbient((s) => s.notifications);
+  const { notifications, notificationMessage, setNotificationMessage, toggleNotifications } = useDesktopAlerts();
   const usageOpen = useAmbient((s) => s.usageOpen);
   const setUsageOpen = (open: boolean) => useAmbient.setState({ usageOpen: open });
   const [usage, setUsage] = useState<(UsageSummary & { persistent: boolean }) | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
-  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    try { useAmbient.setState({ notifications: localStorage.getItem("thunk.notifications") === "on" }); } catch { /* Storage is optional. */ }
-  }, []);
-
   useEffect(() => {
     if (!usageOpen) return;
     const controller = new AbortController();
@@ -58,21 +59,6 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
     const timer = setInterval(load, 30000);
     return () => { controller.abort(); clearInterval(timer); };
   }, [usageOpen]);
-
-  const setNotifications = (on: boolean) => {
-    useAmbient.setState({ notifications: on });
-    try { localStorage.setItem("thunk.notifications", on ? "on" : "off"); } catch { /* Storage is optional. */ }
-    setNotificationMessage(null);
-  };
-  const toggleNotifications = async () => {
-    if (notifications) { setNotifications(false); return; }
-    if (!("Notification" in window)) { setNotificationMessage("Desktop notifications are unavailable in this browser."); return; }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") { setNotificationMessage("Allow notifications in your browser settings to enable alerts."); return; }
-      setNotifications(true);
-    } catch { setNotificationMessage("Could not enable desktop notifications."); }
-  };
 
   return (
     <div className={cn("border-t px-2 py-2", className)}>
@@ -110,10 +96,15 @@ export function SettingsMenu({ projects, className }: { projects: SidebarProject
           <Button variant="ghost" size="sm" className="w-full justify-start text-xs" aria-pressed={notifications} onClick={toggleNotifications}>
             <BellIcon /> Desktop alerts <span className="text-muted-foreground ml-auto">{notifications ? "On" : "Off"}</span>
           </Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => setAgentsOpen(true)}>Agents</Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => { onboarding.replay("intro"); router.push("/projects"); }}>Show intro</Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => { onboarding.replay("map-legend"); router.push("/projects"); }}>Legend</Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => { onboarding.resetAll(); router.push("/projects"); }}>Reset hints</Button>
           <details className="px-2 py-1 text-xs"><summary className="cursor-pointer">Alert kinds</summary><div className="mt-2 max-h-64 space-y-2 overflow-y-auto">{NOTIFICATION_KINDS.map((kind) => <Label key={kind} className="text-xs font-normal"><Checkbox checked={!muted.includes(kind)} onCheckedChange={(on) => setMuted(on === true ? muted.filter((k) => k !== kind) : [...muted, kind])} />{NOTIFICATION_LABELS[kind]}</Label>)}</div></details>
           {notificationMessage && <p role="status" className="text-muted-foreground px-2 py-1 text-xs">{notificationMessage}</p>}
         </PopoverContent>
       </Popover>
+      <Dialog open={agentsOpen} onOpenChange={setAgentsOpen}><DialogContent><DialogTitle>Agents</DialogTitle><DialogDescription>Thunk uses agents installed on this machine.</DialogDescription><AgentStatus /></DialogContent></Dialog>
       <Dialog open={usageOpen} onOpenChange={setUsageOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogTitle>Usage</DialogTitle>

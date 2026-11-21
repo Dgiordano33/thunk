@@ -1,4 +1,5 @@
 "use client";
+import { Checklist } from "@/components/onboarding/checklist";
 
 import { projectSectionPath } from "@/lib/routes";
 
@@ -194,6 +195,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
         </ul>
       </ScrollArea>
 
+      <Checklist projects={projects} />
       <SettingsMenu projects={projects} />
     </div>
   );

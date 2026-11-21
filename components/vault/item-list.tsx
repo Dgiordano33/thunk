@@ -65,7 +65,7 @@ export function ItemList({ items, selectedId, onSelect, contextOf }: {
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query ? "Nothing matches." : "Nothing stored yet."}</EmptyDescription></Empty>
+        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query ? "Nothing matches." : "Keep docs, screenshots and transcripts here for agents to read. Drop files into the upload area to get started."}</EmptyDescription></Empty>
       ) : (
         <ul className="flex flex-col gap-1 overflow-y-auto p-2">
           {shown.map((item) => {

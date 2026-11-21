@@ -21,11 +21,13 @@ export default async function NewChatPage({ params, searchParams }: PageProps<"/
   if (!ctx) notFound();
   const id = ctx.workspace.id;
   // Carry over the model and mode from the workspace's latest session.
+  const projectSessions = await listSessions({ projectId: ctx.project.id, limit: 1 });
   const [latest] = await listSessions({ workspaceId: id, limit: 1 });
 
   return (
     <NewChat
       key={typeof model === "string" ? model : undefined}
+      firstSession={projectSessions.length === 0}
       workspaceId={id}
       workspaceLabel={workspaceLabel(ctx.workspace)}
       defaultModel={(typeof model === "string" && model) || latest?.model || env.DEFAULT_MODEL}

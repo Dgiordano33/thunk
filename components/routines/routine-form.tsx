@@ -167,6 +167,10 @@ export function RoutineForm({
         void save();
       }}
     >
+      {!routine && <div className="flex flex-wrap gap-2" aria-label="Routine templates">{[
+        { name: "Daily PR summary", prompt: "Summarise open pull requests for this project and note anything that needs my attention. Do not change code.", schedule: "daily", needsRemote: true },
+        { name: "Weekly project review", prompt: "Review project notes and tasks. Summarise progress and suggest the next priorities without changing code.", schedule: "weekly", needsRemote: false },
+      ].map((template) => <Button key={template.name} type="button" size="sm" variant="outline" disabled={template.needsRemote && !hasRemote} onClick={() => { setName(template.name); setPrompt(template.prompt); setPreset(template.schedule); }}> {template.name}</Button>)}</div>}
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Nightly dependency check" required />
       </Field>

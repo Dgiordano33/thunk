@@ -23,7 +23,7 @@ export function NoteList({
   createControl,
   onDelete,
   compact,
-  emptyText = "No notes yet.",
+  emptyText = "Notes are plans and reference that agents can read and write. Start a note to give your next session context.",
   keyOf = (n) => n.id,
   contextOf,
 }: {
@@ -116,7 +116,7 @@ export function NoteList({
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query || filter !== "all" ? "No matching notes." : emptyText}</EmptyDescription></Empty>
+        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query || filter !== "all" ? "No matching notes." : emptyText}</EmptyDescription>{!query && filter === "all" && onCreate && <Button size="sm" onClick={onCreate}>New note</Button>}</Empty>
       ) : (
         <ul ref={listRef} className="flex flex-col gap-1 overflow-y-auto p-2" onKeyDown={onKeyDown}>
           {shown.map((n) => (

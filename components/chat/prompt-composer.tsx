@@ -25,7 +25,8 @@ function Images({ disabled }: { disabled?: boolean }) {
   </div>;
 }
 
-export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, onSubmit, children }: {
+export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, onSubmit, children, starters = [] }: {
+  starters?: string[];
   workspaceId: string;
   disabled?: boolean;
   placeholder: string;
@@ -87,6 +88,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
       try { localStorage.setItem(historyKey, JSON.stringify(next)); } catch { /* History is optional when storage is unavailable. */ }
       historyIndex.current = -1; setText(""); setError("");
     }}>
+    {starters.length > 0 && <div className="flex flex-wrap gap-2 p-3">{starters.map((prompt) => <Button key={prompt} type="button" variant="outline" size="sm" disabled={disabled} onClick={() => { setText(prompt); textarea.current?.focus(); }}>{prompt}</Button>)}</div>}
     <PromptInputBody>
       <Images disabled={disabled} />
       {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files and notes" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">

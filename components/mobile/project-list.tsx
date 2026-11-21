@@ -1,4 +1,5 @@
 "use client";
+import { Checklist } from "@/components/onboarding/checklist";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
@@ -20,7 +21,7 @@ export function ProjectList({ projects }: { projects: SidebarProject[] }) {
     return () => { active = false; };
   }, [rev]);
   return <main className="h-dvh overflow-y-auto px-4 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
-    <div className="space-y-3">{projects.map(p => {
+    <Checklist projects={projects} /><div className="space-y-3">{projects.map(p => {
       const active = sessions.filter(s => s.projectId === p.id);
       const waiting = active.filter(s => s.pending > 0).length;
       const running = active.filter(s => s.status === "running").length;

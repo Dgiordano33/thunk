@@ -1,4 +1,5 @@
 "use client";
+import { AgentStatus } from "@/components/onboarding/agent-status";
 import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function PromptBox() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
+      <AgentStatus onlyUnavailable={status !== "error" && !error} />
       <PromptComposer
         workspaceId={meta?.workspaceId ?? ""}
         disabled={!live || submitting}

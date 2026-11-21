@@ -1,6 +1,6 @@
 # Light onboarding: a first-run intro, teaching empty states, and one-time hints
 
-Status: proposal · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-20
+Status: implemented · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-20
 
 ## Goal
 
@@ -147,3 +147,18 @@ Each phase ships on its own.
 
 1. **Starter prompts.** Fixed copy, or chosen by whether the project has a repo? Fixed is simpler and is the default here.
 2. **Desktop app.** If the Electron build serves the UI from a fixed origin, the cookie works unchanged. Confirm when `plans/desktop-app-plan.md` lands.
+
+
+## Implementation notes · 2026-11-20
+
+All four phases are implemented. The first-session chips live in `new-chat.tsx`, where the first prompt is actually composed. The intro diagram and legend reuse the map’s sphere and sprite components, and the mobile intro uses the same Sheet primitive as the existing drawer.
+
+Claude readiness uses `claude auth status --json` without starting a turn; older CLIs fall back to “Installed · sign-in not verified”. Codex checks login status and reuses the model list. An additional `unavailable` state distinguishes unexpected check failures from a confirmed missing installation or sign-out. “Check again” refreshes the shared status and model pickers.
+
+Reset keeps an explicitly empty cookie so the existing-install rule does not suppress the replay after reload. Checklist note counts exclude synthetic memory entries; workspace progress counts an explicitly created workspace rather than the automatic Local workspace. Top-level notes count too.
+
+Archive reuses the existing Harvest dialog on the first eligible workspace, with both “Harvest and archive” and “Archive without harvesting”. Delete continues to use the existing Harvest flow. Desktop alerts share one permission flow between Settings and the Inbox.
+
+Validation covers cookie parsing/reset, readiness mapping, intro Skip/Escape/replay, add-project handoff, existing installs, checklist progress/dismissal/completion, starter prompts, agent recovery, routine templates and archive preservation. Screenshots cover both looks/themes and the mobile drawer. Real agent turns and the packaged Electron app are not exercised by these checks.
+
+Checks passed: TypeScript, lint on changed files, 12 focused unit/UI tests, 25 Harvest/routine server tests, 11 Playwright tests, and a production build in isolated memory mode. The build reports two file-tracing warnings through the existing Codex import path.

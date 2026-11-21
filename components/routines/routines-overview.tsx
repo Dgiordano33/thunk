@@ -39,7 +39,7 @@ export function RoutinesOverview({
           <h1 className="pixel mt-1 text-3xl">No routines yet</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">
             Routines are agent sessions that run on a schedule, on demand, or when something happens, and report back to the
-            project that owns them. Each project sets up its own.
+            project that owns them. Each project sets up its own. Routines fire only while Thunk is running.
           </p>
           <Link
             href={firstProjectId ? projectSectionPath(paths.project(firstProjectId), "workshop", { routine: "new" }) : "/projects"}

@@ -1,4 +1,5 @@
 "use client";
+import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import { ArrowUpRightIcon, CheckCheckIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, Clock3Icon, EllipsisIcon, InboxIcon, MessageSquareIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -164,6 +165,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
                 <p className="pixel text-muted-foreground mb-2 text-[11px] tracking-widest uppercase">{hasFilters ? "Nothing in this view" : "A quiet moment"}</p>
                 <h2 className="pixel text-3xl">{hasFilters ? "No matching notifications" : "Nothing needs you right now."}</h2>
                 <p className="text-muted-foreground mt-3 text-sm leading-relaxed">{hasFilters ? "Try another project or notification kind to see more of your inbox." : "When an agent needs a decision or has news to share, it will land here. You can get back to building."}</p>
+                {!hasFilters && <DesktopAlerts />}
                 {hasFilters ? <Button className="mt-6" variant="outline" onClick={() => { setProjectId("all"); setKind("all"); }}>Clear filters</Button> : <Button asChild className="mt-6" variant="outline"><Link href="/projects">Back to your projects <ArrowUpRightIcon aria-hidden="true" /></Link></Button>}
               </div>
             </div>}

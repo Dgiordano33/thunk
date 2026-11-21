@@ -100,11 +100,11 @@ export function AddProjectForm({ size = "default", compact = false }: { size?: "
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         {compact ? (
-          <Button size="icon" variant="ghost" aria-label="Add project" className="size-11">
+          <Button data-add-project size="icon" variant="ghost" aria-label="Add project" className="size-11">
             <PlusIcon />
           </Button>
         ) : (
-          <Button size={size}>
+          <Button data-add-project size={size}>
             <PlusIcon />
             Add project
           </Button>

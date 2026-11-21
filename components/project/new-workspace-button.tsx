@@ -1,4 +1,5 @@
 "use client";
+import { OnboardingHint } from "@/components/onboarding/hint";
 
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -88,6 +89,7 @@ export function NewWorkspaceButton({
           }}
           className="flex flex-col gap-3"
         >
+          <OnboardingHint name="workspace-repos">Choose which repos this workspace includes. Git repos get a separate worktree, leaving your checkout in place. Shared folders use the same files, so edits affect your checkout.</OnboardingHint>
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-xs font-medium">Repos in this workspace</legend>
             {repos.map((r) => (

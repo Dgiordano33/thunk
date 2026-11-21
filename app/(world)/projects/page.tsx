@@ -1,3 +1,4 @@
+import { MapLegend } from "@/components/onboarding/map-legend";
 import { ResponsiveView } from "@/components/mobile/viewport";
 import { ProjectList } from "@/components/mobile/project-list";
 import { loadSidebarProjects } from "@/components/layout/sidebar-tree";
@@ -22,6 +23,7 @@ export default async function Home() {
 
   const overlay = (
     <>
+      <MapLegend />
       {projects.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
           <CivPanel parchment className="pointer-events-auto w-full max-w-sm" bodyClassName="flex flex-col items-center px-6 py-6 text-center">
