@@ -8,9 +8,9 @@ import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
-import { readConnectors } from "@/lib/projects/connectors";
+import { sessionConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
-import { projectConfigDir, projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
+import { projectConfigDir, sharedConfigDir, projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { tasksTools } from "@/lib/tasks/tools";
 import { tasksPrompt } from "@/lib/tasks/prompt";
@@ -90,7 +90,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     tasksForWorkspace(workspace.id),
     listItems(vaultDir).catch(() => []),
     readMemory(projectInstructionsFile(project.dataKey)),
-    readConnectors(project.dataKey),
+    sessionConnectors(project.dataKey),
   ]);
   await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
   const anchor = anchorRepo(live.ctx);
@@ -103,7 +103,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // Project memory and notes live outside the repo; grant file-tool access to them.
     // The other repos of a multi-repo workspace are working directories too.
     additionalDirectories: [...(live.meta.origin?.kind === "board" ? [projectBoardsDir(project.dataKey, live.meta.origin.boardId)] : []), projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...otherRepoDirectories(workspace), ...notes.repos.filter((r) => r.extra).map((r) => r.dir)],
-    mcpServers: { ...connectors.config.mcpServers, thunk: createSdkMcpServer({
+    mcpServers: { ...connectors.mcpServers, thunk: createSdkMcpServer({
       name: "thunk", alwaysLoad: true,
       tools: [
         ...boardTools(live, emit).map(t => tool(t.name, t.description, t.schema, t.handler)),
@@ -127,10 +127,10 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     settings: {
       autoMemoryEnabled: true,
       autoMemoryDirectory: projectMemoryDir(project.dataKey),
-      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`, `Edit(/${projectConfigDir(project.dataKey)}/**)`, `Write(/${projectConfigDir(project.dataKey)}/**)`] },
+      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`, `Edit(/${projectConfigDir(project.dataKey)}/**)`, `Write(/${projectConfigDir(project.dataKey)}/**)`, `Edit(/${sharedConfigDir()}/**)`, `Write(/${sharedConfigDir()}/**)`] },
     },
     // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.
-    sandbox: { filesystem: { denyWrite: [vaultDir.dir, projectConfigDir(project.dataKey)] } },
+    sandbox: { filesystem: { denyWrite: [vaultDir.dir, projectConfigDir(project.dataKey), sharedConfigDir()] } },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",

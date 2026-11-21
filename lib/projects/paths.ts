@@ -86,6 +86,9 @@ export function granaryEntryDir(key: string, slug: string, when: Date) {
 export function projectConfigDir(key: string) { return path.join(projectDir(key), "config"); }
 export function projectInstructionsFile(key: string) { return path.join(projectConfigDir(key), "INSTRUCTIONS.md"); }
 export function projectConnectorsFile(key: string) { return path.join(projectConfigDir(key), "mcp.json"); }
+/** Connectors every project gets, in the same format as a project's mcp.json. */
+export function sharedConfigDir() { return path.join(DATA_DIR, "config"); }
+export function sharedConnectorsFile() { return path.join(sharedConfigDir(), "mcp.json"); }
 export function workspaceHomeDir(key: string, slug: string) {
   return slug === "main" ? projectHomeDir(key) : `${projectHomeDir(key)}--${slug}`;
 }

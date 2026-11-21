@@ -76,6 +76,7 @@ Then run any command from your Mac, for example `thunk-vm update` or `thunk-vm l
 | Builds | `.next-a` and `.next-b` in the server checkout; one is live. `~/.config/thunk/` records which |
 | Automatic updates | `thunk-autoupdate.timer` and `thunk-autoupdate.service` in `/etc/systemd/system/`; log with `thunk auto` |
 | Memory, notes and vault files | `~/.thunk` |
+| Connectors shared by every project | `~/.thunk/config/mcp.json`; see [Browser tools](#browser-tools) |
 | Service definition | `/etc/systemd/system/thunk.service`, written by `scripts/server/setup.sh` |
 | Logs | `thunk logs`, or `journalctl -u thunk` |
 
@@ -96,6 +97,12 @@ Projects, workspaces, sessions, tasks and routines are kept in an embedded datab
 To use your own Postgres instead, such as Supabase, add `DATABASE_URL` with `thunk env`. For Supabase, copy the **Session pooler** string from **Connect** in the dashboard; Supabase's direct connection is IPv6-only unless you add its IPv4 add-on. Do not point the server and the Mac at the same database while both are running: both would run the scheduler and delivery polling.
 
 **Upgrading a server that used `SUPABASE_URL`.** Add `DATABASE_URL` with `thunk env` *before* deploying a version that needs it; older versions ignore it. A new version that finds only `SUPABASE_URL` keeps Thunk running but refuses to use any database, and `thunk doctor` shows `Data: NOT CONNECTED`. Remove the `SUPABASE_*` lines once `thunk doctor` shows `Database: ok`.
+
+## Browser tools
+
+Agents in every project can open pages, click through them and take screenshots. `setup.sh` installs Chromium and writes `~/.thunk/config/mcp.json`, which holds connectors shared by all projects, in the same format as a project's **Connectors** setting. A project connector with the same name replaces the shared one. Changes apply to new sessions.
+
+To add browser tools to a server set up before this existed, run `scripts/server/setup.sh` again from `~/thunk-server`. To change the pinned version, edit the file and run `npx -y @playwright/mcp@<version> install-browser chromium` so the matching Chromium is installed.
 
 ## Sign-ins
 
