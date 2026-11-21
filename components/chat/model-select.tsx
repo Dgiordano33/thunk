@@ -28,9 +28,11 @@ export function ModelSelect({
     value && !models.some((m) => m.id === value)
       ? [...models, { id: value, label: value, provider: providerOf(value) }]
       : models;
+  // Until status loads, treat every agent as available so nothing flickers.
+  const notReady = (provider: AgentProvider) => !!status && status[provider].state !== "ready";
   const groups = (["claude", "codex"] as AgentProvider[])
     .map((provider) => ({ provider, models: all.filter((m) => m.provider === provider) }))
-    .filter((g) => g.models.length || status?.[g.provider].state !== "ready");
+    .filter((g) => g.models.length || notReady(g.provider));
 
   return (
     <PromptInputSelect value={value} onValueChange={onValueChange} disabled={disabled}>
@@ -41,10 +43,10 @@ export function ModelSelect({
         {groups.map((g, i) => (
           <SelectGroup key={g.provider}>
             {i > 0 && <SelectSeparator />}
-            <SelectLabel>{PROVIDER_LABELS[g.provider]}{status && status[g.provider].state !== "ready" && ` · ${status[g.provider].message}`}</SelectLabel>
+            <SelectLabel>{PROVIDER_LABELS[g.provider]}{notReady(g.provider) && ` · ${status![g.provider].message}`}</SelectLabel>
             {!g.models.length && <PromptInputSelectItem value={`unavailable-${g.provider}`} disabled>No models available</PromptInputSelectItem>}
             {g.models.map((m) => (
-              <PromptInputSelectItem key={m.id} value={m.id} disabled={!!status && status[g.provider].state !== "ready"} title={status?.[g.provider].state !== "ready" ? status?.[g.provider].message : m.description}>
+              <PromptInputSelectItem key={m.id} value={m.id} disabled={notReady(g.provider)} title={notReady(g.provider) ? status![g.provider].message : m.description}>
                 {m.label}
               </PromptInputSelectItem>
             ))}
