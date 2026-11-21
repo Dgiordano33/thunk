@@ -7,7 +7,6 @@ import { PLANET_PALETTES, PLANET_RADIUS } from "@/lib/world/system";
 import { SceneContext, makeBody, useBodyHover, useSceneStore, type SceneBody } from "./scene/scene-store";
 import { SpaceCanvas } from "./scene/space-canvas";
 import { Sphere } from "./sphere";
-import { KIND_LABEL } from "./system-map";
 
 const CELL_W = 150;
 const CELL_H = 150;
@@ -61,7 +60,7 @@ function Cell({ body, palette }: { body: SceneBody; palette: string }) {
         </span>
       </span>
       <span className="planet-label sp-enter-label mt-6 flex flex-col items-center whitespace-nowrap">
-        <span className={body.dormant ? "sp-name is-dim" : "sp-name"}>{KIND_LABEL[body.spec.kind]}</span>
+        <span className={body.dormant ? "sp-name is-dim" : "sp-name"}>{body.spec.kind}</span>
         <span className="sp-meta">{palette}{body.dormant ? " · dormant" : ""}</span>
       </span>
     </div>
