@@ -1,17 +1,16 @@
 "use client";
 
-import { EllipsisIcon, InfoIcon } from "lucide-react";
+import { EllipsisIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useEffect, useMemo } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CONTROL_BUTTON, IsoViewport } from "@/components/world/iso-viewport";
+import { IsoViewport } from "@/components/world/iso-viewport";
 import { needsPerson } from "@/lib/agent/types";
 import { deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
-import { CORE_RADIUS, SATELLITE_RADIUS, SATELLITE_RINGS, SPEND_THRESHOLDS, type PlanetLayout, type SpendStep } from "@/lib/world/planet";
+import { CORE_RADIUS, SATELLITE_RADIUS, SATELLITE_RINGS, type PlanetLayout, type SpendStep } from "@/lib/world/planet";
 import { bodyKind, moonKind } from "@/lib/world/bodies";
 import { TILT, planetPalette } from "@/lib/world/system";
 import { CardEyebrow, CardStats } from "./card";
@@ -19,7 +18,7 @@ import { SceneContext, makeBody, useBodyHover, useSceneStore, type SceneData } f
 import { SpaceCanvas } from "./scene/space-canvas";
 import { Sphere } from "./sphere";
 import { StatusBadge, type Tone } from "./status";
-import { KIND_LABEL, Orbits } from "./system-map";
+import { Orbits } from "./system-map";
 
 export type PlanetMoon = {
   id: string;
@@ -177,7 +176,6 @@ export function PlanetView({
             ))}
           </>
         }
-        controls={<Legend />}
       >
         <SectionDock sections={routineAttention ? sections.map((s) => (s.key === "routines" ? { ...s, attention: true } : s)) : sections} aside={panelOpen} />
         {children}
@@ -209,7 +207,7 @@ function Core({ projectId, level, name, x, y, href, selected, tone }: { projectI
       </span>
       <span className="planet-label sp-enter-label mt-1 flex flex-col items-center whitespace-nowrap">
         <span className="sp-tick" aria-hidden="true" />
-        <span className="sp-eyebrow">Project · {KIND_LABEL[bodyKind(level)]}</span>
+        <span className="sp-eyebrow">Project</span>
         <span className="sp-core-name">{name}</span>
         {tone ? <StatusBadge tone={tone} className="mt-1" /> : <span className="sp-meta group-hover:text-foreground">Overview</span>}
       </span>
@@ -364,41 +362,5 @@ function SectionDock({ sections, aside }: { sections: PlanetSection[]; aside: bo
         ))}
       </ul>
     </nav>
-  );
-}
-
-function Legend() {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" aria-label="Legend" title="Legend" className={CONTROL_BUTTON}>
-          <InfoIcon className="size-4" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="left" align="end" className="w-64 text-xs" aria-label="Legend">
-        <CardEyebrow>Legend</CardEyebrow>
-        <ul className="text-muted-foreground mt-1 grid gap-0.5">
-          <li><span className="text-foreground">Planet</span>: this project. Opens the overview.</li>
-          <li><span className="text-foreground">Moon</span>: a workspace, “main” innermost.</li>
-          <li><span className="text-foreground">Dot</span>: a session, newest {SATELLITE_RINGS.reduce((n, s) => n + s.slots, 0)} per workspace.</li>
-        </ul>
-        <p className="mt-2 mb-1 font-medium">Dots grow with spend</p>
-        <ul className="grid gap-1">
-          {SATELLITE_RADIUS.map((r, i) => (
-            <li key={r} className="flex items-center gap-2">
-              <span className="flex w-4 justify-center"><span className="satellite is-open block rounded-full" style={{ width: 2 * r, height: 2 * r }} /></span>
-              <span className="text-muted-foreground ml-auto tabular-nums">{i === 0 ? "$0" : `$${SPEND_THRESHOLDS[i - 1]}+`}</span>
-            </li>
-          ))}
-          <li className="flex items-center gap-2"><span className="flex w-4 justify-center"><span className="satellite is-closed block size-2 rounded-full" /></span> Closed session</li>
-        </ul>
-        <ul className="mt-2 grid gap-1 border-t pt-2">
-          <li className="flex items-center gap-2"><StatusBadge tone="running" /> working now</li>
-          <li className="flex items-center gap-2"><StatusBadge tone="attention" /> waiting on you</li>
-          <li className="flex items-center gap-2"><StatusBadge tone="error" /> failed</li>
-          <li className="text-muted-foreground">PR marks: ✓ checks passed · … running · × failing · – draft</li>
-        </ul>
-      </PopoverContent>
-    </Popover>
   );
 }

@@ -12,14 +12,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { CivPanel } from "@/components/world/civ-panel";
 import { IsoViewport } from "@/components/world/iso-viewport";
 import { TerrainLayer } from "@/components/world/terrain-layer";
-import { LegendButton } from "@/components/world/world-map";
 import { needsPerson } from "@/lib/agent/types";
 import type { ActivitySession } from "@/lib/ambient/types";
 import { DELIVERY_EVENT_LABELS, deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
 import { TILE_H, TILE_W, mapSize, toIso, type Cell, type Grid, type Tile } from "@/lib/world/terrain";
-import { CROP_NAMES, CROP_THRESHOLDS, type CropStage } from "@/lib/world/town";
+import { CROP_NAMES, type CropStage } from "@/lib/world/town";
 import {
   FarmField,
   FarmhouseSprite,
@@ -194,11 +193,6 @@ export function TownView({
             <TownHallSprite />
           </Building>
         </>
-      }
-      controls={
-        <LegendButton label="Town legend">
-          <TownLegend />
-        </LegendButton>
       }
     >
       {children}
@@ -459,37 +453,5 @@ function Building({
         <p className="mt-1 opacity-80">{blurb}</p>
       </Card>
     </HoverCard>
-  );
-}
-
-function TownLegend() {
-  return (
-    <CivPanel className="w-56" bodyClassName="px-3 py-2 text-xs">
-      <p className="pixel text-sm">Legend</p>
-      <ul className="mt-1 grid gap-0.5">
-        <li>Town center = project</li>
-        <li>Farmhouse = workspace</li>
-        <li>Fallow field = closed session</li>
-        <li>Harvest: keep what this farm learned.</li>
-        <li>Field = session, fenced in its workspace&apos;s colour</li>
-        <li>Library = notes · Workshop = routines · Town hall = tasks · Vault = uploads</li>
-      </ul>
-      <p className="text-muted-foreground mt-2 mb-1 text-[11px]">Crops ripen with session spend</p>
-      <ul className="grid gap-0.5">
-        {CROP_NAMES.map((name, i) => (
-          <li key={name} className="flex">
-            <span>{name}</span>
-            <span className="text-muted-foreground ml-auto tabular-nums">{i === 0 ? "$0" : `$${CROP_THRESHOLDS[i - 1]}+`}</span>
-          </li>
-        ))}
-      </ul>
-      <ul className="mt-2 grid gap-0.5 border-t pt-1.5">
-        <li>Pennants: – draft · … checks running</li>
-        <li>✓ checks passed · × failure/conflict · ? unknown</li>
-        <li>Lit windows: dev server running · Vault lamps: reading uploads</li>
-        <li>Farmer in the field: session running</li>
-        <li className="flex items-center gap-2"><span className="pixel flex size-3 items-center justify-center bg-[oklch(0.86_0.17_90)] text-[9px] text-black">!</span> Needs attention</li>
-      </ul>
-    </CivPanel>
   );
 }
