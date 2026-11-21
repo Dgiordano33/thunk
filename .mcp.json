@@ -2,7 +2,13 @@
   "mcpServers": {
     "retune": {
       "command": "npx",
-      "args": ["--no-install", "retune"]
+      "args": [
+        "--no-install",
+        "retune"
+      ],
+      "env": {
+        "RETUNE_WS_PORT": "55239"
+      }
     }
   }
 }

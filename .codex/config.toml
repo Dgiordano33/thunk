@@ -1,0 +1,6 @@
+[mcp_servers.retune]
+command = "npx"
+args = ["--no-install", "retune"]
+
+[mcp_servers.retune.env]
+RETUNE_WS_PORT = "55239"

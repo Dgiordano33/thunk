@@ -203,7 +203,7 @@ export async function removeProjectRepo(projectId: string, repoId: string) {
 
 export type CreateWorkspaceInput = {
   projectId: string;
-  /** Defaults to an unused city name, Conductor-style. */
+  /** Defaults to an unused moon name. */
   name?: string;
   /** Create a git worktree in each chosen git repo. Defaults to true when git repos are selected. */
   worktree?: boolean;
@@ -307,23 +307,23 @@ async function createWorkspaceUnlocked(input: CreateWorkspaceInput): Promise<Wor
   return ws;
 }
 
-const CITY_NAMES = [
-  "atlanta", "austin", "berlin", "bogota", "boston", "cairo", "chicago", "denver", "dublin", "geneva",
-  "havana", "helsinki", "istanbul", "jakarta", "kyoto", "lagos", "lima", "lisbon", "london", "madrid",
-  "manila", "melbourne", "miami", "milan", "montreal", "mumbai", "nairobi", "naples", "oslo", "paris",
-  "porto", "prague", "quito", "reykjavik", "riga", "rome", "santiago", "seattle", "seoul", "seville",
-  "sydney", "taipei", "tallinn", "tokyo", "toronto", "valencia", "vienna", "vilnius", "warsaw", "zurich",
+const MOON_NAMES = [
+  "luna", "phobos", "deimos", "io", "europa", "ganymede", "callisto", "amalthea", "himalia", "elara",
+  "pasiphae", "sinope", "lysithea", "carme", "ananke", "leda", "thebe", "adrastea", "metis", "mimas",
+  "enceladus", "tethys", "dione", "rhea", "titan", "hyperion", "iapetus", "phoebe", "janus", "epimetheus",
+  "helene", "telesto", "calypso", "atlas", "prometheus", "pandora", "pan", "ariel", "umbriel", "titania",
+  "oberon", "miranda", "puck", "portia", "triton", "nereid", "proteus", "charon", "nix", "hydra",
 ];
 
-/** A city name no workspace in the project uses yet; falls back to city-N once they run out. */
+/** A moon name no workspace in the project uses yet; falls back to moon-N once they run out. */
 async function pickWorkspaceName(projectId: string) {
   const used = new Set((await listWorkspaces(projectId)).map((w) => w.slug));
-  const free = CITY_NAMES.filter((c) => !used.has(c));
+  const free = MOON_NAMES.filter((c) => !used.has(c));
   if (free.length) return free[Math.floor(Math.random() * free.length)];
-  const city = CITY_NAMES[Math.floor(Math.random() * CITY_NAMES.length)];
+  const moon = MOON_NAMES[Math.floor(Math.random() * MOON_NAMES.length)];
   let n = 2;
-  while (used.has(`${city}-${n}`)) n++;
-  return `${city}-${n}`;
+  while (used.has(`${moon}-${n}`)) n++;
+  return `${moon}-${n}`;
 }
 
 export async function removeWorkspace(id: string, opts: { removeWorktree?: boolean } = {}) {

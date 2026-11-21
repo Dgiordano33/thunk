@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,8 +20,14 @@ export function PanelTabs({ tabs, vertical }: { tabs: PanelTab[]; vertical?: boo
   const pathname = usePathname();
   const params = useSearchParams();
   const requested = params.get("section");
-  const value = tabs.some((t) => t.value === requested) ? requested! : tabs[0]?.value;
+  // Switch immediately without waiting for the router, and follow later URL changes.
+  const [selection, setSelection] = useState({ requested, value: requested });
+  if (selection.requested !== requested) {
+    setSelection({ requested, value: requested });
+  }
+  const value = tabs.some((t) => t.value === selection.value) ? selection.value! : tabs[0]?.value;
   const onValueChange = (next: string) => {
+    setSelection({ requested, value: next });
     const query = new URLSearchParams(params.toString());
     query.set("section", next);
     window.history.replaceState(null, "", `${pathname}?${query}`);

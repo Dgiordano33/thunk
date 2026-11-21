@@ -1,18 +1,17 @@
 "use client";
 
-import { InfoIcon, RotateCcwIcon } from "lucide-react";
+import { RotateCcwIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CONTROL_BUTTON, IsoViewport } from "@/components/world/iso-viewport";
 import type { ProjectSummary } from "@/lib/projects/types";
 import { projectPath } from "@/lib/routes";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
-import { bodyKind, type BodyKind } from "@/lib/world/bodies";
-import { LEVEL_THRESHOLDS, cityActivity, cityLevel, cityMood, type CityActivity } from "@/lib/world/cities";
+import { bodyKind } from "@/lib/world/bodies";
+import { cityActivity, cityLevel, cityMood, type CityActivity } from "@/lib/world/cities";
 import { POSITIONS_COOKIE, POSITIONS_MAX_AGE, clampOffset, encodePositions, floatLayout, positionKey, type Offset } from "@/lib/world/positions";
 import { TILT, planetPalette, planetRadius } from "@/lib/world/system";
 import { CardEyebrow, CardStats, shortAge } from "./card";
@@ -28,8 +27,6 @@ type Mover = { move: (id: string, at: Offset) => void; drop: (id: string, at: Of
 const DRAG_SLOP = 4;
 /** Alt+arrow nudges a focused planet this far (map px). */
 const NUDGE = 24;
-
-export const KIND_LABEL: Record<BodyKind, string> = { rock: "Rock", ice: "Ice world", cloud: "Cloud world", gas: "Gas giant", giant: "Great giant" };
 
 /**
  * The home map: a star and one planet per project, floating free. Drag a planet (or Alt+arrow it) to rearrange;
@@ -127,7 +124,6 @@ export function SystemMap({ projects, positions = {}, activity, children }: { pr
                   <RotateCcwIcon className="size-4" />
                 </button>
               )}
-              <Legend />
             </>
           }
         >
@@ -250,7 +246,7 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
         </Link>
       </HoverCardTrigger>
       <HoverCardContent side="right" align="start" sideOffset={14} className="w-72">
-        <CardEyebrow>Project · {KIND_LABEL[bodyKind(level)]}</CardEyebrow>
+        <CardEyebrow>Project</CardEyebrow>
         <p className="mt-1 truncate text-[15px] leading-5 font-semibold tracking-[-0.011em]">{project.name}</p>
         <p className="text-muted-foreground mt-0.5 truncate font-mono text-[11px]">
           {project.repos.length > 1 ? `${project.repos.length} repositories` : project.repos[0] ? tildify(project.repos[0].path) : "No repositories"}
@@ -270,42 +266,3 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
     </HoverCard>
   );
 });
-
-function Legend() {
-  const sizes = [1, 2, 3, 4, 5].map((level, i) => {
-    const lo = i === 0 ? 0 : LEVEL_THRESHOLDS[i - 1];
-    const hi = LEVEL_THRESHOLDS[i];
-    return { level, range: hi === undefined ? `${lo}+` : `${lo}–${hi - 1}` };
-  });
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" aria-label="Map legend" title="Map legend" className={CONTROL_BUTTON}>
-          <InfoIcon className="size-4" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="left" align="end" className="w-64 text-xs" aria-label="Map legend">
-        <CardEyebrow>Legend</CardEyebrow>
-        <p className="text-muted-foreground mt-1 mb-2">Each planet is a project. Size = workspaces × 2 + sessions.</p>
-        <ul className="grid gap-1">
-          {sizes.map((s) => (
-            <li key={s.level} className="flex items-center gap-2">
-              <span className="flex w-9 justify-center">
-                <span className="bg-foreground/70 rounded-full" style={{ width: planetRadius(s.level) * 0.75, height: planetRadius(s.level) * 0.75 }} />
-              </span>
-              <span>{KIND_LABEL[bodyKind(s.level)]}</span>
-              <span className="text-muted-foreground ml-auto font-mono text-[11px] tabular-nums">{s.range}</span>
-            </li>
-          ))}
-        </ul>
-        <ul className="mt-2 grid gap-1 border-t pt-2">
-          <li className="flex items-center gap-2"><StatusBadge activity="Running" /> a session is working</li>
-          <li className="flex items-center gap-2"><StatusBadge activity="Needs attention" /> waiting on you</li>
-          <li className="flex items-center gap-2"><StatusBadge activity="Session error" /> a session failed</li>
-          <li className="text-muted-foreground">Dim planets have been idle 30+ days.</li>
-        </ul>
-        <p className="text-muted-foreground mt-2 border-t pt-2">Drag a planet to move it, or focus it and press Alt + arrow keys.</p>
-      </PopoverContent>
-    </Popover>
-  );
-}
