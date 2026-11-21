@@ -1,12 +1,28 @@
 import "server-only";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 import { promisify } from "node:util";
 import { env } from "@/lib/env";
 import { listCodexModels } from "./codex/models";
 import { checkResult, type AgentStatuses } from "./readiness";
 const exec = promisify(execFile);
+/** Sessions run on the Agent SDK's bundled CLI, so check that rather than a global `claude`. */
+function claudeBinary() {
+  const require = createRequire(path.join(process.cwd(), "package.json"));
+  const pkg = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
+  const exe = process.platform === "win32" ? "claude.exe" : "claude";
+  for (const name of process.platform === "linux" ? [pkg, `${pkg}-musl`] : [pkg]) {
+    try {
+      const file = require.resolve(`${name}/${exe}`);
+      if (existsSync(file)) return file;
+    } catch { /* Not installed for this platform. */ }
+  }
+  return "claude";
+}
 async function check(provider: "claude" | "codex") {
-  const binary = provider === "codex" ? env.CODEX_BIN ?? "codex" : "claude";
+  const binary = provider === "codex" ? env.CODEX_BIN ?? "codex" : claudeBinary();
   try {
     await exec(binary, ["--version"], { timeout: 5000 });
   } catch (error) {
