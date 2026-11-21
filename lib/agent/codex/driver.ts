@@ -14,7 +14,7 @@ import { tasksForWorkspace } from "@/lib/tasks/service";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadSessionNotes } from "@/lib/notes/prompt";
-import { readConnectors, codexConnectors } from "@/lib/projects/connectors";
+import { sessionConnectors, codexConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
 import { projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
@@ -162,7 +162,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     tasksForWorkspace(workspace.id),
     listItems(vaultDirOf(project)).catch(() => []),
     readMemory(projectInstructionsFile(project.dataKey)),
-    readConnectors(project.dataKey),
+    sessionConnectors(project.dataKey),
   ]);
   const dataDirs = [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
@@ -408,7 +408,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
       approvalPolicy: approvalPolicy(),
       sandbox: live.meta.permissionMode === "bypassPermissions" ? "danger-full-access" : "workspace-write",
       developerInstructions,
-      config: { mcp_servers: codexConnectors(connectors.config) },
+      config: { mcp_servers: codexConnectors(connectors) },
     };
     const res = await rpc.request<{ thread: { id: string }; model: string; cwd: string }>(
       resume ? "thread/resume" : "thread/start",

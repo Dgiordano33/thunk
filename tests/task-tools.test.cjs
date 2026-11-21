@@ -29,9 +29,9 @@ const mocks = {
   },
   "@anthropic-ai/claude-agent-sdk": { createSdkMcpServer: (v) => v, tool: (name, description, schema, handler) => ({ name, description, schema, handler }) },
   "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", repos: [], workspaceDir: "/tmp" }), notesPrompt: () => "notes" },
-  "@/lib/projects/connectors": { readConnectors: async () => ({ config: { mcpServers: {} } }), codexConnectors: () => ({}) },
+  "@/lib/projects/connectors": { sessionConnectors: async () => ({ mcpServers: {} }), codexConnectors: () => ({}) },
   "@/lib/projects/memory": { readMemory: async () => "" },
-  "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile", "projectVaultDir", "projectInstructionsFile", "projectConfigDir"].map((k) => [k, () => "/tmp"])),
+  "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile", "projectVaultDir", "projectInstructionsFile", "projectConfigDir", "sharedConfigDir"].map((k) => [k, () => "/tmp"])),
   "@/lib/vault/store": { listItems: async () => [], readItem: async () => null },
   "@/lib/routines/prompt": { routineSystemPrompt: () => "" },
 };

@@ -84,8 +84,15 @@ test("both providers get capped project instructions, and Claude protects projec
     const live = { id: "test", ctx: { project, workspace }, meta: { cwd: workspace.cwd, model: "test", permissionMode: "default" }, stderrTail: [] };
     const initial = await readConnectors(project.dataKey);
     await saveConnectors(project.dataKey, { mcpServers: { example: { command: "node" } } }, initial.revision);
+    // Shared connectors reach every project; a project's own entry wins on a name clash.
+    await fs.mkdir(paths.sharedConfigDir(), { recursive: true });
+    await fs.writeFile(paths.sharedConnectorsFile(), JSON.stringify({ mcpServers: { browser: { command: "npx" }, example: { command: "shared" } } }));
     const options = await buildOptions(live, {});
     assert.equal(options.mcpServers.example.command, "node");
+    assert.equal(options.mcpServers.browser.command, "npx");
+    assert.ok(options.sandbox.filesystem.denyWrite.includes(paths.sharedConfigDir()));
+    await fs.writeFile(paths.sharedConnectorsFile(), "{broken");
+    assert.equal((await buildOptions(live, {})).mcpServers.browser, undefined);
     assert.ok(options.mcpServers.thunk);
     assert.match(options.systemPrompt.append, /Project instructions\nUse plain language/);
     assert.ok(options.sandbox.filesystem.denyWrite.includes(paths.projectConfigDir(project.dataKey)));

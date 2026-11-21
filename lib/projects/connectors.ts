@@ -4,7 +4,7 @@ import { chmod, mkdir } from "node:fs/promises";
 import { z } from "zod";
 import { HttpError } from "@/lib/api/errors";
 import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
-import { projectConfigDir, projectConnectorsFile } from "./paths";
+import { projectConfigDir, projectConnectorsFile, sharedConnectorsFile } from "./paths";
 
 const strings = z.record(z.string(), z.string());
 const url = z.url().refine((value) => /^https?:\/\//i.test(value), "Use an HTTP(S) URL");
@@ -19,9 +19,18 @@ export type ConnectorConfig = z.infer<typeof Connectors>;
 const MASK = "••••••••";
 const revision = (raw: string | null) => createHash("sha256").update(raw ?? "").digest("hex");
 
-export async function readConnectors(key: string) {
+export const readConnectors = (key: string) => readConnectorsFile(projectConnectorsFile(key));
+
+/** What a session loads: the shared connectors, then the project's, which win on a name clash. */
+export async function sessionConnectors(key: string) {
+  const [shared, project] = await Promise.all([readConnectorsFile(sharedConnectorsFile()), readConnectors(key)]);
+  if (shared.error) console.warn(`[thunk] shared connectors skipped (${sharedConnectorsFile()}): ${shared.error}`);
+  return { mcpServers: { ...shared.config.mcpServers, ...project.config.mcpServers } } as ConnectorConfig;
+}
+
+async function readConnectorsFile(file: string) {
   try {
-    const raw = await readOptional(projectConnectorsFile(key));
+    const raw = await readOptional(file);
     let parsed: unknown;
     try { parsed = raw === null ? { mcpServers: {} } : JSON.parse(raw); }
     catch { return { config: { mcpServers: {} } as ConnectorConfig, revision: revision(raw), error: "Invalid connector JSON. Correct and save it to enable connectors." }; }

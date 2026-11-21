@@ -8,6 +8,7 @@ ME=$(id -un)
 ENV_FILE=/etc/thunk.env
 STATE_DIR="$HOME/.config/thunk"
 UNIT=/etc/systemd/system/thunk.service
+PLAYWRIGHT_MCP=0.0.86   # pinned: each release needs its own Chromium build
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -129,6 +130,25 @@ rm -f "$SUDOERS"
 sudo usermod -aG systemd-journal "$ME"      # read logs without sudo (applies from the next login)
 sudo tailscale set --operator="$ME"         # run 'tailscale serve' without sudo
 sudo ln -sf "$REPO/scripts/server/thunk" /usr/local/bin/thunk
+
+# Browser tools for every project's agents (docs/server.md, 'Browser tools'). Left alone once the file exists.
+SHARED_MCP="$HOME/.thunk/config/mcp.json"
+if [ ! -f "$SHARED_MCP" ]; then
+  say "Browser tools for agents"
+  npx -y "@playwright/mcp@$PLAYWRIGHT_MCP" install-browser chromium --with-deps
+  mkdir -p -m 700 "$(dirname "$SHARED_MCP")"
+  cat > "$SHARED_MCP" <<MCP_EOF
+{
+  "mcpServers": {
+    "browser": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@$PLAYWRIGHT_MCP", "--headless", "--browser", "chromium", "--isolated"]
+    }
+  }
+}
+MCP_EOF
+  chmod 600 "$SHARED_MCP"
+fi
 
 say "Start"
 tmux kill-session -t thunk 2>/dev/null && echo "    stopped the old tmux session" || true
