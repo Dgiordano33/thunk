@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CardStats } from "@/components/space/card";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client/api";
 import type { SessionMeta } from "@/lib/agent/types";
@@ -32,10 +33,25 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
-  return <div className="space-y-2 text-xs">
-    <p className="text-muted-foreground">{team?.summary || (team?.chief ? `Chief · ${team.chief.status}` : "Delegate project work to agents in their own worktrees.")}</p>
-    {team && <p>{team.running} running · {team.waiting} waiting{team.queued ? ` · ${team.queued} queued` : ""} · {team.done} done today · Chief ${team.costUsd.toFixed(2)} · Workers ${team.workerCostUsdToday.toFixed(2)} today</p>}
-    <div className="flex gap-2"><Button size="sm" disabled={busy} onClick={() => void open()}>Open the chief</Button>{team?.chief && <Button size="sm" variant="outline" disabled={busy} onClick={() => void open(true)}>New chief</Button>}</div>
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+  return <div className="flex flex-col gap-3 text-xs">
+    <p className="text-muted-foreground">{team?.summary || "Delegate project work to agents in their own worktrees."}</p>
+    {team && <CardStats
+      className="mt-0"
+      rows={[
+        ["Status", team.chief ? <span className="capitalize">{team.chief.status}</span> : "Not started"],
+        ["Running", team.running],
+        ["Waiting", team.waiting],
+        ...(team.queued ? [["Queued", team.queued] as [string, React.ReactNode]] : []),
+        ["Done today", team.done],
+        ["Chief spend", usd(team.costUsd)],
+        ["Worker spend today", usd(team.workerCostUsdToday)],
+      ]}
+    />}
+    <div className="flex gap-2">
+      <Button size="sm" disabled={busy} onClick={() => void open()}>Open the chief</Button>
+      {team?.chief && <Button size="sm" variant="outline" disabled={busy} onClick={() => void open(true)}>New chief</Button>}
+    </div>
     {error && <p role="alert" className="text-destructive">{error}</p>}
   </div>;
 }
