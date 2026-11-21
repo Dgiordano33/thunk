@@ -13,7 +13,7 @@ Developing Thunk is hard outside the user's own Mac:
 1. **Data points at one machine.** Project rows store absolute repo paths (`/Users/<user>/...`). `npm run db:pull` copies production data, but the paths only resolve on the Mac and the server.
 2. **Sessions depend on files outside the database.** Resuming needs Claude or Codex transcript files from the machine that ran the session. Notes, memory and vault live under `~/.thunk`.
 3. **Agents need real logins.** Every session spawns `claude` or `codex`, and delivery features call `gh`. Without credentials, the core flow (chat, documents, comments, plans, permissions) can't be exercised. With credentials, every manual test costs money.
-4. **Background jobs start on every boot.** The routine scheduler, PR and delivery polling, triage, worker cleanup and file watchers run as soon as the server starts. In a dev checkout they poll GitHub and can fire routines.
+4. **Background jobs start on every boot.** The routine scheduler, PR and delivery polling, triage, worker recovery and cleanup, and file watchers run as soon as the server starts. In a dev checkout they poll GitHub and can fire routines. Triage runs every minute and can message the top chief, which starts a real Claude session. This applies today to `npm run dev` on the Mac against a `db:pull` copy: `db:pull` turns routines off in the copy, but triage and worker recovery still run.
 
 What already works anywhere: unit tests (`npm test`) and Playwright (`npm run test:e2e`), which build throwaway projects in a temp folder with memory-only storage. This plan extends that to a running app.
 
@@ -67,7 +67,12 @@ Guard: `THUNK_AGENT=fake` logs a banner at startup and shows a "Fake agent" badg
 
 One check in `instrumentation.ts` and in each `ensure*` starter (`ensureScheduler`, `ensureDeliveryPolling`, `ensureTriageScheduler`, `ensureNotificationProducers`, worker cleanup, PR polling). With it off, nothing polls, schedules or fires. **Run now** on a routine still works, using the fake agent.
 
-Default: on in production (`next start`, the desktop app, the server), off for `dev:demo`. A plain `npm run dev` keeps today's behaviour, because it's the closest check of what production does.
+Default:
+
+- On in production (`next start`, the desktop app, the server).
+- Off for `dev:demo`.
+- Off for any database made by `npm run db:pull`. The copy records that it is a copy (a row in a small `thunk_settings` table written by `db:pull`), and the server reads that at startup. `THUNK_BACKGROUND=on` overrides it when testing a job against real data.
+- A plain `npm run dev` on its own database keeps today's behaviour, because it's the closest check of what production does.
 
 Notes file watchers stay on, because they only watch the demo data folder.
 
@@ -83,7 +88,7 @@ Every new workspace opens a working Thunk with demo data. To use the Mac's copie
 
 ## Order
 
-1. Background switch (small, no dependencies).
+1. Background switch, including the `db:pull` copy marker. Small, no dependencies, and the most urgent: it closes the gap where local development on a production copy can start real agent sessions.
 2. Fake driver and contract test. This is the largest piece and the most valuable on its own: e2e can start testing chat, documents and plans.
 3. Demo seed and `dev:demo`.
 4. `thunk.json`, plus a "Develop Thunk" section in the README.
