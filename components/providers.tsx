@@ -1,4 +1,7 @@
 "use client";
+import { OnboardingProvider } from "@/components/onboarding/provider";
+import { Intro } from "@/components/onboarding/intro";
+import type { HintKey } from "@/lib/onboarding";
 
 import { ViewportProvider } from "@/components/mobile/viewport";
 import { ConfirmHost } from "@/components/confirm";
@@ -10,7 +13,7 @@ import { useEffect } from "react";
 import { useUi } from "@/lib/store/ui-store";
 import { applyTheme, readTheme } from "@/lib/theme";
 
-export function Providers({ look, initialDesktop, children }: { look: Look; initialDesktop: boolean; children: React.ReactNode }) {
+export function Providers({ look, initialDesktop, children, onboarding, hasProjects }: { onboarding: HintKey[]; hasProjects: boolean; look: Look; initialDesktop: boolean; children: React.ReactNode }) {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => applyTheme(useUi.getState().theme, media.matches);
@@ -32,11 +35,12 @@ export function Providers({ look, initialDesktop, children }: { look: Look; init
   }, []);
   return (
     <ViewportProvider initialDesktop={initialDesktop}><LookProvider initial={look}>
-      <TooltipProvider delayDuration={300}>
+      <OnboardingProvider initial={onboarding}><TooltipProvider delayDuration={300}>
         {children}
+        <Intro hasProjects={hasProjects} />
         <ConfirmHost />
         <Toaster position="bottom-right" />
-      </TooltipProvider>
+      </TooltipProvider></OnboardingProvider>
     </LookProvider></ViewportProvider>
   );
 }

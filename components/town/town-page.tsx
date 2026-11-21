@@ -1,3 +1,4 @@
+import { MapLegend } from "@/components/onboarding/map-legend";
 import { ProjectHome } from "@/components/mobile/project-home";
 import { MobileSessionRedirect } from "@/components/mobile/session-redirect";
 import { ResponsiveView } from "@/components/mobile/viewport";
@@ -189,7 +190,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       >
         {panel}
         {harvestOffers}
-      </PlanetView></ResponsiveView>
+      <MapLegend /></PlanetView></ResponsiveView>
     );
   }
 
@@ -212,6 +213,6 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     >
       {panel}
       {harvestOffers}
-    </TownView></ResponsiveView>
+    <MapLegend /></TownView></ResponsiveView>
   );
 }

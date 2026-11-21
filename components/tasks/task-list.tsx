@@ -5,7 +5,7 @@ import { TaskRow, type TaskRowProps } from "./task-row";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 export function TaskList({ tasks, emptyText = "No tasks yet.", busyId, ...actions }: Omit<TaskRowProps, "task" | "busy"> & { tasks: Task[]; emptyText?: string; busyId?: string | null }) {
-  if (!tasks.length) return <Empty className="py-4 gap-2"><EmptyDescription className="text-xs">{emptyText}</EmptyDescription></Empty>;
+  if (!tasks.length) return <Empty className="py-4 gap-2"><EmptyDescription className="text-xs">{emptyText} A task is work you can send to a session. Agents can create and update tasks too. Add a title above to start.</EmptyDescription></Empty>;
   const waiting = (t: Task) => actions.sessions.some((s) => s.id === t.sessionId && s.origin?.kind === "worker" && needsPerson(s));
   const pending = tasks.filter(waiting);
   const group = (status: TaskStatus) => {

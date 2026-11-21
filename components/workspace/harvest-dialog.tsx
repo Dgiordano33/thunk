@@ -1,4 +1,6 @@
 "use client";
+import { useOnboarding } from "@/components/onboarding/provider";
+import { OnboardingHint } from "@/components/onboarding/hint";
 
 import { SaveIcon } from "lucide-react";
 import { useState } from "react";
@@ -13,17 +15,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Hint } from "@/components/hint";
 
-export type HarvestAction = "harvest" | "delete" | "merge";
+export type HarvestAction = "harvest" | "delete" | "merge" | "archive";
 
 export function HarvestDialog({ workspaceId, label, data, action, hasGit = false, onClose, onComplete }: {
   hasGit?: boolean; workspaceId: string; label: string; data: HarvestData; action: HarvestAction; onClose: () => void; onComplete: () => void;
 }) {
+  const onboarding = useOnboarding();
   const [memory, setMemory] = useState(data.suggested);
   const [noteIds, setNoteIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [harvested, setHarvested] = useState(false);
-  const verb = action === "merge" ? "merge and delete" : "delete";
+  const verb = action === "merge" ? "merge and delete" : action === "archive" ? "archive" : "delete";
   async function submit(keep: boolean) {
     setBusy(true); setError("");
     try {
@@ -36,6 +39,8 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
         if (result.retainedDirectory) toast.info("Some files were kept", { description: result.retainedDirectory });
       }
       if (action === "merge") await api.workspaceGitAction(workspaceId, "merge", true);
+      if (action === "archive") await api.updateWorkspace(workspaceId, { status: "archived" });
+      if (!data.empty) onboarding.markSeen("harvest");
       onComplete(); onClose();
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
@@ -43,6 +48,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Copy what this workspace learned into the project: its task log into project memory, and chosen notes into project notes. Anything left behind is kept in the granary when the workspace is deleted.</DialogDescription></DialogHeader>
+      {!data.empty && <OnboardingHint name="harvest">Harvest keeps what this workspace learned in the project. Choose the memory and notes below, then use Harvest to keep them for future sessions.</OnboardingHint>}
       {action === "merge" && <p className="text-sm">Merge committed changes into the local default branch, run the archive hook, then delete the worktree and sessions.</p>}
       {action === "delete" && <p className="text-sm">{hasGit ? "Delete this workspace, its sessions and worktree. Worktree deletion requires committed changes merged into the default branch." : "Delete this workspace and its sessions. Shared folders and non-empty scratch folders are kept."}</p>}
       <fieldset disabled={busy || harvested} className="space-y-4">
@@ -59,7 +65,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
       {harvested && <p role="status" className="text-sm">Harvest saved. Retrying will only {verb}.</p>}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="ghost" disabled={busy} onClick={onClose}>Cancel</Button>
-        {action !== "harvest" && <Button variant="outline" disabled={busy} onClick={() => submit(false)}>{action === "merge" ? "Merge and delete" : "Delete"} without harvesting</Button>}
+        {action !== "harvest" && <Button variant="outline" disabled={busy} onClick={() => submit(false)}>{action === "merge" ? "Merge and delete" : action === "archive" ? "Archive" : "Delete"} without harvesting</Button>}
         <Button disabled={busy} onClick={() => submit(true)}>{busy ? "Working…" : action === "harvest" ? "Harvest" : `Harvest and ${verb}`}</Button>
       </div>
     </DialogContent>

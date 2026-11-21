@@ -10,7 +10,9 @@ web
 
 Primary user: Thunk's author, a developer who uses it daily to direct coding agents across several repositories. Their job is to work out what should be built, write it down well, hand it to agents, and keep both themselves and those agents focused.
 
-Likely later audience: peers who also work heavily with coding agents. When the two conflict, the author's own workflow decides. Onboarding for strangers is not a current goal.
+Next audience: peers who also work heavily with coding agents and are opening Thunk for the first time. They know agents and Git, but not Thunk's vocabulary or where its context lives. When the two audiences conflict, the author's own workflow decides.
+
+Light onboarding for that second audience is a current goal (`plans/onboarding-plan.md`): a short first-run introduction, empty states that explain what each area is for, and one-time hints at the first real decisions. It stays light. Everything is skippable, shows once, can be replayed from Settings, and never stands between a returning user and their work. Guided tours, sample data in a real install, accounts, and sign-up flows are not goals.
 
 ## Product Purpose
 
@@ -64,12 +66,12 @@ The product name is Thunk. The established name and metadata describe a canvas-s
 
 ## Evidence on Hand
 
-The README, `plans/desktop-app-plan.md`, `plans/orchestration-plan.md`, and `docs/repo-notes-plan.md` describe the product and its proposals. There are no testimonials, customers, usage figures, benchmarks, or press, and future work must not invent them.
+The README, `plans/desktop-app-plan.md`, `plans/orchestration-plan.md`, `plans/onboarding-plan.md`, and `docs/repo-notes-plan.md` describe the product and its proposals. There are no testimonials, customers, usage figures, benchmarks, or press, and future work must not invent them.
 
 ## Product Principles
 
 1. **Context is the product.** When features compete for attention, favor the one that helps people write, organize, or reuse what agents should know.
 2. **One pane, one focus.** Plans, issues, notes, and running work belong together. Reduce the reasons to leave Thunk or lose the thread of the task.
 3. **Shared artifacts, not transcripts.** People and agents should read and improve the same durable documents, and important thinking should not stay buried in chat.
-4. **Build for the daily operator.** Depth and speed for someone who lives in the tool come before explaining it to newcomers.
+4. **Build for the daily operator.** Depth and speed for someone who lives in the tool come first. Explain Thunk to newcomers in the places they would otherwise be stuck, such as first run and empty screens, and never by slowing down someone who already knows it.
 5. **Agent-neutral by default.** Context and orchestration belong to Thunk, and any supported agent should be able to use them.

@@ -1,4 +1,5 @@
 "use client";
+import { AgentStatus, useAgentStatus } from "@/components/onboarding/agent-status";
 import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { CivPanel } from "@/components/world/civ-panel";
@@ -31,18 +32,22 @@ export function NewChat({
   defaultModel,
   defaultMode,
   disabled,
+  firstSession = false,
 }: {
   workspaceId: string;
   workspaceLabel: string;
   defaultModel: string;
   defaultMode: string;
   disabled?: boolean;
+  firstSession?: boolean;
 }) {
   const router = useRouter();
   const base = useWorkspaceBase();
   const models = useModels();
   const [model, setModel] = useState(defaultModel);
   const provider = providerOf(model);
+  const agents = useAgentStatus();
+  const unavailable = agents && agents[provider].state !== "ready";
   const modes = permissionModesFor(provider);
   const [chosenMode, setMode] = useState(defaultMode);
   // Plan mode is Claude-only; fall back while a Codex model is picked.
@@ -65,9 +70,11 @@ export function NewChat({
         )}
       </div>
       <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
-        <PromptComposer
+        {unavailable || error ? <AgentStatus /> : <AgentStatus onlyUnavailable />}
+      <PromptComposer
           workspaceId={workspaceId}
-          disabled={disabled || submitting}
+          starters={firstSession ? ["Explain how this repo is organised", "Plan a change to …", "Find something worth fixing"] : []}
+          disabled={disabled || submitting || !!unavailable}
           autoFocus
           placeholder="Ask the agent to do something…"
           onSubmit={async ({ text, files }) => {
@@ -102,7 +109,7 @@ export function NewChat({
               </PromptInputSelect></ComposerOptions>
               {error && <span className="text-destructive truncate text-xs">{error}</span>}
             </PromptInputTools>
-            <PromptInputSubmit disabled={disabled || submitting} status={submitting ? "submitted" : "ready"} />
+            <PromptInputSubmit disabled={disabled || submitting || !!unavailable} status={submitting ? "submitted" : "ready"} />
           </PromptInputFooter>
         </PromptComposer>
       </div>

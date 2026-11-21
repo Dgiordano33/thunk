@@ -1,4 +1,5 @@
 "use client";
+import { useOnboarding } from "@/components/onboarding/provider";
 
 import { useState } from "react";
 import { HarvestDialog, type HarvestAction } from "./harvest-dialog";
@@ -23,6 +24,7 @@ import { confirm } from "@/components/confirm";
 /** New note / save to project / archive / delete for a workspace. */
 export function WorkspaceMenu({ project, workspace, label, className }: { project: { slug: string }; workspace: Workspace; label: string; className?: string }) {
   const router = useRouter();
+  const onboarding = useOnboarding();
   const [harvest, setHarvest] = useState<{ data: HarvestData; action: HarvestAction } | null>(null);
   const pathname = usePathname();
   const base = workspacePath(project, workspace);
@@ -38,6 +40,10 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
 
   const toggleArchive = async () => {
     try {
+      if (!archived && !onboarding.seen("harvest")) {
+        const data = await api.getHarvest(workspace.id);
+        if (!data.empty) { setHarvest({ data, action: "archive" }); return; }
+      }
       await api.updateWorkspace(workspace.id, { status: archived ? "active" : "archived" });
       if (!archived) router.push(`${projectPath(project)}?harvest=${workspace.id}`);
       else done();

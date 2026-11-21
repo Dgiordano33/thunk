@@ -1,3 +1,6 @@
+import { cookies } from "next/headers";
+import { listProjects } from "@/lib/db/repo/projects";
+import { initialOnboarding, ONBOARDING_COOKIE } from "@/lib/onboarding";
 import { isMobileRequest } from "@/components/mobile/viewport.server";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Pixelify_Sans } from "next/font/google";
@@ -22,12 +25,14 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const look = await getLook();
+  const projects = await listProjects();
+  const onboarding = initialOnboarding((await cookies()).get(ONBOARDING_COOKIE)?.value, projects.length > 0);
   const initialDesktop = !(await isMobileRequest());
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} ${lookClass(look)} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="h-full" suppressHydrationWarning>
-        <Providers look={look} initialDesktop={initialDesktop}>{children}</Providers>
+        <Providers onboarding={onboarding} hasProjects={projects.length > 0} look={look} initialDesktop={initialDesktop}>{children}</Providers>
         <DevTools />
       </body>
     </html>

@@ -1,4 +1,6 @@
 "use client";
+import { OnboardingHint } from "@/components/onboarding/hint";
+import { useOnboarding } from "@/components/onboarding/provider";
 
 import { CheckIcon, ChevronDownIcon, FileTextIcon, ListChecksIcon, Loader2Icon, MessageSquareIcon } from "lucide-react";
 import { useIsDesktop } from "@/components/mobile/viewport";
@@ -23,7 +25,9 @@ const STATUS_LABEL = { draft: "Draft", sent: "Revised", approved: "Approved" } a
 
 /** A canvas page: one assistant response (or plan) the user can edit and comment on. */
 export function DocumentCard({ documentId }: { documentId: string }) {
+  const onboarding = useOnboarding();
   const doc = useSession((s) => s.documents[documentId]);
+  const firstResponse = useSession((s) => Object.values(s.documents).find((d) => d.kind === "response")?.id === documentId);
   const active = useSession((s) => s.activeDocumentId === documentId);
   const request = useSession((s) => (doc?.requestId ? s.requests[doc.requestId] : undefined));
   const setActive = useSession((s) => s.setActiveDocument);
@@ -46,14 +50,15 @@ export function DocumentCard({ documentId }: { documentId: string }) {
   return (
     <article
       id={`doc-${documentId}`}
-      onFocusCapture={() => setActive(documentId)}
-      onMouseDown={() => !active && setActive(documentId)}
+      onFocusCapture={() => { setActive(documentId); if (doc.kind === "response") onboarding.markSeen("first-document"); }}
+      onMouseDown={() => { if (!active) setActive(documentId); if (doc.kind === "response") onboarding.markSeen("first-document"); }}
       className={cn(
         "bg-card relative scroll-mt-4 rounded-lg border px-4 md:px-8 pt-5 pb-4 shadow-xs transition-[border-color,box-shadow]",
         active && editable && "border-foreground/20 shadow-sm",
         !editable && "bg-muted/20",
       )}
     >
+      {firstResponse && doc.kind === "response" && <OnboardingHint name="first-document">{desktop ? "Edit this document, select text to comment, then send your revisions back to the agent." : "On desktop, edit this document, select text to comment, then send your revisions back to the agent."}</OnboardingHint>}
       <header className="text-muted-foreground mb-4 flex items-center gap-2 text-xs">
         <Icon className="size-3.5" />
         <span className="font-medium">{doc.kind === "plan" ? "Plan" : "Response"}</span>

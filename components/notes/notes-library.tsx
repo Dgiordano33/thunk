@@ -2,6 +2,9 @@
 
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from "next/link";
+import { usePaths } from "@/components/layout/paths-context";
+import { projectSectionPath } from "@/lib/routes";
 import { PlusIcon } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -111,6 +114,7 @@ function AllNotes({
   label: Map<string, string>;
   onSelect: (scope: NoteScope | null, note: string | null) => void;
 }) {
+  const paths = usePaths();
   const desktop = useIsDesktop();
   const notes = useMemo<NoteMeta[] | null>(
     () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.workspaces.flatMap((w) => w.notes), ...f.repos.flatMap((r) => r.notes)])) : null),
@@ -133,8 +137,9 @@ function AllNotes({
           onSelect={select}
           onDelete={(n) => void remove(n)}
           createControl={<NewNoteMenu folders={folders} onCreate={(s) => void create(s)} />}
-          emptyText="No notes yet. Start one at the top level, or in a project or workspace."
+          emptyText="Notes are plans and reference that agents can read and write. Start one at the top level, or in a project or workspace."
         />
+        {folders?.find((f) => !f.home) && <p className="px-3 py-2 text-xs text-muted-foreground">Keep notes in your repo with notebooks in <Link className="underline" href={projectSectionPath(paths.project(folders.find((f) => !f.home)!.project.id), "center")}>project settings</Link>.</p>}
       </CollapsiblePane>
       <div className={!desktop && !selected ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
         {!desktop && <button className="min-h-11 border-b text-left px-4" onClick={() => select(null)}>← Notes</button>}
@@ -159,8 +164,8 @@ function NewNoteMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon-sm" variant="outline" aria-label="New note" title="New note" disabled={!folders?.length}>
-          <PlusIcon />
+        <Button size="sm" variant="outline" aria-label="New note" title="New note" disabled={!folders?.length}>
+          <PlusIcon /> New note
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-80 w-56 overflow-y-auto">

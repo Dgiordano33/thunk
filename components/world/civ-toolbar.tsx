@@ -1,4 +1,5 @@
 "use client";
+import { Checklist } from "@/components/onboarding/checklist";
 
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileTabBar } from "@/components/mobile/tab-bar";
@@ -107,7 +108,8 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
                   </Link>
                 );
               })}
-              <SettingsMenu projects={projects} />
+              <Checklist projects={projects} />
+      <SettingsMenu projects={projects} />
             </CivPanel>
           </motion.nav>
         )}
