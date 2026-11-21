@@ -12,11 +12,14 @@ import { NoteEditor } from "./note-editor";
 import { NewRepoNote } from "./new-repo-note";
 import { NoteList } from "./note-list";
 import { confirm } from "@/components/confirm";
+import { ArrowLeftIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 
 /** Create and delete notes in a scope, keeping every open view in sync. */
 export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | null) => void) {
   const [creating, setCreating] = useState<NoteScope | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const created = useCallback((target: NoteScope, id: string) => {
     useNotesFeed.getState().touch(target);
     onSelect(scope ? id : `${scopeKey(target)}/${id}`);
@@ -26,22 +29,29 @@ export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | 
     if (!target) return;
     if (target.kind === "repos") { setCreating(target); return; }
     try {
-    const { note } = await api.createNote(target.kind, target.id, { title: "Untitled" });
-    created(target, note.id);
-    } catch (err) { setError((err as Error).message); }
+      const { note } = await api.createNote(target.kind, target.id, {});
+      created(target, note.id);
+    } catch (err) {
+      toast.error("Couldn't create the note", { description: (err as Error).message });
+    }
   }, [scope, created]);
   const remove = useCallback(
     async (note: NoteMeta) => {
       if (!(await confirm(note.source === "repo"
         ? { title: `Delete ${note.path}?`, description: "This removes the file from the working tree.", action: "Delete", destructive: true }
         : { title: `Delete “${note.title}”?`, description: "This removes the file from disk.", action: "Delete", destructive: true }))) return;
-      await api.deleteNote(note.scope.kind, note.scope.id, note.id);
+      try {
+        await api.deleteNote(note.scope.kind, note.scope.id, note.id);
+      } catch (err) {
+        toast.error("Couldn't delete the note", { description: (err as Error).message });
+        return;
+      }
       useNotesFeed.getState().touch(note.scope);
       onSelect(null);
     },
     [onSelect],
   );
-  const dialog = <>{error && <p role="alert" className="text-destructive p-2 text-xs">{error}</p>}{creating && <NewRepoNote scope={creating} onClose={() => setCreating(null)} onCreated={(id) => created(creating, id)} />}</>;
+  const dialog = <>{creating && <NewRepoNote scope={creating} onClose={() => setCreating(null)} onCreated={(id) => created(creating, id)} />}</>;
   return { create, remove, dialog };
 }
 
@@ -70,7 +80,7 @@ export function ScopeNotes({
   const selected = selectedId;
   const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />;
 
-  if (!desktop) return <div className="flex min-h-0 min-w-0 flex-1 flex-col">{dialog}{selected ? <><button className="min-h-11 border-b px-4 text-left" onClick={() => onSelect(null)}>← Notes</button><NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} /></> : <>{listHeader}{list}</>}</div>;
+  if (!desktop) return <div className="flex min-h-0 min-w-0 flex-1 flex-col">{dialog}{selected ? <><BackToNotes onClick={() => onSelect(null)} /><NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} /></> : <>{listHeader}{list}</>}</div>;
   return (
     <div className={cn("flex min-h-0 flex-1", className)}>
       {dialog}
@@ -95,6 +105,17 @@ export function ScopeNotes({
   );
 }
 
+/** Mobile: back from the editor to the list. */
+export function BackToNotes({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="flex min-h-11 shrink-0 items-center border-b px-2">
+      <Button variant="ghost" size="sm" onClick={onClick}>
+        <ArrowLeftIcon /> Notes
+      </Button>
+    </div>
+  );
+}
+
 export function EmptyNote({ onCreate }: { onCreate?: () => void }) {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
@@ -104,13 +125,16 @@ export function EmptyNote({ onCreate }: { onCreate?: () => void }) {
         <p className="mt-1 text-xs opacity-80">
           Or{" "}
           {onCreate ? (
-            <button type="button" onClick={onCreate} className="underline underline-offset-2">
-              start a new one
-            </button>
+            <>
+              <button type="button" onClick={onCreate} className="underline underline-offset-2">
+                start a new one
+              </button>{" "}
+              <Kbd>⌘N</Kbd>
+            </>
           ) : (
             "start a new one"
-          )}{" "}
-          (⌘N). Notes are markdown files agents read and edit too.
+          )}
+          . Notes are markdown files agents read and edit too.
         </p>
       </div>
     </div>

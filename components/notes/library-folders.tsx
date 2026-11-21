@@ -2,6 +2,7 @@
 
 import { FolderIcon, GitBranchIcon, InboxIcon } from "lucide-react";
 import { TriageSettings } from "./triage-settings";
+import { Hint } from "@/components/hint";
 import { PixelIcon } from "@/components/world/pixel-icon";
 import { scopeKey, type NoteFolder, type NoteScope } from "@/lib/notes/types";
 import { cn } from "@/lib/utils";
@@ -40,12 +41,13 @@ export function LibraryFolders({
         const pScope: NoteScope = { kind: "projects", id: f.project.id };
         if (f.home) return (
           <div key={f.project.id} className="mt-2 flex items-center gap-0.5">
-            <button type="button" className={row(active === scopeKey(pScope))} onClick={() => onSelect(pScope)} aria-current={active === scopeKey(pScope) ? "true" : undefined}
-              title="Notes above your projects. Tag items #project or put them under a ## Project heading, then Route.">
-              <InboxIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="min-w-0 truncate font-medium">{f.project.name}</span>
-              {count(f.notes.length)}
-            </button>
+            <Hint side="right" label="Notes above your projects. Tag items #project or put them under a ## Project heading, then Route them to the top chief.">
+              <button type="button" className={row(active === scopeKey(pScope))} onClick={() => onSelect(pScope)} aria-current={active === scopeKey(pScope) ? "true" : undefined}>
+                <InboxIcon className="text-muted-foreground size-4 shrink-0" />
+                <span className="min-w-0 truncate font-medium">{f.project.name}</span>
+                {count(f.notes.length)}
+              </button>
+            </Hint>
             <TriageSettings />
           </div>
         );

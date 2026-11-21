@@ -6,6 +6,8 @@ import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Hint } from "@/components/hint";
 import { api } from "@/lib/client/api";
 import type { TriageSettings as Triage } from "@/lib/home/triage-types";
 
@@ -42,11 +44,13 @@ export function TriageSettings() {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label="Daily triage" title={triage?.enabled ? "Daily triage is on" : "Daily triage"} className={triage?.enabled ? "text-foreground" : "text-muted-foreground"}>
-          <CalendarClockIcon />
-        </Button>
-      </PopoverTrigger>
+      <Hint label={triage?.enabled ? "Daily triage is on" : "Daily triage"}>
+        <PopoverTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label="Daily triage" className={triage?.enabled ? "text-foreground" : "text-muted-foreground"}>
+            <CalendarClockIcon />
+          </Button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent align="start" className="w-72 space-y-3 text-xs">
         <div>
           <p className="text-sm font-medium">Daily triage</p>
@@ -60,12 +64,15 @@ export function TriageSettings() {
           <input type="time" value={form.time} disabled={busy || !triage} aria-label="Triage time"
             onChange={(e) => setForm({ ...form, time: e.target.value })} onBlur={() => triage && fromCron(triage.cron).time !== form.time && void save(form)}
             className="bg-background focus-visible:ring-ring h-7 rounded-md border px-2 outline-none focus-visible:ring-2" />
-          <select value={form.weekdays ? "weekdays" : "daily"} disabled={busy || !triage} aria-label="Triage days"
-            onChange={(e) => void save({ ...form, weekdays: e.target.value === "weekdays" })}
-            className="bg-background focus-visible:ring-ring h-7 rounded-md border px-1.5 outline-none focus-visible:ring-2">
-            <option value="weekdays">Weekdays</option>
-            <option value="daily">Every day</option>
-          </select>
+          <Select value={form.weekdays ? "weekdays" : "daily"} disabled={busy || !triage} onValueChange={(v) => void save({ ...form, weekdays: v === "weekdays" })}>
+            <SelectTrigger size="sm" aria-label="Triage days" className="h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekdays">Weekdays</SelectItem>
+              <SelectItem value="daily">Every day</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="text-muted-foreground space-y-0.5">
           {triage?.enabled && triage.nextRunAt && <p>Next: {new Date(triage.nextRunAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}</p>}

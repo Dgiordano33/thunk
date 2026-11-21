@@ -31,6 +31,8 @@ export type NoteMeta = NoteFlags & {
   excerpt: string;
   openTasks: number;
   doneTasks: number;
+  /** The file changed after Thunk last wrote it: an agent (or another editor) edited it by hand. Thunk notes only. */
+  editedOutside?: boolean;
 };
 
 export type Note = NoteMeta & { markdown: string };
