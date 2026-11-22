@@ -1,6 +1,7 @@
 "use client";
 
 import { FloatingWindow, WindowControls } from "@/components/world/floating-window";
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { XIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -34,6 +35,7 @@ export function TownPanel({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const desktop = useIsDesktop();
 
   useEffect(() => {
     if (!escapable) return;
@@ -56,7 +58,7 @@ export function TownPanel({
       )}
     >
       <CivPanel className={cn("w-full h-full", compact && "md:h-auto")} bodyClassName="flex h-full min-h-0 flex-col">
-        <header data-window-drag="" tabIndex={0} aria-label="Window title bar. Arrow keys move; Shift and arrow keys resize." className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
+        <header data-window-drag="" tabIndex={desktop ? 0 : undefined} aria-label={desktop ? "Window title bar. Arrow keys move; Shift and arrow keys resize." : undefined} className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             {eyebrow && <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">{eyebrow}</p>}
             <h2 className="pixel truncate text-lg leading-tight">{title}</h2>

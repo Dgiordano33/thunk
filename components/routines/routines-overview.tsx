@@ -34,8 +34,10 @@ export function RoutinesOverview({
 
   if (!list.length)
     return (
-      <FloatingWindow title="Routines" className="absolute inset-x-4 top-20 bottom-20 z-10 flex flex-col md:left-[calc(50%-224px)] md:right-auto md:w-md">
-        <CivPanel parchment className="w-full min-h-0 flex-1" bodyClassName="flex h-full flex-col items-center justify-center overflow-auto px-8 py-8 text-center">
+      <div className="fog absolute inset-0">
+      {/* Mobile keeps the full-screen centred card; desktop floats the same card as a window. */}
+      <FloatingWindow title="Routines" className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
+        <CivPanel parchment className="w-full max-w-md md:max-w-none md:min-h-0 md:flex-1" bodyClassName="flex flex-col items-center px-8 py-8 text-center md:h-full md:justify-center md:overflow-auto">
           <EmptyMark name="hourglass" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Routines</p>
           <h1 className="pixel mt-1 text-3xl">No routines yet</h1>
@@ -51,6 +53,7 @@ export function RoutinesOverview({
           </Link>
         </CivPanel>
       </FloatingWindow>
+      </div>
     );
 
   if (!desktop) return <main className="h-dvh overflow-auto px-4 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]"><h1 className="mb-4 text-xl">Routines</h1>{list.map(r => <article key={r.id} className="mb-3 rounded-lg border bg-background p-4"><Link className="block py-2 font-medium" href={projectSectionPath(paths.project(r.projectId), "workshop", { routine: r.id })}>{r.name}</Link><p>{r.projectName}</p><p className="my-2 text-sm">{triggerSummary(r)}</p><p className="text-sm">Next: {r.enabled && r.nextRunAt ? untilTime(r.nextRunAt) : "—"}</p><div className="mt-3 flex gap-4"><RunNowButton routine={r} onStarted={() => void refresh()} /><EnabledToggle routine={r} onChange={() => void refresh()} /></div></article>)}</main>;
