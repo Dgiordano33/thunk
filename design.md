@@ -214,7 +214,7 @@ Inside a project, the HUD replaces the homepage title with a back link (“Proje
 - Default width: `min(460px, calc(100vw - 2rem))`.
 - `medium` width: `min(560px, calc(100vw - 2rem))`, for tabbed panels like the project overview.
 - `wide` width: `min(720px, calc(100vw - 2rem))`.
-- Panels with many sections use [PanelTabs](components/town/panel-tabs.tsx): a line-variant tab bar under the header, active tab in `?section=`, each tab scrolling on its own.
+- Panels with many sections use [PanelTabs](components/town/panel-tabs.tsx) with `vertical`: a rail of line icons down the left (tooltip names, a small mono count badge for lists like sessions or archived workspaces), active tab in `?section=`, each tab scrolling on its own. Project and workspace panels share this shape: every tab opens on a `Section` heading, stat rows use `CardStats` (the hover card's hairline rows with mono values), and a panel's one primary action pins to a footer below the rail.
 - Default height fills the available space down to the bottom inset.
 - `compact` sizes the panel to its content, for short informational panels.
 - Header: 16px horizontal and 10px vertical padding, bottom border, optional eyebrow and actions, close control.

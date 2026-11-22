@@ -12,6 +12,8 @@ export type PanelTab = {
   icon?: React.ReactNode;
   /** Plain-text name for the icon's tooltip and accessible name. */
   name?: string;
+  /** A count shown on the rail icon, like sessions or external sessions. Hidden at zero. */
+  count?: number;
   content: React.ReactNode;
 };
 
@@ -48,9 +50,14 @@ export function PanelTabs({ tabs, vertical }: { tabs: PanelTab[]; vertical?: boo
               <TooltipTrigger asChild>
                 <TabsTrigger value={t.value} aria-label={t.name} className="size-11 flex-none justify-center md:size-9 group-data-vertical/tabs:justify-center aria-selected:bg-muted aria-selected:text-foreground aria-selected:after:opacity-100">
                   {t.icon ?? t.label}
+                  {!!t.count && (
+                    <span aria-hidden className="bg-popover text-muted-foreground ring-border absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 font-mono text-[9px] leading-4 tabular-nums ring-1">
+                      {t.count > 99 ? "99+" : t.count}
+                    </span>
+                  )}
                 </TabsTrigger>
               </TooltipTrigger>
-              <TooltipContent side="right">{t.name ?? t.label}</TooltipContent>
+              <TooltipContent side="right">{t.name ?? t.label}{t.count ? ` · ${t.count}` : ""}</TooltipContent>
             </Tooltip>
           ))}
         </TabsList>

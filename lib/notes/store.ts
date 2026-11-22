@@ -49,6 +49,13 @@ async function atomicWrite(file: string, content: string, exclusive = false) {
   } finally { await rm(tmp, { force: true }); }
 }
 
+/** Thunk stamps `updated` on every write it makes; a file modified well after that stamp was edited by hand. */
+const OUTSIDE_EDIT_SLACK_MS = 2000;
+function editedOutside(updated: string | null, mtime: Date) {
+  const stamp = updated ? Date.parse(updated) : NaN;
+  return Number.isFinite(stamp) && mtime.getTime() - stamp > OUTSIDE_EDIT_SLACK_MS;
+}
+
 function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Date, birth: Date): Note {
   if (id === MEMORY_NOTE_ID) {
     const tasks = extractTasks(raw);
@@ -88,6 +95,7 @@ function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Da
     createdAt: fm.created ?? birth.toISOString(),
     // Agents edit the body without touching `updated`; the file's mtime is the truth.
     updatedAt: mtime.toISOString(),
+    ...(dirs.scope.kind === "repos" ? {} : { editedOutside: editedOutside(fm.updated, mtime) }),
     excerpt: noteExcerpt(parsed.body, title),
     openTasks: tasks.filter((t) => !t.done).length,
     doneTasks: tasks.filter((t) => t.done).length,

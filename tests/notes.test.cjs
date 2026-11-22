@@ -242,3 +242,14 @@ test("legacy memory saves share the file lock and reject an agent's newer conten
   await ensureMemory(d.memoryFile, "replacement");
   assert.equal(await fs.readFile(d.memoryFile, "utf8"), "agent edit");
 });
+
+test("notes edited by hand after Thunk's last write are marked as edited outside", async (t) => {
+  const d = await dirs(t);
+  const note = await store.createNote(d, { markdown: "Plan\n" });
+  assert.equal(note.editedOutside, false);
+  const later = new Date(Date.now() + 60_000);
+  await fs.utimes(note.path, later, later);
+  assert.equal((await store.readNote(d, note.id)).editedOutside, true);
+  assert.equal((await store.writeNote(d, note.id, { markdown: "Plan, revised\n" })).editedOutside, false);
+  assert.ok(!(await store.readNote(d, "memory")).editedOutside);
+});

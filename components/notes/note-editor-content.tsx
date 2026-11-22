@@ -13,12 +13,26 @@ import { api } from "@/lib/client/api";
 import { editorExtensions } from "@/lib/editor/extensions";
 import { MemoryHeading } from "@/lib/editor/memory-heading";
 import { docToMarkdown } from "@/lib/editor/markdown";
+import { extractTasks } from "@/lib/notes/frontmatter";
 import { MEMORY_NOTE_ID, scopeKey, type Note, type NoteFlags, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed } from "@/lib/store/notes-store";
 import { NoteMetaBar } from "./note-meta-bar";
 import { confirm } from "@/components/confirm";
 
 const SAVE_MS = 800;
+/** The store's default title. The editor shows it as the placeholder, so a new note's title starts empty. */
+const UNTITLED = "Untitled";
+const shownTitle = (t: string) => (t === UNTITLED ? "" : t);
+const storedTitle = (t: string) => t.trim() || UNTITLED;
+
+/** The editor pane's loading state, shared with the dynamic import's fallback. */
+export function EditorLoading() {
+  return (
+    <div role="status" aria-label="Loading note" className="text-muted-foreground flex flex-1 justify-center p-8">
+      <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+    </div>
+  );
+}
 
 /** Load a note and edit it. Frontmatter stays out of the editor; flags live in the meta bar. */
 export function NoteEditor({
@@ -35,6 +49,7 @@ export function NoteEditor({
 }) {
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const key = `${scopeKey(scope)}/${noteId}`;
 
   useEffect(() => {
@@ -49,15 +64,17 @@ export function NoteEditor({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` identifies scope + note.
-  }, [key]);
+  }, [key, attempt]);
 
-  if (error) return <p className="text-destructive p-6 text-sm">{error}</p>;
-  if (!note)
+  if (error)
     return (
-      <div className="text-muted-foreground flex flex-1 justify-center p-8">
-        <Loader2Icon className="size-4 animate-spin" />
+      <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm">
+        <p className="font-medium">Couldn&apos;t open this note</p>
+        <p className="text-muted-foreground max-w-sm text-xs">{error}</p>
+        <Button size="sm" variant="outline" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>
       </div>
     );
+  if (!note) return <EditorLoading />;
   return <NoteEditorBody key={key} scope={scope} initial={note} onDeleted={onDeleted} topLevel={topLevel} />;
 }
 
@@ -68,7 +85,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
   const [delegating, setDelegating] = useState(false);
   const memory = initial.id === MEMORY_NOTE_ID;
   const [note, setNote] = useState(initial);
-  const [title, setTitle] = useState(initial.title);
+  const [title, setTitle] = useState(shownTitle(initial.title));
   const [save, setSave] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<Note | null>(null);
@@ -78,7 +95,8 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
   /** Body as last written by us or loaded from disk: lets us ignore our own watcher echoes. */
   const known = useRef(new Set([initial.markdown]));
   const dirty = useRef(false);
-  const titleRef = useRef(initial.title);
+  const titleRef = useRef(shownTitle(initial.title));
+  const titleInput = useRef<HTMLInputElement>(null);
   const version = useRef(initial.updatedAt);
   const savedTitle = useRef(initial.title);
 
@@ -88,7 +106,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
     const editor = editorRef.current;
     if (!editor || !dirty.current) return;
     const markdown = docToMarkdown(editor);
-    const body = { markdown, expectedUpdatedAt: version.current, ...(!memory && titleRef.current !== savedTitle.current ? { title: titleRef.current } : {}) };
+    const body = { markdown, expectedUpdatedAt: version.current, ...(!memory && storedTitle(titleRef.current) !== savedTitle.current ? { title: storedTitle(titleRef.current) } : {}) };
     known.current.add(markdown);
     dirty.current = false;
     setSave("saving");
@@ -146,6 +164,11 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
     editorRef.current = editor;
   }, [editor]);
 
+  // A brand-new note: start in the title.
+  useEffect(() => {
+    if (!memory && initial.title === UNTITLED && !initial.markdown.trim()) titleInput.current?.focus();
+  }, [memory, initial.title, initial.markdown]);
+
   // Flush pending edits when switching notes or closing the panel.
   const flushRef = useRef(flush);
   useEffect(() => {
@@ -182,8 +205,8 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
         known.current = new Set([fresh.markdown]);
         setNote(fresh);
         if (!memory) {
-          setTitle(fresh.title);
-          titleRef.current = fresh.title;
+          setTitle(shownTitle(fresh.title));
+          titleRef.current = shownTitle(fresh.title);
         }
         editorRef.current?.commands.setContent(fresh.markdown, { contentType: "markdown", emitUpdate: false });
       })
@@ -205,8 +228,8 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
     savedTitle.current = conflict.title;
     known.current = new Set([conflict.markdown]);
     setNote(conflict);
-    setTitle(conflict.title);
-    titleRef.current = conflict.title;
+    setTitle(shownTitle(conflict.title));
+    titleRef.current = shownTitle(conflict.title);
     editorRef.current?.commands.setContent(conflict.markdown, { contentType: "markdown", emitUpdate: false });
     setSave("saved");
     setConflict(null);
@@ -220,6 +243,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
   };
 
   const patchFlags = async (flags: Partial<NoteFlags>) => {
+    const before = note;
     setNote((n) => ({ ...n, ...flags }));
     try {
       const r = await api.patchNote(scope.kind, scope.id, initial.id, flags);
@@ -229,7 +253,8 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
       setNote(r.note);
       useNotesFeed.getState().touch(scope);
     } catch (err) {
-      setSaveError((err as Error).message);
+      setNote(before);
+      toast.error("Couldn't update the note", { description: (err as Error).message });
     }
   };
 
@@ -238,10 +263,52 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
       ? { title: `Delete ${note.path}?`, description: "This removes the file from the working tree.", action: "Delete", destructive: true }
       : { title: `Delete “${note.title}”?`, description: "This removes the file from disk.", action: "Delete", destructive: true }))) return;
     if (timer.current) clearTimeout(timer.current);
+    const wasDirty = dirty.current;
     dirty.current = false;
-    await api.deleteNote(scope.kind, scope.id, initial.id);
+    try {
+      await api.deleteNote(scope.kind, scope.id, initial.id);
+    } catch (err) {
+      dirty.current = wasDirty;
+      toast.error("Couldn't delete the note", { description: (err as Error).message });
+      return;
+    }
     useNotesFeed.getState().touch(scope);
     onDeleted?.();
+  };
+
+  const delegate = async () => {
+    // Save first so the agent reads what's on screen.
+    await flush();
+    if (dirty.current) return;
+    const open = extractTasks(editorRef.current ? docToMarkdown(editorRef.current) : note.markdown).filter((t) => !t.done);
+    const who = topLevel ? "the top chief" : "the project chief";
+    const ok = await confirm({
+      title: `${topLevel ? "Route" : "Delegate"} ${open.length} item${open.length === 1 ? "" : "s"} to ${who}?`,
+      description: (
+        <>
+          <span className="block">
+            {topLevel ? "It proposes which project gets each item; nothing starts until you approve its plan in the Inbox." : "It splits each item into its own task. You'll go to its session."}
+          </span>
+          <span className="mt-2 block max-h-40 overflow-y-auto">
+            {open.slice(0, 12).map((t) => <span key={t.line} className="block truncate">• {t.text}</span>)}
+            {open.length > 12 && <span className="block">…and {open.length - 12} more</span>}
+          </span>
+        </>
+      ),
+      action: topLevel ? "Route" : "Delegate",
+    });
+    if (!ok) return;
+    setDelegating(true);
+    try {
+      const r = await api.delegateNote(scope, note.id);
+      // Top-level notes stay put: the top chief's routing plan arrives in the inbox.
+      if (r.top) toast.success(`Sent ${r.open} item${r.open === 1 ? "" : "s"} to the top chief`, { description: "Approve its routing plan in your Inbox. Lines are marked as they are routed and settled." });
+      else { router.push(r.href); router.refresh(); }
+    } catch (err) {
+      toast.error(`Couldn't ${topLevel ? "route" : "delegate"} this note`, { description: (err as Error).message });
+    } finally {
+      setDelegating(false);
+    }
   };
 
   if (broken && memory && scope.kind !== "repos") {
@@ -255,18 +322,15 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <NoteMetaBar note={note} onChange={patchFlags} onDelete={memory ? undefined : remove}
-        delegateDisabled={delegating || save !== "saved" || Boolean(conflict) || broken}
-        delegateLabel={topLevel ? "Route" : "Delegate"}
-        onDelegate={memory ? undefined : () => {
-          setDelegating(true);
-          api.delegateNote(scope, note.id).then((r) => {
-            // Top-level notes stay put: the top chief's routing plan arrives in the inbox.
-            if (r.top) toast.success(`Sent ${r.open} item${r.open === 1 ? "" : "s"} to the top chief`, { description: "Approve its routing plan in your Inbox. Lines are marked as they are routed and settled." });
-            else { router.push(r.href); router.refresh(); }
-          })
-            .catch((err: Error) => setSaveError(err.message)).finally(() => setDelegating(false));
-        }} />
+      <NoteMetaBar
+        note={note}
+        onChange={patchFlags}
+        onDelete={memory ? undefined : remove}
+        onDelegate={memory ? undefined : () => void delegate()}
+        delegating={delegating}
+        blocked={Boolean(conflict) || broken}
+        topLevel={topLevel}
+      />
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs">
           <span className="flex-1">This note changed on disk while you were editing (an agent may have updated it).</span>
@@ -277,6 +341,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-10">
         {!memory && (
           <input
+            ref={titleInput}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -289,7 +354,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
                 editor?.commands.focus("start");
               }
             }}
-            placeholder="Untitled"
+            placeholder={UNTITLED}
             aria-label="Note title"
             className="placeholder:text-muted-foreground mb-3 w-full bg-transparent text-2xl font-bold tracking-tight outline-none"
           />
@@ -299,11 +364,9 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
         </div>
       </div>
       <footer className="text-muted-foreground flex shrink-0 items-center gap-2 border-t px-4 py-1.5 text-[11px]">
-        <span aria-live="polite">
-          {save === "saving" ? "Saving…" : save === "dirty" ? "Edited" : save === "error" ? `Couldn't save: ${saveError}` : `Saved · ${relativeTime(note.updatedAt)}`}
+        <span aria-live="polite" className={save === "error" ? "text-destructive" : undefined}>
+          {save === "saving" ? "Saving…" : save === "dirty" ? "Editing…" : save === "error" ? `Couldn't save: ${saveError}` : `Edited ${relativeTime(note.updatedAt)}${note.editedOutside ? " by an agent" : ""}`}
         </span>
-        {save !== "error" && saveError && <span className="text-destructive">{saveError}</span>}
-        <span className="ml-auto">⌘S to save now</span>
       </footer>
     </div>
   );
