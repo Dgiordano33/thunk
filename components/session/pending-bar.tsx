@@ -17,7 +17,8 @@ export function PendingBar() {
     }
   });
   const target = req ? (req.kind === "plan" ? `doc-${req.documentId}` : `req-${req.id}`) : null;
-  const [onScreen, setOnScreen] = useState<string | null>(null);
+  // Shown only once the card is known to be off screen, so it never flashes over a card already in view.
+  const [offScreen, setOffScreen] = useState<string | null>(null);
 
   useEffect(() => {
     if (!target) return;
@@ -26,13 +27,13 @@ export function PendingBar() {
     const frame = requestAnimationFrame(() => {
       const el = document.getElementById(target);
       if (!el) return;
-      observer = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting ? target : null), { threshold: 0.2 });
+      observer = new IntersectionObserver(([entry]) => setOffScreen(entry.isIntersecting ? null : target), { threshold: 0.2 });
       observer.observe(el);
     });
     return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
   }, [target]);
 
-  if (!req || !target || onScreen === target) return null;
+  if (!req || !target || offScreen !== target) return null;
   const label = req.kind === "permission" ? `${req.toolName} needs your permission` : req.kind === "question" ? "A question is waiting for you" : "A plan is ready for review";
   return (
     <div role="status" className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-2 px-4 md:hidden">

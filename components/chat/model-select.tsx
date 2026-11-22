@@ -36,7 +36,7 @@ export function ModelSelect({
 
   return (
     <PromptInputSelect value={value} onValueChange={onValueChange} disabled={disabled}>
-      <PromptInputSelectTrigger className="h-7 min-w-0 shrink text-xs [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
+      <PromptInputSelectTrigger className="h-7 max-w-36 shrink-0 text-xs max-md:gap-1 max-md:px-1.5 [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
         <PromptInputSelectValue />
       </PromptInputSelectTrigger>
       <PromptInputSelectContent>

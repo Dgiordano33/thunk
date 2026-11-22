@@ -27,12 +27,12 @@ test("both panel layouts render on the server without a browser", () => {
   const { ShellPanels } = load("../components/layout/shell-panels.tsx", {
     "@/components/ui/resizable": resizable,
     "@/components/mobile/viewport": load("../components/mobile/viewport.tsx"),
-    "@/components/mobile/drawer": { MobileDrawer: () => null },
+    "@/components/mobile/drawer": { MobileDrawer: () => null, MobileNav: React.createContext(null) },
   });
   const { WorkspaceShell } = load("../components/workspace/workspace-shell.tsx", {
     "@/components/ui/resizable": resizable,
     "@/components/mobile/viewport": load("../components/mobile/viewport.tsx"),
-    "@/components/mobile/drawer": { MobileDrawer: () => null },
+    "@/components/mobile/drawer": { MobileDrawer: () => null, MobileNav: React.createContext(null) },
     "next/navigation": { useParams: () => ({}) },
     "@/components/comments/comments-panel": { CommentsPanel: () => null },
     "@/lib/store/ui-store": { useUi: () => false },
