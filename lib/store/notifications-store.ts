@@ -5,11 +5,41 @@ import { api } from "@/lib/client/api";
 import type { Notification, NotificationCounts, NotificationEvent, NotificationKind } from "@/lib/notifications/types";
 
 export const useNotifications = create<{
-  items: Notification[]; before: { at: string; id: string } | null; counts: NotificationCounts; loaded: boolean; error: string | null; muted: NotificationKind[];
-}>(() => ({ items: [], before: null, counts: { total: 0, action: 0, byProject: {} }, loaded: false, error: null, muted: [] }));
+  items: Notification[]; before: { at: string; id: string } | null; counts: NotificationCounts; loaded: boolean; error: string | null;
+  /** Server-wide channel preferences (lib/notifications/preferences.ts). */
+  muted: NotificationKind[]; slackKinds: NotificationKind[]; prefsLoaded: boolean;
+}>(() => ({ items: [], before: null, counts: { total: 0, action: 0, byProject: {} }, loaded: false, error: null, muted: [], slackKinds: [], prefsLoaded: false }));
+
+type Preferences = { desktopMuted: NotificationKind[]; slack: NotificationKind[]; migrated: boolean };
+async function savePreferences(patch: Partial<Preferences>) {
+  const response = await fetch("/api/notifications/preferences", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not save");
+  useNotifications.setState({ muted: data.desktopMuted, slackKinds: data.slack, prefsLoaded: true });
+}
+/** Kinds that never raise a desktop alert, on every browser that opens this server. */
 export function setMuted(muted: NotificationKind[]) {
   useNotifications.setState({ muted });
-  try { localStorage.setItem("thunk.notifications.muted", JSON.stringify(muted)); } catch { /* Storage is optional. */ }
+  return savePreferences({ desktopMuted: muted });
+}
+/** Kinds sent to Slack. */
+export function setSlackKinds(slackKinds: NotificationKind[]) {
+  useNotifications.setState({ slackKinds });
+  return savePreferences({ slack: slackKinds });
+}
+/** Load preferences; the first browser to load them copies its old local mute list to the server. */
+async function loadPreferences() {
+  try {
+    const response = await fetch("/api/notifications/preferences", { cache: "no-store" });
+    if (!response.ok) return;
+    const prefs: Preferences = await response.json();
+    useNotifications.setState({ muted: prefs.desktopMuted, slackKinds: prefs.slack, prefsLoaded: true });
+    if (prefs.migrated) return;
+    let local: unknown = [];
+    try { local = JSON.parse(localStorage.getItem("thunk.notifications.muted") || "[]"); } catch { /* Storage is optional. */ }
+    const kinds = Array.isArray(local) ? local.filter((k): k is NotificationKind => typeof k === "string") : [];
+    await savePreferences({ migrated: true, ...(kinds.length && !prefs.desktopMuted.length ? { desktopMuted: kinds } : {}) });
+  } catch { /* Keep defaults; the settings screen shows its own errors. */ }
 }
 let revision = 0;
 let request = 0;
@@ -36,9 +66,8 @@ async function desktopAlert(n: Notification) {
   if (!("Notification" in window) || window.Notification.permission !== "granted") return;
   try {
     if (localStorage.getItem("thunk.notifications") !== "on") return;
-    const muted = JSON.parse(localStorage.getItem("thunk.notifications.muted") || "[]");
-    if (Array.isArray(muted) && muted.includes(n.kind)) return;
   } catch { return; }
+  if (useNotifications.getState().muted.includes(n.kind)) return;
   const show = () => {
     const key = "thunk.notifications.shown";
     try {
@@ -65,10 +94,7 @@ export function useNotificationsEvents() {
   useEffect(() => {
     refs++;
     if (!source) {
-      try {
-        const muted = JSON.parse(localStorage.getItem("thunk.notifications.muted") || "[]");
-        if (Array.isArray(muted)) useNotifications.setState({ muted });
-      } catch { /* Storage is optional. */ }
+      void loadPreferences();
       source = new EventSource("/api/notifications/events");
       // Keep the list on reconnect: the refresh merges fresh rows over it instead of flashing skeletons and losing scroll.
       source.onopen = () => { void refreshNotifications(); };

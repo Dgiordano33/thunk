@@ -27,7 +27,7 @@ Agents keep using MCP servers for ad-hoc reads and writes mid-session. These int
 - **Linear is polled, scoped per project.** A project maps to one Linear team, with an optional Linear project and label filter. Only issues assigned to the key's owner are imported.
 - **An issue becomes a task; the task is the unit Thunk works with.** No separate "issues" surface. The task shows the issue key (`ENG-123`) as a chip linking to Linear.
 - **Linear owns title and description; status is mapped by state type.** `backlog`/`unstarted` → `open`, `started` → `in_progress`, `completed` → `done`, `canceled` → `cancelled`. `blocked` has no Linear equivalent and is never pushed.
-- **Let Linear's GitHub integration do the PR linking.** A workspace started from an issue gets the branch `thunk/<issue-key>-<slug>`. The issue key in the branch name lets Linear attach the PR and move the issue on merge, so Thunk does not write "done" itself. The `thunk/` prefix keeps the `pr_opened` self-trigger guard in `pr-poll.ts` working.
+- **Let Linear's GitHub integration do the PR linking.** A workspace started from an issue gets the branch `thunk/<issue-key>-<slug>`. The issue key in the branch name lets Linear attach the PR and move the issue on merge, so Thunk does not write "done" itself when a PR exists. The `thunk/` prefix keeps the `pr_opened` self-trigger guard in `pr-poll.ts` working.
 - **Slack starts outbound only.** A bot token and `chat.postMessage`, not an incoming webhook, because messages are edited when the notification resolves.
 - **Slack is quiet by default.** Only `urgency: "action"` notifications post, after a 30-second delay, and not at all if the notification was read or resolved in that window (you were already at the keyboard).
 
@@ -58,6 +58,7 @@ Agents keep using MCP servers for ad-hoc reads and writes mid-session. These int
 2. Add a routine-level filter "only Linear issues with label …" so not every assigned issue starts a run.
 3. Write-back, each one a setting that defaults on:
    - Task moves to `in_progress` (or its workspace starts) → issue moves to the team's first `started` state.
+   - Task marked `done` in Thunk with no linked PR → issue moves to the team's first `completed` state.
    - A routine run or workspace opens a PR → comment on the issue with the PR link and run summary. Hook this in `lib/routines/report.ts` and the delivery `pr_opened` path.
 4. Loop guard: record the last value Thunk wrote per task and ignore the poll that reads it back.
 
@@ -76,11 +77,11 @@ This phase carries the most risk (a Slack account becomes a way to approve tool 
 - Creating Linear issues from Thunk tasks. Agents can do it through MCP when asked.
 - Notion, or a general integrations framework. Two integrations do not justify one.
 
-## Open questions
+## Settled questions (2026-11-22)
 
-- Slack destination: a DM to yourself, or a `#thunk` channel? The plan assumes a DM.
-- Import every assigned issue, or only those with a label such as `thunk`? The plan assumes every assigned issue in the mapped team, with the label as an optional filter.
-- Should marking a task done in Thunk close the Linear issue when there is no PR? The plan assumes no.
+- Slack destination: a DM to yourself.
+- Linear import: every issue assigned to you in the mapped team.
+- Marking a task done in Thunk closes its Linear issue when no PR is linked (a PR closes it through Linear's GitHub integration instead). Linear stays the source of truth: the poller always takes Linear's state, so reopening the issue in Linear reopens the task, and Thunk never overwrites a state change made in Linear since its last poll.
 
 ## Files
 

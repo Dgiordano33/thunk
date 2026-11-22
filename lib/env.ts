@@ -11,6 +11,11 @@ const schema = z.object({
   /** Remote access over Tailscale Serve (docs/remote.md); read by proxy.ts via lib/access.ts. */
   THUNK_TRUSTED_HOSTS: z.string().optional(),
   THUNK_TRUSTED_USER: z.string().optional(),
+  /** Base URL for links Thunk sends elsewhere (Slack). Defaults to the first trusted host (lib/public-url.ts). */
+  THUNK_PUBLIC_URL: z.string().optional(),
+  /** Override the Slack bot token and member ID saved in Settings → Integrations (lib/integrations/config.ts). */
+  SLACK_BOT_TOKEN: z.string().optional(),
+  SLACK_USER_ID: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

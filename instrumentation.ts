@@ -4,6 +4,8 @@ export async function register() {
     console.log(`[thunk] database: ${describeDatabase()}`);
     const { ensureNotificationProducers } = await import("./lib/notifications/producers");
     ensureNotificationProducers();
+    const { ensureSlackNotifier } = await import("./lib/integrations/slack");
+    ensureSlackNotifier();
     const { ensureDeliveryPolling } = await import("./lib/projects/delivery");
     ensureDeliveryPolling();
     const { recoverWorkers } = await import("./lib/workers/service");

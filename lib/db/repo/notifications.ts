@@ -137,3 +137,27 @@ export async function countOpen(): Promise<NotificationCounts> {
   for (const n of rows) if (n.urgency === "action") { counts.action++; counts.byProject[n.projectId] = (counts.byProject[n.projectId] ?? 0) + 1; }
   return counts;
 }
+
+export async function getNotification(id: string): Promise<Notification | null> {
+  const client = db();
+  if (!client) return mem.get(id) ?? null;
+  const [row] = await client.query<Row>("select * from notifications where id::text = $1", [id]);
+  return row ? fromRow(row) : null;
+}
+
+const g2 = globalThis as typeof globalThis & { __thunkMemSlackRefs?: Map<string, { channel: string; ts: string }> };
+const memSlack = (g2.__thunkMemSlackRefs ??= new Map());
+/** The Slack DM sent for a notification (lib/integrations/slack). */
+export async function saveSlackRef(notificationId: string, ref: { channel: string; ts: string }) {
+  const client = db();
+  if (!client) { memSlack.set(notificationId, ref); return; }
+  await client.query(
+    "insert into notification_slack_messages (notification_id, channel, ts) values ($1, $2, $3) on conflict (notification_id) do update set channel = excluded.channel, ts = excluded.ts",
+    [notificationId, ref.channel, ref.ts]);
+}
+export async function getSlackRef(notificationId: string): Promise<{ channel: string; ts: string } | null> {
+  const client = db();
+  if (!client) return memSlack.get(notificationId) ?? null;
+  const [row] = await client.query<{ channel: string; ts: string }>("select channel, ts from notification_slack_messages where notification_id::text = $1", [notificationId]);
+  return row ?? null;
+}
