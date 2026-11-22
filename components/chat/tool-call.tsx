@@ -57,7 +57,7 @@ export function ToolCallView({ toolUseId }: { toolUseId: string }) {
         toolName={tool.name}
         state={toolState(tool)}
         title={summary ? `${tool.name} · ${summary}` : tool.name}
-        className="py-2 [&_span]:max-w-[52ch] [&_span]:truncate"
+        className="py-2 [&>div]:min-w-0 [&_span]:max-w-[52ch] [&_span]:truncate [&_[data-slot=badge]]:shrink-0"
       />
       <ToolContent>
         <ToolInput input={tool.input} />

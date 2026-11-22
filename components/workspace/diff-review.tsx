@@ -7,6 +7,7 @@ import { api } from "@/lib/client/api";
 import { buildReview, diffHunks, type DiffComment } from "@/lib/review/diff";
 import { useSession } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
+import { useIsDesktop } from "@/components/mobile/viewport";
 
 export function useDiffComments(workspaceId: string) {
   const key = `thunk:diff-review:${workspaceId}`;
@@ -57,12 +58,14 @@ export function SendReview({ workspaceId, comments, onSent }: { workspaceId: str
 
 export function ReviewDiff({ diff, path, comments, onAdd, onRemove }: { diff: string; path: string; comments: DiffComment[]; onAdd: (comment: DiffComment) => void; onRemove: (id: string) => void }) {
   const [composing, setComposing] = useState<string | null>(null);
+  // Read-only on a phone: hunk comments are written on desktop.
+  const desktop = useIsDesktop();
   const hunks = diffHunks(diff);
   if (!hunks.length) return <p className="p-3 text-xs whitespace-pre-wrap">{diff || "No text changes (binary or mode only)."}</p>;
   return <div className="py-1">
     {hunks.map((hunk, i) => <div key={i}>
       <pre className="w-max min-w-full font-mono text-[11px] leading-[1.6]">{hunk.split("\n").map((line, j) => <div key={j} className={cn("px-3", line.startsWith("+") && "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300", line.startsWith("-") && "bg-red-500/10 text-red-800 dark:text-red-300", line.startsWith("@@") && "bg-muted/60 text-muted-foreground")}>
-        {j === 0 && <button type="button" aria-label={`Comment on ${path} ${line}`} className="mr-2 underline" onClick={() => setComposing(hunk)}>Comment</button>}{line || " "}
+        {j === 0 && desktop && <button type="button" aria-label={`Comment on ${path} ${line}`} className="mr-2 underline" onClick={() => setComposing(hunk)}>Comment</button>}{line || " "}
       </div>)}</pre>
       {comments.filter((c) => c.path === path && c.hunk === hunk).map((c) => <div key={c.id} className="m-2 rounded border p-2 text-xs whitespace-pre-wrap break-words">{c.body} <button type="button" className="underline" onClick={() => onRemove(c.id)}>Remove</button></div>)}
       {composing === hunk && <div className="p-2"><Composer autoFocus placeholder="Request a change to this hunk…" onCancel={() => setComposing(null)} onSubmit={(body) => { onAdd({ id: crypto.randomUUID(), path, hunk, body }); setComposing(null); }} /></div>}

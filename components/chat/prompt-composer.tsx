@@ -108,6 +108,12 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
             if (e.key === "Escape") { e.preventDefault(); setDismissed(true); }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setSelected((selected + (e.key === "ArrowDown" ? 1 : choices.length - 1)) % choices.length); }
             if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); choose(choices[selected] ?? choices[0]); }
+          } else if (e.key === "Enter" && !e.shiftKey && window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+            // On a touch keyboard Return adds a line; the send button submits.
+            e.preventDefault();
+            const { selectionStart: from, selectionEnd: to } = e.currentTarget;
+            setText(text.slice(0, from) + "\n" + text.slice(to));
+            requestAnimationFrame(() => textarea.current?.setSelectionRange(from + 1, from + 1));
           } else if ((e.key === "ArrowUp" && (e.currentTarget.selectionStart === 0 || historyIndex.current >= 0)) || (e.key === "ArrowDown" && historyIndex.current >= 0 && e.currentTarget.selectionStart === text.length)) {
             const entries = readHistory();
             if (!entries.length) return;
@@ -118,9 +124,10 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
             setDismissed(true);
           }
         }} />
-      <p className="hidden md:block text-muted-foreground px-3 pb-1 text-[10px]">@ files and notes · / commands · ↑ prompt history · paste or drop images</p>
+      <p className="text-muted-foreground w-full px-3 pb-1 text-[10px]">@ files and notes · / commands<span className="hidden md:inline"> · ↑ prompt history · paste or drop images</span></p>
       {error && <p role="alert" className="text-destructive px-3 text-xs">{error}</p>}
     </PromptInputBody>
-    <div className="flex items-end gap-1 px-2 pb-2"><AttachImagesButton disabled={disabled} /><div className="min-w-0 flex-1">{children}</div></div>
+    {/* The footer must be a direct child: the input group only stacks when it finds it there. */}
+    {children}
   </PromptInput>;
 }

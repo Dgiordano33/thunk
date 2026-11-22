@@ -1,10 +1,10 @@
 "use client";
 import { AgentStatus } from "@/components/onboarding/agent-status";
-import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { Button } from "@/components/ui/button";
 
-import { PromptComposer } from "@/components/chat/prompt-composer";
+import { AttachImagesButton, PromptComposer } from "@/components/chat/prompt-composer";
+import { SquareIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -45,7 +45,7 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
     api.control(sessionId, body).catch((err: Error) => setError(err.message));
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
+    <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-[max(env(safe-area-inset-bottom),0.75rem)] md:pb-5">
       {!live && <p className="text-muted-foreground mb-2 text-xs">Paused · Send a message to resume.</p>}
       <AgentStatus onlyUnavailable={status !== "error" && !error} />
       <PromptComposer
@@ -73,7 +73,8 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
       >
         <PromptInputFooter>
           <PromptInputTools>
-<ComposerOptions>            <ModelSelect
+            <AttachImagesButton disabled={submitting} />
+            <ModelSelect
               models={models}
               value={model ?? meta?.model}
               onValueChange={(value) => {
@@ -88,7 +89,7 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
               onValueChange={(value) => { if (live) { setMode(null); void control({ action: "setPermissionMode", value }); } else setMode(value); }}
               disabled={submitting}
             >
-              <PromptInputSelectTrigger className="h-7 text-xs">
+              <PromptInputSelectTrigger className="h-7 min-w-0 shrink text-xs">
                 <PromptInputSelectValue />
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>
@@ -98,10 +99,10 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
                   </PromptInputSelectItem>
                 ))}
               </PromptInputSelectContent>
-            </PromptInputSelect></ComposerOptions>
+            </PromptInputSelect>
             {error && <span className="text-destructive truncate text-xs">{error}</span>}
           </PromptInputTools>
-          {running && <Button variant="ghost" size="xs" type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</Button>}
+          {running && <Button variant="ghost" size="xs" type="button" aria-label="Stop" className="text-muted-foreground max-md:text-foreground shrink-0 text-xs max-md:border" onClick={() => control({ action: "interrupt" })}><SquareIcon className="size-3.5 fill-current md:hidden" /><span className="max-md:hidden">Stop</span></Button>}
           <PromptInputSubmit
             aria-label={submitting ? "Sending message" : "Send message"}
             className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"

@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { PROVIDER_LABELS, providerOf } from "@/lib/agent/types";
 import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/store/session-store";
-import { cn } from "@/lib/utils";
 
 const EXT_LANG: Record<string, string> = {
   ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx", mjs: "javascript", json: "json", md: "markdown",
@@ -83,7 +82,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
   }
 
   return (
-    <div className={cn("rounded-lg border border-amber-500/40 bg-amber-500/5 p-4")}>
+    <div id={`req-${requestId}`} className="scroll-mt-4 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
       <div className="mb-3 flex items-start gap-2">
         <ShieldAlertIcon className="mt-0.5 size-4 text-amber-700 dark:text-amber-400" />
         <div className="min-w-0">
@@ -119,7 +118,7 @@ export function PermissionCard({ requestId }: { requestId: string }) {
           </Button>
         </form>
       ) : (
-        <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center">
           {/* Decline first: an approval should never be one stray keystroke away. */}
           <Button size="sm" variant="outline" onClick={() => setDenying(true)} disabled={busy}>
             Deny…
@@ -128,11 +127,11 @@ export function PermissionCard({ requestId }: { requestId: string }) {
             Allow
           </Button>
           {canAlways && (
-            <Button size="sm" variant="secondary" onClick={() => decide("allow_always")} disabled={busy}>
+            <Button size="sm" variant="secondary" className="max-md:col-span-2" onClick={() => decide("allow_always")} disabled={busy}>
               Allow for this session
             </Button>
           )}
-          {error && <span className="text-destructive text-xs">{error}</span>}
+          {error && <span className="text-destructive text-xs max-md:col-span-2">{error}</span>}
         </div>
       )}
     </div>

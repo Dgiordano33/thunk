@@ -1,6 +1,8 @@
 "use client";
 import { useIsDesktop } from "@/components/mobile/viewport";
-import { MobileDrawer } from "@/components/mobile/drawer";
+import { MobileDrawer, MobileNav } from "@/components/mobile/drawer";
+import { MenuIcon, PanelBottomIcon } from "lucide-react";
+import { useContext } from "react";
 
 import { useDefaultLayout } from "react-resizable-panels";
 
@@ -35,10 +37,25 @@ export function WorkspaceShell({
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-chat-layout", panelIds: ['chat', 'tools'], storage: usePanelLayoutStorage() });
   const { session } = useParams<{ session?: string }>();
   const desktop = useIsDesktop();
+  const nav = useContext(MobileNav);
   const commentsOpen = useUi((s) => s.commentsOpen);
   const showComments = commentsOpen && !!session;
 
-  if (!desktop) return <WorkspaceBaseProvider value={base}><div className="flex h-full min-w-0 flex-col">{tabs}<MobileDrawer title="Workspace tools"><WorkspacePanel hasGit={false} workspaceId={workspaceId} projectId={projectId} sessions={sessions} /></MobileDrawer><div className="min-h-0 flex-1 overflow-y-auto">{children}</div></div></WorkspaceBaseProvider>;
+  // One bar on a phone: navigation, the session switcher (from `tabs`), then the workspace's tools.
+  if (!desktop) return (
+    <WorkspaceBaseProvider value={base}>
+      <div className="flex h-full min-w-0 flex-col">
+        <header className="flex h-12 shrink-0 items-center border-b px-1">
+          <MobileDrawer title="Navigation" side="left" className="px-0" trigger={<MenuIcon className="mx-auto size-5" />}>{nav}</MobileDrawer>
+          {tabs}
+          <MobileDrawer title="Workspace tools" className="px-0" trigger={<PanelBottomIcon className="mx-auto size-5" />}>
+            <WorkspacePanel hasGit={hasGit} workspaceId={workspaceId} projectId={projectId} sessions={sessions} />
+          </MobileDrawer>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </WorkspaceBaseProvider>
+  );
 
   return (
     <WorkspaceBaseProvider value={base}>

@@ -13,6 +13,7 @@ import { useSession } from "@/lib/store/session-store";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
 import { usePaths } from "@/components/layout/paths-context";
+import { useIsDesktop } from "@/components/mobile/viewport";
 
 import { sessionStatus, sessionDot } from "./labels";
 
@@ -23,14 +24,18 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasTurns = useSession((s) => s.items.some((item) => item.kind === "user" || item.kind === "turn"));
+  const desktop = useIsDesktop();
   if (!meta) return null;
 
   const live = meta.live && connection !== "not_live";
+  const canResume = hasTurns && (!live || status === "error" || status === "closed");
+  // On a phone the workspace bar already shows the title and status; this row appears only when it adds something.
+  if (!desktop && !canResume && !error && connection !== "reconnecting" && !["chief", "top_chief", "worker", "routine"].includes(meta.origin?.kind ?? "")) return null;
 
 
   return (
     <header className="flex min-h-11 md:h-10 shrink-0 items-center gap-3 border-b px-3">
-      <h1 className="min-w-0 truncate pixel text-base leading-tight">{meta.title || "Untitled session"}</h1>
+      <h1 className="min-w-0 truncate pixel text-base leading-tight max-md:hidden">{meta.title || "Untitled session"}</h1>
       {meta.origin?.kind === "chief" && meta.title?.toLowerCase() !== "chief" && <Badge variant="outline">Chief</Badge>}
       {meta.origin?.kind === "top_chief" && meta.title?.toLowerCase() !== "top chief" && <Badge variant="outline">Top chief</Badge>}
       {meta.origin?.kind === "worker" && meta.title?.toLowerCase() !== "worker" && <Badge variant="outline">Worker</Badge>}
@@ -43,7 +48,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
       <div className="text-muted-foreground ml-auto flex items-center gap-3 text-xs">
         <span className="hidden md:contents"><CommentsToggle /></span>
         {error && <span className="text-destructive">{error}</span>}
-        {hasTurns && (!live || status === "error" || status === "closed") && (
+        {canResume && (
           <Button
             size="sm"
             disabled={resuming}

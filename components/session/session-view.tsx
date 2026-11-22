@@ -10,6 +10,7 @@ import { useDocumentPersistence } from "@/lib/client/use-document-persistence";
 import type { PersistedDocument } from "@/lib/documents/types";
 import { useSession } from "@/lib/store/session-store";
 import { useUi } from "@/lib/store/ui-store";
+import { PendingBar } from "./pending-bar";
 import { SessionHeader } from "./session-header";
 
 export function SessionView({
@@ -116,6 +117,7 @@ export function SessionView({
         <>
           <SessionHeader onResume={resume} />
           <Timeline />
+          <PendingBar />
           <PromptBox key={meta.id} onResume={resume} />
         </>
       )}
