@@ -5,10 +5,10 @@ import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
   ArrowUpRightIcon, CheckCheckIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
-  GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
+  GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/hint";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { QuickContext } from "./quick-context";
 import { describe, destination, dismissScope, FAILED_KINDS, groupFollowups, isExternal, kindCounts, nextFocus, plural, sectionOf, type Group } from "./model";
 
 /** Group rows past this many fold behind "Show N more" so one noisy PR can't push decisions off screen. */
@@ -64,6 +65,8 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [reviewing, setReviewing] = useState<Set<string>>(() => new Set());
+  const [context, setContext] = useState<Set<string>>(() => new Set());
+  const [replyTo, setReplyTo] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ ids: string[]; decisions: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -153,6 +156,17 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     if (blocked) setConfirm({ ids: chosen.map((n) => n.id), decisions: blocked });
     else void dismiss(chosen.map((n) => n.id), plural(chosen.length, "item"));
   }
+  const toggleContext = (id: string) => setContext((s) => { const next = new Set(s); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  /** Open an item's context with the cursor in its reply box. */
+  const openReply = (id: string) => { setContext((s) => new Set([...s, id])); setReplyTo(id); };
+  const clearReplyTo = useCallback(() => setReplyTo(null), []);
+  const contextPanel = (n: Notification, lead: string) => context.has(n.id) && n.sessionId && (
+    <QuickContext n={n} lead={lead} focusReply={replyTo === n.id} onFocused={clearReplyTo} onReplied={(message) => { setAnnouncement(`${message}.`); void refreshNotifications(); }} />
+  );
+  const contextButton = (n: Notification, active: boolean, lead: string, labelled: boolean) => n.sessionId && (
+    <Hint label={context.has(n.id) ? "Hide context" : "Quick context"} keys="c"><Button data-context size={labelled ? "default" : "icon"} variant="ghost" tabIndex={active ? 0 : -1} aria-expanded={context.has(n.id)}
+      aria-label={`Quick context for “${lead}”`} className={cn("shrink-0", !labelled && "text-muted-foreground", context.has(n.id) && "bg-accent text-accent-foreground", RING)} onClick={() => toggleContext(n.id)}><PanelBottomIcon aria-hidden="true" />{labelled && "Context"}</Button></Hint>
+  );
   const toggleSelect = (id: string) => setSelected((s) => { const next = new Set(s); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   function onListKey(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -171,6 +185,11 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     else if (e.key === "Home" && onRow) move(0);
     else if (e.key === "End" && onRow) move(rows.length - 1);
     else if (e.key === "o" || e.key === "Enter" && onRow) { e.preventDefault(); row.querySelector<HTMLElement>("[data-open]")?.click(); }
+    else if (e.key === "c" || e.key === "r") {
+      if (!visible.find((v) => v.id === id)?.sessionId) return;
+      e.preventDefault();
+      if (e.key === "c") toggleContext(id); else openReply(id);
+    }
     else if (e.key === "x" || e.key === " " && onRow) { e.preventDefault(); toggleSelect(id); }
     else if (e.key === "e") {
       e.preventDefault();
@@ -248,11 +267,14 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
                 <Button key={i} tabIndex={tab} className={RING} variant={n.kind === "question" || i > 0 ? "outline" : "default"} disabled={busy} onClick={() => void act(n, action)}>{action.label}</Button>
               ))}
               {isPlan && open && <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => setReviewing((s) => { const next = new Set(s); next.delete(n.id); return next; })}>Hide plan</Button>}
-              <Button asChild tabIndex={tab} variant={n.actions.length ? "ghost" : "default"} className={RING}>
+              {n.sessionId && <Button data-reply tabIndex={tab} variant={n.actions.length ? "ghost" : "default"} className={RING} onClick={() => openReply(n.id)}><ReplyIcon aria-hidden="true" />{n.kind === "question" && !n.actions.length ? "Answer" : "Reply"}</Button>}
+              {contextButton(n, active, lead, true)}
+              <Button asChild tabIndex={tab} variant={n.actions.length || n.sessionId ? "ghost" : "default"} className={RING}>
                 <OpenLink n={n} data-open="">{more > 0 ? `${more} more options in session` : destination(n)}<ArrowUpRightIcon aria-hidden="true" /></OpenLink>
               </Button>
               <span className="ml-auto flex items-center gap-1">{selectBox(n, active, lead)}{dismissButton(n, active, lead)}</span>
             </div>
+            {contextPanel(n, lead)}
           </div>
         </div>
       </article>
@@ -267,9 +289,10 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     const open = n.status === "open" && n.urgency === "action";
     return (
       <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className={cn(
-        "hover:bg-muted/40 flex min-h-11 min-w-0 items-center gap-2 rounded-sm px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:gap-3",
+        "min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         selected.has(n.id) && "bg-accent/40",
       )}>
+        <div className="hover:bg-muted/40 flex min-h-11 min-w-0 items-center gap-2 rounded-sm px-1 py-1 sm:gap-3">
         {selectBox(n, active, lead) || <span className="size-8 shrink-0" />}
         <Icon aria-hidden="true" className={cn("size-4 shrink-0", failed && open ? "text-destructive" : open ? "text-[var(--status-attention-ink)]" : "text-muted-foreground")} />
         <div className="min-w-0 flex-1 py-1.5">
@@ -282,10 +305,13 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           </details>}
         </div>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-[11px]">{meta(n, withProject)}</span>
+        {contextButton(n, active, lead, false)}
         <Button asChild size="sm" variant="ghost" tabIndex={active ? 0 : -1} className={cn("hidden h-8 shrink-0 sm:inline-flex", RING)}>
           <OpenLink n={n} data-open="">{destination(n)}<ArrowUpRightIcon aria-hidden="true" /></OpenLink>
         </Button>
         {dismissButton(n, active, lead) || <span className="size-8 shrink-0" />}
+        </div>
+        {context.has(n.id) && n.sessionId && <div className="pb-3 pl-10 pr-1 sm:pl-11">{contextPanel(n, lead)}</div>}
       </article>
     );
   };
@@ -405,7 +431,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             }}>Load earlier notifications</Button>}
           </div>
           <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
-          <footer className="text-muted-foreground hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[11px] sm:px-8 md:flex"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> move</span><span><Kbd>x</Kbd> select</span><span><Kbd>e</Kbd> dismiss</span><span><Kbd>o</Kbd> open</span><span className="ml-auto">Shortcuts work while the list has focus</span></footer>
+          <footer className="text-muted-foreground hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[11px] sm:px-8 md:flex"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> move</span><span><Kbd>x</Kbd> select</span><span><Kbd>e</Kbd> dismiss</span><span><Kbd>o</Kbd> open</span><span><Kbd>c</Kbd> context</span><span><Kbd>r</Kbd> reply</span><span className="ml-auto">Shortcuts work while the list has focus</span></footer>
         </div>
       </CivPanel>
       <AlertDialog open={Boolean(confirm)} onOpenChange={(open) => { if (!open) setConfirm(null); }}>

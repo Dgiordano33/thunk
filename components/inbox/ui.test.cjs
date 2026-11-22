@@ -108,4 +108,16 @@ test("bulk dismissal scope counts decisions so the inbox can confirm first", () 
   assert.equal(model.destination(ci(1)), "Open PR on GitHub");
   assert.equal(model.destination({ ...base, kind: "turn_finished", sessionId: "s", href: "/w/s" }), "Open session");
 });
+test("items from a session can be answered in place; items without one only link out", () => {
+  const stuck = { ...base, id: "stuck", kind: "session_stuck", urgency: "action", status: "open", sessionId: "s1", title: "Agent has been quiet for 10 minutes" };
+  const ask = { ...base, id: "ask", kind: "question", urgency: "action", status: "open", sessionId: "s2", title: "Runner? · Platforms?" };
+  const html = renderInbox({ items: [...sample.map((n) => n.id === "permission" ? { ...n, sessionId: "s3" } : n), stuck, ask, ci(1)] });
+  assert.equal((html.match(/data-reply="true"/g) || []).length, 2, "decision cards with a session get a reply button");
+  assert.match(html, /data-variant="default"[^>]*data-reply="true"[^>]*>.*?Answer</s, "a question with no inline options leads with Answer");
+  assert.equal((html.match(/data-context="true"/g) || []).length, 3, "every session item offers quick context");
+  assert.match(html, /aria-label="Quick context for “Agent has been quiet for 10 minutes”"/);
+  assert.doesNotMatch(html, /Quick context for “Fix flaky test 1”/);
+  assert.doesNotMatch(html, /aria-expanded="true"/, "context stays closed until asked for");
+  assert.match(html, /<kbd[^>]*>c<\/kbd> context/); assert.match(html, /<kbd[^>]*>r<\/kbd> reply/);
+});
 module.exports = { renderInbox, sample };
