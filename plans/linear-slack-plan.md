@@ -1,6 +1,6 @@
 # Native Linear and Slack integrations
 
-Status: proposed · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
+Status: Phase 1 shipped (Slack DMs); Phase 2 built (Linear issues as tasks); Phase 3 next · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
 
 ## Goal
 

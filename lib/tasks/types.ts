@@ -7,10 +7,13 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = { open: "Open", in
 export type Task = {
   id: string; projectId: string; workspaceId: string | null;
   title: string; body: string | null; status: TaskStatus; priority: TaskPriority; position: number;
-  createdBy: "user" | "agent" | "routine";
+  createdBy: "user" | "agent" | "routine" | "integration";
+  /** The Linear issue this task mirrors. Linear owns it; see lib/integrations/linear. */
+  external: TaskExternal | null;
   sessionId: string | null; createdInSessionId: string | null; noteId: string | null;
   dueAt: string | null; completedAt: string | null; createdAt: string; updatedAt: string;
 };
+export type TaskExternal = { source: "linear"; id: string; key: string; url: string; updatedAt: string | null };
 export type TaskTree = { project: { id: string; name: string }; tasks: Task[]; workspaces: { workspace: { id: string; name: string; slug: string }; tasks: Task[] }[] };
 export type TaskCounts = Record<string, { project: number; byWorkspace: Record<string, number> }>;
 /** `transition` marks the change that routines can fire on: a new task, or one that just became done. */

@@ -7,6 +7,7 @@ import { getRoutine, listDueRoutines, listOpenRuns, updateRoutine, updateRun } f
 import { computeNextRun } from "./cron";
 import { pollDeliveryRoutines } from "./delivery-poll";
 import { pollPullRequests } from "./pr-poll";
+import { pollLinear } from "@/lib/integrations/linear/service";
 import { fire, isRunActive } from "./runner";
 import { routinesState as state } from "./state";
 import { subscribeTasks } from "@/lib/tasks/events";
@@ -32,7 +33,10 @@ async function tick() {
       await fire(routine, "cron").catch((err) => console.error(`[thunk] routine "${routine.name}" failed to start`, err));
     }
     await pollDeliveryRoutines();
-    if (++state.tickCount % PR_POLL_EVERY === 0) await pollPullRequests();
+    if (++state.tickCount % PR_POLL_EVERY === 0) {
+      await pollPullRequests();
+      await pollLinear();
+    }
   } catch (err) {
     console.error("[thunk] routines tick failed", err);
   } finally {

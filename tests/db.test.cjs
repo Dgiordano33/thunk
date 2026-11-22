@@ -335,3 +335,14 @@ test("a project already using the settings slug moves aside for the /settings pa
   await db.exec(MIGRATIONS[at].sql);
   assert.deepEqual((await db.query("select slug from public.projects order by slug")).map((r) => r.slug), ["other", "settings-2", "settings-3"]);
 });
+
+test("tasks can mirror one Linear issue each, created by the integration", async (t) => {
+  const db = await rawDb({ supabaseRoles: true });
+  t.after(() => db.pg.close());
+  await migrate(db.exec, db.query, MIGRATIONS);
+  const [{ id }] = await db.query("insert into public.projects (name, data_key, slug) values ('P', 'p', 'p') returning id");
+  const insert = () => db.query("insert into public.tasks (project_id, title, created_by, external_source, external_id, external_key) values ($1, 'Fix', 'integration', 'linear', 'i1', 'ENG-1')", [id]);
+  await insert();
+  await assert.rejects(insert(), /duplicate key/);
+  await assert.rejects(db.query("insert into public.tasks (project_id, title, created_by) values ($1, 'x', 'robot')", [id]), /tasks_created_by_check/);
+});

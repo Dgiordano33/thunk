@@ -64,7 +64,7 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
   return <Sheet open onOpenChange={(open) => !open && !busy && onClose()}>
     <SheetContent side={desktop ? "right" : "bottom"} className="max-h-[95dvh] w-full md:w-[min(600px,92vw)] overflow-y-auto p-5 data-[side=right]:sm:max-w-none">
       <SheetTitle>{task ? "Edit task" : "New task"}</SheetTitle>
-      <SheetDescription>Track the work and the session responsible for it.</SheetDescription>
+      <SheetDescription>{task?.external ? <>Mirrors <a href={task.external.url} target="_blank" rel="noreferrer" className="font-mono underline">{task.external.key}</a> in Linear. Linear owns it: changes made there replace edits made here.</> : "Track the work and the session responsible for it."}</SheetDescription>
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) { e.preventDefault(); void save(); } }}>
         <fieldset disabled={busy} className="space-y-4">
           <label className="grid gap-1.5 text-xs">Title<Input autoFocus required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /></label>

@@ -27,6 +27,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
     <div className="min-w-0 flex-1">
       <button type="button" className={`w-full text-left text-[13px] break-words hover:underline ${task.status === "done" || task.status === "cancelled" ? "text-muted-foreground line-through" : ""}`} onClick={() => onPatch(task)}>{task.title}</button>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+        {task.external && <a href={task.external.url} target="_blank" rel="noreferrer" title="Open in Linear" className="rounded border px-1 font-mono hover:text-foreground hover:underline">{task.external.key}</a>}
         <span className="rounded border px-1">{TASK_STATUS_LABELS[task.status]}</span>
         {task.priority > 0 && <span title={`${["None", "Low", "Medium", "High"][task.priority]} priority`} aria-label={`${["None", "Low", "Medium", "High"][task.priority]} priority`} className={`size-1.5 rounded-full ${["", "bg-sky-500", "bg-amber-500", "bg-red-500"][task.priority]}`} />}
         {task.sessionId && <Link className="max-w-40 truncate hover:underline" href={workspaceId ? paths.session(workspaceId, task.sessionId) : `/s/${task.sessionId}`}>{owner?.origin?.kind === "worker" ? `Worker · ${owner.title || task.title}` : owner?.title || "Assigned session"}</Link>}
