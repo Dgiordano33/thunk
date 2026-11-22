@@ -27,6 +27,8 @@ for (const entry of ["server.js", "package.json", "node_modules", ".next"]) {
   });
 }
 cpSync("public", path.join(server, "public"), { recursive: true });
+// lib/db/server.ts applies these at startup from <cwd>/db/migrations.
+cpSync("db/migrations", path.join(server, "db/migrations"), { recursive: true });
 cpSync(".next/static", path.join(server, ".next/static"), { recursive: true });
 // These packages load native files dynamically, beyond Next's static file tracing.
 for (const name of ["node-pty", "@anthropic-ai/claude-agent-sdk", `@anthropic-ai/claude-agent-sdk-darwin-${process.arch}`]) {
