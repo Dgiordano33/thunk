@@ -41,12 +41,6 @@ export async function openNotification(input: NewNotification): Promise<{ row: N
   if (!row) return openNotification(input); // The competing row resolved between insert and update.
   return { row: fromRow(row), created: false };
 }
-export async function getNotification(id: string): Promise<Notification | null> {
-  const client = db();
-  if (!client) return mem.get(id) ?? null;
-  const [row] = await client.query<Row>("select * from notifications where id::text = $1", [id]);
-  return row ? fromRow(row) : null;
-}
 export type NotificationFilter = { status?: "open" | "all"; projectId?: string; limit?: number; before?: string; beforeId?: string };
 export async function listNotifications(opts: NotificationFilter = {}): Promise<Notification[]> {
   const client = db();
