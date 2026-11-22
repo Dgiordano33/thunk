@@ -1,0 +1,12 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+const { version } = JSON.parse(readFileSync('desktop/package.json', 'utf8'));
+if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Desktop version must be x.y.z');
+const bundle = `dist-desktop/${process.arch === 'arm64' ? 'mac-arm64' : 'mac'}/Thunk.app`;
+execFileSync(process.execPath, ['scripts/smoke-desktop.mjs', `${bundle}/Contents/Resources/backend`], { stdio: 'inherit' });
+execFileSync('codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' });
+const archive = `dist-desktop/Thunk-${version}-${process.arch === 'arm64' ? 'Apple-Silicon' : 'Intel'}.zip`;
+execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, archive]);
+writeFileSync(`${archive}.sha256`, `${createHash('sha256').update(readFileSync(archive)).digest('hex')}  ${archive.split('/').at(-1)}\n`);
+console.log(`Ready to share: ${archive}`);

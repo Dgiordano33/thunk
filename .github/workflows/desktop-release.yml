@@ -1,0 +1,56 @@
+name: Desktop release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify release version and architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          node -e 'const assert = require("node:assert/strict"); assert.equal(process.arch, process.env.EXPECTED_ARCH); assert.equal(process.env.GITHUB_REF_NAME, "v" + require("./desktop/package.json").version)'
+      - run: npm ci
+      - run: npm run test:desktop
+      - run: npm run desktop:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.arch }}
+          path: |
+            dist-desktop/*.zip
+            dist-desktop/*.sha256
+          if-no-files-found: error
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: artifacts
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --draft --title "Thunk $RELEASE_TAG" --notes 'Download the Apple-Silicon ZIP for M-series Macs, or Intel for older Macs. Unzip, move Thunk to Applications, and open it. Connect an agent in Thunk → Connections. For updates, quit Thunk before replacing the app. Data stays in place. This build is ad-hoc signed; macOS may require approval in Privacy & Security.'

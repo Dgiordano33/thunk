@@ -1,6 +1,6 @@
 # Thunk
 
-For a locally packaged Mac app with no paid Apple Developer account, see [Thunk for macOS](docs/desktop.md). Build with `npm run desktop:pack`.
+For a locally packaged Mac app with no paid Apple Developer account, see [Thunk for macOS](docs/desktop.md). Build with `npm run desktop:pack`, or create a shareable ZIP with `npm run desktop:release`. The desktop app includes a Connections window for agent setup; see the guide for publishing Apple Silicon and Intel releases.
 
 To use Thunk from your phone or another computer over a private Tailscale network, see [Use Thunk from your phone](docs/remote.md). To run it around the clock on a Linux server, see [Run Thunk on a server](docs/server.md).
 

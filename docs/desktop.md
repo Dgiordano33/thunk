@@ -8,15 +8,56 @@ npm run desktop:pack
 open dist-desktop/mac-arm64/Thunk.app
 ```
 
-Use macOS and an official Node.js 22.16+ or 24+ installation (for example, via nvm). The build bundles that exact Node executable and targets the Mac's current architecture: `mac-arm64` on Apple Silicon, `mac` on Intel. It rejects Node installations that depend on external libraries, such as Homebrew's Node. Build separately on each architecture; cross-compilation is not supported. Internet access is needed for dependencies, Electron, and the existing Google Fonts build step.
+Install GitHub CLI (`brew install gh`) on the build machine first. Packaging copies its standalone executable and rejects external library dependencies. Use macOS and an official Node.js 22.16+ or 24+ installation (for example, via nvm). The build bundles that exact Node executable and targets the Mac's current architecture: `mac-arm64` on Apple Silicon, `mac` on Intel. It rejects Node installations that depend on external libraries, such as Homebrew's Node. Build separately on each architecture; cross-compilation is not supported. Internet access is needed for dependencies, Electron, and the existing Google Fonts build step.
 
-You can copy the generated app to `/Applications` and launch it from Finder. The app contains Electron, Thunk's production Next.js server, Node, the Claude SDK native runtime, and node-pty. No terminal or separately running server is needed. Git, GitHub CLI, Codex CLI, and project-specific tools remain installed on your Mac. The app reads your login shell's PATH to find them and uses your existing CLI logins.
+You can copy the generated app to `/Applications` and launch it from Finder. The app contains Electron, Thunk's production Next.js server, Node, the Claude SDK native runtime, and node-pty. No terminal or separately running server is needed. Codex CLI, ripgrep, and GitHub CLI are bundled too. Git and project-specific tools still need to be installed on your Mac. A clean Mac may prompt you to install Apple’s Command Line Tools for Git. The app reads your login shell's PATH to find them and uses your existing CLI logins.
 
 `npm run desktop:dev` prepares the same production backend and opens it in an unpackaged Electron window. `npm run test:desktop` tests startup, shutdown, configuration loading, startup failures, and external-link filtering. Packaging also runs a real PTY check using the copied Node executable. For an isolated smoke test of the finished bundle, run `node scripts/smoke-desktop.mjs dist-desktop/mac-arm64/Thunk.app/Contents/Resources/backend` (use `mac` on Intel). This checks UI assets, API access and origin protection, the bundled PTY and Claude executables, shutdown, and package isolation without using your data or credentials.
 
-## Updating
+## Connections
 
-Choose **Thunk → Check for Updates…**. A small dialog with a rotating hourglass shows the current step while Thunk fetches the latest `main` from `Dgiordano33/thunk` (or [your fork](#update-from-a-fork)), builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock also show that a build is running. Close the progress dialog to keep using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
+On first launch, a Connections window opens. Reopen it with **Thunk → Connections…**. It is available for local desktop mode only; remote server credentials must be configured on the server.
+
+- **Codex:** click Connect ChatGPT, then Open sign-in page and enter the displayed device code. Device sign-in must be enabled for your account. Existing Codex CLI authentication is recognized; this uses the same credentials as the CLI.
+- **Claude:** paste an Anthropic API key and Save connection. Thunk validates it without starting an agent turn and encrypts it with Electron safeStorage (macOS Keychain). API usage is billed separately from Claude subscriptions. Quit and reopen Thunk after saving or removing the key; finish active work first. A saved key overrides `ANTHROPIC_API_KEY` in the desktop configuration. Removing it falls back to any key or authentication already configured outside Connections. The UI never displays a stored key. Existing local Claude authentication continues to work as before; Connections does not provide Claude subscription login.
+- **GitHub:** click Connect GitHub, then complete browser authorization with the displayed code. GitHub CLI stores credentials using its supported credential store. Existing CLI authentication is shared. This does not install Git or configure SSH keys.
+
+Closing Connections cancels a pending login. You can skip setup and return later. For Codex/GitHub account removal, use their CLI logout commands; the UI deliberately does not silently sign other apps out of shared accounts.
+
+## Share a prebuilt app
+
+```sh
+npm ci
+npm run desktop:release
+```
+
+This runs the production build, packages and smoke-tests the app, verifies its ad-hoc signature, and creates `dist-desktop/Thunk-<version>-Apple-Silicon.zip` (or `Intel.zip`) plus a SHA-256 checksum. The version comes from `desktop/package.json`. Your regular `npm run desktop:pack` still produces the unpacked app at the same path. Bundled tools make the download larger.
+
+Send the ZIP for the recipient’s processor. They unzip it, move Thunk to Applications, open it (approving it in Privacy & Security if needed), and connect an agent. They do not need Node, npm, a source checkout, or access to the source repository. Git and any tools needed by their projects are separate prerequisites.
+
+**Thunk → Download Latest Release…** opens the published GitHub release page and tells the user which ZIP to select. Quit Thunk, replace the app, and reopen. Data in `~/.thunk`, desktop configuration, encrypted keys, and CLI logins stay in place. This is a manual download flow, not an automatic version check or installation. Until a release is published, the link may show GitHub’s not-found page.
+
+Set `THUNK_RELEASE_REPO=owner/downloads` in the desktop configuration to use a different release repository. This is independent of `THUNK_UPDATE_REPO`, which controls builds from source. GitHub requires repository access for downloads from a private repository; use a public download repository to share with people who cannot access your source.
+
+## Publish both Mac builds
+
+The workflow `.github/workflows/desktop-release.yml` builds on native Apple Silicon and Intel runners, smoke-tests each bundle, and creates a **draft** release with both ZIPs and checksums. It does not publish automatically.
+
+1. Merge the changes you want to distribute into your release branch (normally `main`).
+2. Set a fresh version in `desktop/package.json`, such as `0.1.1`, and commit it.
+3. Tag that commit and push the tag: `git tag v0.1.1` then `git push origin v0.1.1`. The tag must match the desktop version exactly.
+4. Wait for the **Desktop release** workflow to pass for both architectures.
+5. Open GitHub Releases, review the draft and publish it. Share the release link.
+
+GitHub Actions must be enabled, with permission to create releases. Builds need internet access and available macOS runner minutes. The workflow uses GitHub CLI preinstalled on those runners. No Apple signing secrets are required for this ad-hoc distribution path.
+
+For private source with public downloads, download both artifacts from the draft and upload them to a release in your public downloads repository. Configure `THUNK_RELEASE_REPO` for recipients. Automatic cross-repository publication is not configured.
+
+For a future automatic installer, use Developer ID signing and a standard updater such as electron-updater; the current manual path avoids introducing a custom unsigned remote-code installer.
+
+## Updating from source
+
+Choose **Thunk → Build Update from Source…**. A small dialog with a rotating hourglass shows the current step while Thunk fetches the latest `main` from `Dgiordano33/thunk` (or [your fork](#update-from-a-fork)), builds it in a temporary directory, and verifies the resulting bundle. This can take several minutes; the menu and Dock also show that a build is running. Close the progress dialog to keep using the app during the build. Choose **Restart and Update** when ready, or **Later** to discard the prepared update. Restart stops active agents and routines.
 
 The update replaces the app at its existing location, including an Applications copy. Your source checkout, desktop `.env`, and data are untouched. A failed build leaves the current app running. A failed replacement restores the previous app. The previous bundle is retained in a hidden `.thunk-previous-*` folder beside the app; `~/Library/Application Support/Thunk/previous-app.txt` records its path for recovery. You can remove those backup folders once satisfied with an update.
 
@@ -35,7 +76,7 @@ THUNK_UPDATE_REPO=you/thunk
 THUNK_UPDATE_BRANCH=main
 ```
 
-The settings are read each time you choose **Check for Updates…**, so no restart is needed.
+The settings are read each time you choose **Build Update from Source…**, so no restart is needed.
 
 ## Configuration and data
 
@@ -83,4 +124,4 @@ Closing the window keeps the app, agents, and routines running, as expected on m
 
 ## Distribution limits
 
-This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. There is no prebuilt-release updater, DMG installer, or Windows/Linux target yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
+This is a local macOS build with an ad-hoc signature, not a Developer ID signed or notarized release. Downloaded copies may require manual approval in macOS Privacy & Security. Prebuilt ZIP downloads are supported; replacing the app is manual. There is no automatic binary installer, DMG installer, or Windows/Linux target yet. See [Electron's signing guide](https://www.electronjs.org/docs/latest/tutorial/code-signing) for public distribution requirements.
