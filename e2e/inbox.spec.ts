@@ -43,7 +43,9 @@ test('quick context explains a request and a typed reply answers the agent witho
     await expect(context.getByText('Make the session screen work on a phone', { exact: true })).toBeVisible();
     await expect(context.getByText(/^Make the session screen work on a phone, and check/)).toBeVisible();
     await expect(context.getByText('Allow or deny Bash so the agent can continue.')).toBeVisible();
-    await expect(context.getByText('Waiting on you')).toBeVisible();
+    // The written summary arrives after the panel, above the facts it was written from.
+    await expect(context.getByText('The agent paused here and is waiting on you.')).toBeVisible();
+    await expect(context.getByText('Waiting on you', { exact: true })).toBeVisible();
     await expect(context.getByRole('log').getByText('Now run the tests.')).toBeVisible();
     await expect(context.getByText('Bash · Run the mobile browser tests')).toBeVisible();
     await page.screenshot({ path: `${SHOTS}/quick-context.png` });
@@ -96,4 +98,33 @@ test('a reply to a finished turn is a message to its session', async ({ page, re
     await page.screenshot({ path: `${SHOTS}/reply-to-finished.png` });
     await page.goto(done.href);
     await expect(page.getByText('Now do the tablet layout.')).toBeVisible({ timeout: 60000 });
+});
+
+test('a typed reply to a plan sends it back for changes', async ({ page, request }) => {
+    const ws = await newWorkspace(request, SAMPLE);
+    const session = await seedSession(request, ws, [
+        { type: 'user_message', messageId: 'm1', content: 'Plan the release pipeline.', kind: 'prompt' },
+        { type: 'turn_start', turnId: 't1' },
+        { type: 'plan_proposed', requestId: 'p1', toolUseId: 'u1', documentId: 'doc-plan-1', version: 1, plan: '# Release pipeline\n\n1. Build on every tag\n2. Sign and notarize\n3. Publish the archive' },
+    ], { title: 'Release plan' });
+    await openInbox(page, request, ws);
+    const card = page.locator('[data-notification]', { hasText: 'Plan ready for review' });
+    await expect(card).toBeVisible({ timeout: 60000 });
+    await card.getByRole('button', { name: 'Reply' }).click();
+    await expect(card.getByText('Review the plan, then approve it or reply with changes.')).toBeVisible();
+    await expect(card.getByRole('log').getByText('Sign and notarize')).toBeVisible();
+    await card.getByRole('textbox').fill('Add a step that runs the tests before signing.');
+    await card.getByRole('button', { name: 'Request changes' }).click();
+    await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
+    await expect(page.getByText('No agent is waiting on a decision.')).toBeVisible();
+    // The session agrees: the plan is no longer waiting, and the request is on record as changes.
+    const events = await page.evaluate(async (id) => {
+        const res = await fetch(`/api/sessions/${id}/stream`);
+        const reader = res.body!.getReader();
+        let text = '';
+        while (!text.includes('plan_resolved')) { const { value, done } = await reader.read(); if (done) break; text += new TextDecoder().decode(value); }
+        await reader.cancel();
+        return text;
+    }, session.id);
+    expect(events).toContain('"type":"plan_resolved","requestId":"p1","decision":"changes"');
 });

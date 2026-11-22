@@ -20,7 +20,7 @@
     "test:multi-repo": "node --conditions=react-server --test tests/multi-repo.test.cjs",
     "test": "npm run test:lib && node --conditions=react-server --test $(find tests -maxdepth 1 -name '*.test.cjs' ! -name 'panel-layout.test.cjs') && node --test tests/panel-layout.test.cjs components/tasks/ui.test.cjs components/inbox/ui.test.cjs",
     "test:lib": "node --test lib/*.test.mjs lib/*/*.test.mjs",
-    "test:notifications": "node --conditions=react-server --test tests/notifications.test.cjs && node --test components/inbox/ui.test.cjs",
+    "test:notifications": "node --conditions=react-server --test tests/notifications.test.cjs tests/inbox-reply.test.cjs && node --test components/inbox/ui.test.cjs lib/notifications/*.test.mjs",
     "desktop:prepare": "npm run build && node scripts/prepare-desktop.mjs",
     "desktop:dev": "npm run desktop:prepare && electron desktop",
     "desktop:pack": "npm run desktop:prepare && electron-builder --config desktop/builder.cjs --mac --dir",
