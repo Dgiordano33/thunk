@@ -144,13 +144,6 @@ export async function countOpen(): Promise<NotificationCounts> {
   return counts;
 }
 
-export async function getNotification(id: string): Promise<Notification | null> {
-  const client = db();
-  if (!client) return mem.get(id) ?? null;
-  const [row] = await client.query<Row>("select * from notifications where id::text = $1", [id]);
-  return row ? fromRow(row) : null;
-}
-
 const g2 = globalThis as typeof globalThis & { __thunkMemSlackRefs?: Map<string, { channel: string; ts: string }> };
 const memSlack = (g2.__thunkMemSlackRefs ??= new Map());
 /** The Slack DM sent for a notification (lib/integrations/slack). */
