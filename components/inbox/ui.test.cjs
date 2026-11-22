@@ -24,9 +24,12 @@ for (const ext of [".ts", ".tsx"]) require.extensions[ext] = (mod, filename) => 
 Module._load = function (name, ...rest) {
   if (name === "@/lib/store/notifications-store") return { useNotifications: (select) => select(state), useNotificationsEvents() {}, refreshNotifications() {} };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(query) };
+  if (name === "@/components/ai-elements/message") return { MessageResponse: ({ children }) => React.createElement("div", null, children) };
+  if (name === "@/components/hint") return { Hint: ({ children }) => children };
   return originalLoad.call(this, name, ...rest);
 };
 const { Inbox } = require("./inbox.tsx");
+const model = require("./model.ts");
 Module._load = originalLoad;
 const projects = [{ id: "thunk", name: "Thunk", workspaces: [{ id: "inbox", name: "notifications" }] }, { id: "docs", name: "Documentation", workspaces: [{ id: "main", name: "main" }] }];
 const base = { projectId: "thunk", workspaceId: "inbox", sessionId: null, runId: null, subjectKey: "preview", href: "/", detail: null, actions: [], readAt: null, resolvedAt: null, createdAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date().toISOString() };
@@ -44,11 +47,11 @@ function renderInbox(overrides = {}, search = "") {
 test("empty inbox uses the shared frame and shows one useful empty state", () => {
   const html = renderInbox();
   assert.match(html, /civ-panel/); assert.match(html, /Nothing needs you right now/);
-  assert.doesNotMatch(html, /Earlier<|Needs your attention</);
+  assert.doesNotMatch(html, /Earlier<|Decisions</);
 });
-test("attention precedes quiet history and retains permission controls and full details", () => {
+test("decisions precede quiet history and retain permission controls and full details", () => {
   const html = renderInbox({ items: sample, counts: { total: 2, action: 2, byProject: { thunk: 2 } } });
-  assert.ok(html.indexOf("Needs your attention") < html.indexOf("Earlier"));
+  assert.ok(html.indexOf(">Decisions<") < html.indexOf(">Earlier<"));
   assert.match(html, />Allow<\/button>/); assert.match(html, />Deny<\/button>/);
   assert.match(html, /<details/); assert.match(html, /npm run test:notifications/);
   assert.equal((html.match(/data-notification="true"/g) || []).length, 4);
@@ -58,5 +61,51 @@ test("project filter excludes other projects and failure does not look like load
   assert.match(filtered, /Nightly checks completed/); assert.doesNotMatch(filtered, /Allow the agent/);
   const failed = renderInbox({ loaded: false, error: "Connection lost" });
   assert.match(failed, /Your inbox couldn’t load/); assert.doesNotMatch(failed, /Loading inbox|All caught up/);
+});
+const ci = (i, projectId = "thunk") => ({ ...base, projectId, id: `ci-${projectId}-${i}`, kind: "ci_failed", urgency: "action", status: "open", subjectKey: `pr:${i}:ci`,
+  title: `CI failed · #${850 + i}`, detail: `Fix flaky test ${i}`, href: `https://github.com/acme/thunk/pull/${850 + i}`, createdAt: new Date(Date.now() - 86400000 - i * 1000).toISOString() });
+test("many CI failures collapse into one grouped list of one-line rows behind the decisions", () => {
+  const many = [...sample, ...Array.from({ length: 13 }, (_, i) => ci(i))];
+  const html = renderInbox({ items: many, counts: { total: 15, action: 15, byProject: { thunk: 15 } } });
+  assert.ok(html.indexOf(">Decisions<") < html.indexOf(">Follow-ups<"));
+  assert.equal((html.match(/border-l-\[var\(--status-attention\)\]/g) || []).length, 2, "only decisions get the card edge");
+  assert.match(html, />Dismiss 13</); assert.match(html, /Show 8 more/);
+  assert.equal((html.match(/Open PR on GitHub/g) || []).length, 5);
+  assert.match(html, /Fix flaky test 0/); assert.match(html, /font-mono">#850</);
+  assert.doesNotMatch(html, /CI failed · #850/, "the kind label is not repeated in the lead line");
+  assert.match(html, /target="_blank"/); assert.doesNotMatch(html, /Take a look|Mark all read/);
+  assert.match(html, /2 decisions · 13 follow-ups/);
+  assert.equal((html.match(/tabindex="0"/g) || []).filter(Boolean).length > 0, true);
+  assert.equal((html.match(/data-notification="true"[^>]*tabindex="0"|tabindex="0"[^>]*data-notification="true"/g) || []).length, 1, "one roving tab stop among rows");
+});
+test("dismiss names are distinct, plans lead with review, question options have equal weight", () => {
+  const question = { ...base, id: "q", kind: "question", urgency: "action", status: "open", title: "Which database?", actions: ["Postgres", "SQLite", "MySQL", "Mongo", "Redis"].map((label) => ({ label, method: "POST", path: "/a" })) };
+  const html = renderInbox({ items: [...sample, question, ci(1), ci(2)] });
+  const names = [...html.matchAll(/aria-label="(Dismiss[^"]*)"/g)].map((m) => m[1]);
+  assert.equal(new Set(names).size, names.length);
+  assert.match(html, />Review plan</); assert.doesNotMatch(html, />Approve plan</);
+  assert.match(html, /1 more options in session/); assert.doesNotMatch(html, />Redis</);
+  const options = [...html.matchAll(/data-variant="(\w+)"[^>]*>(Postgres|SQLite|MySQL|Mongo)</g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(options)], ["outline"]);
+});
+test("kind filter from the URL scopes the header count and the list", () => {
+  const html = renderInbox({ items: [...sample, ci(1)], counts: { total: 3, action: 3, byProject: { thunk: 3 } } }, "kind=ci_failed");
+  assert.match(html, /1 follow-up</); assert.doesNotMatch(html, /Allow the agent/); assert.doesNotMatch(html, /\d decisions? ·/);
+});
+test("focus moves to the row that took the dismissed row's place", () => {
+  assert.equal(model.nextFocus(["a", "b", "c"], ["b"], "b"), "c");
+  assert.equal(model.nextFocus(["a", "b", "c"], ["c"], "c"), "b");
+  assert.equal(model.nextFocus(["a", "b", "c"], ["a", "b"], "a"), "c");
+  assert.equal(model.nextFocus(["a", "b", "c"], ["b"], "a"), "a");
+  assert.equal(model.nextFocus(["a"], ["a"], "a"), null);
+});
+test("bulk dismissal scope counts decisions so the inbox can confirm first", () => {
+  const scope = model.dismissScope([...sample, ci(1), ci(2)]);
+  assert.equal(scope.count, 4); assert.equal(scope.decisions, 2);
+  assert.equal(model.dismissScope([ci(1), ci(2)]).decisions, 0);
+  const groups = model.groupFollowups([ci(1), ci(2, "docs"), ci(3)]);
+  assert.deepEqual(groups.map((g) => [g.projectId, g.items.length]), [["thunk", 2], ["docs", 1]]);
+  assert.equal(model.destination(ci(1)), "Open PR on GitHub");
+  assert.equal(model.destination({ ...base, kind: "turn_finished", sessionId: "s", href: "/w/s" }), "Open session");
 });
 module.exports = { renderInbox, sample };

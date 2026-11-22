@@ -18,3 +18,5 @@ export const resolveWhere = (match: Parameters<typeof repo.resolveWhere>[0]) => 
 export const markRead = (ids: string[]) => updated(repo.markRead(ids));
 export const dismiss = (id: string) => updated(repo.dismiss(id));
 export const dismissAll = (projectId?: string) => updated(repo.dismissAll(projectId));
+export const dismissMany = (ids: string[]) => updated(repo.dismissMany(ids));
+export const restore = (ids: string[]) => updated(repo.restore(ids));

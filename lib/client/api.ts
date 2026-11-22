@@ -51,6 +51,8 @@ export const api = {
   readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
   dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),
   dismissAllNotifications: (projectId?: string) => post<{ notifications: Notification[] }>("/api/notifications/dismiss-all", { projectId }),
+  dismissNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/dismiss-all", { ids }),
+  restoreNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/restore", { ids }),
   notificationAction: (action: Notification["actions"][number]) => post(action.path, action.body ?? {}),
   // Vault
   listVault: (projectId: string) => call<{ items: VaultItem[]; dir: string }>(`/api/projects/${projectId}/vault`),
