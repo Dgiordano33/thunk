@@ -14,6 +14,7 @@ async function status() {
     hasKey: Boolean(s.apiKey),
     keyHint: s.apiKey ? `…${s.apiKey.slice(-4)}` : null,
     keyFromEnv: s.keyFromEnv,
+    writeBack: s.writeBack,
     projects: projects.map((p) => ({ id: p.id, name: p.name, team: s.projects[p.id] ?? null, sync: linearSyncStatus(p.id) })),
   };
 }
@@ -25,6 +26,7 @@ export const PUT = handle(async (req: Request) => {
   const body = await parseBody(req, z.object({
     apiKey: z.string().max(200).optional(),
     projects: z.record(z.string(), z.string().nullable()).optional(),
+    writeBack: z.boolean().optional(),
   }));
   try {
     // Check a new key before saving it, so a typo never replaces a working key.
@@ -41,7 +43,7 @@ export const PUT = handle(async (req: Request) => {
         return [projectId, { teamId: team.id, teamKey: team.key, teamName: team.name }];
       }));
     }
-    await updateLinearSettings({ ...(body.apiKey !== undefined ? { apiKey: body.apiKey } : {}), ...(links ? { projects: links } : {}) });
+    await updateLinearSettings({ ...(body.apiKey !== undefined ? { apiKey: body.apiKey } : {}), ...(links ? { projects: links } : {}), ...(body.writeBack !== undefined ? { writeBack: body.writeBack } : {}) });
   } catch (error) {
     if (error instanceof LinearError) throw new HttpError(400, error.message);
     throw error;

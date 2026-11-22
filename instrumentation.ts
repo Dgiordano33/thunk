@@ -6,6 +6,8 @@ export async function register() {
     ensureNotificationProducers();
     const { ensureSlackNotifier } = await import("./lib/integrations/slack");
     ensureSlackNotifier();
+    const { ensureLinearWriteBack } = await import("./lib/integrations/linear/service");
+    ensureLinearWriteBack();
     const { ensureDeliveryPolling } = await import("./lib/projects/delivery");
     ensureDeliveryPolling();
     const { recoverWorkers } = await import("./lib/workers/service");

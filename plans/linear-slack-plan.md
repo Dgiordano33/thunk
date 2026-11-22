@@ -1,6 +1,6 @@
 # Native Linear and Slack integrations
 
-Status: Phase 1 shipped (Slack DMs); Phase 2 built (Linear issues as tasks); Phase 3 next · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
+Status: Phases 1 and 2 shipped; Phase 3 built except the PR comment and the label filter (see Phase 3 notes) · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
 
 ## Goal
 
@@ -61,6 +61,11 @@ Agents keep using MCP servers for ad-hoc reads and writes mid-session. These int
    - Task marked `done` in Thunk with no linked PR → issue moves to the team's first `completed` state.
    - A routine run or workspace opens a PR → comment on the issue with the PR link and run summary. Hook this in `lib/routines/report.ts` and the delivery `pr_opened` path.
 4. Loop guard: record the last value Thunk wrote per task and ignore the poll that reads it back.
+
+Phase 3 as built (2026-11-22): the started and completed write-backs and the routine payload shipped, with one
+"Update Linear from Thunk" setting. The loop guard is a read before each write rather than a record of past writes.
+Not built: the PR comment, because Linear's GitHub integration already attaches the PR to the issue from the
+`thunk/<key>-…` branch; and the routine label filter, which needs routine trigger filters that do not exist yet.
 
 ## Phase 4: Slack reports and replies
 
