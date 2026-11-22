@@ -4,6 +4,7 @@ import { AgentSettings } from "@/components/settings/agents";
 import { AppearanceSettings } from "@/components/settings/appearance";
 import { AutomationSettings } from "@/components/settings/automation";
 import { HelpSettings } from "@/components/settings/help";
+import { IntegrationSettings } from "@/components/settings/integrations";
 import { NotificationSettings } from "@/components/settings/notifications";
 import { settingsSection } from "@/components/settings/sections";
 import { UsageSettings } from "@/components/settings/usage";
@@ -22,6 +23,7 @@ export default async function SettingsSectionPage({ params }: PageProps<"/settin
     case "appearance": return <AppearanceSettings />;
     case "notifications": return <NotificationSettings />;
     case "agents": return <AgentSettings />;
+    case "integrations": return <IntegrationSettings />;
     case "automation": return <AutomationSettings />;
     case "help": return <HelpSettings />;
     case "usage": {

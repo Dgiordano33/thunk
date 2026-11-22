@@ -9,6 +9,7 @@ import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
 import { readAgentSettings } from "@/lib/setup/settings";
+import { integrationsFile } from "@/lib/integrations/config";
 import { sessionConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
 import { projectConfigDir, sharedConfigDir, projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
@@ -131,10 +132,10 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     settings: {
       autoMemoryEnabled: true,
       autoMemoryDirectory: projectMemoryDir(project.dataKey),
-      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`, `Edit(/${projectConfigDir(project.dataKey)}/**)`, `Write(/${projectConfigDir(project.dataKey)}/**)`, `Edit(/${sharedConfigDir()}/**)`, `Write(/${sharedConfigDir()}/**)`] },
+      permissions: { deny: [`Edit(/${vaultDir.dir}/**)`, `Write(/${vaultDir.dir}/**)`, `Edit(/${projectConfigDir(project.dataKey)}/**)`, `Write(/${projectConfigDir(project.dataKey)}/**)`, `Edit(/${sharedConfigDir()}/**)`, `Write(/${sharedConfigDir()}/**)`, `Read(/${integrationsFile()})`] },
     },
     // Apply to sandboxed shell calls too; unrestricted sessions still require OS isolation.
-    sandbox: { filesystem: { denyWrite: [vaultDir.dir, projectConfigDir(project.dataKey), sharedConfigDir()] } },
+    sandbox: { filesystem: { denyWrite: [vaultDir.dir, projectConfigDir(project.dataKey), sharedConfigDir()], denyRead: [integrationsFile()] } },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",

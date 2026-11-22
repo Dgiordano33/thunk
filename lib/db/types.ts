@@ -25,6 +25,15 @@ export type Database = {
         ]
       }
 
+      notification_slack_messages: {
+        Row: { notification_id: string; channel: string; ts: string; created_at: string }
+        Insert: { notification_id: string; channel: string; ts: string; created_at?: string }
+        Update: { notification_id?: string; channel?: string; ts?: string; created_at?: string }
+        Relationships: [
+          { foreignKeyName: "notification_slack_messages_notification_id_fkey"; columns: ["notification_id"]; isOneToOne: true; referencedRelation: "notifications"; referencedColumns: ["id"] }
+        ]
+      }
+
       project_repo_folders: {
         Row: { id: string; project_id: string; repo_id: string; path: string; label: string; files: string[] | null; created_at: string; updated_at: string }
         Insert: { id?: string; project_id: string; repo_id: string; path: string; label: string; files?: string[] | null; created_at?: string; updated_at?: string }

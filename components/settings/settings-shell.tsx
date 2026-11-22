@@ -1,5 +1,5 @@
 "use client";
-import { BellIcon, BotIcon, CalendarClockIcon, ChartNoAxesColumnIcon, ChevronRightIcon, LifeBuoyIcon, MonitorIcon, ServerIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
+import { BellIcon, BlocksIcon, BotIcon, CalendarClockIcon, ChartNoAxesColumnIcon, ChevronRightIcon, LifeBuoyIcon, MonitorIcon, ServerIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
@@ -12,6 +12,7 @@ const ICONS: Record<SettingsSectionId, LucideIcon> = {
   appearance: SunMoonIcon,
   notifications: BellIcon,
   agents: BotIcon,
+  integrations: BlocksIcon,
   automation: CalendarClockIcon,
   usage: ChartNoAxesColumnIcon,
   help: LifeBuoyIcon,

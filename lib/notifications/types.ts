@@ -19,6 +19,9 @@ export const NOTIFICATION_GROUPS: { label: string; description: string; kinds: N
   { label: "Delivery", description: "CI, pull requests, deploys and scripts.", kinds: ["ci_failed", "ci_stuck", "pr_merged", "deploy_ready", "script_failed"] },
 ];
 
+/** Sent to Slack until you choose otherwise: the kinds where an agent is waiting on you. */
+export const DEFAULT_SLACK_KINDS: readonly NotificationKind[] = NOTIFICATION_GROUPS[0].kinds;
+
 export type Notification = {
   id: string; kind: NotificationKind; urgency: "action" | "info";
   projectId: string; workspaceId: string | null; sessionId: string | null; runId: string | null;
