@@ -115,7 +115,7 @@ export async function listSessions(
   for (const live of listLiveSessions()) {
     if (opts.workspaceId && live.meta.workspaceId !== opts.workspaceId) continue;
     if (opts.projectId && live.meta.projectId !== opts.projectId) continue;
-    byId.set(live.id, { ...live.meta, live: true });
+    byId.set(live.id, { ...byId.get(live.id), ...live.meta, live: true });
   }
   return [...byId.values()].filter(s => opts.includeHidden || s.origin?.kind !== "board").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, opts.limit ?? 50);
 }

@@ -394,7 +394,7 @@ export const useSession = create<SessionStore>()((set, get) => ({
     if (!meta.live)
       for (const [id, r] of Object.entries(requests))
         if (r.status === "pending") requests[id] = { ...r, status: "expired" };
-    set({ ...s, documents: docs, requests });
+    set({ ...s, meta: { ...s.meta!, live: meta.live }, connection: meta.live ? "connecting" : "not_live", documents: docs, requests });
   },
 
   applyEvent: (e) => get().applyEvents([e]),
@@ -404,13 +404,14 @@ export const useSession = create<SessionStore>()((set, get) => ({
     for (const e of events) {
       if (e.sessionId !== next.sessionId || e.seq <= next.lastSeq) continue;
       next = { ...next, ...reduce(next, e), lastSeq: e.seq };
+      if (next.meta && Number.isFinite(e.ts)) next.meta = { ...next.meta, updatedAt: new Date(e.ts).toISOString() };
     }
     if (next !== previous) set(next);
   },
 
   setConnection: (connection) => set({ connection }),
 
-  setMeta: (patch) => set((s) => ({ meta: s.meta ? { ...s.meta, ...patch } : s.meta })),
+  setMeta: (patch) => set((s) => ({ meta: s.meta ? { ...s.meta, ...patch } : s.meta, ...(patch.status ? { status: patch.status } : {}) })),
 
   setActiveDocument: (activeDocumentId) => set({ activeDocumentId }),
 

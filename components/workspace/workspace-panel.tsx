@@ -90,7 +90,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
       setTab(value === "files" && filesView === "changed" ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
       <div className="flex h-10 shrink-0 items-end overflow-x-auto border-b px-3">
-        <TabsList variant="line" className="h-full">
+        <TabsList variant="line" className="h-full shrink-0 min-w-max">
           <TabsTrigger className="pixel text-xs" value="sessions">Sessions</TabsTrigger>
           <TabsTrigger className="pixel text-xs" value="artifacts">Artifacts</TabsTrigger>
           {desktop && <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>

@@ -1,4 +1,5 @@
 "use client";
+import { sessionStatus, sessionDot } from "@/components/session/labels";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileDrawer } from "@/components/mobile/drawer";
 
@@ -45,7 +46,7 @@ export function WorkspaceTabs({
           const active = pathname === href;
           const current = s.id === meta?.id;
           const live = current ? Boolean(meta?.live) : s.live;
-          const busy = current && (status === "running" || status === "awaiting");
+          const state = { ...s, ...(current ? meta : {}), live: Boolean(live), status: current ? status : s.status };
           return (
             <Link
               key={s.id}
@@ -58,10 +59,10 @@ export function WorkspaceTabs({
                 lineTabIndicator, "after:h-0.5 after:inset-x-0 after:bottom-0",
               )}
             >
-              <span
+              <span role="img" aria-label={sessionStatus(state)} title={sessionStatus(state)}
                 className={cn(
                   "size-1.5 shrink-0 rounded-full",
-                  busy ? "animate-pulse bg-amber-500" : live ? "bg-emerald-500" : "bg-muted-foreground/40",
+                  sessionDot(state),
                 )}
               />
               <span className="truncate">{(current ? meta?.title : s.title) || "Untitled"}</span>

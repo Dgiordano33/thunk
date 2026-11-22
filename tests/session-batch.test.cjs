@@ -35,3 +35,19 @@ test('batch matches individual event reduction', () => {
   useSession.getState().applyEvents(events);
   assert.deepEqual(useSession.getState(), expected);
 });
+
+test('hydration uses current liveness instead of historical terminal events', () => {
+  const meta = { id: 'resume', status: 'idle', live: true };
+  useSession.getState().hydrate({ meta, events: [{ sessionId: 'resume', seq: 1, ts: 1000, type: 'status', state: 'closed' }], documents: [] });
+  assert.equal(useSession.getState().meta.live, true);
+  assert.equal(useSession.getState().connection, 'connecting');
+  useSession.getState().hydrate({ meta: { ...meta, live: false }, events: [], documents: [] });
+  assert.equal(useSession.getState().connection, 'not_live');
+});
+
+test('resume metadata synchronizes status and new events update activity', () => {
+  useSession.getState().setMeta({ live: true, status: 'starting' });
+  assert.equal(useSession.getState().status, 'starting');
+  useSession.getState().applyEvent({ sessionId: 'resume', seq: 2, ts: 2000, type: 'status', state: 'idle' });
+  assert.equal(useSession.getState().meta.updatedAt, new Date(2000).toISOString());
+});
