@@ -197,6 +197,18 @@ test("delivery batch errors propagate and reconciliation can be retried", async 
   assert.equal(service.resolveWhere, original);
 });
 
+test("bulk dismissal by id can be undone unless a newer row claims the subject", async () => {
+  const a = await service.notify(base);
+  const b = await service.notify({ ...base, subjectKey: "session:a:req:2" });
+  const c = await service.notify({ ...base, subjectKey: "session:a:req:3" });
+  assert.equal((await service.dismissMany([a.id, b.id])).length, 2);
+  assert.equal((await repo.countOpen()).total, 1);
+  await service.notify(base); // A newer request reopens a's subject before the undo.
+  const restored = await service.restore([a.id, b.id, c.id]);
+  assert.deepEqual(restored.map((n) => n.id), [b.id]);
+  assert.equal((await repo.countOpen()).total, 3);
+});
+
 test("database reconciliation resolves exactly the scoped subjects in one statement and surfaces failures", async (t) => {
   const { testDb } = require("./helpers/test-db.cjs");
   const db = await testDb();
@@ -220,4 +232,21 @@ test("database reconciliation resolves exactly the scoped subjects in one statem
   assert.deepEqual(await repo.resolveWhere({ projectId: p.id, subjectKeys: ["pr:1:ci"] }), []);
   t.mock.method(require("../lib/db/server.ts"), "db", () => ({ kind: "pglite", query: async () => { throw new Error("offline"); } }));
   await assert.rejects(repo.resolveWhere({ projectId: p.id, subjectKeys: ["pr:1:ci"] }), { message: "offline" });
+});
+
+test("database undo reopens dismissed rows without colliding with a newer open row", async (t) => {
+  const { testDb } = require("./helpers/test-db.cjs");
+  const db = await testDb();
+  const server = require("../lib/db/server.ts");
+  const mocked = t.mock.method(server, "db", () => ({ kind: "pglite", query: (sql, params) => db.query(sql, params) }));
+  t.after(() => { mocked.mock.restore(); return db.close(); });
+  const [p] = await db.query("insert into projects (name, data_key, slug) values ('R', 'r', 'r') returning id");
+  const row = (key) => repo.openNotification({ ...base, projectId: p.id, subjectKey: key, sessionId: undefined }).then((r) => r.row);
+  const a = await row("r:1"); const b = await row("r:2");
+  assert.equal((await repo.dismissMany([a.id, b.id])).length, 2);
+  await row("r:1");
+  const restored = await repo.restore([a.id, b.id]);
+  assert.deepEqual(restored.map((n) => n.id), [b.id]);
+  assert.equal(restored[0].status, "open"); assert.equal(restored[0].resolvedAt, null);
+  assert.deepEqual((await repo.listNotifications()).map((n) => n.subjectKey).sort(), ["r:1", "r:2"]);
 });

@@ -40,6 +40,13 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
 }
 
 const post = <T>(url: string, json: unknown) => call<T>(url, { method: "POST", json });
+/** The bulk notification routes accept at most 500 ids per request; send larger sets in batches and merge the results. */
+async function postIdBatches(url: string, ids: string[]) {
+  const notifications: Notification[] = [];
+  for (let i = 0; i < ids.length; i += 500)
+    notifications.push(...(await post<{ notifications: Notification[] }>(url, { ids: ids.slice(i, i + 500) })).notifications);
+  return { notifications };
+}
 
 export const api = {
   openChief: (projectId: string, body: { fresh?: boolean; noteId?: string } = {}) => post<{ sessionId: string; workspaceId: string; href: string }>(`/api/projects/${projectId}/chief`, body),
@@ -51,6 +58,8 @@ export const api = {
   readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
   dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),
   dismissAllNotifications: (projectId?: string) => post<{ notifications: Notification[] }>("/api/notifications/dismiss-all", { projectId }),
+  dismissNotifications: (ids: string[]) => postIdBatches("/api/notifications/dismiss-all", ids),
+  restoreNotifications: (ids: string[]) => postIdBatches("/api/notifications/restore", ids),
   notificationAction: (action: Notification["actions"][number]) => post(action.path, action.body ?? {}),
   // Vault
   listVault: (projectId: string) => call<{ items: VaultItem[]; dir: string }>(`/api/projects/${projectId}/vault`),

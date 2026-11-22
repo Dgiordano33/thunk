@@ -97,6 +97,29 @@ export const resolveBySubject = (subjectKey: string) => change({ subjectKey }, "
 export const resolveWhere = (match: Match) => change(match, "resolved");
 export const dismiss = (id: string) => change({ ids: [id] }, "dismissed");
 export const dismissAll = (projectId?: string) => change({ projectId }, "dismissed");
+export const dismissMany = (ids: string[]) => ids.length ? change({ ids }, "dismissed") : Promise.resolve([]);
+/** Undo a dismissal. A row stays dismissed if a newer open row already claims its subject. */
+export async function restore(ids: string[]): Promise<Notification[]> {
+  if (!ids.length) return [];
+  const now = new Date().toISOString();
+  const client = db();
+  if (!client) {
+    const restored: Notification[] = [];
+    for (const id of ids) {
+      const n = mem.get(id);
+      if (!n || n.status !== "dismissed" || [...mem.values()].some((o) => o.status === "open" && o.subjectKey === n.subjectKey)) continue;
+      const next: Notification = { ...n, status: "open", resolvedAt: null, updatedAt: now };
+      mem.set(id, next); restored.push(next);
+    }
+    return restored;
+  }
+  const rows = await client.query<Row>(
+    `update notifications n set status = 'open', resolved_at = null, updated_at = $2
+     where n.id::text = any($1) and n.status = 'dismissed'
+       and not exists (select 1 from notifications o where o.subject_key = n.subject_key and o.status = 'open')
+     returning n.*`, [ids, now]);
+  return rows.map(fromRow);
+}
 export async function markRead(ids: string[]) {
   const read = await change({ ids }, undefined, true);
   const resolved = await change({ ids: read.filter((n) => n.urgency === "info").map((n) => n.id) }, "resolved");

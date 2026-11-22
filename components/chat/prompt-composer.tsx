@@ -13,10 +13,14 @@ type PromptContext = Awaited<ReturnType<typeof api.promptContext>>;
 const contextCache = new Map<string, PromptContext>();
 const EMPTY_CONTEXT: PromptContext = { files: [], commands: [], notes: [] };
 
-function Images({ disabled }: { disabled?: boolean }) {
+export function AttachImagesButton({ disabled }: { disabled?: boolean }) {
   const attachments = usePromptInputAttachments();
-  return <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
-    <Button variant="ghost" size="icon-xs" type="button" disabled={disabled} onClick={attachments.openFileDialog} aria-label="Attach images" className="text-muted-foreground hover:text-foreground rounded p-1"><PaperclipIcon className="size-4" /></Button>
+  return <Button variant="ghost" size="icon-xs" type="button" disabled={disabled} onClick={attachments.openFileDialog} aria-label="Attach images" className="text-muted-foreground"><PaperclipIcon className="size-4" /></Button>;
+}
+function Images() {
+  const attachments = usePromptInputAttachments();
+  return <div className="flex flex-wrap items-center gap-2 px-3 pt-2 empty:hidden">
+
     {attachments.files.map((file) => <div key={file.id} className="relative">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={file.url} alt={file.filename ?? "Attached image"} className="size-14 rounded object-cover" />
@@ -90,7 +94,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
     }}>
     {starters.length > 0 && <div className="flex flex-wrap gap-2 p-3">{starters.map((prompt) => <Button key={prompt} type="button" variant="outline" size="sm" disabled={disabled} onClick={() => { setText(prompt); textarea.current?.focus(); }}>{prompt}</Button>)}</div>}
     <PromptInputBody>
-      <Images disabled={disabled} />
+      <Images />
       {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files and notes" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">
         {choices.map((choice, i) => <Button variant="ghost" size="xs" key={choice} id={`prompt-choice-${i}`} type="button" role="option" aria-selected={i === selected} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(choice)} className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${i === selected ? "bg-accent" : ""}`}>{token?.kind}{choice}</Button>)}
       </div>}
@@ -117,6 +121,6 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
       <p className="hidden md:block text-muted-foreground px-3 pb-1 text-[10px]">@ files and notes · / commands · ↑ prompt history · paste or drop images</p>
       {error && <p role="alert" className="text-destructive px-3 text-xs">{error}</p>}
     </PromptInputBody>
-    {children}
+    <div className="flex items-end gap-1 px-2 pb-2"><AttachImagesButton disabled={disabled} /><div className="min-w-0 flex-1">{children}</div></div>
   </PromptInput>;
 }

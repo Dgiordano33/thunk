@@ -242,12 +242,21 @@ Routines reuse the existing surfaces rather than adding new ones. The town Works
 
 ## Inbox
 
-The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses the toolbar’s bronze selection treatment and amber attention counts; below the large-screen breakpoint it becomes a project picker in the header.
+The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses the toolbar’s bronze selection treatment and attention counts (`--status-attention-ink` on `--status-attention-soft`, mono); below the large-screen breakpoint it becomes a project picker in the header. Project and kind filters live in the URL (`?projectId=`, `?kind=`); the kind picker lists only kinds present, with open counts.
 
-- Requests that need a decision get an amber left edge, a status icon, readable context, and a primary action. Details expand in place so permissions and plans can be inspected before acting.
-- Earlier updates use quiet, divided rows instead of equally prominent cards. Pixel type stays on headings; titles, details, and timestamps use the body font.
-- Empty views use the bell mark (parchment in the game look, `EmptyMark` in the solar-system look) and one clear next step. Loading skeletons stop on failure, which shows a retry state instead of an endless loading screen.
-- Bulk actions live in the header menu. The scrollable content sits between a fixed header and a keyboard-shortcut footer; all controls remain available without hover.
+The list has three sections, in this order ([model.ts](components/inbox/model.ts) decides which):
+
+- **Decisions:** an agent is blocked until someone answers (permission, question, plan, chief plan, agent request, or anything carrying inline actions). Full cards with the one attention cue: a `--status-attention` left edge and a tinted icon well. The lead line is 15px; kind, project and time sit above it as muted metadata. Permissions show tool input in mono. Question options share one outline weight and cap at four inline; more go to the session. Plans lead with **Review plan**, which opens the plan as `.doc-prose`; approval appears only after that.
+- **Follow-ups:** open action items an agent or a person can resolve elsewhere (failed or stuck CI, review requests, stuck sessions). One-line rows (min 44px) grouped by project, then kind, with a count and a group **Dismiss N**; groups past five rows fold behind “Show N more”. They clear themselves when the underlying problem is fixed.
+- **Earlier:** resolved and informational items as quiet one-line rows; details expand in place.
+
+Delivery rows lead with the PR title and carry the PR number as mono metadata, never the kind label twice. Every row has exactly one link out, named for where it goes (“Open PR on GitHub”, “Open preview”, “Open session”); external links open in a new tab.
+
+- **Header:** full eyebrow, heading and filters only when the view is empty; with items it collapses to one row (heading, status, filters, menu).
+- **Dismissal:** every dismissal shows an Undo toast. The header menu dismisses what’s in the current project and kind view and says how many; when that includes decisions it asks first, and offers “Dismiss follow-ups only”.
+- **Keyboard:** shortcuts work only while the list has focus. Rows use a roving tab stop (one per list; a row’s own controls are tabbable only when it’s active). `j`/`k` or arrows move, `x` or Space selects, `e` dismisses the row or the selection, `o` or Enter opens, Esc clears the selection. After a dismissal, focus lands on the row that took its place; a polite live region announces the result.
+- **Controls:** 32px buttons and icon buttons, full-strength `ring` focus rings, distinct accessible names (“Dismiss “Fix flaky test””), tooltips via `Hint`. Nothing is hover-only.
+- **States:** empty views use the bell mark (parchment in the game look, `EmptyMark` in the solar-system look) and one clear next step. Loading skeletons stop on failure, which shows a retry state. A reconnect keeps the list in place and merges fresh rows over it.
 
 ## Vault
 

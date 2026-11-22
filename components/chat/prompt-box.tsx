@@ -25,7 +25,7 @@ import { useModels } from "@/lib/client/use-models";
 import { useSession } from "@/lib/store/session-store";
 import { useWorkspaceBase } from "@/components/workspace/route-context";
 
-export function PromptBox() {
+export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
   const router = useRouter();
   const base = useWorkspaceBase();
   const models = useModels();
@@ -36,7 +36,9 @@ export function PromptBox() {
   const [submitting, setSubmitting] = useState(false);
 
   const live = Boolean(meta?.live);
-  const running = status === "running" || status === "awaiting";
+  const running = live && (status === "running" || status === "awaiting");
+  const [model, setModel] = useState<string | null>(null);
+  const [mode, setMode] = useState<string | null>(null);
   const provider = providerOf(meta?.model);
 
   const control = (body: Parameters<typeof api.control>[1]) =>
@@ -44,17 +46,23 @@ export function PromptBox() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
+      {!live && <p className="text-muted-foreground mb-2 text-xs">Paused · Send a message to resume.</p>}
       <AgentStatus onlyUnavailable={status !== "error" && !error} />
       <PromptComposer
         workspaceId={meta?.workspaceId ?? ""}
-        disabled={!live || submitting}
-        placeholder={live ? (running ? "Queue a follow-up…" : "Ask the agent to do something…") : "Session is not live"}
+        disabled={submitting}
+        placeholder={running ? "Queue a follow-up…" : "Ask the agent to do something…"}
         onSubmit={async ({ text, files }) => {
           if ((!text.trim() && !files.length) || submitting) throw new Error("Message unavailable");
           setError(null);
           setSubmitting(true);
           try {
+            if (!live) await onResume();
+            if (model) await api.control(sessionId, { action: "setModel", value: model });
+            if (mode) await api.control(sessionId, { action: "setPermissionMode", value: mode });
             await api.send(sessionId, text, files);
+            setModel(null);
+            setMode(null);
           } catch (err) {
             setError((err as Error).message);
             throw err;
@@ -67,18 +75,18 @@ export function PromptBox() {
           <PromptInputTools>
 <ComposerOptions>            <ModelSelect
               models={models}
-              value={meta?.model}
+              value={model ?? meta?.model}
               onValueChange={(value) => {
                 // A session can't change runtimes: the other provider's models open a new chat here.
-                if (providerOf(value) === provider) void control({ action: "setModel", value });
+                if (providerOf(value) === provider) { if (live) { setModel(null); void control({ action: "setModel", value }); } else setModel(value); }
                 else if (meta) router.push(`${base}/new?model=${encodeURIComponent(value)}`);
               }}
-              disabled={!live}
+              disabled={submitting}
             />
             <PromptInputSelect
-              value={meta?.permissionMode}
-              onValueChange={(value) => control({ action: "setPermissionMode", value })}
-              disabled={!live}
+              value={mode ?? meta?.permissionMode}
+              onValueChange={(value) => { if (live) { setMode(null); void control({ action: "setPermissionMode", value }); } else setMode(value); }}
+              disabled={submitting}
             >
               <PromptInputSelectTrigger className="h-7 text-xs">
                 <PromptInputSelectValue />
@@ -95,7 +103,9 @@ export function PromptBox() {
           </PromptInputTools>
           {running && <Button variant="ghost" size="xs" type="button" className="text-muted-foreground text-xs" onClick={() => control({ action: "interrupt" })}>Stop</Button>}
           <PromptInputSubmit
-            disabled={!live || submitting}
+            aria-label={submitting ? "Sending message" : "Send message"}
+            className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+            disabled={submitting}
             status={submitting ? "submitted" : "ready"}
           />
         </PromptInputFooter>

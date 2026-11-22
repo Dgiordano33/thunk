@@ -81,10 +81,19 @@ export function SessionView({
     if (composing || activeComment) useUi.getState().setCommentsOpen(true);
   }, [composing, activeComment]);
 
-  const resume = useCallback(async () => {
-    await api.resume(meta.id);
-    useSession.getState().setMeta({ live: true });
-    setConnKey((k) => k + 1);
+  const resumePending = useRef<Promise<void> | null>(null);
+  const resume = useCallback(() => {
+    if (resumePending.current) return resumePending.current;
+    const pending = (async () => {
+      const { session } = await api.resume(meta.id);
+      if (useSession.getState().sessionId !== meta.id) return;
+      useSession.getState().setConnection("connecting");
+      useSession.getState().setMeta(session);
+      setConnKey((k) => k + 1);
+    })();
+    resumePending.current = pending;
+    void pending.finally(() => { resumePending.current = null; }).catch(() => {});
+    return pending;
   }, [meta.id]);
 
   // Esc interrupts a running turn (unless a dialog/menu or the editor wants it).
@@ -107,7 +116,7 @@ export function SessionView({
         <>
           <SessionHeader onResume={resume} />
           <Timeline />
-          <PromptBox />
+          <PromptBox key={meta.id} onResume={resume} />
         </>
       )}
     </div>

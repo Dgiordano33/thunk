@@ -157,6 +157,7 @@ export type SessionMeta = {
   status: SessionState;
   waitingOn?: WaitingOn;
   createdAt: string;
+  updatedAt?: string;
   live: boolean;
   /** What started the session when it wasn't a person, e.g. a routine. */
   origin?: SessionOrigin | null;

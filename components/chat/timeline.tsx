@@ -25,6 +25,7 @@ function RequestItem({ requestId }: { requestId: string }) {
 }
 
 export function Timeline() {
+  const live = useSession((s) => s.meta?.live);
   const items = useSession((s) => s.items);
 
   return (
@@ -34,7 +35,7 @@ export function Timeline() {
           <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5 text-center">
             <EmptyMark name="scroll" className="mx-auto mb-2" pixelClassName="mx-auto mb-3 size-8" />
             <h2 className="pixel text-lg">Start the conversation</h2>
-            <p className="text-muted-foreground mt-2 text-sm">Replies arrive as documents you can edit and comment on.</p>
+            <p className="text-muted-foreground mt-2 text-sm">{live ? "Replies arrive as documents you can edit and comment on." : "Send your first message to resume this session. Replies arrive as documents you can edit and comment on."}</p>
           </CivPanel>
         ) : (
           items.map((item) => {

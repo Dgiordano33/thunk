@@ -70,7 +70,8 @@ export function useNotificationsEvents() {
         if (Array.isArray(muted)) useNotifications.setState({ muted });
       } catch { /* Storage is optional. */ }
       source = new EventSource("/api/notifications/events");
-      source.onopen = () => { useNotifications.setState({ loaded: false, items: [], before: null }); void refreshNotifications(); };
+      // Keep the list on reconnect: the refresh merges fresh rows over it instead of flashing skeletons and losing scroll.
+      source.onopen = () => { void refreshNotifications(); };
       source.onerror = () => useNotifications.setState({ error: "Inbox connection lost. Reconnecting…" });
       source.onmessage = (message) => {
         try {

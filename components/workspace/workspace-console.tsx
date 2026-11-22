@@ -124,7 +124,7 @@ export function WorkspaceConsole({ workspaceId }: { workspaceId: string }) {
       </div>
       {open && <div className="flex h-[min(50vh,420px)] min-h-64 flex-col border-t">
         {(error || state?.setupError) && <p role="alert" className="text-destructive max-h-24 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{error || state?.setupError}</p>}
-        {canManage && <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
+        {canManage && <div className="flex shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap border-b px-3 py-1 [&>*]:shrink-0">
           <Select value={gitAction} onValueChange={setGitAction}>
             <SelectTrigger size="sm" className="w-44" aria-label="Git action"><SelectValue /></SelectTrigger>
             <SelectContent>
