@@ -1,5 +1,6 @@
 import type { DirListing } from "@/lib/fs/list-dirs";
 import type { Notification, NotificationCounts } from "@/lib/notifications/types";
+import type { NotificationContext, ReplyMode } from "@/lib/notifications/context";
 import type { TaskInput, TaskPatch } from "@/lib/tasks/schema";
 import type { NoteImportScope, Task, TaskTree, TaskCounts } from "@/lib/tasks/types";
 import type { Checkpoint } from "@/lib/projects/checkpoints";
@@ -61,6 +62,8 @@ export const api = {
   dismissNotifications: (ids: string[]) => postIdBatches("/api/notifications/dismiss-all", ids),
   restoreNotifications: (ids: string[]) => postIdBatches("/api/notifications/restore", ids),
   notificationAction: (action: Notification["actions"][number]) => post(action.path, action.body ?? {}),
+  notificationContext: (id: string) => call<{ context: NotificationContext }>(`/api/notifications/${id}/context`),
+  replyToNotification: (id: string, content: string) => post<{ ok: true; mode: ReplyMode }>(`/api/notifications/${id}/reply`, { content }),
   // Vault
   listVault: (projectId: string) => call<{ items: VaultItem[]; dir: string }>(`/api/projects/${projectId}/vault`),
   listAllVault: () => call<{ items: (VaultItem & { projectName: string })[] }>("/api/vault"),

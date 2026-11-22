@@ -2,8 +2,8 @@ import { z } from "zod";
 import { emit, resolvePending, setState } from "@/lib/agent";
 import { handle, HttpError, parseBody, requireLive } from "@/lib/api/http";
 import { RevisionBodySchema } from "@/lib/api/schemas";
-import { buildRevisionPayload } from "@/lib/revisions/build-payload";
-import { insertRevision, updateDocument } from "@/lib/db/repo/documents";
+import { requestPlanChanges } from "@/lib/revisions/plan-changes";
+import { updateDocument } from "@/lib/db/repo/documents";
 
 const Body = z.discriminatedUnion("decision", [
   z.object({
@@ -44,20 +44,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/sessions
     return Response.json({ ok: true });
   }
 
-  const { payload, stat } = buildRevisionPayload({
-    documentId: body.documentId,
-    version: body.version,
-    kind: "plan",
-    baselineMarkdown: body.baselineMarkdown,
-    editedMarkdown: body.editedMarkdown,
-    comments: body.comments,
-  });
-  if (live.lastPlan?.documentId === body.documentId) live.lastPlan.changesRequested = true;
-  resolvePending(live, body.requestId, { behavior: "deny", message: payload });
-  emit(live, { type: "plan_resolved", requestId: body.requestId, decision: "changes" });
-  await Promise.all([
-    updateDocument(body.documentId, { status: "sent", currentMarkdown: body.editedMarkdown }),
-    insertRevision({ documentId: body.documentId, diff: "", payload, stat }),
-  ]).catch(console.error);
+  const { payload, stat } = await requestPlanChanges(live, body);
   return Response.json({ ok: true, payload, stat });
 });
