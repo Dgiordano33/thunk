@@ -96,7 +96,7 @@ export function NewChat({
               <AttachImagesButton disabled={disabled || submitting} />
               <ModelSelect models={models} value={model} onValueChange={setModel} disabled={disabled} />
               <PromptInputSelect value={mode} onValueChange={setMode} disabled={disabled}>
-                <PromptInputSelectTrigger className="h-7 min-w-0 shrink text-xs">
+                <PromptInputSelectTrigger className="h-7 min-w-0 shrink-[3] text-xs [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
                   <PromptInputSelectValue />
                 </PromptInputSelectTrigger>
                 <PromptInputSelectContent>

@@ -89,7 +89,7 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
               onValueChange={(value) => { if (live) { setMode(null); void control({ action: "setPermissionMode", value }); } else setMode(value); }}
               disabled={submitting}
             >
-              <PromptInputSelectTrigger className="h-7 min-w-0 shrink text-xs">
+              <PromptInputSelectTrigger className="h-7 min-w-0 shrink-[3] text-xs [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
                 <PromptInputSelectValue />
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>
@@ -102,7 +102,7 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
             </PromptInputSelect>
             {error && <span className="text-destructive truncate text-xs">{error}</span>}
           </PromptInputTools>
-          {running && <Button variant="ghost" size="xs" type="button" aria-label="Stop" className="text-muted-foreground max-md:text-foreground shrink-0 text-xs max-md:border" onClick={() => control({ action: "interrupt" })}><SquareIcon className="size-3.5 fill-current md:hidden" /><span className="max-md:hidden">Stop</span></Button>}
+          {running && <Button variant="ghost" size="xs" type="button" aria-label="Stop" className="text-muted-foreground max-md:text-foreground shrink-0 text-xs max-md:border-border" onClick={() => control({ action: "interrupt" })}><SquareIcon className="size-3.5 fill-current md:hidden" /><span className="max-md:hidden">Stop</span></Button>}
           <PromptInputSubmit
             aria-label={submitting ? "Sending message" : "Send message"}
             className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"

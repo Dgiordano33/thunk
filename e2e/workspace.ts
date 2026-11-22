@@ -1,4 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { expect, type APIRequestContext } from '@playwright/test';
 
@@ -30,3 +32,19 @@ export const SAMPLE = {
     'src/util/strings.ts': 'export const up = (s: string) => s.toUpperCase();\n',
     'docs/': '',
 };
+
+/** A project on a fresh git repo with one commit, then an edited file and a new one left uncommitted. */
+export async function newGitWorkspace(request: APIRequestContext): Promise<Workspace> {
+    const repo = mkdtempSync(path.join(os.tmpdir(), 'thunk-e2e-repo-'));
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@thunk.test', ...args], { cwd: repo });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(path.join(repo, 'greeting.ts'), 'export const greeting = "hello";\n');
+    git('add', '.');
+    git('commit', '-q', '-m', 'Initial commit');
+    writeFileSync(path.join(repo, 'greeting.ts'), 'export const greeting = "hello from a phone";\n');
+    writeFileSync(path.join(repo, 'notes.md'), '# Notes\n');
+    const res = await request.post('/api/projects', { data: { name: `Git ${Date.now().toString(36)} ${++made}`, repos: [{ source: 'existing', path: repo }] } });
+    expect(res.ok(), await res.text()).toBe(true);
+    const { project, workspace } = await res.json();
+    return { id: workspace.id, base: `/${project.slug}/${workspace.slug}`, cwd: workspace.cwd };
+}
