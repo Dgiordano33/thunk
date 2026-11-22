@@ -17,7 +17,7 @@ import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { canvasPath, pathsFor, projectPath, workspacePath } from "@/lib/routes";
 import { Kbd } from "@/components/ui/kbd";
-import { SETTINGS_SECTIONS, settingsPath } from "@/components/settings/sections";
+import { SETTINGS_PATH, SETTINGS_SECTIONS, settingsPath } from "@/components/settings/sections";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -49,11 +49,15 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" && !event.defaultPrevented) {
         event.preventDefault();
         setSearchOpen((open) => !open);
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "," && !event.defaultPrevented) {
+        event.preventDefault();
+        setSearchOpen(false);
+        router.push(SETTINGS_PATH);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let stopped = false;
