@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingWindow } from "@/components/world/floating-window";
+
 import { projectSectionPath } from "@/lib/routes";
 
 import Link from "next/link";
@@ -56,20 +58,20 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
 
   if (!projects.length)
     return (
-      <main className="fog absolute inset-0 flex items-center justify-center p-6">
-        <CivPanel parchment className="w-full max-w-md" bodyClassName="flex flex-col items-center px-8 py-8 text-center">
+      <FloatingWindow title="Vault" className="absolute inset-x-4 top-20 bottom-20 z-10 flex flex-col md:left-[calc(50%-224px)] md:right-auto md:w-md">
+        <CivPanel parchment className="w-full min-h-0 flex-1" bodyClassName="flex h-full flex-col items-center justify-center overflow-auto px-8 py-8 text-center">
           <EmptyMark name="chest" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
           <h1 className="pixel mt-1 text-3xl">Your Vault is empty</h1>
           <p className="mt-3 text-sm leading-relaxed opacity-80">Every project has a Vault for source material: docs, screenshots, slides, transcripts. Agents can read this material during sessions. Add a project to start collecting it.</p>
           <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to your projects</Link>
         </CivPanel>
-      </main>
+      </FloatingWindow>
     );
 
   return (
-    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
-      <CivPanel className="w-full max-w-6xl" bodyClassName="flex h-full min-h-0 flex-col">
+    <FloatingWindow title="Vault" className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
+      <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">Vault</p>
@@ -117,6 +119,6 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           />
         </div>
       </CivPanel>
-    </main>
+    </FloatingWindow>
   );
 }

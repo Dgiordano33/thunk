@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingWindow } from "@/components/world/floating-window";
+
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
@@ -90,8 +92,8 @@ export function NotesLibrary() {
   }, [folders]);
 
   return (
-    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex md:inset-x-4 md:top-20" style={{ bottom: !desktop ? "calc(4rem + env(safe-area-inset-bottom))" : process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
-      <CivPanel className="w-full" bodyClassName="flex h-full min-h-0 flex-col md:flex-row">
+    <FloatingWindow title="Notes" className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex flex-col md:inset-x-4 md:top-20" style={{ bottom: !desktop ? "calc(4rem + env(safe-area-inset-bottom))" : process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+      <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0 flex-col md:flex-row">
         <CollapsiblePane title="Notebooks" storageKey="thunk.notes.notebooksOpen" className="hidden w-60 md:flex">
           <LibraryFolders folders={error ? [] : folders} selected={scope} onSelect={(s) => navigate({ scope: s, note: null })} />
         </CollapsiblePane>
@@ -109,7 +111,7 @@ export function NotesLibrary() {
           <AllNotes folders={folders} error={error} onRetry={retry} homeId={homeId} selected={noteParam} label={label} projectOf={projectOf} onSelect={(s, id) => navigate({ scope: s, note: id })} />
         )}
       </CivPanel>
-    </main>
+    </FloatingWindow>
   );
 }
 

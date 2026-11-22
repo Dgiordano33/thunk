@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingWindow } from "@/components/world/floating-window";
+
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { projectSectionPath } from "@/lib/routes";
 
@@ -32,8 +34,8 @@ export function RoutinesOverview({
 
   if (!list.length)
     return (
-      <main className="fog absolute inset-0 flex items-center justify-center p-6">
-        <CivPanel parchment className="w-full max-w-md" bodyClassName="flex flex-col items-center px-8 py-8 text-center">
+      <FloatingWindow title="Routines" className="absolute inset-x-4 top-20 bottom-20 z-10 flex flex-col md:left-[calc(50%-224px)] md:right-auto md:w-md">
+        <CivPanel parchment className="w-full min-h-0 flex-1" bodyClassName="flex h-full flex-col items-center justify-center overflow-auto px-8 py-8 text-center">
           <EmptyMark name="hourglass" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Routines</p>
           <h1 className="pixel mt-1 text-3xl">No routines yet</h1>
@@ -48,15 +50,15 @@ export function RoutinesOverview({
             {firstProjectId ? "Open a project’s routines →" : "← Add a project first"}
           </Link>
         </CivPanel>
-      </main>
+      </FloatingWindow>
     );
 
   if (!desktop) return <main className="h-dvh overflow-auto px-4 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]"><h1 className="mb-4 text-xl">Routines</h1>{list.map(r => <article key={r.id} className="mb-3 rounded-lg border bg-background p-4"><Link className="block py-2 font-medium" href={projectSectionPath(paths.project(r.projectId), "workshop", { routine: r.id })}>{r.name}</Link><p>{r.projectName}</p><p className="my-2 text-sm">{triggerSummary(r)}</p><p className="text-sm">Next: {r.enabled && r.nextRunAt ? untilTime(r.nextRunAt) : "—"}</p><div className="mt-3 flex gap-4"><RunNowButton routine={r} onStarted={() => void refresh()} /><EnabledToggle routine={r} onChange={() => void refresh()} /></div></article>)}</main>;
 
   const head = "text-muted-foreground px-3 py-2 text-left text-[11px] font-medium";
   return (
-    <main className="absolute inset-x-4 top-20 z-10 flex justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
-      <CivPanel className="w-full max-w-6xl" bodyClassName="flex h-full min-h-0 flex-col">
+    <FloatingWindow title="Routines" className="absolute inset-x-4 top-20 z-10 flex flex-col justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+      <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">Standing orders</p>
@@ -124,7 +126,7 @@ export function RoutinesOverview({
           </table>
         </div>
       </CivPanel>
-    </main>
+    </FloatingWindow>
   );
 }
 
