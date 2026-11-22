@@ -5,7 +5,7 @@ import { projectSectionPath } from "@/lib/routes";
 
 import { WORLD_SELECTION } from "@/components/world/selection";
 
-import { BotIcon, ChevronRightIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
+import { BotIcon, ChevronRightIcon, SettingsIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -15,7 +15,7 @@ import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
 import { useNotifications } from "@/lib/store/notifications-store";
 import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { PixelIcon } from "@/components/world/pixel-icon";
-import { SettingsMenu } from "@/components/ambient/settings-menu";
+import { SETTINGS_PATH } from "@/components/settings/sections";
 import { workspaceActivity } from "@/lib/ambient/summary";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { Logo } from "@/components/logo";
@@ -196,7 +196,11 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
       </ScrollArea>
 
       <Checklist projects={projects} />
-      <SettingsMenu projects={projects} />
+      <div className="border-t px-2 py-2">
+        <Button asChild variant="ghost" size="sm" className="w-full justify-start text-xs">
+          <Link href={SETTINGS_PATH}><SettingsIcon /> Settings</Link>
+        </Button>
+      </div>
     </div>
   );
 }

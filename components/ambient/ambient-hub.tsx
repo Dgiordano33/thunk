@@ -17,6 +17,7 @@ import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { canvasPath, pathsFor, projectPath, workspacePath } from "@/lib/routes";
 import { Kbd } from "@/components/ui/kbd";
+import { SETTINGS_SECTIONS, settingsPath } from "@/components/settings/sections";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -105,7 +106,7 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: projectPath(p), kind: "Project" },
     { id: `${p.id}:canvas`, label: "Canvas", detail: p.name, href: canvasPath(p), kind: "Project" },
     ...p.workspaces.map((w) => ({ id: w.id, label: w.name, detail: p.name, href: workspacePath(p, w), kind: "Workspace" })),
-  ]).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
+  ]).concat(SETTINGS_SECTIONS.map((s) => ({ id: `settings:${s.id}`, label: s.label, detail: s.blurb, href: settingsPath(s.id), kind: "Settings" }))).filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
 
   const searchDialog = (
     <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
@@ -117,7 +118,6 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
           <CommandList>
             <CommandEmpty>{searchError || (searching ? "Searching…" : "No results found.")}</CommandEmpty>
             <CommandGroup heading="Navigate">
-              {!query && <CommandItem onSelect={() => { setSearchOpen(false); useAmbient.setState({ usageOpen: true }); }}>View usage</CommandItem>}
               {navigation.map((item) => <CommandItem key={item.id} value={item.id} onSelect={() => navigate(item.href)}><span className="truncate">{item.label}</span><span className="text-muted-foreground ml-auto truncate text-xs">{item.kind} · {item.detail}</span></CommandItem>)}
             </CommandGroup>
             {query.trim() && <CommandGroup heading="Sessions & documents">
