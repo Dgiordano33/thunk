@@ -98,7 +98,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
       {choices.length > 0 && <div id="prompt-completions" role="listbox" aria-label={token?.kind === "@" ? "Project files and notes" : "Project commands"} className="mx-3 max-h-56 overflow-auto rounded border p-1">
         {choices.map((choice, i) => <Button variant="ghost" size="xs" key={choice} id={`prompt-choice-${i}`} type="button" role="option" aria-selected={i === selected} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(choice)} className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${i === selected ? "bg-accent" : ""}`}>{token?.kind}{choice}</Button>)}
       </div>}
-      <PromptInputTextarea ref={textarea} autoFocus={autoFocus} disabled={disabled} placeholder={placeholder} value={text}
+      <PromptInputTextarea ref={textarea} className="max-md:min-h-11" autoFocus={autoFocus} disabled={disabled} placeholder={placeholder} value={text}
         aria-label="Message" aria-autocomplete="list" aria-controls={choices.length ? "prompt-completions" : undefined} aria-activedescendant={choices.length ? `prompt-choice-${selected}` : undefined}
         onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
         onChange={(e) => { setText(e.target.value); setCursor(e.target.selectionStart); setSelected(0); setDismissed(false); historyIndex.current = -1; }}

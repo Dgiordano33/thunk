@@ -89,7 +89,7 @@ export function PromptBox({ onResume }: { onResume: () => Promise<void> }) {
               onValueChange={(value) => { if (live) { setMode(null); void control({ action: "setPermissionMode", value }); } else setMode(value); }}
               disabled={submitting}
             >
-              <PromptInputSelectTrigger className="h-7 min-w-0 shrink-[3] text-xs [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
+              <PromptInputSelectTrigger className="h-7 min-w-0 shrink text-xs max-md:gap-1 max-md:px-1.5 [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
                 <PromptInputSelectValue />
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>

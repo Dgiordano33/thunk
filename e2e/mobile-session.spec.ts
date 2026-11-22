@@ -30,6 +30,7 @@ test('one header, a usable composer, and an approval reachable from anywhere in 
     await expect(message).toBeInViewport({ ratio: 1 });
     expect((await message.boundingBox())!.width).toBeGreaterThan(300);
     await expect(page.getByRole('combobox').filter({ hasText: 'Sonnet 5.5' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Allow', exact: true })).toBeInViewport();
     await expect(page.getByRole('combobox').filter({ hasText: 'Ask before edits' })).toBeVisible();
     await page.screenshot({ path: `${SHOTS}/after-bottom.png` });
 
