@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync, chmodSync, existsSync, writeFileSync } from "node:fs";
+import { copyFileSync, realpathSync, cpSync, mkdirSync, rmSync, chmodSync, existsSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -17,6 +17,18 @@ writeFileSync(path.join(root, "version.json"), JSON.stringify({
 }));
 cpSync(process.execPath, path.join(root, "bin/node"));
 chmodSync(path.join(root, "bin/node"), 0o755);
+// Bundle native agent tools; recipients do not need Node/npm or Homebrew.
+const triple = process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
+const codex = path.resolve(`node_modules/@openai/codex-darwin-${process.arch}/vendor/${triple}`);
+cpSync(path.join(codex, "bin"), path.join(root, "bin"), { recursive: true });
+cpSync(path.join(codex, "codex-path/rg"), path.join(root, "bin/rg"));
+const gh = execFileSync("/usr/bin/which", ["gh"], { encoding: "utf8" }).trim();
+const ghLibraries = execFileSync("otool", ["-L", gh], { encoding: "utf8" });
+assert.ok(ghLibraries.split("\n").slice(1).every(line => !line.trim() || /^\s+\/(usr\/lib|System\/Library)\//.test(line)), "GitHub CLI must not depend on external libraries.");
+copyFileSync(realpathSync(gh), path.join(root, "bin/gh"));
+chmodSync(path.join(root, "bin/gh"), 0o755);
+for (const command of ["codex", "gh"]) execFileSync(path.join(root, "bin", command), ["--version"], { stdio: "inherit" });
+writeFileSync(path.join(root, "tool-versions.json"), JSON.stringify({ codex: execFileSync(path.join(root, "bin/codex"), ["--version"], { encoding: "utf8" }).trim(), gh: execFileSync(gh, ["--version"], { encoding: "utf8" }).trim() }, null, 2));
 const server = path.join(root, "server");
 mkdirSync(server, { recursive: true });
 for (const entry of ["server.js", "package.json", "node_modules", ".next"]) {

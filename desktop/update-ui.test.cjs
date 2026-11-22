@@ -43,7 +43,7 @@ function fixture(prepare) {
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8"), context);
   const check = vm.runInContext("checkForUpdates", context);
-  const item = { enabled: true, label: "Check for Updates…" };
+  const item = { enabled: true, label: "Build Update from Source…" };
   return { check: () => check(item), item, windows, messages, errors };
 }
 
@@ -82,7 +82,7 @@ test("build errors close progress and restore the update menu", async () => {
   assert.equal(f.errors[0][0], "Update could not be built");
   assert.match(f.errors[0][1], /Build failed/);
   assert.equal(f.item.enabled, true);
-  assert.equal(f.item.label, "Check for Updates…");
+  assert.equal(f.item.label, "Build Update from Source…");
 });
 
 test("repeated update checks do not create overlapping windows", async () => {

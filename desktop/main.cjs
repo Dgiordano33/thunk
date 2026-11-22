@@ -3,6 +3,10 @@ const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync,
 const path = require("node:path");
 const { startBackend, configuredRemote, loginPath, externalUrl } = require("./runtime.cjs");
 
+const { connections, readKey } = require("./connections.cjs");
+const { releaseUrl } = require("./releases.cjs");
+const { parseEnv } = require("node:util");
+
 const { prepareUpdate, installUpdate, configuredUpdateSource } = require("./updater.cjs");
 
 app.setName("Thunk");
@@ -80,7 +84,7 @@ async function checkForUpdates(item) {
     if (prepared) rmSync(prepared.staging, { recursive: true, force: true });
     updateController = null;
     item.enabled = true;
-    item.label = "Check for Updates…";
+    item.label = "Build Update from Source…";
     window?.setProgressBar(-1);
   }
 }
@@ -151,10 +155,22 @@ if (!app.requestSingleInstanceLock()) {
     const config = path.join(userData, ".env");
     if (!existsSync(config)) writeFileSync(config, "# Optional: ANTHROPIC_API_KEY, DATABASE_URL, CODEX_BIN, THUNK_DATA_DIR, THUNK_PORT, THUNK_TRUSTED_HOSTS, THUNK_TRUSTED_USER, THUNK_REMOTE_URL, THUNK_UPDATE_REPO, THUNK_UPDATE_BRANCH\n", { mode: 0o600, flag: "wx" });
     const remote = configuredRemote(config);
+    const root = app.isPackaged ? path.join(process.resourcesPath, "backend") : path.resolve(__dirname, "../build/desktop");
+    const configValues = parseEnv(readFileSync(config, "utf8"));
+    const credential = remote ? undefined : readKey(path.join(userData, "anthropic-key.enc"));
+    const runtimeEnv = { ...process.env, ...configValues, PATH: `${path.join(root, "bin")}:${loginPath()}`, ...(credential ? { ANTHROPIC_API_KEY: credential } : {}) };
+    const showConnections = remote ? undefined : connections({ app, env: runtimeEnv, configKey: !!runtimeEnv.ANTHROPIC_API_KEY });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu", submenu: [
         { role: "about" }, { type: "separator" },
-        { label: "Check for Updates…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } },
+        { label: "Download Latest Release…", click: async () => {
+          try {
+            const result = await dialog.showMessageBox({ message: "Download a ready-to-use update", detail: `Choose the ${process.arch === "arm64" ? "Apple Silicon" : "Intel"} ZIP. Quit Thunk before replacing the app in Applications, then reopen it. Your data and connections stay in place.`, buttons: ["Open Downloads", "Cancel"], cancelId: 1 });
+            if (result.response === 0) await shell.openExternal(releaseUrl(config));
+          } catch (error) { dialog.showErrorBox("Could not open downloads", error.message); }
+        } },
+        { label: "Build Update from Source…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } },
+        ...(showConnections ? [{ label: "Connections…", click: () => void showConnections().catch(fail) }] : []),
         { label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) },
         { type: "separator" },
         { label: "Show Configuration", click: () => shell.showItemInFolder(config) },
@@ -168,10 +184,9 @@ if (!app.requestSingleInstanceLock()) {
       // THUNK_REMOTE_URL: open a Thunk server (docs/server.md) and start nothing locally.
       backend = { url: remote, remote: true, stop: async () => {}, exited: new Promise(() => {}) };
     } else {
-      const root = app.isPackaged ? path.join(process.resourcesPath, "backend") : path.resolve(__dirname, "../build/desktop");
       const log = openSync(path.join(app.getPath("logs"), "server.log"), "w", 0o600);
       try {
-        backend = await startBackend({ root, config, log, env: { ...process.env, PATH: loginPath() } });
+        backend = await startBackend({ root, config, log, env: runtimeEnv });
       } finally {
         closeSync(log);
       }
@@ -183,5 +198,10 @@ if (!app.requestSingleInstanceLock()) {
       callback(contents === window?.webContents && new URL(contents.getURL()).origin === backend.url && permission === "notifications");
     });
     await openWindow();
+    const onboarding = path.join(userData, "connections-seen");
+    if (showConnections && !existsSync(onboarding)) {
+      await showConnections();
+      writeFileSync(onboarding, "1", { mode: 0o600 });
+    }
   }).catch(fail);
 }

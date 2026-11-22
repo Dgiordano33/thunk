@@ -45,9 +45,12 @@ try {
   `]);
   const claude = path.join(root, `server/node_modules/@anthropic-ai/claude-agent-sdk-darwin-${process.arch}/claude`);
   assert.match(execFileSync(claude, ["--version"], { encoding: "utf8", timeout: 10000 }), /Claude/);
+  for (const command of ["codex", "gh"]) {
+    assert.ok(execFileSync(path.join(root, "bin", command), ["--version"], { encoding: "utf8", timeout: 10000 }).trim());
+  }
   await backend.stop();
   await assert.rejects(fetch(backend.url));
-  console.log("Desktop smoke passed: assets, API, origin protection, native PTY, Claude binary, shutdown, package isolation.");
+  console.log("Desktop smoke passed: assets, API, origin protection, native PTY, Claude/Codex/GitHub binaries, shutdown, package isolation.");
 } catch (error) {
   console.error(readFileSync(logFile, "utf8"));
   throw error;
