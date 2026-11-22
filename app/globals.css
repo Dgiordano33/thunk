@@ -726,3 +726,15 @@
   input, textarea, select { font-size: 16px; }
   [data-slot="kbd"] { display: none; }
 }
+
+/* Window gestures stay on the frame, leaving editors and controls selectable. */
+@media (min-width: 768px) {
+  .floating-window [data-window-drag] { cursor: grab; touch-action: none; user-select: none; }
+  .floating-window.select-none [data-window-drag] { cursor: grabbing; }
+  .floating-window > .civ-panel { min-height: 0; }
+}
+
+@media (min-width: 768px) {
+  .floating-window[data-window-sized="true"] > .civ-panel { height: 100%; }
+  .floating-window [data-window-resize="se"]::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid var(--muted-foreground); border-bottom: 2px solid var(--muted-foreground); opacity: .5; }
+}

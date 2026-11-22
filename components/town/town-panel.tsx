@@ -1,5 +1,6 @@
 "use client";
 
+import { FloatingWindow, WindowControls } from "@/components/world/floating-window";
 import { XIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -46,7 +47,7 @@ export function TownPanel({
   }, [escapable, closeHref, router]);
 
   return (
-    <aside
+    <FloatingWindow as="aside"
       className={cn(
         "absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex md:inset-x-auto md:top-20 md:right-4",
         compact && "md:bottom-auto",
@@ -55,12 +56,13 @@ export function TownPanel({
       )}
     >
       <CivPanel className={cn("w-full h-full", compact && "md:h-auto")} bodyClassName="flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
+        <header data-window-drag="" tabIndex={0} aria-label="Window title bar. Arrow keys move; Shift and arrow keys resize." className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             {eyebrow && <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">{eyebrow}</p>}
             <h2 className="pixel truncate text-lg leading-tight">{title}</h2>
           </div>
           {actions}
+          <WindowControls />
           <Link
             href={closeHref}
             scroll={false}
@@ -72,6 +74,6 @@ export function TownPanel({
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </CivPanel>
-    </aside>
+    </FloatingWindow>
   );
 }

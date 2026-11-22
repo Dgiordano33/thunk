@@ -1,4 +1,6 @@
 "use client";
+
+import { FloatingWindow } from "@/components/world/floating-window";
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
@@ -306,8 +308,8 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const kindLabel = kind === "all" ? "All kinds" : NOTIFICATION_LABELS[kind as NotificationKind] ?? "All kinds";
 
   return (
-    <main className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
-      <CivPanel className="w-full max-w-7xl" bodyClassName="flex h-full min-h-0">
+    <FloatingWindow title="Inbox" className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
+      <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0">
         <aside className="bg-muted/20 hidden w-52 shrink-0 flex-col border-r lg:flex" aria-label="Inbox projects">
           <div className="flex items-center gap-3 border-b px-5 py-5"><PixelIcon name="bell" className="size-7" /><span className="pixel text-lg">Inbox</span></div>
           <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Filter notifications by project">
@@ -418,7 +420,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </FloatingWindow>
   );
 
   function filters() {
