@@ -11,6 +11,14 @@ export const NOTIFICATION_LABELS: Record<NotificationKind, string> = {
   ci_failed: "CI failed", ci_stuck: "CI stuck", review_requested: "Review requested", deploy_ready: "Deploy ready",
   pr_merged: "PR merged", script_failed: "Script failed", agent_request: "Agent request",
 };
+/** Settings → Notifications shows the kinds in these groups. Every kind appears in exactly one. */
+export const NOTIFICATION_GROUPS: { label: string; description: string; kinds: NotificationKind[] }[] = [
+  { label: "Needs you", description: "An agent is waiting on an answer or approval.", kinds: ["permission", "question", "plan", "delegation_plan", "agent_request", "review_requested"] },
+  { label: "Sessions", description: "Turns finishing, failing or getting stuck.", kinds: ["turn_finished", "turn_failed", "session_error", "session_stuck", "worker_report"] },
+  { label: "Routines", description: "Scheduled and triggered runs.", kinds: ["run_needs_attention", "run_succeeded", "run_failed"] },
+  { label: "Delivery", description: "CI, pull requests, deploys and scripts.", kinds: ["ci_failed", "ci_stuck", "pr_merged", "deploy_ready", "script_failed"] },
+];
+
 export type Notification = {
   id: string; kind: NotificationKind; urgency: "action" | "info";
   projectId: string; workspaceId: string | null; sessionId: string | null; runId: string | null;

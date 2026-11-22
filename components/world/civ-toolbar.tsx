@@ -8,7 +8,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { ArchiveIcon, InboxIcon, NotebookTextIcon, OrbitIcon, RepeatIcon, SettingsIcon, type LucideIcon } from "lucide-react";
-import { SETTINGS_PATH } from "@/components/settings/sections";
+import { SETTINGS_PATH, settingsPath } from "@/components/settings/sections";
+import { useAgentStatus } from "@/components/onboarding/agent-status";
 import { useLook } from "@/components/look-context";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { useNotifications } from "@/lib/store/notifications-store";
@@ -29,6 +30,14 @@ function Mark({ className }: { className?: string }) {
       <circle cx={34} cy={90} r={5} />
     </svg>
   );
+}
+
+/** The menu's Settings row, with which agents can run sessions. Points at Agents when none can. Mounted only while the menu is open. */
+function SettingsSlot({ render }: { render: (slot: { href: string; label: string; icon: PixelIconName; lucide: LucideIcon; detail: string }) => React.ReactNode }) {
+  const agents = useAgentStatus();
+  const ready = agents ? (["claude", "codex"] as const).filter((name) => agents[name].state === "ready") : [];
+  const detail = !agents ? "" : ready.length === 2 ? "Agents ready" : ready.length === 1 ? `${ready[0] === "claude" ? "Claude" : "Codex"} ready` : "Set up an agent";
+  return render({ href: agents && !ready.length ? settingsPath("agents") : SETTINGS_PATH, label: "Settings", icon: "gear", lucide: SettingsIcon, detail });
 }
 
 /** Main menu, bottom-left: a round button that opens into Projects, Inbox, Notes, Routines and the Vault. Game look: a bronze orb with pixel icons. */
@@ -67,7 +76,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
   ];
 
   const renderSlot = (slot: Slot) => {
-                const active = slot.href === PROJECTS_PATH ? pathname === PROJECTS_PATH || isProjectPath(pathname) : pathname.startsWith(slot.href);
+                const active = slot.href === PROJECTS_PATH ? pathname === PROJECTS_PATH || isProjectPath(pathname) : pathname.startsWith(slot.href.split("/").slice(0, 2).join("/"));
                 return (
                   <Link
                     key={slot.href}
@@ -112,7 +121,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
             <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">
               {slots.map(renderSlot)}
               <Checklist projects={projects} />
-              {renderSlot({ href: SETTINGS_PATH, label: "Settings", icon: "gear", lucide: SettingsIcon, detail: "" })}
+              <SettingsSlot render={renderSlot} />
             </CivPanel>
           </motion.nav>
         )}
