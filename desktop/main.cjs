@@ -1,9 +1,10 @@
-const { app, BrowserWindow, Menu, dialog, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session } = require("electron");
 const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync, rmSync } = require("node:fs");
 const path = require("node:path");
 const { startBackend, configuredRemote, loginPath, externalUrl } = require("./runtime.cjs");
 
 const { connections, readKey } = require("./connections.cjs");
+const { syncSetup, describeSummary } = require("./setup-sync.cjs");
 const { releaseUrl } = require("./releases.cjs");
 const { parseEnv } = require("node:util");
 
@@ -17,6 +18,16 @@ let stopped = false;
 let starting = true;
 let updateController;
 let updateTask;
+let setupSync;
+
+/** Send this Mac's Claude Code and Codex setup to the Thunk server the window shows. One sync at a time. */
+function syncSetupToServer() {
+  setupSync ??= syncSetup({
+    baseUrl: backend.url,
+    onProgress: (text) => { if (window && !window.isDestroyed()) window.webContents.send("thunk:sync-progress", text); },
+  }).finally(() => { setupSync = null; });
+  return setupSync;
+}
 
 async function checkForUpdates(item) {
   if (updateController) return;
@@ -93,7 +104,10 @@ async function openWindow() {
   window = new BrowserWindow({
     title: "Thunk", width: 1440, height: 960, minWidth: 900, minHeight: 600,
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: {
+      nodeIntegration: false, contextIsolation: true, sandbox: true,
+      ...(backend.remote ? { preload: path.join(__dirname, "app-preload.cjs") } : {}),
+    },
   });
   const openExternal = (url) => {
     if (externalUrl(url)) void shell.openExternal(url).catch(console.error);
@@ -171,6 +185,12 @@ if (!app.requestSingleInstanceLock()) {
         } },
         { label: "Build Update from Source…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } },
         ...(showConnections ? [{ label: "Connections…", click: () => void showConnections().catch(fail) }] : []),
+        ...(remote ? [{ label: "Sync My Setup to Server", click: () => {
+          syncSetupToServer().then(
+            (summary) => dialog.showMessageBox({ message: "Your setup is on the server", detail: `${describeSummary(summary)}\n\nNew sessions use it; running sessions keep what they started with.` }),
+            (error) => dialog.showErrorBox("Could not sync your setup", error.message),
+          );
+        } }] : []),
         { label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) },
         { type: "separator" },
         { label: "Show Configuration", click: () => shell.showItemInFolder(config) },
@@ -181,6 +201,12 @@ if (!app.requestSingleInstanceLock()) {
       { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
     ]));
     if (remote) {
+      // Only the server's own page in the main window may start a sync.
+      ipcMain.handle("thunk:sync-setup", (event) => {
+        const frame = event.senderFrame;
+        if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame || new URL(frame.url).origin !== new URL(backend.url).origin) throw new Error("Not allowed");
+        return syncSetupToServer();
+      });
       // THUNK_REMOTE_URL: open a Thunk server (docs/server.md) and start nothing locally.
       backend = { url: remote, remote: true, stop: async () => {}, exited: new Promise(() => {}) };
     } else {

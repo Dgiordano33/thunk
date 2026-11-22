@@ -9,7 +9,7 @@
 //   /projects/{project}/{section}          project screens
 
 /** Top-level paths a project slug may never take: app pages, legacy redirects and framework paths. */
-export const RESERVED_SLUGS: readonly string[] = ["projects", "inbox", "notes", "routines", "vault", "mock", "api", "p", "w", "s", "new", "_next"];
+export const RESERVED_SLUGS: readonly string[] = ["projects", "inbox", "notes", "routines", "vault", "settings", "mock", "api", "p", "w", "s", "new", "_next"];
 
 type Slugged = { slug: string };
 

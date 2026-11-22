@@ -8,6 +8,7 @@ import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessionNotes, notesPrompt, type SessionNotes } from "@/lib/notes/prompt";
+import { readAgentSettings } from "@/lib/setup/settings";
 import { sessionConnectors } from "@/lib/projects/connectors";
 import { readMemory } from "@/lib/projects/memory";
 import { projectConfigDir, sharedConfigDir, projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir } from "@/lib/projects/paths";
@@ -84,13 +85,14 @@ export function hierarchyPrompt(
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
   const vaultDir = vaultDirOf(project);
-  const [projectMemory, notes, tasks, vaultItems, instructions, connectors] = await Promise.all([
+  const [projectMemory, notes, tasks, vaultItems, instructions, connectors, agentSettings] = await Promise.all([
     readMemory(projectMemoryFile(project.dataKey)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
     listItems(vaultDir).catch(() => []),
     readMemory(projectInstructionsFile(project.dataKey)),
     sessionConnectors(project.dataKey),
+    readAgentSettings(),
   ]);
   await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
   const anchor = anchorRepo(live.ctx);
@@ -120,9 +122,11 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     // Lets the user switch to bypassPermissions from the mode picker later.
     allowDangerouslySkipPermissions: true,
     includePartialMessages: true,
-    // Load the project's CLAUDE.md + .claude/settings(.local).json like Claude Code does in a repo,
-    // but not ~/.claude (global plugins/hooks). Our permissionMode still wins over defaultMode.
-    settingSources: ["project", "local"],
+    // Load the project's CLAUDE.md + .claude/settings(.local).json like Claude Code does in a repo. ~/.claude
+    // (skills, plugins, hooks, permission rules, user MCP servers) only loads when
+    // "Use my Claude Code setup" is on (Settings → Agents, lib/setup/settings.ts).
+    // Our permissionMode still wins over defaultMode, and the denies below still win over user allow rules.
+    settingSources: agentSettings.claudeUserConfig ? ["user", "project", "local"] : ["project", "local"],
     // Auto-memory is durable project knowledge shared across workspaces.
     settings: {
       autoMemoryEnabled: true,

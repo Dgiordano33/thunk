@@ -1,4 +1,4 @@
-import { ArchiveIcon, BellIcon, ListChecksIcon, NotebookTextIcon, OrbitIcon, PenLineIcon, RepeatIcon, type LucideIcon } from "lucide-react";
+import { ArchiveIcon, BellIcon, SettingsIcon, ListChecksIcon, NotebookTextIcon, OrbitIcon, PenLineIcon, RepeatIcon, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,6 +9,10 @@ const ICONS = {
   bell: {
     palette: { a: "var(--w-bronze-dark)", b: "var(--w-bronze-light)" },
     rows: ["....aa....", "...abba...", "..abbbba..", "..abbbba..", "..abbbba..", ".abbbbbba.", "abbbbbbbba", "aaaaaaaaaa", "....aa...."],
+  },
+  gear: {
+    palette: { a: "var(--w-bronze-dark)", b: "var(--w-bronze-light)" },
+    rows: ["....aa....", ".a.abba.a.", "..abbbba..", ".abbaabba.", "abba..abba", "abba..abba", ".abbaabba.", "..abbbba..", ".a.abba.a.", "....aa...."],
   },
   checklist: {
     palette: { a: "var(--w-bronze-dark)", b: "var(--w-parchment)", c: "var(--w-parchment-ink)" },
@@ -97,6 +101,7 @@ export type PixelIconName = keyof typeof ICONS;
 /** The solar-system look's line icon for each pixel icon. */
 export const PLAIN_ICONS: Record<PixelIconName, LucideIcon> = {
   bell: BellIcon,
+  gear: SettingsIcon,
   checklist: ListChecksIcon,
   castle: OrbitIcon,
   scroll: NotebookTextIcon,

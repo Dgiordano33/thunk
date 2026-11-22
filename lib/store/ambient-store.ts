@@ -13,5 +13,4 @@ export const useAmbient = create<{
   error: string | null;
   /** Desktop alerts opt-in, persisted to localStorage by the settings menu. */
   notifications: boolean;
-  usageOpen: boolean;
-}>(() => ({ sessions: [], deliveries: [], runs: [], error: null, notifications: false, usageOpen: false }));
+}>(() => ({ sessions: [], deliveries: [], runs: [], error: null, notifications: false }));

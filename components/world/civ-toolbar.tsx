@@ -7,8 +7,8 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { ArchiveIcon, InboxIcon, NotebookTextIcon, OrbitIcon, RepeatIcon, type LucideIcon } from "lucide-react";
-import { SettingsMenu } from "@/components/ambient/settings-menu";
+import { ArchiveIcon, InboxIcon, NotebookTextIcon, OrbitIcon, RepeatIcon, SettingsIcon, type LucideIcon } from "lucide-react";
+import { SETTINGS_PATH } from "@/components/settings/sections";
 import { useLook } from "@/components/look-context";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { useNotifications } from "@/lib/store/notifications-store";
@@ -45,7 +45,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
   }, []);
 
   useEffect(() => {
-    if (pathname === "/notes" || pathname === "/vault" || pathname === "/inbox") setExpanded(false);
+    if (pathname === "/notes" || pathname === "/vault" || pathname === "/inbox" || pathname.startsWith(SETTINGS_PATH)) setExpanded(false);
   }, [pathname, setExpanded]);
 
   useEffect(() => {
@@ -57,7 +57,8 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded, setExpanded]);
 
-  const slots: { href: string; label: string; icon: PixelIconName; lucide: LucideIcon; detail: string }[] = [
+  type Slot = { href: string; label: string; icon: PixelIconName; lucide: LucideIcon; detail: string };
+  const slots: Slot[] = [
     { href: PROJECTS_PATH, label: "Projects", icon: "castle", lucide: OrbitIcon, detail: `${cityCount} ${cityCount === 1 ? "project" : "projects"}` },
     { href: "/inbox", label: "Inbox", icon: "bell", lucide: InboxIcon, detail: `${count} waiting` },
     { href: "/notes", label: "Notes", icon: "scroll", lucide: NotebookTextIcon, detail: `${noteCount} ${noteCount === 1 ? "note" : "notes"}` },
@@ -65,24 +66,7 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
     { href: "/vault", label: "Vault", icon: "chest", lucide: ArchiveIcon, detail: `${vaultCount} ${vaultCount === 1 ? "item" : "items"}` },
   ];
 
-  if (!desktop) return <MobileTabBar count={count} projects={projects} />;
-
-  return (
-    // In dev, sit above the Next.js dev indicator that owns the bottom-left corner.
-    <div className={cn("fixed left-4 z-30 flex flex-col items-start gap-2", process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4")}>
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.nav
-            id="civ-toolbar-menu"
-            aria-label="Main"
-            initial={{ opacity: 0, y: 16, scale: 0.94 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 420, damping: 30 }}
-            style={{ transformOrigin: "bottom left" }}
-          >
-            <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">
-              {slots.map((slot) => {
+  const renderSlot = (slot: Slot) => {
                 const active = slot.href === PROJECTS_PATH ? pathname === PROJECTS_PATH || isProjectPath(pathname) : pathname.startsWith(slot.href);
                 return (
                   <Link
@@ -107,9 +91,28 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
                     <span className="pixel text-muted-foreground text-xs tabular-nums world:bg-foreground world:text-background world:px-1.5 world:text-[11px]">{slot.detail}</span>
                   </Link>
                 );
-              })}
+              };
+
+  if (!desktop) return <MobileTabBar count={count} />;
+
+  return (
+    // In dev, sit above the Next.js dev indicator that owns the bottom-left corner.
+    <div className={cn("fixed left-4 z-30 flex flex-col items-start gap-2", process.env.NODE_ENV === "development" ? "bottom-18" : "bottom-4")}>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.nav
+            id="civ-toolbar-menu"
+            aria-label="Main"
+            initial={{ opacity: 0, y: 16, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 30 }}
+            style={{ transformOrigin: "bottom left" }}
+          >
+            <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">
+              {slots.map(renderSlot)}
               <Checklist projects={projects} />
-      <SettingsMenu projects={projects} />
+              {renderSlot({ href: SETTINGS_PATH, label: "Settings", icon: "gear", lucide: SettingsIcon, detail: "" })}
             </CivPanel>
           </motion.nav>
         )}

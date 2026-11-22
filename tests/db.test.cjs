@@ -325,3 +325,13 @@ test("repositories round-trip through Postgres", async (t) => {
 
 before(() => { delete process.env.DATABASE_URL; });
 after(() => { current = null; });
+
+test("a project already using the settings slug moves aside for the /settings page", async (t) => {
+  const db = await rawDb({ supabaseRoles: true });
+  t.after(() => db.pg.close());
+  const at = MIGRATIONS.findIndex((m) => m.name.endsWith("0014_reserve_settings_slug"));
+  for (const m of MIGRATIONS.slice(0, at)) await db.exec(m.sql);
+  await db.exec("insert into public.projects (name, data_key, slug) values ('Settings', 'settings', 'settings'), ('Settings two', 'settings-2', 'settings-2'), ('Other', 'other', 'other')");
+  await db.exec(MIGRATIONS[at].sql);
+  assert.deepEqual((await db.query("select slug from public.projects order by slug")).map((r) => r.slug), ["other", "settings-2", "settings-3"]);
+});
