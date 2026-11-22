@@ -58,8 +58,10 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
 
   if (!projects.length)
     return (
-      <FloatingWindow title="Vault" className="absolute inset-x-4 top-20 bottom-20 z-10 flex flex-col md:left-[calc(50%-224px)] md:right-auto md:w-md">
-        <CivPanel parchment className="w-full min-h-0 flex-1" bodyClassName="flex h-full flex-col items-center justify-center overflow-auto px-8 py-8 text-center">
+      <div className="fog absolute inset-0">
+      {/* Mobile keeps the full-screen centred card; desktop floats the same card as a window. */}
+      <FloatingWindow title="Vault" className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
+        <CivPanel parchment className="w-full max-w-md md:max-w-none md:min-h-0 md:flex-1" bodyClassName="flex flex-col items-center px-8 py-8 text-center md:h-full md:justify-center md:overflow-auto">
           <EmptyMark name="chest" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
           <h1 className="pixel mt-1 text-3xl">Your Vault is empty</h1>
@@ -67,6 +69,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to your projects</Link>
         </CivPanel>
       </FloatingWindow>
+      </div>
     );
 
   return (
