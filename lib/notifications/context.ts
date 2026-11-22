@@ -28,6 +28,8 @@ export type NotificationContext = {
   /** Still-pending questions, so the Inbox can answer ones with several parts or several picks. */
   questions: { requestId: string; items: Question[] } | null;
   reply: { mode: ReplyMode; placeholder: string; send: string } | null;
+  /** Identifies the state a model-written brief describes; it changes when the conversation or the request does, not when the item is merely read. Null: nothing to summarize. */
+  briefKey: string | null;
 };
 
 const THREAD_TAIL = 6;
@@ -171,5 +173,8 @@ export function buildContext(input: ContextInput): NotificationContext {
     thread, activity: digest.activity, files: digest.files.slice(-8),
     questions: pending && asked?.type === "ask_question" ? { requestId: requestId!, items: asked.questions } : null,
     reply: session ? replyFor(n, pending) : null,
+    briefKey: session && (digest.messages.length > 0 || digest.activity.length > 0)
+      ? [n.id, pending ? 1 : 0, digest.messages.length, digest.messages.at(-1)?.at ?? 0, digest.messages.at(-1)?.text.length ?? 0, digest.activity.length].join(":")
+      : null,
   };
 }

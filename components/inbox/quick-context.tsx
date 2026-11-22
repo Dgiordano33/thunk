@@ -46,6 +46,8 @@ export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  /** The model-written summary, with the context state it was written for. */
+  const [brief, setBrief] = useState<{ key: string; text: string | null } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLDivElement>(null);
 
@@ -61,6 +63,15 @@ export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
     const timer = setInterval(() => { if (document.visibilityState === "visible") void load(); }, POLL_MS);
     return () => clearInterval(timer);
   }, [polling, load]);
+  // The summary is written for a settled state: wait out a working agent rather than summarizing every step.
+  const briefKey = ctx?.briefKey ?? null;
+  useEffect(() => {
+    if (!briefKey || polling) return;
+    let stale = false;
+    api.notificationBrief(n.id).then(({ brief: text, key }) => { if (!stale) setBrief({ key: key ?? briefKey, text }); })
+      .catch(() => { if (!stale) setBrief({ key: briefKey, text: null }); });
+    return () => { stale = true; };
+  }, [briefKey, polling, n.id]);
   const last = ctx?.thread.at(-1);
   useEffect(() => { if (thread.current) thread.current.scrollTop = thread.current.scrollHeight; }, [last?.at, last?.text.length]);
   const ready = Boolean(ctx);
@@ -92,6 +103,8 @@ export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
   );
 
   const { source } = ctx;
+  // A summary is on its way when this state has one to write and the one on screen (if any) is for an earlier state.
+  const summarizing = Boolean(ctx.briefKey && !polling && brief?.key !== ctx.briefKey);
   const state = stateOf(source.state, source.live);
   const where = [source.project, source.workspace].filter(Boolean).join(" › ");
   const form = ctx.questions && (ctx.questions.items.length > 1 || ctx.questions.items[0]?.multiSelect) ? ctx.questions : null;
@@ -102,6 +115,14 @@ export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
   return (
     <section aria-label={`Quick context for “${lead}”`} className="bg-muted/30 mt-3 min-w-0 rounded-sm border">
       <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-2.5 px-4 py-3 text-xs leading-relaxed">
+        {(brief?.text || summarizing) && <>
+          <dt className={eyebrow}>Summary</dt>
+          <dd className="min-w-0" aria-busy={summarizing}>
+            {brief?.text
+              ? <p className={cn("text-foreground text-[13px] leading-relaxed break-words", summarizing && "opacity-60")}>{brief.text}</p>
+              : <div role="status" aria-label="Writing a summary" className="space-y-1.5 py-1"><Skeleton className="h-2 w-11/12" /><Skeleton className="h-2 w-2/3" /></div>}
+          </dd>
+        </>}
         <dt className={eyebrow}>From</dt>
         <dd className="min-w-0">
           <span className="break-words">{where || "Top level"}{source.session ? <> › <span className="text-foreground font-medium">{source.session}</span></> : null}</span>
