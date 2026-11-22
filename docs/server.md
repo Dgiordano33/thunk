@@ -104,6 +104,30 @@ Agents in every project can open pages, click through them and take screenshots.
 
 To add browser tools to a server set up before this existed, run `scripts/server/setup.sh` again from `~/thunk-server`. To change the pinned version, edit the file and run `npx -y @playwright/mcp@<version> install-browser chromium` so the matching Chromium is installed.
 
+## Your Claude Code and Codex setup
+
+By default, Claude sessions in Thunk load only the project's `CLAUDE.md` and `.claude/` settings, not your own `~/.claude`. Codex sessions always read `~/.codex/config.toml`. To give agents on the server the skills, plugins and MCP servers you use on your Mac, open the server in the Mac app ([Open it in the Mac app](#open-it-in-the-mac-app)) and choose **Settings → Agents → Sync from this Mac**, or **Thunk → Sync My Setup to Server** in the menu bar.
+
+The sync goes over Thunk's own address, so it needs no SSH. Only files that changed are sent: the first sync is about 25 MB, later ones usually send nothing. It also turns on **Use my Claude Code setup in Claude sessions** in the same panel, and new sessions pick it up with no restart. Running sessions keep what they started with. Sync again whenever you add a skill, plugin or MCP server on the Mac. Each settings file it replaces is kept as `<file>.bak-<time>`.
+
+Without the Mac app, run `npm run server:sync-config -- https://<host>.<tailnet>` from a Thunk checkout on the Mac. Add `--dry-run` to see what would be sent.
+
+| Copied | Left out |
+|---|---|
+| `~/.claude/settings.json` (permissions, enabled plugins, model and effort) | Its `hooks` and `statusLine`, which call tools on the Mac |
+| `~/.claude/skills`, with symlinked skills copied as files | `~/.claude/skills/synced` (claude.ai sync) |
+| Enabled Claude plugins and the marketplaces they come from, without git history | Disabled plugins and unused marketplaces |
+| MCP servers from `~/.claude.json` and `~/.codex/config.toml` that can run on Linux | Servers under `/Applications`, on `localhost`, disabled, or whose command the server lacks (the panel lists each with the reason) |
+| Codex model settings, features, profiles, trusted projects, `AGENTS.md`, `~/.codex/skills` | Codex plugins, `notify`, and desktop-app settings |
+
+Paths under your Mac's home folder are rewritten to the server's, so plugins work even when the home folders differ.
+
+Sign-ins are never copied: not Claude, Codex or GitHub, and not MCP servers or plugins that sign in through a browser (Linear, Notion, Slack and the like show as needing sign-in). Connectors you use on claude.ai do not reach Thunk sessions either. For those, add a connector with an API key in a project's **Connectors** setting or in `~/.thunk/config/mcp.json`.
+
+With the setup turned on, your `permissions.allow` rules apply in Thunk too, so the tools they allow run without an approval card. Thunk's own denies (vault originals and connector settings) still win.
+
+The same checkbox works in the Mac app without a server: turn it on in **Settings → Agents** to load your `~/.claude` in local sessions. There, your hooks load as well.
+
 ## Sign-ins
 
 Each sign-in is stored on the server. `thunk doctor` shows which ones work.
