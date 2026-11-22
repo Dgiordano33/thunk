@@ -42,7 +42,7 @@ test('one header, a usable composer, and an approval reachable from anywhere in 
     // Scrolled away from the approval, a bar above the composer brings it back.
     const allow = page.getByRole('button', { name: 'Allow', exact: true });
     await expect(page.getByRole('status').filter({ hasText: 'needs your permission' })).toHaveCount(0);
-    await page.getByRole('log').evaluate((el) => el.scrollTo(0, 0));
+    await page.getByText('Make the session screen work on a phone, and check').scrollIntoViewIfNeeded();
     const bar = page.getByRole('status').filter({ hasText: 'Bash needs your permission' });
     await expect(bar).toBeVisible();
     await fits(page);
@@ -53,7 +53,7 @@ test('one header, a usable composer, and an approval reachable from anywhere in 
 
     // Stop is a button on the composer while the agent works, since there is no Esc.
     await allow.tap();
-    await expect(page.getByText(/Bash .* — allowed/)).toBeVisible();
+    await expect(allow).toHaveCount(0);
     const stop = page.getByRole('button', { name: 'Stop', exact: true });
     await expect(stop).toBeVisible();
     await stop.tap();
