@@ -30,7 +30,7 @@ export function Timeline() {
 
   return (
     <Conversation initial="instant" resize="smooth" className="min-h-0">
-      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-4 md:px-6 pt-8 pb-16">
+      <ConversationContent className="mx-auto w-full max-w-3xl gap-6 [&>div]:[content-visibility:auto] [&>div]:[contain-intrinsic-size:auto_200px] px-4 md:px-6 pt-4 md:pt-8 pb-16">
         {items.length === 0 ? (
           <CivPanel parchment className="mx-auto max-w-md" bodyClassName="p-5 text-center">
             <EmptyMark name="scroll" className="mx-auto mb-2" pixelClassName="mx-auto mb-3 size-8" />
@@ -53,7 +53,7 @@ export function Timeline() {
                     className="border-destructive/40 bg-destructive/5 text-destructive flex gap-2 rounded-lg border p-3 text-sm"
                   >
                     <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-                    <pre className="font-sans whitespace-pre-wrap">{item.message}</pre>
+                    <pre className="min-w-0 font-sans whitespace-pre-wrap [overflow-wrap:anywhere]">{item.message}</pre>
                   </div>
                 );
             }

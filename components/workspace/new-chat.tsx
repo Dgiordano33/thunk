@@ -1,11 +1,10 @@
 "use client";
 import { AgentStatus, useAgentStatus } from "@/components/onboarding/agent-status";
-import { ComposerOptions } from "@/components/mobile/composer-options";
 
 import { CivPanel } from "@/components/world/civ-panel";
 import { EmptyMark } from "@/components/space/orbit-mark";
 
-import { PromptComposer } from "@/components/chat/prompt-composer";
+import { AttachImagesButton, PromptComposer } from "@/components/chat/prompt-composer";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -69,7 +68,7 @@ export function NewChat({
           </>
         )}
       </div>
-      <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-safe md:pb-5">
+      <div className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-[max(env(safe-area-inset-bottom),0.75rem)] md:pb-5">
         {unavailable || error ? <AgentStatus /> : <AgentStatus onlyUnavailable />}
       <PromptComposer
           workspaceId={workspaceId}
@@ -94,9 +93,10 @@ export function NewChat({
         >
           <PromptInputFooter>
             <PromptInputTools>
-  <ComposerOptions>            <ModelSelect models={models} value={model} onValueChange={setModel} disabled={disabled} />
+              <AttachImagesButton disabled={disabled || submitting} />
+              <ModelSelect models={models} value={model} onValueChange={setModel} disabled={disabled} />
               <PromptInputSelect value={mode} onValueChange={setMode} disabled={disabled}>
-                <PromptInputSelectTrigger className="h-7 text-xs">
+                <PromptInputSelectTrigger className="h-7 min-w-0 shrink-[3] text-xs [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
                   <PromptInputSelectValue />
                 </PromptInputSelectTrigger>
                 <PromptInputSelectContent>
@@ -106,7 +106,7 @@ export function NewChat({
                     </PromptInputSelectItem>
                   ))}
                 </PromptInputSelectContent>
-              </PromptInputSelect></ComposerOptions>
+              </PromptInputSelect>
               {error && <span className="text-destructive truncate text-xs">{error}</span>}
             </PromptInputTools>
             <PromptInputSubmit disabled={disabled || submitting || !!unavailable} status={submitting ? "submitted" : "ready"} />

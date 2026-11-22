@@ -1,6 +1,6 @@
 "use client";
-import { useIsDesktop } from "@/components/mobile/viewport";
-import { MobileDrawer } from "@/components/mobile/drawer";
+import { useIsDesktop, useVisualViewportHeight } from "@/components/mobile/viewport";
+import { MobileNav } from "@/components/mobile/drawer";
 
 import { useDefaultLayout } from "react-resizable-panels";
 
@@ -9,7 +9,9 @@ import { usePanelLayoutStorage, ResizableHandle, ResizablePanel, ResizablePanelG
 export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; children: React.ReactNode }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-sidebar-layout", panelIds: ['sidebar', 'content'], storage: usePanelLayoutStorage() });
   const desktop = useIsDesktop();
-  if (!desktop) return <div className="flex h-dvh flex-col bg-background"><div className="border-b pt-safe"><MobileDrawer title="Navigation" side="left">{sidebar}</MobileDrawer></div><div className="min-h-0 flex-1">{children}</div></div>;
+  useVisualViewportHeight(!desktop);
+  // On a phone the workspace header opens the sidebar as a sheet, so the page gets the whole screen.
+  if (!desktop) return <MobileNav.Provider value={sidebar}><div className="bg-background flex h-[var(--vvh,100dvh)] flex-col pt-safe"><div className="min-h-0 flex-1">{children}</div></div></MobileNav.Provider>;
   return (
     <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="moonlit sky-surface bg-background h-dvh">
       <ResizablePanel id="sidebar" defaultSize="17" minSize="12" maxSize="30">

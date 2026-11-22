@@ -43,7 +43,9 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
   const params = useSearchParams();
   const pathname = usePathname();
   const requested = params.get("tab") ?? "sessions";
-  const requestedTab = !desktop && ["files", "changes", "checkpoints"].includes(requested) ? "sessions" : requested;
+  // A phone gets the changed files and their diffs, read-only; the tree, the editor and checkpoints stay on desktop.
+  const phoneTab = requested === "files" || requested === "changes" ? (hasGit ? "changes" : "sessions") : requested === "checkpoints" ? "sessions" : requested;
+  const requestedTab = desktop ? requested : phoneTab;
   // `tab=changes` is the Files tab filtered to changed files; it falls back to all files without git.
   const tab = !hasGit && requestedTab === "checkpoints" ? "sessions" : !hasGit && requestedTab === "changes" ? "files" : requestedTab;
   const filesView = tab === "changes" ? "changed" : "all";
@@ -87,14 +89,14 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
   return (
     <Tabs value={["sessions", "artifacts", "files", "tasks", "notes", "checkpoints"].includes(tabValue) ? tabValue : "sessions"} onValueChange={(value) => {
       // Reopening Files keeps whichever view (all or changed) was last picked.
-      setTab(value === "files" && filesView === "changed" ? "changes" : value);
+      setTab(value === "files" && (filesView === "changed" || !desktop) ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
       <div className="flex h-10 shrink-0 items-end overflow-x-auto border-b px-3">
         <TabsList variant="line" className="h-full shrink-0 min-w-max">
           <TabsTrigger className="pixel text-xs" value="sessions">Sessions</TabsTrigger>
           <TabsTrigger className="pixel text-xs" value="artifacts">Artifacts</TabsTrigger>
-          {desktop && <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
-            Files
+          {(desktop || hasGit) && <TabsTrigger className="pixel text-xs" value="files" title={fileCount > 0 ? `${fileCount} changed` : undefined}>
+            {desktop ? "Files" : "Changes"}
             {fileCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{fileCount}</span>}
           </TabsTrigger>}
           <TabsTrigger className="pixel text-xs" value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
@@ -112,9 +114,9 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
           <Artifacts workspaceId={workspaceId} />
         </div>
       </TabsContent>
-      {desktop && <TabsContent forceMount value="files" className="data-[state=inactive]:hidden flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
-          {hasGit && <div className="flex gap-1" role="group" aria-label="Files view">
+      {(desktop || hasGit) && <TabsContent forceMount value="files" className="data-[state=inactive]:hidden flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5 max-md:py-0">
+          {desktop && hasGit && <div className="flex gap-1" role="group" aria-label="Files view">
             {(["all", "changed"] as const).map((v) => (
               <Button variant="ghost" size="xs"
                 key={v}
@@ -143,7 +145,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
         </div>
         {/* Plain overflow, not ScrollArea: its table layout would widen to the longest diff line. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {filesView === "changed"
+          {filesView === "changed" || !desktop
             ? <Changes workspaceId={workspaceId} changes={changes} repos={repos} />
             : <FileTree workspaceId={workspaceId} changes={changes} repos={repos} refreshKey={`${fileCount}:${treeRefresh}`} />}
         </div>
@@ -306,6 +308,7 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
 
 function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onRemove }: { workspaceId: string; repoId?: string; label: string; file: ChangedFile; comments: DiffComment[]; onAdd: (c: DiffComment) => void; onRemove: (id: string) => void }) {
   const base = useWorkspaceBase();
+  const desktop = useIsDesktop();
   const [open, setOpen] = useState(false);
   const [diff, setDiff] = useState<string | null>(null);
   const slash = file.path.lastIndexOf("/");
@@ -348,9 +351,9 @@ function ChangedFileRow({ workspaceId, repoId, label, file, comments, onAdd, onR
           {file.deletions > 0 && <span className="ml-1 text-red-600 dark:text-red-400">-{file.deletions}</span>}
         </span>
         {/* Room for the edit link, which sits over the row so it isn't nested in the button. */}
-        {file.status !== "D" && <span className="w-5 shrink-0" />}
+        {desktop && file.status !== "D" && <span className="w-5 shrink-0" />}
       </button>
-      {file.status !== "D" && (
+      {desktop && file.status !== "D" && (
         <Hint label="Open in editor">
         <Link
           href={filePagePath(base, repoId ?? null, file.path, "changes")}

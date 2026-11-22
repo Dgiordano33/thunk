@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 const InitialDesktop = createContext(true);
 const query = "(min-width: 768px)";
@@ -18,4 +18,29 @@ export function useIsDesktop() {
 }
 export function ResponsiveView({ mobile, children }: { mobile: React.ReactNode; children: React.ReactNode }) {
   return useIsDesktop() ? children : mobile;
+}
+
+/**
+ * Keeps `--vvh` on the root at the height left above the on-screen keyboard. iOS Safari overlays the keyboard
+ * instead of resizing the page, so a full-height layout would otherwise leave the composer underneath it.
+ */
+export function useVisualViewportHeight(enabled: boolean) {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!enabled || !viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      root.style.setProperty("--vvh", `${viewport.height}px`);
+      // Safari scrolls the page to reveal a focused field; the layout already fits, so undo it.
+      if (viewport.offsetTop) window.scrollTo(0, 0);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      root.style.removeProperty("--vvh");
+    };
+  }, [enabled]);
 }

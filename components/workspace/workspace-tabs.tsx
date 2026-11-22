@@ -1,9 +1,9 @@
 "use client";
-import { sessionStatus, sessionDot } from "@/components/session/labels";
+import { relativeTime, sessionStatus, sessionDot } from "@/components/session/labels";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileDrawer } from "@/components/mobile/drawer";
 
-import { GitBranchIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
@@ -36,7 +36,54 @@ export function WorkspaceTabs({
   const status = useSession((s) => s.status);
   const branched = workspace.repos.filter((r) => r.branch);
 
-  if (!desktop) return <header className="flex min-h-14 min-w-0 items-center border-b"><Link href={base.split("/").slice(0, -1).join("/")} className="p-3" aria-label="Back to project">←</Link><MobileDrawer title={sessions.find(s => pathname === `${base}/${s.id}`)?.title || "Sessions"}><nav className="flex flex-col">{sessions.map(s => <Link className="p-4" key={s.id} href={`${base}/${s.id}`}>{s.title || "Untitled"}</Link>)}<Link className="p-4" href={`${base}/new`}>New chat</Link></nav></MobileDrawer><MobileDrawer title="Branch and PR"><p className="p-4 break-words">{branch ?? workspace.name} · {dirty} changed</p>{branched.length > 1 ? branched.map(r => <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />) : workspace.repos.length > 0 && <PrButton workspaceId={workspace.id} />}</MobileDrawer></header>;
+  if (!desktop) {
+    const open = sessions.find((s) => pathname === `${base}/${s.id}`);
+    const stateOf = (s: SessionMeta) => {
+      const current = s.id === meta?.id;
+      return { ...s, ...(current ? meta : {}), live: Boolean(current ? meta?.live : s.live), status: current ? status : s.status };
+    };
+    const title = open ? stateOf(open).title || "Untitled" : onNew ? "New chat" : "Sessions";
+    return (
+      <>
+        <MobileDrawer
+          title="Sessions"
+          className="flex-1 px-1 text-left"
+          trigger={
+            <span className="flex items-center gap-2">
+              {open && <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", sessionDot(stateOf(open)))} />}
+              <span className="truncate font-medium">{title}</span>
+              {open && <span className="sr-only">· {sessionStatus(stateOf(open))}</span>}
+              <ChevronDownIcon aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
+            </span>
+          }
+        >
+          <nav className="flex flex-col gap-1 px-2 pb-4" aria-label="Sessions">
+            <Link href={`${base}/new`} aria-current={onNew ? "page" : undefined} className="aria-[current=page]:bg-muted flex min-h-11 items-center gap-3 rounded-md px-3 font-medium"><PlusIcon className="size-4" /> New chat</Link>
+            {sessions.map((s) => {
+              const state = stateOf(s);
+              return (
+                <Link key={s.id} href={`${base}/${s.id}`} aria-current={s === open ? "page" : undefined} className="aria-[current=page]:bg-muted flex min-h-14 items-center gap-3 rounded-md px-3">
+                  <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", sessionDot(state))} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{state.title || "Untitled"}</span>
+                    <span className="text-muted-foreground block truncate text-xs">{sessionStatus(state)} · {relativeTime(state.updatedAt ?? state.createdAt)}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </MobileDrawer>
+        {workspace.repos.length > 0 && (
+          <MobileDrawer title="Branch and PR" className="relative px-0" trigger={<><GitBranchIcon className="mx-auto size-5" />{dirty > 0 && <span aria-hidden="true" className="absolute top-2.5 right-2.5 size-1.5 rounded-full bg-[var(--status-attention)]" />}</>}>
+            <p className="px-4 pb-4 font-mono text-sm break-words">{branch ?? workspace.name}<span className="text-muted-foreground font-sans"> · {dirty} changed</span></p>
+            <div className="flex flex-col items-start gap-2 px-4 pb-4">
+              {branched.length > 1 ? branched.map(r => <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />) : <PrButton workspaceId={workspace.id} />}
+            </div>
+          </MobileDrawer>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-10 shrink-0 items-stretch border-b">

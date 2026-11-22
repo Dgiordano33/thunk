@@ -200,6 +200,12 @@ async function runSession(live: LiveSession) {
   }
 }
 
+/** Add a session whose driver the caller built, without starting an agent (browser-test fixtures). */
+export function registerSession(live: LiveSession) {
+  registry.set(live.id, live);
+  for (const hook of g.__thunkSessionHooks!) hook(live);
+}
+
 export function getSession(id: string) {
   return registry.get(id);
 }
