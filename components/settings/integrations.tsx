@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { SLACK_APP_MANIFEST } from "@/lib/integrations/slack/manifest";
 import { cn } from "@/lib/utils";
 import { settingsPath } from "./sections";
+import { LinearCard } from "./linear-card";
 import { useSlack } from "./use-slack";
 
 function Status({ state }: { state: "on" | "off" | "setup" }) {
@@ -124,15 +125,7 @@ export function IntegrationSettings() {
   return (
     <div className="space-y-6">
       <SlackCard />
-      <section className="rounded-lg border border-dashed px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-medium">Linear</h3>
-            <p className="text-muted-foreground text-xs">Issues assigned to you become tasks, and closing a task closes its issue. Coming next.</p>
-          </div>
-          <span className="text-muted-foreground text-[11px]">Soon</span>
-        </div>
-      </section>
+      <LinearCard status={Status} />
     </div>
   );
 }

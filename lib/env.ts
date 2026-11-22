@@ -16,6 +16,8 @@ const schema = z.object({
   /** Override the Slack bot token and member ID saved in Settings → Integrations (lib/integrations/config.ts). */
   SLACK_BOT_TOKEN: z.string().optional(),
   SLACK_USER_ID: z.string().optional(),
+  /** Override the Linear personal API key saved in Settings → Integrations. */
+  LINEAR_API_KEY: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

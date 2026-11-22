@@ -14,7 +14,7 @@ export function tasksPrompt(open: Task[]) {
   ] as const) {
     const current = tasks.filter((t) => OPEN_TASK_STATUSES.some((s) => s === t.status));
     lines.push("", `## ${label}`, ...current.map((t) =>
-      `- ${t.id.slice(0, 8)} · ${t.status} · ${t.title.replace(/\s+/g, " ")} · owner: ${t.sessionId ?? "unclaimed"}`));
+      `- ${t.id.slice(0, 8)} · ${t.status} · ${t.external ? `${t.external.key} ` : ""}${t.title.replace(/\s+/g, " ")} · owner: ${t.sessionId ?? "unclaimed"}`));
     if (!current.length) lines.push("- (none)");
   }
   return lines.join("\n");

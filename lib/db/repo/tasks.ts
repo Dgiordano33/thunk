@@ -5,7 +5,7 @@ import type { Tables, TablesUpdate } from "../types";
 import { db } from "../server";
 import { insertSql, run, updateSql } from "../sql";
 type Row = Tables<"tasks">;
-const COLUMNS = "id, project_id, workspace_id, title, body, status, priority, position, created_by, session_id, created_in_session_id, note_id, due_at, completed_at, created_at, updated_at";
+const COLUMNS = "id, project_id, workspace_id, title, body, status, priority, position, created_by, session_id, created_in_session_id, note_id, due_at, completed_at, created_at, updated_at, external_source, external_id, external_key, external_url, external_updated_at";
 function toTask(r: Row): Task { return {
   id: r.id,
   projectId: r.project_id,
@@ -23,6 +23,7 @@ function toTask(r: Row): Task { return {
   completedAt: r.completed_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
+  external: r.external_source && r.external_id ? { source: r.external_source as "linear", id: r.external_id, key: r.external_key ?? "", url: r.external_url ?? "", updatedAt: r.external_updated_at } : null,
 }; }
 function taskToRow(p: Partial<Task>): TablesUpdate<"tasks"> {
   const row: TablesUpdate<"tasks"> = {};
@@ -42,6 +43,13 @@ function taskToRow(p: Partial<Task>): TablesUpdate<"tasks"> {
   if (p.completedAt !== undefined) row.completed_at = p.completedAt;
   if (p.createdAt !== undefined) row.created_at = p.createdAt;
   if (p.updatedAt !== undefined) row.updated_at = p.updatedAt;
+  if (p.external !== undefined) {
+    row.external_source = p.external?.source ?? null;
+    row.external_id = p.external?.id ?? null;
+    row.external_key = p.external?.key ?? null;
+    row.external_url = p.external?.url ?? null;
+    row.external_updated_at = p.external?.updatedAt ?? null;
+  }
   return row;
 }
 const g = globalThis as typeof globalThis & { __thunkMemTasks?: Map<string, Task>; __thunkTaskInserts?: Map<string, Promise<unknown>> };
@@ -72,6 +80,7 @@ async function insertTaskNow(input: NewTask): Promise<Task> {
     status: input.status ?? "open", priority: input.priority ?? 0,
     createdBy: input.createdBy ?? "user", sessionId: input.sessionId ?? null,
     createdInSessionId: input.createdInSessionId ?? null, noteId: input.noteId ?? null, dueAt: input.dueAt ?? null,
+    external: input.external ?? null,
     position: (peers.length ? Math.max(...peers.map((t) => t.position)) : 0) + 1,
     completedAt: closed(input.status ?? "open") ? now : null, createdAt: now, updatedAt: now,
   };
@@ -120,6 +129,13 @@ export async function deleteTask(id: string): Promise<void> {
     await client.query("delete from tasks where id = $1", [id]);
   }
   changed(task, "removed");
+}
+/** Tasks that mirror issues from `source` in a project, keyed by issue id. */
+export async function listExternalTasks(projectId: string, source: "linear"): Promise<Task[]> {
+  const client = db();
+  if (!client) return [...mem.values()].filter((t) => t.projectId === projectId && t.external?.source === source);
+  const rows = await client.query<Row>(`select ${COLUMNS} from tasks where project_id = $1 and external_source = $2`, [projectId, source]);
+  return rows.map(toTask);
 }
 export type TaskFilter = { projectId?: string; workspaceId?: string | null; sessionId?: string; status?: "open" | TaskStatus[] };
 export async function listTasks(opts: TaskFilter = {}): Promise<Task[]> {

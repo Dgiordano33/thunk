@@ -1,4 +1,5 @@
 import "server-only";
+import { linearBranch } from "@/lib/integrations/linear/sync";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
 import { createWorkspace, ensureMainWorkspace, getWorkspaceContext } from "@/lib/projects";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
@@ -131,7 +132,9 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     const entries: RaceEntry[] = [];
     for (const model of models) {
       const workspace = scout ? await ensureMainWorkspace(project)
-        : target ?? await createWorkspace({ projectId, name: `${routineSlug(task.title)}-${shortId()}`, repoIds: selectRepos(project, args.repoIds).map((r) => r.id), worktree: true, setup: "await" });
+        : target ?? await createWorkspace({ projectId, name: `${routineSlug(task.title)}-${shortId()}`, repoIds: selectRepos(project, args.repoIds).map((r) => r.id), worktree: true, setup: "await",
+          // Linear attaches the PR to the issue when the branch carries its key.
+          ...(task.external?.source === "linear" ? { branch: linearBranch(task.external.key, task.title) } : {}) });
       const live = await startWorkerSession({ workspaceId: workspace.id, title: raceId ? `${task.title} · ${model}` : task.title, model, permissionMode: scout ? "default" : args.permissionMode ?? "default",
         origin: { kind: "worker", chiefSessionId, taskId: task.id, ...(target ? { existingWorkspace: true } : {}), ...(scout ? { scout: true } : {}), ...(raceId ? { raceId } : {}) } });
       started.push(live);

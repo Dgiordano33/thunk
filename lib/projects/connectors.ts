@@ -4,6 +4,7 @@ import { chmod, mkdir } from "node:fs/promises";
 import { z } from "zod";
 import { HttpError } from "@/lib/api/errors";
 import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
+import { linearConnector } from "@/lib/integrations/linear/service";
 import { projectConfigDir, projectConnectorsFile, sharedConnectorsFile } from "./paths";
 
 const strings = z.record(z.string(), z.string());
@@ -21,11 +22,11 @@ const revision = (raw: string | null) => createHash("sha256").update(raw ?? "").
 
 export const readConnectors = (key: string) => readConnectorsFile(projectConnectorsFile(key));
 
-/** What a session loads: the shared connectors, then the project's, which win on a name clash. */
+/** What a session loads: integrations (Linear), the shared connectors, then the project's; later ones win on a name clash. */
 export async function sessionConnectors(key: string) {
-  const [shared, project] = await Promise.all([readConnectorsFile(sharedConnectorsFile()), readConnectors(key)]);
+  const [integrations, shared, project] = await Promise.all([linearConnector().catch(() => ({})), readConnectorsFile(sharedConnectorsFile()), readConnectors(key)]);
   if (shared.error) console.warn(`[thunk] shared connectors skipped (${sharedConnectorsFile()}): ${shared.error}`);
-  return { mcpServers: { ...shared.config.mcpServers, ...project.config.mcpServers } } as ConnectorConfig;
+  return { mcpServers: { ...integrations, ...shared.config.mcpServers, ...project.config.mcpServers } } as ConnectorConfig;
 }
 
 async function readConnectorsFile(file: string) {
