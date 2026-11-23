@@ -7,7 +7,8 @@ import { DocumentCard } from "@/components/canvas/document-card";
 import { AskQuestionForm } from "@/components/approvals/ask-question-form";
 import { PermissionCard } from "@/components/approvals/permission-card";
 import { useSession } from "@/lib/store/session-store";
-import { ToolCallView } from "./tool-call";
+import { ToolCallView, ToolGroup } from "./tool-call";
+import type { TurnPart } from "@/lib/store/session-store";
 
 /** A tool call, plus the approval / question / plan it is waiting on, rendered in place. */
 function ToolPart({ toolUseId }: { toolUseId: string }) {
@@ -25,12 +26,34 @@ function ToolPart({ toolUseId }: { toolUseId: string }) {
   );
 }
 
+type Segment =
+  | { kind: "text"; text: string; index: number }
+  | { kind: "tool"; toolUseId: string }
+  | { kind: "tools"; toolUseIds: string[] };
+
+/**
+ * Fold consecutive plain tool calls into one group. Calls tied to an approval,
+ * question or plan stay standalone so they are never hidden behind a fold.
+ */
+function segment(parts: TurnPart[], requestByToolUse: Record<string, string>): Segment[] {
+  const out: Segment[] = [];
+  parts.forEach((part, index) => {
+    if (part.kind === "text") return void out.push({ kind: "text", text: part.text, index });
+    if (requestByToolUse[part.toolUseId]) return void out.push({ kind: "tool", toolUseId: part.toolUseId });
+    const last = out[out.length - 1];
+    if (last?.kind === "tools") last.toolUseIds.push(part.toolUseId);
+    else out.push({ kind: "tools", toolUseIds: [part.toolUseId] });
+  });
+  return out;
+}
+
 /**
  * An assistant turn: interim narration and tool calls render as a compact
  * trace; the turn's final prose becomes an editable canvas document.
  */
 export function AssistantTurn({ turnId }: { turnId: string }) {
   const turn = useSession((s) => s.turns[turnId]);
+  const requestByToolUse = useSession((s) => s.requestByToolUse);
   if (!turn) return null;
   const streaming = turn.status === "streaming";
 
@@ -38,6 +61,7 @@ export function AssistantTurn({ turnId }: { turnId: string }) {
   const lastText = turn.parts.length - 1;
   const docTakesLast = Boolean(turn.documentId) && turn.parts[lastText]?.kind === "text";
   const trace = docTakesLast ? turn.parts.slice(0, lastText) : turn.parts;
+  const segments = segment(trace, requestByToolUse);
 
   return (
     <div className="flex flex-col gap-3">
@@ -48,19 +72,21 @@ export function AssistantTurn({ turnId }: { turnId: string }) {
         </Reasoning>
       )}
 
-      {trace.map((part, i) =>
-        part.kind === "tool" ? (
-          <ToolPart key={part.toolUseId} toolUseId={part.toolUseId} />
-        ) : (
+      {segments.map((seg, i) => {
+        if (seg.kind === "tool") return <ToolPart key={seg.toolUseId} toolUseId={seg.toolUseId} />;
+        if (seg.kind === "tools")
+          return <ToolGroup key={seg.toolUseIds[0]} toolUseIds={seg.toolUseIds} live={streaming && i === segments.length - 1} />;
+        const isTail = seg.index === trace.length - 1;
+        return (
           <MessageResponse
-            key={i}
-            isAnimating={streaming && i === trace.length - 1}
-            className={i === trace.length - 1 && streaming ? "text-[15px] leading-7" : "text-muted-foreground text-sm"}
+            key={seg.index}
+            isAnimating={streaming && isTail}
+            className={isTail && streaming ? "text-[15px] leading-7" : "text-muted-foreground text-sm"}
           >
-            {part.text}
+            {seg.text}
           </MessageResponse>
-        ),
-      )}
+        );
+      })}
 
       {streaming && trace.length === 0 && !turn.thinking && (
         <Shimmer className="text-sm">Thinking…</Shimmer>
