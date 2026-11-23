@@ -120,4 +120,26 @@ test("items from a session can be answered in place; items without one only link
   assert.doesNotMatch(html, /aria-expanded="true"/, "context stays closed until asked for");
   assert.match(html, /<kbd[^>]*>c<\/kbd> context/); assert.match(html, /<kbd[^>]*>r<\/kbd> reply/);
 });
+test("the triage loop moves to the next decision the person saw, then the one before, then anything new", () => {
+  assert.equal(model.nextDecision(["a", "b", "c"], "b", ["a", "c"]), "c");
+  assert.equal(model.nextDecision(["a", "b", "c"], "c", ["a", "b"]), "b");
+  assert.equal(model.nextDecision(["a", "b", "c"], "a", ["c"]), "c", "skips decisions that left meanwhile");
+  assert.equal(model.nextDecision(["a"], "a", ["z"]), "z", "a decision that arrived since");
+  assert.equal(model.nextDecision(["a"], "a", []), null);
+});
+test("earlier updates from one session fold under the newest, with a count to unfold them", () => {
+  const turn = (i, sessionId) => ({ ...base, id: `t${i}`, kind: "turn_finished", urgency: "info", status: "resolved", sessionId, title: `Phone layout · Turn ${i}`, createdAt: new Date(Date.now() - i * 60000).toISOString() });
+  const folds = model.foldBySession([turn(1, "s"), turn(2, null), turn(3, "s"), turn(4, "s"), turn(5, null)]);
+  assert.deepEqual(folds.map((f) => [f.lead.id, f.rest.map((n) => n.id)]), [["t1", ["t3", "t4"]], ["t2", []], ["t5", []]]);
+  const html = renderInbox({ items: [turn(1, "s"), turn(3, "s"), turn(4, "s"), turn(2, null)] });
+  assert.match(html, /aria-label="Show 2 earlier updates from this session"[^>]*aria-expanded="false"|aria-expanded="false"[^>]*aria-label="Show 2 earlier updates from this session"/);
+  assert.match(html, />\+2<svg/); assert.match(html, /Phone layout · Turn 1/); assert.doesNotMatch(html, /Phone layout · Turn 3/, "folded rows stay hidden");
+  assert.match(html, /Phone layout · Turn 2/, "rows from no session stand alone");
+});
+test("decision options carry number keys, and a permission can be allowed for the session", () => {
+  const permission = { ...sample[0], sessionId: "s", actions: ["Allow", "Allow for this session", "Deny"].map((label) => ({ label, method: "POST", path: "/p" })) };
+  const html = renderInbox({ items: [permission, sample[1]] });
+  assert.deepEqual([...html.matchAll(/data-action="(\d)"[^>]*>([^<]+)</g)].map((m) => [m[1], m[2]]), [["1", "Allow"], ["2", "Allow for this session"], ["3", "Deny"], ["1", "Review plan"]]);
+  assert.match(html, /<kbd[^>]*>1<\/kbd>–<kbd[^>]*>4<\/kbd> answer/);
+});
 module.exports = { renderInbox, sample };

@@ -4,7 +4,7 @@ import { FloatingWindow } from "@/components/world/floating-window";
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
-  ArrowUpRightIcon, CheckCheckIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
+  ArrowUpRightIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
   GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -29,7 +29,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/hint";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { QuickContext } from "./quick-context";
-import { describe, destination, dismissScope, FAILED_KINDS, groupFollowups, isExternal, kindCounts, nextFocus, plural, sectionOf, type Group } from "./model";
+import { describe, destination, dismissScope, FAILED_KINDS, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, sectionOf, type Group } from "./model";
 
 /** Group rows past this many fold behind "Show N more" so one noisy PR can't push decisions off screen. */
 const GROUP_PREVIEW = 5;
@@ -73,6 +73,11 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const refocus = useRef(false);
+  /** Set while a decision is being answered or dismissed: when it leaves the list, the loop moves on to the next one. */
+  const advance = useRef<{ id: string; decisions: string[] } | null>(null);
+  /** A row to focus once it has rendered (the next decision, after the loop moves on). */
+  const pendingFocus = useRef<string | null>(null);
+  const [folds, setFolds] = useState<Set<string>>(() => new Set());
   const read = useRef(new Set<string>());
 
   const setParam = (key: string, value: string) => {
@@ -92,7 +97,9 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const earlier = visible.filter((n) => sectionOf(n) === "earlier");
   const groups = groupFollowups(followups);
   const shownInGroup = (g: Group) => expanded.has(g.key) ? g.items : g.items.slice(0, GROUP_PREVIEW);
-  const order = [...decisions, ...groups.flatMap(shownInGroup), ...earlier].map((n) => n.id);
+  const earlierFolds = foldBySession(earlier);
+  const shownEarlier = earlierFolds.flatMap((f) => folds.has(f.lead.id) ? [f.lead, ...f.rest] : [f.lead]);
+  const order = [...decisions, ...groups.flatMap(shownInGroup), ...shownEarlier].map((n) => n.id);
   const focusId = activeId && order.includes(activeId) ? activeId : order[0] ?? null;
   const kinds = kindCounts(scoped);
   const scope = dismissScope(visible);
@@ -115,11 +122,39 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     (target || list.current)?.focus();
   }, [focusId, order.length]);
 
+  // The triage loop: once the decision just answered or dismissed has left, focus the next one with its context open.
+  const decisionIds = decisions.map((n) => n.id).join(",");
+  useEffect(() => {
+    const from = advance.current;
+    if (!from) return;
+    const now = decisionIds ? decisionIds.split(",") : [];
+    if (now.includes(from.id)) return;
+    advance.current = null;
+    const next = nextDecision(from.decisions, from.id, now);
+    // The answered item drops to Earlier; close its panel there so the list stays quiet.
+    setContext((s) => { const open = new Set(s); open.delete(from.id); if (next) open.add(next); return open; });
+    if (!next) { setAnnouncement("No more decisions."); return; }
+    setActiveId(next);
+    pendingFocus.current = next;
+  }, [decisionIds]);
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const target = list.current?.querySelector<HTMLElement>(`[data-id="${pendingFocus.current}"]`);
+    if (!target) return;
+    pendingFocus.current = null;
+    target.focus();
+  });
+  /** Arm the loop for a decision about to be answered; disarm if the answer fails. */
+  const armAdvance = (n: Notification) => { if (isDecision(n)) advance.current = { id: n.id, decisions: decisions.map((d) => d.id) }; };
+  const disarm = (n: Notification) => { if (advance.current?.id === n.id) advance.current = null; };
+
   const markPending = (ids: string[], on: boolean) => setPending((s) => { const next = new Set(s); ids.forEach((id) => on ? next.add(id) : next.delete(id)); return next; });
   async function dismiss(ids: string[], label: string) {
     if (!ids.length) return;
     refocus.current = Boolean(list.current?.contains(document.activeElement));
     setActiveId(nextFocus(order, ids, focusId));
+    const single = ids.length === 1 ? visible.find((n) => n.id === ids[0]) : undefined;
+    if (single) armAdvance(single);
     setHidden((s) => new Set([...s, ...ids]));
     setSelected((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
     setAnnouncement(`Dismissed ${label}.`);
@@ -128,6 +163,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
       void refreshNotifications();
       toast(`Dismissed ${label}`, { action: { label: "Undo", onClick: () => void undo(ids, label) } });
     } catch (err) {
+      if (single) disarm(single);
       setHidden((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
       setAnnouncement(`Couldn’t dismiss ${label}.`);
       toast.error(`Couldn’t dismiss ${label}`, { description: (err as Error).message });
@@ -145,8 +181,9 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   }
   async function act(n: Notification, action: Notification["actions"][number]) {
     markPending([n.id], true);
+    armAdvance(n);
     try { await api.notificationAction(action); await refreshNotifications(); setAnnouncement(`${action.label}: done.`); }
-    catch (err) { toast.error(`Couldn’t ${action.label.toLowerCase()}`, { description: (err as Error).message }); }
+    catch (err) { disarm(n); toast.error(`Couldn’t ${action.label.toLowerCase()}`, { description: (err as Error).message }); }
     finally { markPending([n.id], false); }
   }
   /** Bulk dismissal asks first when it would drop a decision an agent is waiting on. */
@@ -161,7 +198,8 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const openReply = (id: string) => { setContext((s) => new Set([...s, id])); setReplyTo(id); };
   const clearReplyTo = useCallback(() => setReplyTo(null), []);
   const contextPanel = (n: Notification, lead: string) => context.has(n.id) && n.sessionId && (
-    <QuickContext n={n} lead={lead} focusReply={replyTo === n.id} onFocused={clearReplyTo} onReplied={(message) => { setAnnouncement(`${message}.`); void refreshNotifications(); }} />
+    <QuickContext n={n} lead={lead} focusReply={replyTo === n.id} onFocused={clearReplyTo} onSend={() => armAdvance(n)} onSendFailed={() => disarm(n)}
+      onReplied={(message, mode) => { if (mode === "message" && n.kind !== "agent_request") disarm(n); setAnnouncement(`${message}.`); void refreshNotifications(); }} />
   );
   const contextButton = (n: Notification, active: boolean, lead: string, labelled: boolean) => n.sessionId && (
     <Hint label={context.has(n.id) ? "Hide context" : "Quick context"} keys="c"><Button data-context size={labelled ? "default" : "icon"} variant="ghost" tabIndex={active ? 0 : -1} aria-expanded={context.has(n.id)}
@@ -185,6 +223,12 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     else if (e.key === "Home" && onRow) move(0);
     else if (e.key === "End" && onRow) move(rows.length - 1);
     else if (e.key === "o" || e.key === "Enter" && onRow) { e.preventDefault(); row.querySelector<HTMLElement>("[data-open]")?.click(); }
+    else if (/^[1-9]$/.test(e.key)) {
+      const button = row.querySelector<HTMLButtonElement>(`[data-action="${e.key}"]`);
+      if (!button || button.disabled) return;
+      e.preventDefault();
+      button.click();
+    }
     else if (e.key === "c" || e.key === "r") {
       if (!visible.find((v) => v.id === id)?.sessionId) return;
       e.preventDefault();
@@ -262,9 +306,11 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
               <p className={cn("bg-muted/40 mt-2 max-h-72 overflow-auto rounded-sm border p-3 leading-relaxed whitespace-pre-wrap break-words", n.kind === "permission" ? "font-mono text-xs" : "text-sm")}>{detail}</p>
             </details>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              {isPlan && !open && <Button tabIndex={tab} className={RING} onClick={() => setReviewing((s) => new Set([...s, n.id]))}>Review plan</Button>}
+              {isPlan && !open && <Hint label="Review plan" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => setReviewing((s) => new Set([...s, n.id]))}>Review plan</Button></Hint>}
               {(!isPlan || open) && options.map((action, i) => (
-                <Button key={i} tabIndex={tab} className={RING} variant={n.kind === "question" || i > 0 ? "outline" : "default"} disabled={busy} onClick={() => void act(n, action)}>{action.label}</Button>
+                <Hint key={i} label={action.label} keys={String(i + 1)}>
+                  <Button data-action={i + 1} tabIndex={tab} className={RING} variant={n.kind === "question" || i > 0 ? "outline" : "default"} disabled={busy} onClick={() => void act(n, action)}>{action.label}</Button>
+                </Hint>
               ))}
               {isPlan && open && <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => setReviewing((s) => { const next = new Set(s); next.delete(n.id); return next; })}>Hide plan</Button>}
               {n.sessionId && <Button data-reply tabIndex={tab} variant={n.actions.length ? "ghost" : "default"} className={RING} onClick={() => openReply(n.id)}><ReplyIcon aria-hidden="true" />{n.kind === "question" && !n.actions.length ? "Answer" : "Reply"}</Button>}
@@ -281,7 +327,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     );
   };
   /** A one-line row for follow-ups and history: lead text, mono metadata, one named link out. */
-  const lineRow = (n: Notification, withProject: boolean) => {
+  const lineRow = (n: Notification, withProject: boolean, fold?: { count: number; open: boolean; nested?: boolean }) => {
     const { lead, detail } = describe(n);
     const active = n.id === focusId;
     const Icon = iconFor(n);
@@ -290,7 +336,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     return (
       <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className={cn(
         "min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-        selected.has(n.id) && "bg-accent/40",
+        selected.has(n.id) && "bg-accent/40", fold?.nested && "ml-6 border-l pl-2 sm:ml-7",
       )}>
         <div className="hover:bg-muted/40 flex min-h-11 min-w-0 items-center gap-2 rounded-sm px-1 py-1 sm:gap-3">
         {selectBox(n, active, lead) || <span className="size-8 shrink-0" />}
@@ -305,6 +351,9 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           </details>}
         </div>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-[11px]">{meta(n, withProject)}</span>
+        {fold && fold.count > 0 && <Button size="sm" variant="ghost" tabIndex={active ? 0 : -1} aria-expanded={fold.open} aria-label={`${fold.open ? "Hide" : "Show"} ${plural(fold.count, "earlier update")} from this session`}
+          className={cn("text-muted-foreground h-8 shrink-0 font-mono text-[11px] tabular-nums", RING)} onClick={() => setFolds((s) => { const next = new Set(s); if (next.has(n.id)) next.delete(n.id); else next.add(n.id); return next; })}>
+          +{fold.count}<ChevronDownIcon aria-hidden="true" className={cn("transition-transform duration-150 motion-reduce:transition-none", fold.open && "rotate-180")} /></Button>}
         {contextButton(n, active, lead, false)}
         <Button asChild size="sm" variant="ghost" tabIndex={active ? 0 : -1} className={cn("hidden h-8 shrink-0 sm:inline-flex", RING)}>
           <OpenLink n={n} data-open="">{destination(n)}<ArrowUpRightIcon aria-hidden="true" /></OpenLink>
@@ -418,7 +467,13 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
               </section>}
               {earlier.length > 0 && <section className="mt-8" aria-labelledby="earlier-heading">
                 <div className="mb-1 flex items-center gap-3"><h2 id="earlier-heading" className="pixel text-muted-foreground text-sm tracking-wide">Earlier</h2><span className="bg-border h-px flex-1" /></div>
-                {earlier.map((n) => lineRow(n, projectId === "all"))}
+                {earlierFolds.map((f) => {
+                  const open = folds.has(f.lead.id);
+                  return <div key={f.lead.id} role={f.rest.length ? "group" : undefined} aria-label={f.rest.length ? `${describe(f.lead).lead} and ${plural(f.rest.length, "earlier update")}` : undefined}>
+                    {lineRow(f.lead, projectId === "all", { count: f.rest.length, open })}
+                    {open && f.rest.map((n) => lineRow(n, projectId === "all", { count: 0, open: false, nested: true }))}
+                  </div>;
+                })}
               </section>}
             </>}
             {before && <Button className={cn("mt-6", RING)} variant="outline" disabled={loadingMore} onClick={async () => {
@@ -431,7 +486,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             }}>Load earlier notifications</Button>}
           </div>
           <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
-          <footer className="text-muted-foreground hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[11px] sm:px-8 md:flex"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> move</span><span><Kbd>x</Kbd> select</span><span><Kbd>e</Kbd> dismiss</span><span><Kbd>o</Kbd> open</span><span><Kbd>c</Kbd> context</span><span><Kbd>r</Kbd> reply</span><span className="ml-auto">Shortcuts work while the list has focus</span></footer>
+          <footer className="text-muted-foreground hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t px-5 py-2.5 text-[11px] sm:px-8 md:flex"><span><Kbd>j</Kbd> / <Kbd>k</Kbd> move</span><span><Kbd>x</Kbd> select</span><span><Kbd>e</Kbd> dismiss</span><span><Kbd>o</Kbd> open</span><span><Kbd>1</Kbd>–<Kbd>4</Kbd> answer</span><span><Kbd>c</Kbd> context</span><span><Kbd>r</Kbd> reply</span><span className="ml-auto">Shortcuts work while the list has focus</span></footer>
         </div>
       </CivPanel>
       <AlertDialog open={Boolean(confirm)} onOpenChange={(open) => { if (!open) setConfirm(null); }}>

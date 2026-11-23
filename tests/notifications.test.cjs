@@ -63,6 +63,11 @@ test("session requests have usable actions, resolve on answer, and close clears 
   const row = (await repo.listNotifications())[0];
   assert.equal(row.actions[0].path, "/api/sessions/a/permission");
   assert.deepEqual(row.actions[0].body, { requestId: "1", decision: "allow" });
+  assert.deepEqual(row.actions.map((x) => x.label), ["Allow", "Deny"], "no suggestions, so nothing to allow for the session");
+  await sessionNotification(live, { type: "permission_request", requestId: "1b", toolName: "Bash", input: { command: "npm test" }, suggestions: [{ type: "addRules" }] });
+  const scoped = (await repo.listNotifications()).find((n) => n.subjectKey === "session:a:req:1b");
+  assert.deepEqual(scoped.actions.map((x) => [x.label, x.body.decision]), [["Allow", "allow"], ["Allow for this session", "allow_always"], ["Deny", "deny"]]);
+  await sessionNotification(live, { type: "permission_resolved", requestId: "1b" });
   await sessionNotification(live, { type: "permission_resolved", requestId: "1" });
   assert.equal((await repo.countOpen()).action, 0);
   await sessionNotification(live, { type: "ask_question", requestId: "2", questions: [{ question: "Which?", multiSelect: false, options: [{ label: "A" }, { label: "B" }] }] });
