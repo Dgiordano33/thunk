@@ -64,6 +64,7 @@ export function LibraryPanel({
         <ScopeNotes
           key={scopeKey(scope)}
           scope={scope}
+          projectId={projectId}
           selectedId={note}
           onSelect={(id) => go({ note: id })}
           listHeader={

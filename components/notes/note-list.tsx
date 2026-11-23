@@ -26,6 +26,7 @@ export function NoteList({
   onSelect,
   onCreate,
   createControl,
+  extraControl,
   onDelete,
   compact,
   groupMemory,
@@ -39,6 +40,8 @@ export function NoteList({
   onCreate?: () => void;
   /** Replaces the default "New note" button, e.g. with a notebook picker. */
   createControl?: React.ReactNode;
+  /** Rendered before the create control, e.g. an "Add files" button. */
+  extraControl?: React.ReactNode;
   onDelete?: (note: NoteMeta) => void;
   /** Drop the search box (for short embedded lists). */
   compact?: boolean;
@@ -120,6 +123,7 @@ export function NoteList({
             />
           </label>
           <NoteFilters query={query} filter={filter} onChange={(nextQuery, nextFilter) => { setQuery(nextQuery); setFilter(nextFilter); }} />
+          {extraControl}
           {createControl ??
             (onCreate && (
               <Hint label="New note" keys="⌘N">

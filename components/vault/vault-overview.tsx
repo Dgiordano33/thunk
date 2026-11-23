@@ -65,7 +65,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           <EmptyMark name="chest" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
           <h1 className="pixel mt-1 text-3xl">Your Vault is empty</h1>
-          <p className="mt-3 text-sm leading-relaxed opacity-80">Every project has a Vault for source material: docs, screenshots, slides, transcripts. Agents can read this material during sessions. Add a project to start collecting it.</p>
+          <p className="mt-3 text-sm leading-relaxed opacity-80">Every project has a Vault for reference you bring in as-is: PDFs, screenshots, decks, transcripts. Every agent in the project can read it. Add a project to start collecting it.</p>
           <Link href="/projects" className="pixel mt-6 text-sm underline underline-offset-4 hover:opacity-80">← Back to your projects</Link>
         </CivPanel>
       </FloatingWindow>

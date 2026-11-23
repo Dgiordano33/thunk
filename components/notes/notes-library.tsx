@@ -105,6 +105,7 @@ export function NotesLibrary() {
             selectedId={noteParam}
             onSelect={(id) => navigate({ scope, note: id })}
             listTitle={label.get(scopeKey(scope)) ?? "Notes"}
+            projectId={projectOf.get(scopeKey(scope))}
             topLevel={scope.kind === "projects" && scope.id === homeId}
           />
         ) : (

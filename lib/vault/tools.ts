@@ -27,7 +27,7 @@ const firstLine = (s = "") => s.split("\n").map((l) => l.replace(/^[#>*\-\s]+/, 
 export function listLine(i: VaultItem) {
   const tags = i.tags?.length ? ` · #${i.tags.join(" #")}` : "";
   const ideas = i.ideas?.length ? ` · ${i.ideas.length} ideas` : "";
-  return `${i.id} · ${KIND_LABELS[i.kind]} · ${i.status} · ${i.title.replace(/\s+/g, " ")}${ideas}${tags}${i.summary ? ` — ${firstLine(i.summary)}` : ""}`;
+  return `${i.id} · ${KIND_LABELS[i.kind]} · ${i.status}${i.pinned ? " · pinned" : ""} · ${i.title.replace(/\s+/g, " ")}${ideas}${tags}${i.summary ? ` — ${firstLine(i.summary)}` : ""}`;
 }
 
 export function readText(i: VaultItem) {
@@ -75,14 +75,43 @@ export function vaultTools(ctx: VaultToolContext) {
   ];
 }
 
-/** System prompt paragraph: what's in the Vault right now. */
+/** Cap on pinned summaries in the system prompt, like notes' INJECT_LIMIT. */
+export const PINNED_LIMIT = 12_000;
+const INDEX_LIMIT = 30;
+
+/** System prompt section: pinned items' summaries in full, then an index of the rest with type and a one-line summary. */
 export function vaultPrompt(items: VaultItem[], dir: string) {
   const lines = [
     "# Thunk vault",
-    `The project's Vault holds source material the user uploaded, each with a summary and extracted ideas. Originals live under \`${dir}\` (read-only for you). Use vault_list to browse and vault_read for a summary, ideas and the original's path. Consult it when the user refers to a doc, screenshot, spec or transcript they shared.`,
+    `The project's Vault holds reference material the user brought in as-is (PDFs, screenshots, slides, docs, transcripts), shared by every workspace in the project. Each has a summary written when it was added. Originals live under \`${dir}\` (read-only for you). Use vault_list to search and vault_read for the full summary, extracted ideas and the original's path. Consult it when the user refers to a doc, deck, screenshot, spec or transcript, or when the work needs background the notes don't cover.`,
   ];
-  const ready = items.filter((i) => i.status === "ready").slice(0, 20);
-  if (ready.length) lines.push("", `Recent items (${items.length} total):`, ...ready.map((i) => `- ${i.id} · ${i.title.replace(/\s+/g, " ")}`));
-  else lines.push("", items.length ? `${items.length} items, none read yet.` : "The Vault is empty.");
+  if (!items.length) return [...lines, "", "The Vault is empty."].join("\n");
+  const pinned = items.filter((i) => i.pinned && i.status === "ready" && i.summary?.trim());
+  if (pinned.length) {
+    lines.push("", "## Pinned (summaries; read the original for detail)");
+    let budget = PINNED_LIMIT;
+    let cut = 0;
+    for (const i of pinned) {
+      const text = i.summary!.trim();
+      if (budget <= 0) {
+        cut++;
+        continue;
+      }
+      const piece = text.length > budget ? `${text.slice(0, budget)}\n…(truncated)` : text;
+      if (text.length > budget) cut++;
+      budget -= piece.length;
+      lines.push("", `### ${i.title.replace(/\s+/g, " ")} (${KIND_LABELS[i.kind]}, \`${i.filename}\`, id ${i.id})`, piece);
+    }
+    if (cut) lines.push("", `(${cut} pinned summar${cut === 1 ? "y was" : "ies were"} truncated or omitted; use vault_read.)`);
+  }
+  const shown = new Set(pinned.map((i) => i.id));
+  const rest = items.filter((i) => !shown.has(i.id));
+  if (rest.length) {
+    lines.push("", `## ${pinned.length ? "Other items" : "Items"} (${rest.length}${rest.length > INDEX_LIMIT ? `, newest ${INDEX_LIMIT} shown` : ""})`);
+    for (const i of rest.slice(0, INDEX_LIMIT)) {
+      const gist = i.status === "ready" ? firstLine(i.summary) : i.status === "failed" ? "couldn't be read" : "still being read";
+      lines.push(`- ${i.id} · ${KIND_LABELS[i.kind]} · ${i.title.replace(/\s+/g, " ")}${gist ? ` — ${gist}` : ""}`);
+    }
+  }
   return lines.join("\n");
 }

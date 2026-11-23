@@ -103,7 +103,7 @@ export function Dropzone({ projectId, onAdded, compact }: { projectId: string; o
               </>
             ) : (
               <>
-                <span className="text-foreground font-medium">Drop files</span> or click to choose. Docs, PDFs, images, slides, transcripts — up to{" "}
+                <span className="text-foreground font-medium">Drop files</span> or click to choose. PDFs, images, slides, docs, transcripts — up to{" "}
                 {VAULT_MAX_BYTES / 1024 / 1024}MB each.
               </>
             ))}
@@ -142,7 +142,7 @@ export function Dropzone({ projectId, onAdded, compact }: { projectId: string; o
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void submitText();
               if (e.key === "Escape") e.stopPropagation();
             }}
-            placeholder="Paste meeting notes, an article, a transcript…"
+            placeholder="Paste a transcript, an article, an email thread…"
             className="max-h-60 min-h-28 text-xs"
             aria-label="Text to add to the Vault"
           />

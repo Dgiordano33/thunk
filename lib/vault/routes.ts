@@ -6,8 +6,9 @@ import { createNote } from "@/lib/notes/store";
 import { createTask } from "@/lib/tasks/service";
 import { enqueue } from "./extract";
 import { createItem, deleteItem, isVaultId, listItems, readOriginal, updateItem } from "./store";
+import { noteMarkdownFrom } from "./convert";
 import { ideaBody, listAllItems, recordPromotion, requireItem, vaultFor } from "./service";
-import { VAULT_MAX_BYTES, VAULT_MAX_FILES } from "./types";
+import { VAULT_MAX_BYTES, VAULT_MAX_FILES, canConvertToNote } from "./types";
 
 // Route handlers for /api/projects/[id]/vault/** and /api/vault.
 
@@ -53,7 +54,7 @@ export const collection = {
   }),
 };
 
-const PatchBody = z.object({ title: z.string().trim().min(1).max(200).optional(), reextract: z.literal(true).optional() }).strict();
+const PatchBody = z.object({ title: z.string().trim().min(1).max(200).optional(), reextract: z.literal(true).optional(), pinned: z.boolean().optional() }).strict();
 
 export const item = {
   GET: handle(async (_req: Request, ctx: Ctx<ItemParams>) => {
@@ -71,6 +72,7 @@ export const item = {
     const next = await updateItem(vault, id, {
       ...(body.title ? { title: body.title, titled: true } : {}),
       ...(body.reextract ? { status: "queued" as const } : {}),
+      ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
     });
     if (body.reextract) enqueue(vault, id);
     return Response.json({ item: next });
@@ -123,6 +125,25 @@ export const promote = {
     }
     const task = await createTask({ projectId: project.id, title: idea.title.slice(0, 200), body: markdown }, { createdBy: "user" });
     return Response.json({ item: await recordPromotion(vault, id, idea.id, { taskId: task.id }), taskId: task.id });
+  }),
+};
+
+/** Move a text or Word upload to the project's notes: the note becomes the living copy and the Vault item is removed. */
+export const convert = {
+  POST: handle(async (_req: Request, ctx: Ctx<ItemParams>) => {
+    const p = await ctx.params;
+    const { project, vault } = await vaultFor(p.id);
+    const id = itemId(p.itemId);
+    const it = await requireItem(vault, id);
+    if (!canConvertToNote(it)) throw new HttpError(400, "Only text and Word documents can become notes");
+    const bytes = await readOriginal(vault, it).catch(() => {
+      throw new HttpError(404, "Original file is missing");
+    });
+    const { title, markdown } = noteMarkdownFrom(it, bytes);
+    if (!markdown.trim()) throw new HttpError(400, "No text found in this file");
+    const note = await createNote(projectNoteDirs(project), { title, markdown, tags: it.tags?.slice(0, 20) ?? [] });
+    await deleteItem(vault, id);
+    return Response.json({ noteId: note.id });
   }),
 };
 
