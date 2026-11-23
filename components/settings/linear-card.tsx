@@ -3,13 +3,14 @@ import { ExternalLinkIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type Sync = { at: string; result: { imported: number; updated: number; closed: number } | null; error: string | null } | null;
 type LinearStatus = {
-  hasKey: boolean; keyHint: string | null; keyFromEnv: boolean;
+  hasKey: boolean; keyHint: string | null; keyFromEnv: boolean; writeBack: boolean;
   projects: { id: string; name: string; team: { teamId: string; teamKey: string; teamName: string } | null; sync: Sync }[];
 };
 type Teams = { viewer: { name: string; organization: string }; teams: { id: string; key: string; name: string }[] };
@@ -69,6 +70,9 @@ export function LinearCard({ status: Status }: { status: React.ComponentType<{ s
   });
   const mapTeam = (projectId: string, teamId: string | null) => run(projectId, async () => {
     setStatus(await call<LinearStatus>("/api/integrations/linear", { method: "PUT", body: JSON.stringify({ projects: { [projectId]: teamId } }) }));
+  });
+  const toggleWriteBack = () => run("writeBack", async () => {
+    setStatus(await call<LinearStatus>("/api/integrations/linear", { method: "PUT", body: JSON.stringify({ writeBack: !status?.writeBack }) }));
   });
   const syncNow = () => run("sync", async () => {
     await call("/api/integrations/linear/sync", { method: "POST" });
@@ -133,6 +137,15 @@ export function LinearCard({ status: Status }: { status: React.ComponentType<{ s
                 </tbody>
               </table>
             </div>
+          )}
+          {status.hasKey && (
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox className="mt-0.5" checked={status.writeBack} disabled={busy !== null} onCheckedChange={() => void toggleWriteBack()} />
+              <span>
+                <span className="block">Update Linear from Thunk</span>
+                <span className="text-muted-foreground block text-xs">Starting a task moves its issue to started. Marking it done closes the issue, unless a PR is attached: then Linear closes it when the PR merges.</span>
+              </span>
+            </label>
           )}
           {status.hasKey && (
             <div className="flex flex-wrap items-center gap-2">

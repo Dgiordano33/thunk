@@ -47,6 +47,8 @@ export async function onTaskEvent(event: TaskEvent) {
       task: {
         id: task.id, title: task.title, body: task.body ?? "", status: task.status, priority: task.priority,
         createdBy: task.createdBy, noteId: task.noteId,
+        // The Linear issue an imported task mirrors: {{event.task.external.key}} and {{event.task.external.url}}.
+        external: task.external ? { source: task.external.source, key: task.external.key, url: task.external.url } : null,
         workspace: ws ? { id: ws.id, name: ws.name, branch: ws.branch ?? null } : null,
       },
     }).catch((err) => console.error(`[thunk] ${type} routine failed to start`, err));

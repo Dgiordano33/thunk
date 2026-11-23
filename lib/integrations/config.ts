@@ -20,7 +20,9 @@ const Integrations = z.object({
     apiKey: z.string().optional(),
     /** Thunk project id → the Linear team whose issues assigned to you become its tasks. */
     projects: z.record(z.string(), z.object({ teamId: z.string(), teamKey: z.string(), teamName: z.string() })).default({}),
-  }).default({ projects: {} }),
+    /** Move issues when their tasks start or finish in Thunk (lib/integrations/linear/writeback.ts). */
+    writeBack: z.boolean().default(true),
+  }).default({ projects: {}, writeBack: true }),
 });
 type Integrations = z.infer<typeof Integrations>;
 
@@ -52,19 +54,20 @@ async function write(mutate: (config: Integrations) => Integrations) {
 }
 
 export type LinearTeamLink = Integrations["linear"]["projects"][string];
-export type LinearSettings = { apiKey: string | null; keyFromEnv: boolean; projects: Record<string, LinearTeamLink> };
+export type LinearSettings = { apiKey: string | null; keyFromEnv: boolean; projects: Record<string, LinearTeamLink>; writeBack: boolean };
 
 export async function linearSettings(): Promise<LinearSettings> {
   const { linear } = (await read()).config;
   const envKey = process.env.LINEAR_API_KEY?.trim();
-  return { apiKey: envKey || linear.apiKey || null, keyFromEnv: Boolean(envKey), projects: linear.projects };
+  return { apiKey: envKey || linear.apiKey || null, keyFromEnv: Boolean(envKey), projects: linear.projects, writeBack: linear.writeBack };
 }
 
 /** `apiKey: ""` clears the stored key. A project mapped to null stops syncing; its tasks stay. */
-export async function updateLinearSettings(patch: { apiKey?: string; projects?: Record<string, LinearTeamLink | null> }) {
+export async function updateLinearSettings(patch: { apiKey?: string; projects?: Record<string, LinearTeamLink | null>; writeBack?: boolean }) {
   await write((config) => {
     const linear = { ...config.linear, projects: { ...config.linear.projects } };
     if (patch.apiKey !== undefined) linear.apiKey = patch.apiKey.trim() || undefined;
+    if (patch.writeBack !== undefined) linear.writeBack = patch.writeBack;
     for (const [projectId, link] of Object.entries(patch.projects ?? {})) {
       if (link) linear.projects[projectId] = link;
       else delete linear.projects[projectId];

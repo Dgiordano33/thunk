@@ -84,7 +84,21 @@ Issues assigned to you become tasks in the Thunk project you map their team to. 
 - Sending a Linear task to **New worktree** creates the branch `thunk/<issue-key>-<title>`, so Linear's GitHub
   integration attaches the PR to the issue and moves it when the PR merges.
 
-Closing a task in Thunk does not close its Linear issue yet; that write-back comes next.
+### Thunk updates Linear
+
+With **Update Linear from Thunk** on (the default), Thunk moves issues when their tasks change here:
+
+- A task moving to **In progress** moves an unstarted issue to the team's first started state.
+- A task marked **Done** closes its issue (the team's first completed state), unless a PR is attached to the issue.
+  Then Linear's GitHub integration closes it when the PR merges.
+- Cancelling a task in Thunk leaves the issue alone, and Thunk never reopens an issue.
+
+Thunk reads the issue before each change, so it never echoes back a change it just copied from Linear.
+
+### Routines
+
+Imported tasks fire `task_created` routines like any task, and `task_completed` when they become Done. Prompts can
+use `{{event.task.external.key}}` and `{{event.task.external.url}}` for the Linear issue.
 
 ### Agents get Linear's tools
 
