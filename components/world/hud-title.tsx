@@ -1,56 +1,43 @@
 "use client";
 
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLook } from "@/components/look-context";
 import { Logo } from "@/components/logo";
-import { projectSlugFromPath, isProjectPath, PROJECTS_PATH } from "@/lib/routes";
+import { worldBreadcrumbs } from "./navigation";
 
-/** Top-left of the HUD: the logo on the projects map; a way back to it from a project or section. */
+/** A consistent route back through the map, project and section hierarchy. */
 export function HudTitle({ projects, noteCount }: { projects: { slug: string; name: string }[]; noteCount: number }) {
   const pathname = usePathname();
-  const [, section] = pathname.split("/");
-  const world = useLook().look === "world";
-  const back = (
-    <Link href={PROJECTS_PATH} className="pixel hover:bg-muted flex items-center gap-1.5 rounded-md px-1 text-sm world:rounded-none" aria-label={world ? "Back to the world map" : "Back to all projects"}>
-      <ArrowLeftIcon className="size-4" /> {world ? "World" : "Projects"}
-    </Link>
-  );
+  const crumbs = worldBreadcrumbs(pathname, projects, useLook().look === "world");
+  if (crumbs.length === 1) {
+    return <h1><span className="sr-only">Thunk</span><Logo className="h-6 w-auto" /></h1>;
+  }
 
-  if (isProjectPath(pathname)) {
-    const town = projects.find((p) => p.slug === projectSlugFromPath(pathname));
-    return (
-      <>
-        {back}
-        <h1 className="pixel border-l pl-3 text-base font-medium world:font-normal">{town?.name ?? "Project"}</h1>
-      </>
-    );
-  }
-  if (section === "routines" || section === "inbox") {
-    return (
-      <>
-        {back}
-        <h1 className="pixel border-l pl-3 text-base">{section === "inbox" ? "Inbox" : "Routines"}</h1>
-      </>
-    );
-  }
-  if (section === "notes") {
-    return (
-      <>
-        {back}
-        <h1 className="pixel border-l pl-3 text-base">
-          Library · <span className="tabular-nums">{noteCount}</span> {noteCount === 1 ? "note" : "notes"}
-        </h1>
-      </>
-    );
-  }
   return (
-    <>
-      <h1>
-        <span className="sr-only">Thunk</span>
-        <Logo className="h-6 w-auto" />
-      </h1>
-    </>
+    <nav aria-label="Breadcrumb" className="min-w-0">
+      <ol className="flex min-w-0 items-center gap-1 text-sm">
+        {crumbs.map((crumb, index) => {
+          const current = index === crumbs.length - 1;
+          return (
+            <li key={crumb.href} className="flex min-w-0 items-center gap-1">
+              {index > 0 && <ChevronRightIcon aria-hidden="true" className="text-muted-foreground size-3.5 shrink-0" />}
+              {current ? (
+                <h1 aria-current="page" className="pixel truncate px-1 font-medium" title={crumb.label}>
+                  {crumb.label}
+                  {pathname === "/notes" && <span className="text-muted-foreground ml-2 text-xs font-normal tabular-nums">{noteCount} {noteCount === 1 ? "note" : "notes"}</span>}
+                </h1>
+              ) : (
+                <Link href={crumb.href} title={crumb.label} className="pixel text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-1.5 outline-none focus-visible:ring-2 active:scale-[0.97] world:rounded-none">
+                  {index === 0 && <ArrowLeftIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+                  <span className="truncate">{crumb.label}</span>
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
