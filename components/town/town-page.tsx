@@ -11,6 +11,7 @@ import { LibraryPanel } from "@/components/town/library-panel";
 import { FieldPanel, ProjectPanel, FarmPanel } from "@/components/town/panels";
 import { WorkshopPanel } from "@/components/town/workshop-panel";
 import { VaultPanel } from "@/components/vault/vault-panel";
+import { WindowContextDrop } from "@/components/vault/add-context";
 import { vaultDirOf } from "@/lib/vault/dir";
 import { listItems } from "@/lib/vault/store";
 import { isBusy } from "@/lib/vault/types";
@@ -190,6 +191,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       >
         {panel}
         {harvestOffers}
+        {panel === null && <WindowContextDrop target={{ projectId: id }} projectName={project.name} />}
       <MapLegend /></PlanetView></ResponsiveView>
     );
   }
@@ -213,6 +215,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     >
       {panel}
       {harvestOffers}
+      {panel === null && <WindowContextDrop target={{ projectId: id }} projectName={project.name} />}
     <MapLegend /></TownView></ResponsiveView>
   );
 }

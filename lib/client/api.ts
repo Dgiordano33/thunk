@@ -76,8 +76,9 @@ export const api = {
     if (input.title) form.append("title", input.title);
     return call<{ items: VaultItem[] }>(`/api/projects/${projectId}/vault`, { method: "POST", body: form });
   },
-  patchVaultItem: (projectId: string, id: string, patch: { title?: string; reextract?: true }) =>
+  patchVaultItem: (projectId: string, id: string, patch: { title?: string; reextract?: true; pinned?: boolean }) =>
     call<{ item: VaultItem }>(`/api/projects/${projectId}/vault/${id}`, { method: "PATCH", json: patch }),
+  convertVaultItem: (projectId: string, id: string) => post<{ noteId: string }>(`/api/projects/${projectId}/vault/${id}/convert`, {}),
   deleteVaultItem: (projectId: string, id: string) => call(`/api/projects/${projectId}/vault/${id}`, { method: "DELETE" }),
   promoteVaultIdea: (projectId: string, id: string, ideaId: string, to: "note" | "task") =>
     post<{ item: VaultItem; noteId?: string; taskId?: string }>(`/api/projects/${projectId}/vault/${id}/promote`, { ideaId, to }),

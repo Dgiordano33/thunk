@@ -37,7 +37,7 @@ export function VaultPanel({ projectId, closeHref }: { projectId: string; closeH
 
   return (
     <TownPanel
-      eyebrow="Uploads"
+      eyebrow="Reference for agents"
       title="Vault"
       closeHref={closeHref}
       wide
@@ -108,9 +108,10 @@ export function VaultBody({
               <EmptyMark name="chest" pixelClassName="size-10" />
               <p className="pixel text-sm">{items?.length ? "Pick something from the Vault" : "The Vault is empty"}</p>
               <p className="text-xs opacity-80">
-                Drop in docs, PDFs, screenshots, slides or transcripts. Claude reads each one, writes a summary and pulls out the ideas worth keeping —
-                send any idea to Notes or make it a Task.
+                Material you bring in as-is: PDFs, screenshots, decks, specs, transcripts. Claude summarizes each one, and every agent in this project can
+                read it. Pin the essentials to put them in every session.
               </p>
+              <p className="text-xs opacity-60">Writing something you&apos;ll keep editing? Make it a note instead.</p>
             </div>
           </div>
         )}

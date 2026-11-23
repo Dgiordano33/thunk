@@ -33,6 +33,8 @@ export type VaultItem = {
   ideas?: VaultIdea[];
   tags?: string[];
   promoted?: VaultPromotion[];
+  /** Pinned items sort first and their summary goes into every session's system prompt. */
+  pinned?: boolean;
   /** Absolute path of the original on disk (server-filled). */
   path?: string;
 };
@@ -73,5 +75,13 @@ export function classify(filename: string, mime: string): { kind: VaultKind; mim
 
 export const KIND_LABELS: Record<VaultKind, string> = { image: "Image", pdf: "PDF", text: "Text", office: "Document", other: "File" };
 export const IDEA_LABELS: Record<IdeaKind, string> = { idea: "Idea", insight: "Insight", question: "Question", action: "Action" };
+
+// Notes are what you write and keep changing; the Vault is what you bring in as-is.
+// Plain markdown and text are things you'd write, so "Add context" turns them into notes.
+const NOTE_EXT = new Set(["md", "markdown", "txt"]);
+export const routeUpload = (filename: string): "note" | "vault" => (NOTE_EXT.has(extOf(filename)) ? "note" : "vault");
+
+/** Text and Word uploads can move to Notes as a living doc. */
+export const canConvertToNote = (i: Pick<VaultItem, "kind" | "filename">) => i.kind === "text" || (i.kind === "office" && extOf(i.filename) === "docx");
 
 export const isBusy = (i: Pick<VaultItem, "status">) => i.status === "queued" || i.status === "processing";

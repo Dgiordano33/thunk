@@ -229,3 +229,52 @@ test("vault tools list, filter and read items for the session's project only", a
   assert.equal(bad.isError, true);
   assert.deepEqual(tools.VAULT_TOOL_NAMES, ["vault_list", "vault_read"]);
 });
+
+test("pinned items sort first and put their summary in the session prompt; the rest get type and a one-line gist", async (t) => {
+  const v = await vault(t);
+  const old = await store.createItem(v, { filename: "brand.pdf", mime: "application/pdf", bytes: Buffer.from("%PDF") });
+  await new Promise((r) => setTimeout(r, 5));
+  const fresh = await store.createItem(v, { filename: "shot.png", mime: "image/png", bytes: Buffer.from("png") });
+  await store.updateItem(v, old.id, { status: "ready", title: "Brand guide", summary: "Use bronze.\nNever purple." , pinned: true });
+  await store.updateItem(v, fresh.id, { status: "ready", title: "Pricing screenshot", summary: "## Tiers\nThree tiers, $29 starter." });
+
+  const items = await store.listItems(v);
+  assert.deepEqual(items.map((i) => i.id), [old.id, fresh.id], "pinned first even though older");
+  assert.match(tools.listLine(items[0]), / · ready · pinned · Brand guide/);
+
+  const prompt = tools.vaultPrompt(items, v.dir);
+  assert.match(prompt, /## Pinned[\s\S]*### Brand guide \(PDF, `brand\.pdf`, id [a-z0-9]{10}\)\nUse bronze\.\nNever purple\./);
+  assert.match(prompt, new RegExp(`## Other items \\(1\\)\\n- ${fresh.id} · Image · Pricing screenshot — Tiers`));
+
+  await store.updateItem(v, old.id, { pinned: false });
+  assert.doesNotMatch(tools.vaultPrompt(await store.listItems(v), v.dir), /## Pinned/);
+  const big = tools.vaultPrompt([{ ...items[0], summary: "x".repeat(tools.PINNED_LIMIT + 50) }], v.dir);
+  assert.match(big, /…\(truncated\)/);
+  assert.match(big, /1 pinned summary was truncated/);
+});
+
+test("add-context routing: written text becomes notes, everything else goes to the Vault", () => {
+  for (const f of ["plan.md", "Plan.MARKDOWN", "notes.txt"]) assert.equal(types.routeUpload(f), "note", f);
+  for (const f of ["deck.pdf", "shot.png", "brief.docx", "slides.pptx", "data.csv", "call.vtt", "noext"]) assert.equal(types.routeUpload(f), "vault", f);
+  assert.equal(types.canConvertToNote({ kind: "text", filename: "a.vtt" }), true);
+  assert.equal(types.canConvertToNote({ kind: "office", filename: "a.docx" }), true);
+  assert.equal(types.canConvertToNote({ kind: "office", filename: "a.pptx" }), false);
+  assert.equal(types.canConvertToNote({ kind: "pdf", filename: "a.pdf" }), false);
+});
+
+test("textToNote drops frontmatter and takes the title from it, a heading, or the file name", () => {
+  const { textToNote } = require("../lib/vault/to-note.ts");
+  assert.deepEqual(textToNote("x.md", "---\ntitle: Strategy\npinned: true\n---\n\nBody\r\n"), { title: "Strategy", markdown: "Body\n" });
+  assert.equal(textToNote("x.md", "# Launch plan\n\nGo").title, "Launch plan");
+  assert.equal(textToNote("q4_go-to-market.txt", "plain").title, "q4 go to market");
+  assert.equal(textToNote("x.md", "body", "Kept title").title, "Kept title");
+});
+
+test("noteMarkdownFrom reads Word text and text originals", () => {
+  const { noteMarkdownFrom } = require("../lib/vault/convert.ts");
+  const docx = zip({ "word/document.xml": "<w:document><w:body><w:p><w:r><w:t>Positioning</w:t></w:r></w:p><w:p><w:r><w:t>For devs.</w:t></w:r></w:p></w:body></w:document>" });
+  const word = noteMarkdownFrom({ kind: "office", filename: "pos.docx", title: "Positioning doc" }, docx);
+  assert.equal(word.title, "Positioning doc");
+  assert.match(word.markdown, /Positioning[\s\S]*For devs\./);
+  assert.deepEqual(noteMarkdownFrom({ kind: "text", filename: "a.md", title: "A" }, Buffer.from("# Heading\nhi")), { title: "Heading", markdown: "# Heading\nhi\n" });
+});

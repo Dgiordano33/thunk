@@ -1,6 +1,6 @@
 "use client";
 
-import { FileIcon, FileSpreadsheetIcon, FileTextIcon, ImageIcon, LightbulbIcon, SearchIcon } from "lucide-react";
+import { FileIcon, FileSpreadsheetIcon, FileTextIcon, ImageIcon, PinIcon, SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,7 @@ export function VaultStatusBadge({ item, className }: { item: Pick<VaultItem, "s
 
 export const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
-/** Rows like the notes list: kind icon, title, time · size, and an idea count or status. */
+/** Rows like the notes list: kind icon, title, time · size, and a pin or status. */
 export function ItemList({ items, selectedId, onSelect, contextOf }: {
   items: VaultItem[] | null;
   selectedId?: string | null;
@@ -65,7 +65,7 @@ export function ItemList({ items, selectedId, onSelect, contextOf }: {
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : shown.length === 0 ? (
-        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query ? "Nothing matches." : "Keep docs, screenshots and transcripts here for agents to read. Drop files into the upload area to get started."}</EmptyDescription></Empty>
+        <Empty className="py-6 gap-2"><EmptyDescription className="text-xs">{query ? "Nothing matches." : "Bring in PDFs, screenshots, decks and transcripts as-is. Every agent in this project can read them."}</EmptyDescription></Empty>
       ) : (
         <ul className="flex flex-col gap-1 overflow-y-auto p-2">
           {shown.map((item) => {
@@ -85,14 +85,11 @@ export function ItemList({ items, selectedId, onSelect, contextOf }: {
                   <span className="flex items-center gap-1.5">
                     <Icon className="text-muted-foreground size-3 shrink-0" aria-hidden />
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{item.title}</span>
-                    {item.status === "ready" ? (
-                      <span className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums" title="Ideas">
-                        <LightbulbIcon className="size-3" aria-label="Ideas" />
-                        {item.ideas?.length ?? 0}
-                      </span>
-                    ) : (
+                    {item.status !== "ready" ? (
                       <VaultStatusBadge item={item} className="shrink-0" />
-                    )}
+                    ) : item.pinned ? (
+                      <PinIcon className="text-muted-foreground size-3 shrink-0" aria-label="Pinned: in every session" />
+                    ) : null}
                   </span>
                   <span className="text-muted-foreground truncate text-[11px]">
                     {contextOf ? `${contextOf(item)} · ` : ""}

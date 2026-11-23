@@ -74,14 +74,14 @@ export async function readItem(v: VaultDir, id: string): Promise<VaultItem | nul
   }
 }
 
-/** Newest first. Unreadable items are skipped. */
+/** Pinned first, then newest. Unreadable items are skipped. */
 export async function listItems(v: VaultDir): Promise<VaultItem[]> {
   const entries = await readdir(v.dir).catch(() => [] as string[]);
   const items = await Promise.all(entries.filter((e) => ID.test(e)).map((id) => readItem(v, id)));
-  return items.filter((i): i is VaultItem => i !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+  return items.filter((i): i is VaultItem => i !== null).sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
 }
 
-export type VaultPatch = Partial<Pick<VaultItem, "title" | "titled" | "status" | "error" | "summary" | "ideas" | "tags" | "promoted">>;
+export type VaultPatch = Partial<Pick<VaultItem, "title" | "titled" | "status" | "error" | "summary" | "ideas" | "tags" | "promoted" | "pinned">>;
 
 // Serialise read-modify-write per item so the queue and the UI can't clobber each other.
 const locks = new Map<string, Promise<unknown>>();

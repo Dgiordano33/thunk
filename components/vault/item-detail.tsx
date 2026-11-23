@@ -2,8 +2,12 @@
 
 import { projectSectionPath } from "@/lib/routes";
 
-import { CheckIcon, DownloadIcon, ListTodoIcon, NotebookPenIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, DownloadIcon, FileInputIcon, ListTodoIcon, NotebookPenIcon, PinIcon, PinOffIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { confirm } from "@/components/confirm";
+import { Hint } from "@/components/hint";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { relativeTime } from "@/components/session/labels";
@@ -12,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
-import { IDEA_LABELS, KIND_LABELS, isBusy, type IdeaKind, type VaultItem } from "@/lib/vault/types";
+import { useNotesFeed } from "@/lib/store/notes-store";
+import { IDEA_LABELS, KIND_LABELS, canConvertToNote, isBusy, type IdeaKind, type VaultItem } from "@/lib/vault/types";
 import { KIND_ICONS, VaultStatusBadge, formatBytes } from "./item-list";
 import { usePaths } from "@/components/layout/paths-context";
 
@@ -23,10 +28,11 @@ const IDEA_STYLE: Record<IdeaKind, string> = {
   action: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
 };
 
-/** One item: preview, summary, and ideas with → Note / → Task. */
+/** One item: preview, what agents get (the summary), and a secondary tab of ideas with → Note / → Task. */
 export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onChange: (item: VaultItem) => void; onDeleted: () => void }) {
   const fileUrl = `/api/projects/${item.projectId}/vault/${item.id}/file`;
   const paths = usePaths();
+  const router = useRouter();
   const Icon = KIND_ICONS[item.kind];
   const [title, setTitle] = useState(item.title);
   const [busyIdea, setBusyIdea] = useState<string | null>(null);
@@ -57,6 +63,25 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
         setBusyIdea(null);
       }
     });
+
+  const togglePin = () => act(async () => onChange((await api.patchVaultItem(item.projectId, item.id, { pinned: !item.pinned })).item));
+
+  const moveToNotes = async () => {
+    const ok = await confirm({
+      title: `Move “${item.title}” to Notes?`,
+      description: item.kind === "office"
+        ? "Its text becomes a project note you can keep editing. The Word file and its Vault summary are removed; formatting and images aren't carried over."
+        : "It becomes a project note you can keep editing, and leaves the Vault.",
+      action: "Move to Notes",
+    });
+    if (!ok) return;
+    await act(async () => {
+      const { noteId } = await api.convertVaultItem(item.projectId, item.id);
+      useNotesFeed.getState().touch({ kind: "projects", id: item.projectId });
+      // Navigating to the note is the only follow-up; onDeleted would push a competing URL.
+      router.push(projectSectionPath(paths.project(item.projectId), "library", { note: noteId }), { scroll: false });
+    });
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -95,6 +120,11 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
           <img src={fileUrl} alt={item.title} className="bg-muted max-h-56 w-fit max-w-full rounded-md border object-contain" />
         )}
         <div className="flex flex-wrap gap-2">
+          <Hint label={item.pinned ? "Unpin: agents still find it with vault_list" : "Pin: its summary goes into every session in this project"}>
+            <Button size="sm" variant={item.pinned ? "secondary" : "outline"} onClick={() => void togglePin()} aria-pressed={Boolean(item.pinned)}>
+              {item.pinned ? <PinOffIcon /> : <PinIcon />} {item.pinned ? "Pinned" : "Pin"}
+            </Button>
+          </Hint>
           <Button size="sm" variant="outline" asChild>
             <a href={item.kind === "image" || item.kind === "pdf" || item.kind === "text" ? fileUrl : `${fileUrl}?download`} target="_blank" rel="noreferrer">
               Open original
@@ -111,12 +141,19 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
           >
             <RefreshCwIcon className={cn(busy && "animate-spin")} /> {item.status === "failed" ? "Try again" : "Re-read"}
           </Button>
+          {canConvertToNote(item) && (
+            <Hint label="Turn this into a note you keep editing">
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void moveToNotes()}>
+                <FileInputIcon /> Move to Notes
+              </Button>
+            </Hint>
+          )}
           <Button
             size="sm"
             variant="ghost"
             className="ml-auto text-red-700 hover:text-red-700 dark:text-red-400"
-            onClick={() => {
-              if (!confirm(`Delete “${item.title}” and its original file?`)) return;
+            onClick={async () => {
+              if (!(await confirm({ title: `Delete “${item.title}”?`, description: "This removes the original file and its summary.", action: "Delete", destructive: true }))) return;
               void act(async () => {
                 await api.deleteVaultItem(item.projectId, item.id);
                 onDeleted();
@@ -139,9 +176,17 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
           <p className="text-muted-foreground mt-1 text-xs">{item.error}</p>
         </div>
       ) : (
-        <>
-          <section className="border-b px-4 py-3">
-            <h3 className="pixel text-muted-foreground mb-2 text-xs tracking-wide uppercase">Summary</h3>
+        <Tabs defaultValue="summary" className="gap-0">
+          <TabsList variant="line" className="h-9 shrink-0 px-4">
+            <TabsTrigger className="pixel text-xs" value="summary">What agents see</TabsTrigger>
+            <TabsTrigger className="pixel text-xs" value="ideas">Ideas ({item.ideas?.length ?? 0})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="summary" className="border-t px-4 py-3">
+            <p className="text-muted-foreground mb-2 text-[11px]">
+              {item.pinned
+                ? "Pinned: this summary is in every session's prompt for this project. Agents open the original for detail."
+                : "Agents see the title and first line in every session, and read this summary or the original when it's relevant."}
+            </p>
             <div className="doc-prose text-sm">
               <MessageResponse>{item.summary ?? ""}</MessageResponse>
             </div>
@@ -150,9 +195,9 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                 {item.tags.map((t) => <Badge key={t} variant="secondary" className="h-5 text-[11px]">#{t}</Badge>)}
               </div>
             ) : null}
-          </section>
-          <section className="px-4 py-3">
-            <h3 className="pixel text-muted-foreground mb-2 text-xs tracking-wide uppercase">Ideas ({item.ideas?.length ?? 0})</h3>
+          </TabsContent>
+          <TabsContent value="ideas" className="border-t px-4 py-3">
+            <p className="text-muted-foreground mb-2 text-[11px]">Points Claude pulled out while reading. Send one to Notes or Tasks to act on it.</p>
             {!item.ideas?.length ? (
               <p className="text-muted-foreground text-xs">No distinct ideas found.</p>
             ) : (
@@ -191,8 +236,8 @@ export function ItemDetail({ item, onChange, onDeleted }: { item: VaultItem; onC
                 })}
               </ul>
             )}
-          </section>
-        </>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

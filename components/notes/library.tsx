@@ -16,6 +16,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { AddContextButton, ContextDropArea } from "@/components/vault/add-context";
 
 /** Create and delete notes in a scope, keeping every open view in sync. */
 export function useNoteActions(scope: NoteScope | null, onSelect: (id: string | null) => void) {
@@ -64,6 +65,7 @@ export function ScopeNotes({
   listTitle,
   className,
   topLevel,
+  projectId,
 }: {
   scope: NoteScope;
   selectedId: string | null;
@@ -73,16 +75,19 @@ export function ScopeNotes({
   listTitle?: string;
   className?: string;
   topLevel?: boolean;
+  /** The project this notebook belongs to: enables dropping files in (text → notes here, the rest → its Vault). */
+  projectId?: string;
 }) {
   const desktop = useIsDesktop();
   const { notes } = useScopeNotes(scope);
   const { create, remove, dialog } = useNoteActions(scope, onSelect);
   const selected = selectedId;
-  const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} />;
+  const target = projectId ? { projectId, noteScope: scope } : null;
+  const list = <NoteList notes={notes} selectedId={selected} onSelect={onSelect} onCreate={() => void create()} onDelete={(n) => void remove(n)} extraControl={target && <AddContextButton target={target} />} />;
 
   if (!desktop) return <div className="flex min-h-0 min-w-0 flex-1 flex-col">{dialog}{selected ? <><BackToNotes onClick={() => onSelect(null)} /><NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} /></> : <>{listHeader}{list}</>}</div>;
-  return (
-    <div className={cn("flex min-h-0 flex-1", className)}>
+  const body = (
+    <div className={cn("flex min-h-0 flex-1", !target && className)}>
       {dialog}
       {listTitle ? (
         <CollapsiblePane title={listTitle} className="w-64">
@@ -98,11 +103,12 @@ export function ScopeNotes({
         {selected ? (
           <NoteEditor key={selected} scope={scope} noteId={selected} onDeleted={() => onSelect(null)} topLevel={topLevel} />
         ) : (
-          <EmptyNote onCreate={() => void create()} />
+          <EmptyNote onCreate={() => void create()} dropHint={Boolean(target)} />
         )}
       </div>
     </div>
   );
+  return target ? <ContextDropArea target={target} className={cn("flex min-h-0 flex-1", className)}>{body}</ContextDropArea> : body;
 }
 
 /** Mobile: back from the editor to the list. */
@@ -116,7 +122,7 @@ export function BackToNotes({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function EmptyNote({ onCreate }: { onCreate?: () => void }) {
+export function EmptyNote({ onCreate, dropHint }: { onCreate?: () => void; dropHint?: boolean }) {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="is-parchment flex max-w-xs flex-col items-center rounded-sm bg-[var(--w-parchment)] px-6 py-6 text-center text-[var(--w-parchment-ink)]">
@@ -136,6 +142,7 @@ export function EmptyNote({ onCreate }: { onCreate?: () => void }) {
           )}
           . Notes are markdown files agents read and edit too.
         </p>
+        {dropHint && <p className="mt-2 text-xs opacity-70">Drop files here: markdown becomes a note, PDFs, images and decks go to the Vault.</p>}
       </div>
     </div>
   );
