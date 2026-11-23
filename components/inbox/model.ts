@@ -77,3 +77,30 @@ export function kindCounts(items: Notification[]): { kind: NotificationKind; tot
 }
 
 export function plural(n: number, one: string, many = `${one}s`) { return `${n} ${n === 1 ? one : many}`; }
+
+/**
+ * Where the triage loop goes after a decision leaves the list: the next decision in the order the person saw,
+ * else the one before it, else whatever arrived since. Null when no decision is left.
+ */
+export function nextDecision(before: string[], left: string, now: string[]): string | null {
+  const live = new Set(now);
+  const at = before.indexOf(left);
+  for (const id of before.slice(at + 1)) if (live.has(id)) return id;
+  for (const id of before.slice(0, Math.max(0, at)).reverse()) if (live.has(id)) return id;
+  return now.find((id) => id !== left) ?? null;
+}
+
+export type SessionFold = { lead: Notification; rest: Notification[] };
+/** Earlier rows from one session fold under its newest, so a long session reads as one row. Rows without a session stand alone. */
+export function foldBySession(items: Notification[]): SessionFold[] {
+  const folds: SessionFold[] = [];
+  const bySession = new Map<string, SessionFold>();
+  for (const n of items) {
+    const fold = n.sessionId ? bySession.get(n.sessionId) : undefined;
+    if (fold) { fold.rest.push(n); continue; }
+    const next: SessionFold = { lead: n, rest: [] };
+    folds.push(next);
+    if (n.sessionId) bySession.set(n.sessionId, next);
+  }
+  return folds;
+}

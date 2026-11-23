@@ -68,7 +68,9 @@ test('quick context explains a request and a typed reply answers the agent witho
 
     // Questions with several parts get a form: pick options or write your own.
     const multi = page.locator('[data-notification]', { hasText: 'Where should releases build?' });
-    await multi.getByRole('button', { name: 'Answer' }).click();
+    // The loop already opened this one; its Answer button just moves to the form.
+    await expect(multi.getByRole('region', { name: /Quick context/ })).toBeVisible();
+    await multi.getByRole('button', { name: 'Answer', exact: true }).click();
     await multi.getByRole('button', { name: 'GitHub Actions' }).click();
     await multi.getByRole('button', { name: 'macOS' }).click();
     await multi.getByRole('button', { name: 'Linux' }).click();
@@ -127,4 +129,80 @@ test('a typed reply to a plan sends it back for changes', async ({ page, request
         return text;
     }, session.id);
     expect(events).toContain('"type":"plan_resolved","requestId":"p1","decision":"changes"');
+});
+
+test('triage loop: answering a decision opens the next one, number keys answer, and a session folds into one row', async ({ page, request }) => {
+    const ws = await newWorkspace(request, SAMPLE);
+    const ask = (requestId: string, question: string) => [
+        { type: 'user_message', messageId: `m-${requestId}`, content: `Work item ${requestId}.`, kind: 'prompt' },
+        { type: 'turn_start', turnId: `t-${requestId}` },
+        { type: 'ask_question', requestId, toolUseId: `u-${requestId}`, questions: [{ question, header: 'Pick', multiSelect: false, options: [{ label: 'Yes', description: '' }, { label: 'No', description: '' }] }] },
+    ];
+    const allow = [
+        { type: 'user_message', messageId: 'm1', content: 'Run the tests.', kind: 'prompt' },
+        { type: 'turn_start', turnId: 't1' },
+        { type: 'tool_use', turnId: 't1', toolUseId: 'u1', name: 'Bash', input: { command: 'npm test' } },
+        { type: 'permission_request', requestId: 'r1', toolUseId: 'u1', toolName: 'Bash', input: { command: 'npm test' }, suggestions: [{ type: 'addRules' }] },
+    ];
+    await seedSession(request, ws, ask('q-old', 'Ship the older change?'), { title: 'Older' });
+    const permission = await seedSession(request, ws, allow, { title: 'Tests' });
+    await seedSession(request, ws, ask('q-new', 'Ship the newer change?'), { title: 'Newer' });
+    // Three finished turns from one session, which should read as one row.
+    const turns = [1, 2, 3].flatMap((i) => [
+        { type: 'user_message', messageId: `tm${i}`, content: `Step ${i}`, kind: 'prompt' },
+        { type: 'turn_start', turnId: `tt${i}` },
+        { type: 'turn_complete', turnId: `tt${i}`, documentId: null, markdown: `Done with step ${i}.`, version: i },
+        { type: 'result', subtype: 'success', isError: false, costUsd: 0, numTurns: 1, durationMs: 1 },
+    ]);
+    await seedSession(request, ws, turns, { title: 'Long session' });
+    await openInbox(page, request, ws);
+
+    const cards = page.locator('article[data-notification]').filter({ has: page.locator('[data-action]') });
+    await expect(cards).toHaveCount(3, { timeout: 60000 });
+    const first = cards.first();
+    const firstTitle = (await first.locator('h3').textContent())!;
+    const secondTitle = (await cards.nth(1).locator('h3').textContent())!;
+    const thirdTitle = (await cards.nth(2).locator('h3').textContent())!;
+
+    // The permission offers "Allow for this session", the scoped rule the session view also has.
+    const allowCard = page.locator('article[data-notification]', { hasText: 'Bash' });
+    await expect(allowCard.getByRole('button', { name: 'Allow for this session' })).toBeVisible();
+
+    // Answer the first decision with a number key: the next one is focused with its context open.
+    await first.focus();
+    await page.keyboard.press('1');
+    const next = page.locator('article[data-notification]', { hasText: secondTitle });
+    await expect(next).toBeFocused();
+    await expect(next.getByRole('region', { name: /Quick context/ })).toBeVisible();
+    await expect(page.locator('article[data-notification]', { hasText: firstTitle }).locator('[data-action]')).toHaveCount(0);
+    await page.screenshot({ path: `${SHOTS}/triage-next.png` });
+
+    // Keep going from the keyboard until nothing is waiting.
+    // On the permission, 2 is "Allow for this session"; on a question, 1 is "Yes".
+    await page.keyboard.press(secondTitle.includes('Bash') ? '2' : '1');
+    const last = page.locator('article[data-notification]', { hasText: thirdTitle });
+    await expect(last).toBeFocused();
+    await expect(last.getByRole('region', { name: /Quick context/ })).toBeVisible();
+    await page.keyboard.press(thirdTitle.includes('Bash') ? '2' : '1');
+    await expect(page.getByText('No agent is waiting on a decision.')).toBeVisible();
+
+    // "Allow for this session" reached the session as an allow.
+    const events = await page.evaluate(async (id) => {
+        const res = await fetch(`/api/sessions/${id}/stream`);
+        const reader = res.body!.getReader();
+        let text = '';
+        while (!text.includes('permission_resolved')) { const { value, done } = await reader.read(); if (done) break; text += new TextDecoder().decode(value); }
+        await reader.cancel();
+        return text;
+    }, permission.id);
+    expect(events).toContain('"type":"permission_resolved","requestId":"r1","decision":"allow"');
+
+    // Earlier: the long session's three finished turns are one row with a count.
+    const fold = page.getByRole('button', { name: 'Show 2 earlier updates from this session' });
+    await expect(fold).toBeVisible();
+    await expect(page.locator('[data-notification]', { hasText: 'Long session · Turn finished' })).toHaveCount(1);
+    await fold.click();
+    await expect(page.locator('[data-notification]', { hasText: 'Long session · Turn finished' })).toHaveCount(3);
+    await page.getByRole('button', { name: 'Hide 2 earlier updates from this session' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${SHOTS}/session-fold.png` });
 });

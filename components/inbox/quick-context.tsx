@@ -38,8 +38,11 @@ const eyebrow = "pixel text-muted-foreground text-[11px] tracking-widest upperca
  * The expandable panel under an Inbox item: where the notification came from, what the agent was asked and has
  * been doing, what it needs, the last few messages, and a reply box that answers the agent in place.
  */
-export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
-  n: Notification; lead: string; focusReply: boolean; onFocused: () => void; onReplied: (message: string) => void;
+export function QuickContext({ n, lead, focusReply, onFocused, onSend, onSendFailed, onReplied }: {
+  n: Notification; lead: string; focusReply: boolean; onFocused: () => void;
+  /** Around a send, so the Inbox can move on to the next decision once this one is answered. */
+  onSend?: () => void; onSendFailed?: () => void;
+  onReplied: (message: string, mode: ReplyMode) => void;
 }) {
   const [ctx, setCtx] = useState<NotificationContext | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,13 +86,14 @@ export function QuickContext({ n, lead, focusReply, onFocused, onReplied }: {
 
   async function send(run: () => Promise<ReplyMode>) {
     setSending(true); setSendError(null);
+    onSend?.();
     try {
       const mode = await run();
       setText("");
       toast(SENT[mode]);
-      onReplied(SENT[mode]);
+      onReplied(SENT[mode], mode);
       await load();
-    } catch (err) { setSendError((err as Error).message); }
+    } catch (err) { onSendFailed?.(); setSendError((err as Error).message); }
     finally { setSending(false); }
   }
   const toRow = (el: HTMLElement) => el.closest<HTMLElement>("[data-notification]")?.focus();

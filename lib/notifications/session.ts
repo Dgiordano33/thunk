@@ -5,6 +5,8 @@ import { notify, resolveBySubject, resolveWhere } from "./service";
 import type { Notification } from "./types";
 import { hrefForSession } from "@/lib/routes.server";
 
+const PERMISSION_LABELS = { allow: "Allow", allow_always: "Allow for this session", deny: "Deny" } as const;
+
 export async function sessionNotification(live: LiveSession, e: HarnessEvent & { advice?: string }) {
   const sessionId = live.id;
   const base = { projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
@@ -19,7 +21,11 @@ export async function sessionNotification(live: LiveSession, e: HarnessEvent & {
   if (e.type === "permission_request" || e.type === "ask_question" || e.type === "plan_proposed") {
     const kind = e.type === "permission_request" ? "permission" : e.type === "ask_question" ? "question" : "plan";
     const actions: Notification["actions"] = [];
-    if (e.type === "permission_request") for (const decision of ["allow", "deny"]) actions.push({ label: decision === "allow" ? "Allow" : "Deny", method: "POST", path: `/api/sessions/${sessionId}/permission`, body: { requestId: e.requestId, decision } });
+    if (e.type === "permission_request") {
+      // "Allow for this session" scopes the agent's suggested rules to the session; without suggestions it would be a plain Allow.
+      const decisions = e.suggestions?.length ? (["allow", "allow_always", "deny"] as const) : (["allow", "deny"] as const);
+      for (const decision of decisions) actions.push({ label: PERMISSION_LABELS[decision], method: "POST", path: `/api/sessions/${sessionId}/permission`, body: { requestId: e.requestId, decision } });
+    }
     if (e.type === "plan_proposed") actions.push({ label: "Approve plan", method: "POST", path: `/api/sessions/${sessionId}/plan`, body: { requestId: e.requestId, documentId: e.documentId, decision: "approve", editedMarkdown: e.plan } });
     if (e.type === "ask_question" && e.questions.length === 1 && !e.questions[0].multiSelect) {
       const question = e.questions[0];
