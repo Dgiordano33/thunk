@@ -28,6 +28,7 @@ const fields = {
   webhookEnabled: z.boolean(),
   enabled: z.boolean(),
   catchUp: z.enum(["skip", "once"]),
+  slackReport: z.boolean(),
   maxRunsPerDay: z.number().int().min(1).max(200),
   maxRunMinutes: z.number().int().min(5).max(480),
 };
@@ -58,6 +59,7 @@ export const RoutineInputSchema = z
     webhookEnabled: fields.webhookEnabled.default(false),
     enabled: fields.enabled.default(true),
     catchUp: fields.catchUp.default("skip"),
+    slackReport: fields.slackReport.default(false),
     maxRunsPerDay: fields.maxRunsPerDay.default(24),
     maxRunMinutes: fields.maxRunMinutes.default(60),
   })

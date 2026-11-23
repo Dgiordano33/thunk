@@ -52,6 +52,12 @@ the server agrees.
 Links point at `THUNK_PUBLIC_URL`, or the first `THUNK_TRUSTED_HOSTS` entry, as `https://<host>`. On a Droplet set up
 with `docs/server.md`, that is already your tailnet address.
 
+### Routine reports
+
+Turn on **Post to Slack** in a routine's form to get its report as a DM when each run ends: the outcome, changes,
+cost, the agent's summary, and buttons for the PR, the run's note and its session. Reports use the same Slack app and
+are sent only while Slack is on.
+
 ### Where the token lives
 
 `~/.thunk/config/integrations.json`, mode 0600. The settings screen never shows it again. Claude sessions are denied

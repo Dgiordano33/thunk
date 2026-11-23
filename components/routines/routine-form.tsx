@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ChevronRightIcon, CopyIcon, GitPullRequestIcon, ListTodoIcon, Loader2Icon, RefreshCwIcon, TerminalSquareIcon, WebhookIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, CopyIcon, MessageSquareIcon, GitPullRequestIcon, ListTodoIcon, Loader2Icon, RefreshCwIcon, TerminalSquareIcon, WebhookIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ModelSelect } from "@/components/chat/model-select";
 import { MODE_LABELS } from "@/components/session/labels";
@@ -106,6 +106,7 @@ export function RoutineForm({
   const [webhook, setWebhook] = useState(Boolean(routine?.webhookToken));
   const [enabled, setEnabled] = useState(routine?.enabled ?? true);
   const [catchUp, setCatchUp] = useState(routine?.catchUp ?? "skip");
+  const [slackReport, setSlackReport] = useState(routine?.slackReport ?? false);
   const [maxRuns, setMaxRuns] = useState(String(routine?.maxRunsPerDay ?? 24));
   const [maxMinutes, setMaxMinutes] = useState(String(routine?.maxRunMinutes ?? 60));
   const [saving, setSaving] = useState(false);
@@ -146,6 +147,7 @@ export function RoutineForm({
       webhookEnabled: webhook,
       enabled,
       catchUp,
+      slackReport,
       maxRunsPerDay: Number(maxRuns) || 24,
       maxRunMinutes: Number(maxMinutes) || 60,
     };
@@ -338,6 +340,14 @@ export function RoutineForm({
           </Chip>
         </div>
         {webhook && <WebhookInfo routine={routine} />}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground text-xs">Report</span>
+        <Chip on={slackReport} onClick={() => setSlackReport(!slackReport)} title="DM the summary, changes, PR and cost on Slack when a run ends. Needs Slack in Settings → Integrations.">
+          <MessageSquareIcon /> Post to Slack
+        </Chip>
+        <span className="text-muted-foreground text-[11px]">Every run also writes a note in the project notebook.</span>
       </div>
 
       <Collapsible>

@@ -321,6 +321,7 @@ export type Database = {
       routines: {
         Row: {
           catch_up: string
+          slack_report: boolean
           created_at: string
           enabled: boolean
           context: Json
@@ -345,6 +346,7 @@ export type Database = {
         }
         Insert: {
           catch_up?: string
+          slack_report?: boolean
           created_at?: string
           enabled?: boolean
           context?: Json
@@ -369,6 +371,7 @@ export type Database = {
         }
         Update: {
           catch_up?: string
+          slack_report?: boolean
           created_at?: string
           enabled?: boolean
           context?: Json
