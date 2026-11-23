@@ -1,6 +1,6 @@
 # Native Linear and Slack integrations
 
-Status: Phases 1 and 2 shipped; Phase 3 built except the PR comment and the label filter (see Phase 3 notes) · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
+Status: Phases 1–3 shipped; Phase 4 step 1 (routine reports) built; steps 2–3 (Slack approvals and replies) not started · Author: Dan Giordano (drafted with Claude Code) · Date: 2026-11-22
 
 ## Goal
 

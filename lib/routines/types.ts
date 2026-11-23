@@ -54,6 +54,8 @@ export type Routine = {
   webhookToken: string | null;
   enabled: boolean;
   catchUp: RoutineCatchUp;
+  /** DM the run report on Slack when a run ends. */
+  slackReport: boolean;
   maxRunsPerDay: number;
   maxRunMinutes: number;
   triggerState: RoutineTriggerState;

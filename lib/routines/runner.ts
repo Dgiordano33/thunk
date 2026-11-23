@@ -1,6 +1,8 @@
 import { startWorkerSession, sendBrief } from "@/lib/workers/start";
 import { watchWorker } from "@/lib/workers/watch";
 import "server-only";
+import { postRunReport } from "@/lib/integrations/slack/reports";
+import { projectPath, projectSectionPath } from "@/lib/routes";
 import { closeSession, getSession, type LiveSession } from "@/lib/agent";
 import { createWorkspace, getWorkspaceContext, removeWorkspace, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
@@ -195,6 +197,14 @@ async function finalize(input: FinalizeInput) {
       noteId = await writeRunNote({ project, routine, run, status, workspace, workspaceKept, report, error, tasks, keptNotes })
         .then((n) => n.id)
         .catch((err) => (console.error("[thunk] routine note failed", err), null));
+
+    if (routine.slackReport && project && report)
+      await postRunReport({
+        routine: routine.name, project: project.name, status, summary: report.summary, diff: report.diffStat, prUrl: report.prUrl,
+        costUsd, error,
+        notePath: noteId ? projectSectionPath(projectPath(project), "library", { note: noteId }) : null,
+        sessionPath: run.sessionId && workspace && workspaceKept ? `/w/${workspace.id}/s/${run.sessionId}` : null,
+      });
 
     await updateRun(run.id, {
       status,

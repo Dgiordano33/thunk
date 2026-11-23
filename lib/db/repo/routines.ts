@@ -29,6 +29,7 @@ type Row = {
   webhook_token: string | null;
   enabled: boolean;
   catch_up: string;
+  slack_report: boolean;
   max_runs_per_day: number;
   max_run_minutes: number;
   trigger_state: Json;
@@ -59,7 +60,7 @@ type RunRow = {
 };
 
 const COLUMNS =
-  "id, project_id, name, prompt, model, permission_mode, target_kind, target_workspace_id, schedule_cron, schedule_tz, events, context, webhook_token, enabled, catch_up, max_runs_per_day, max_run_minutes, trigger_state, last_run_at, next_run_at, created_at, updated_at";
+  "id, project_id, name, prompt, model, permission_mode, target_kind, target_workspace_id, schedule_cron, schedule_tz, events, context, webhook_token, enabled, catch_up, slack_report, max_runs_per_day, max_run_minutes, trigger_state, last_run_at, next_run_at, created_at, updated_at";
 const RUN_COLUMNS =
   "id, routine_id, session_id, workspace_id, trigger_source, trigger_payload, status, started_at, finished_at, cost_usd, summary, diff_stat, pr_url, note_id, error, created_at, updated_at";
 
@@ -86,6 +87,7 @@ function toRoutine(r: Row): Routine {
     webhookToken: r.webhook_token,
     enabled: r.enabled,
     catchUp: r.catch_up as Routine["catchUp"],
+    slackReport: r.slack_report ?? false,
     maxRunsPerDay: r.max_runs_per_day,
     maxRunMinutes: r.max_run_minutes,
     triggerState: (r.trigger_state ?? {}) as Routine["triggerState"],
@@ -133,6 +135,7 @@ function routineToRow(p: Partial<Routine>): TablesUpdate<"routines"> {
   if (p.webhookToken !== undefined) row.webhook_token = p.webhookToken;
   if (p.enabled !== undefined) row.enabled = p.enabled;
   if (p.catchUp !== undefined) row.catch_up = p.catchUp;
+  if (p.slackReport !== undefined) row.slack_report = p.slackReport;
   if (p.maxRunsPerDay !== undefined) row.max_runs_per_day = p.maxRunsPerDay;
   if (p.maxRunMinutes !== undefined) row.max_run_minutes = p.maxRunMinutes;
   if (p.triggerState !== undefined) row.trigger_state = p.triggerState as Json;
