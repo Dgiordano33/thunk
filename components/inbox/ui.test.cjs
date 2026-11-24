@@ -78,6 +78,7 @@ test("a ready thought is a Decision in time order; thoughts under way stay in th
   assert.match(html, /data-action="3"[^>]*>Discard/);
   assert.doesNotMatch(html, /Dismiss “Look into ready1”/, "a thought closes through Keep or Discard, not dismiss");
   assert.match(html, /Thought busy/); assert.match(html, /Working · Thunk/);
+  assert.doesNotMatch(html, /<input[^>]*aria-label="Capture a thought"/, "new thoughts come from the Capture bar, not an Inbox field");
   assert.equal((html.match(/Thought ready1/g) || []).length, 1, "the ready thought is not repeated in the quiet list");
   assert.equal((html.match(/data-notification="true"[^>]*tabindex="0"|tabindex="0"[^>]*data-notification="true"/g) || []).length, 1, "one roving tab stop across thoughts and decisions");
 });

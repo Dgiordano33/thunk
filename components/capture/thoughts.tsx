@@ -1,21 +1,20 @@
 "use client";
 import type { Capture } from '@/lib/capture/types';
 import type { Captures } from './use-captures';
-import { CaptureInput } from './capture-input';
 
 const STATE: Record<Capture['status'], string> = { routing: 'Routing', queued: 'Queued', working: 'Working', ready: 'Ready', kept: 'Kept', discarded: 'Discarded', failed: 'Couldn’t start' };
 const minutes = (row: Capture) => Math.max(0, Math.round((Date.parse(row.updated_at) - Date.parse(row.created_at)) / 60000));
 
 /**
- * The capture field and the thoughts that don't need you yet (routing, queued, working) or need a retry.
+ * Thoughts that don't need you yet (routing, queued, working) or need a retry. New thoughts come from the Capture bar.
  * Ready thoughts are Decisions in the feed below, in time order with everything else; `inFeed` names those.
  */
 export function Thoughts({ projects, captures, inFeed }: { projects: { id: string; name: string }[]; captures: Captures; inFeed: Set<string> }) {
-  const { rows, limit, error, refresh, act, retry, rule, setRule } = captures;
+  const { rows, error, act, retry, rule, setRule } = captures;
   const quiet = rows.filter((r) => !inFeed.has(r.id));
+  if (!error && !rule && quiet.length === 0) return null;
   const name = (row: Capture) => projects.find((p) => p.id === row.project_id)?.name ?? 'Home';
   return <section aria-label="Thoughts" className="shrink-0 space-y-3 border-b px-5 py-4 sm:px-8">
-    <CaptureInput disabled={rows.length >= limit} onSent={() => void refresh()} />
     {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
     {rule && <p role="status" className="text-xs">Save this redirect as a Home routing rule? <button className="underline" onClick={() => { void act(rule.id, 'rule', rule.text); setRule(null); }}>Save rule</button> <button className="ml-2 underline" onClick={() => setRule(null)}>Not now</button></p>}
     {quiet.length > 0 && <ul aria-label="Thoughts in progress" className="max-h-48 space-y-1 overflow-y-auto">
