@@ -14,7 +14,7 @@ import { readWorkerState } from '@/lib/workers/state';
 import { createTask } from '@/lib/tasks/service';
 import { delegate } from '@/lib/workers/service';
 import { routeCapture } from './router';
-import { captureBrief } from './prompt';
+import { captureBrief, captureTaskBody } from './prompt';
 import type { Capture } from './types';
 export async function captureLimit() {
  try { const config = JSON.parse(await readFile(`${DATA_DIR}/config/capture.json`,'utf8')); return Number.isInteger(config.maxOpen) && config.maxOpen > 0 ? config.maxOpen : 8; } catch { return 8; }
@@ -48,7 +48,7 @@ export async function dispatchCapture(id: string, projectId?: string) {
  if(row.mode==='worktree' && row.workspace_id){const {archiveWorkspace}=await import('@/lib/projects/archive');await archiveWorkspace(row.workspace_id);}
  row=await saveCapture({...row,task_id:null,session_id:null,workspace_id:null});
  }
- const task = row.task_id ? null : await createTask({projectId:route.projectId!,title:route.title,body:brief});
+ const task = row.task_id ? null : await createTask({projectId:route.projectId!,title:route.title,body:captureTaskBody(row.text,route)});
  row=await saveCapture({...row,project_id:route.projectId,task_id:task?.id ?? row.task_id,title:route.title,mode:route.mode,assumptions:route.assumptions});
  const result=await delegate(route.projectId!,null,{taskId:row.task_id!,title:route.title,brief,mode:route.mode,permissionMode:'acceptEdits'});
  // Launch writes working before sending the first brief; never overwrite a fast finish.

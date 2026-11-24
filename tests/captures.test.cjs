@@ -89,7 +89,10 @@ test('dispatch preserves original wording and routing assumptions in the task an
  assert.ok(input.brief.includes(original));
  assert.ok(input.brief.includes('Build it'));
  assert.ok(input.brief.includes('A guess'));
- assert.equal(tasks.get(input.taskId).body,input.brief);
+ const body=tasks.get(input.taskId).body;
+ assert.ok(body.includes(original) && body.includes('Build it') && body.includes('A guess'));
+ assert.doesNotMatch(body,/Capture: take a useful first pass/);
+ assert.ok(input.brief.endsWith(body));
  assert.deepEqual((await get()).assumptions,['A guess']);
 });
 
