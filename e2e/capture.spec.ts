@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 test('capture bar keeps a dismissed draft and submits a thought', async ({page}) => {
  await page.goto('/inbox');
- await page.getByRole('button',{name:'Capture a thought',exact:true}).click();
+ await page.getByRole('button',{name:'take a crack at',exact:true}).click();
  const dialog=page.getByRole('dialog');
- await dialog.getByRole('textbox',{name:'Capture a thought'}).fill('Look into capture browser verification');
+ await dialog.getByRole('textbox',{name:'take a crack at'}).fill('Look into capture browser verification');
  await page.keyboard.press('Escape');
- await page.getByRole('button',{name:'Capture a thought',exact:true}).click();
+ await page.getByRole('button',{name:'take a crack at',exact:true}).click();
  await expect(dialog.getByRole('textbox')).toHaveValue('Look into capture browser verification');
  await dialog.getByRole('textbox').press('Enter');
  await expect(dialog).not.toBeVisible();
