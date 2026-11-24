@@ -2,7 +2,7 @@ module.exports = {
   appId: "dev.thunk.desktop",
   productName: "Thunk",
   directories: { app: "desktop", output: "dist-desktop" },
-  files: ["connections.cjs", "connections-preload.cjs", "connections.html", "connections.js", "releases.cjs", "setup-sync.cjs", "app-preload.cjs", "main.cjs", "runtime.cjs", "updater.cjs", "update.html", "update.js", "offline.html", "offline.js", "prerequisites.cjs", "icon.png", "package.json", "!node_modules/**/*"],
+  files: ["connections.cjs", "connections-preload.cjs", "connections.html", "connections.js", "releases.cjs", "setup-sync.cjs", "app-preload.cjs", "capture.cjs", "capture-preload.cjs", "main.cjs", "runtime.cjs", "updater.cjs", "update.html", "update.js", "offline.html", "offline.js", "prerequisites.cjs", "icon.png", "package.json", "!node_modules/**/*"],
   extraResources: [{ from: "build/desktop", to: "backend" }],
   npmRebuild: false,
   mac: {
