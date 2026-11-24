@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, openSync, closeSync, readFileSync, readdirSync, lstatSync, realpathSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, openSync, closeSync, readFileSync, readdirSync, lstatSync, realpathSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import runtime from "../desktop/runtime.cjs";
 
 const root = path.resolve(process.argv[2] || "build/desktop");
+const { platform, arch } = process;
+const exe = (name) => platform === "win32" ? `${name}.exe` : name;
 // No packaged credentials or symlinks back into the build machine.
 function checkFiles(folder) {
   for (const name of readdirSync(folder)) {
@@ -25,7 +27,8 @@ const log = openSync(logFile, "w");
 let backend;
 try {
   backend = await runtime.startBackend({ root, config, log, env: {
-    PATH: process.env.PATH, HOME: temporary, SHELL: "/bin/zsh",
+    PATH: process.env.PATH, HOME: temporary, USERPROFILE: temporary, SystemRoot: process.env.SystemRoot, ComSpec: process.env.ComSpec,
+    ...(platform === "win32" ? {} : { SHELL: platform === "darwin" ? "/bin/zsh" : "/bin/sh" }),
     THUNK_DATA_DIR: path.join(temporary, "data"), DATABASE_URL: "", SUPABASE_URL: "",
   } });
   const html = await (await fetch(backend.url)).text();
@@ -34,19 +37,22 @@ try {
   assert.equal((await fetch(new URL(asset[1], backend.url))).status, 200);
   assert.equal((await fetch(`${backend.url}/api/models`)).status, 200);
   assert.equal((await fetch(`${backend.url}/api/models`, { headers: { origin: "https://example.com" } })).status, 403);
-  const node = path.join(root, "bin/node");
+  const node = runtime.nodeBinary(root);
+  const [shell, ...shellArgs] = platform === "win32" ? ["cmd.exe", "/d", "/c", "echo THUNK_SMOKE_OK"] : ["/bin/sh", "-c", "printf THUNK_SMOKE_OK"];
   execFileSync(node, ["-e", `
     const pty = require(${JSON.stringify(path.join(root, "server/node_modules/node-pty"))});
-    const terminal = pty.spawn('/bin/sh', ['-c', 'printf THUNK_SMOKE_OK'], {env: process.env});
+    const terminal = pty.spawn(${JSON.stringify(shell)}, ${JSON.stringify(shellArgs)}, {env: process.env});
     let output = '';
     const timer = setTimeout(() => { terminal.kill(); process.exit(1); }, 5000);
     terminal.onData(data => output += data);
     terminal.onExit(({exitCode}) => { clearTimeout(timer); process.exit(exitCode === 0 && output.includes('THUNK_SMOKE_OK') ? 0 : 1); });
   `]);
-  const claude = path.join(root, `server/node_modules/@anthropic-ai/claude-agent-sdk-darwin-${process.arch}/claude`);
+  const claude = [`claude-agent-sdk-${platform}-${arch}`, `claude-agent-sdk-${platform}-${arch}-musl`]
+    .map((name) => path.join(root, "server/node_modules/@anthropic-ai", name, exe("claude"))).find((file) => existsSync(file));
+  assert.ok(claude, `Bundled Claude executable for ${platform}-${arch}`);
   assert.match(execFileSync(claude, ["--version"], { encoding: "utf8", timeout: 10000 }), /Claude/);
   for (const command of ["codex", "gh"]) {
-    assert.ok(execFileSync(path.join(root, "bin", command), ["--version"], { encoding: "utf8", timeout: 10000 }).trim());
+    assert.ok(execFileSync(path.join(root, "bin", exe(command)), ["--version"], { encoding: "utf8", timeout: 10000 }).trim());
   }
   await backend.stop();
   await assert.rejects(fetch(backend.url));

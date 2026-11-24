@@ -1,5 +1,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Windows has no SIGTERM to send, so the desktop app asks over IPC and the usual shutdown runs.
+    if (process.send) process.on("message", (message) => { if (message === "thunk:shutdown") process.emit("SIGTERM"); });
     const { describeDatabase } = await import("./lib/db/server");
     console.log(`[thunk] database: ${describeDatabase()}`);
     const { ensureNotificationProducers } = await import("./lib/notifications/producers");

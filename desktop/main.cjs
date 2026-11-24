@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, session } = require("electron");
 const { mkdirSync, openSync, closeSync, existsSync, writeFileSync, readFileSync, rmSync } = require("node:fs");
 const path = require("node:path");
-const { startBackend, configuredRemote, loginPath, externalUrl } = require("./runtime.cjs");
+const { startBackend, configuredRemote, loginPath, toolPath, externalUrl } = require("./runtime.cjs");
+const { gitVersion, gitHelp } = require("./prerequisites.cjs");
 
 const { connections, readKey } = require("./connections.cjs");
 const { syncSetup, describeSummary } = require("./setup-sync.cjs");
@@ -11,6 +12,27 @@ const { parseEnv } = require("node:util");
 const { prepareUpdate, installUpdate, configuredUpdateSource } = require("./updater.cjs");
 
 app.setName("Thunk");
+const isMac = process.platform === "darwin";
+
+/** Which download to pick from a release page for this computer (see scripts/archive-desktop.mjs). */
+function releaseAsset() {
+  if (isMac) return `the ${process.arch === "arm64" ? "Apple Silicon" : "Intel"} ZIP`;
+  if (process.platform === "win32") return `the Windows ${process.arch === "arm64" ? "ARM64" : "x64"} ZIP`;
+  return `the Linux ${process.arch === "arm64" ? "ARM64" : "x64"} archive`;
+}
+
+/** Git is not bundled on macOS or Linux; say how to get it rather than failing later in a project. */
+async function checkGit(env) {
+  if (await gitVersion(env)) return;
+  const help = gitHelp();
+  const { response } = await dialog.showMessageBox({
+    type: "warning", message: "Git is not installed", detail: help.detail,
+    buttons: [help.action.label, "Later"], defaultId: 0, cancelId: 1,
+  });
+  if (response !== 0) return;
+  if (help.action.url) await shell.openExternal(help.action.url);
+  else require("node:child_process").execFile(...help.action.command, (error) => { if (error) console.error("Could not start the Git installer:", error); });
+}
 let backend;
 let window;
 let quitting = false;
@@ -104,6 +126,8 @@ async function openWindow() {
   window = new BrowserWindow({
     title: "Thunk", width: 1440, height: 960, minWidth: 900, minHeight: 600,
     show: false,
+    // macOS and Windows take the icon from the app bundle; Linux window managers need it here.
+    ...(process.platform === "linux" ? { icon: path.join(__dirname, "icon.png") } : {}),
     webPreferences: {
       nodeIntegration: false, contextIsolation: true, sandbox: true,
       ...(backend.remote ? { preload: path.join(__dirname, "app-preload.cjs") } : {}),
@@ -172,18 +196,20 @@ if (!app.requestSingleInstanceLock()) {
     const root = app.isPackaged ? path.join(process.resourcesPath, "backend") : path.resolve(__dirname, "../build/desktop");
     const configValues = parseEnv(readFileSync(config, "utf8"));
     const credential = remote ? undefined : readKey(path.join(userData, "anthropic-key.enc"));
-    const runtimeEnv = { ...process.env, ...configValues, PATH: `${path.join(root, "bin")}:${loginPath()}`, ...(credential ? { ANTHROPIC_API_KEY: credential } : {}) };
+    const runtimeEnv = { ...process.env, ...configValues, PATH: [toolPath(root), loginPath()].join(path.delimiter), ...(credential ? { ANTHROPIC_API_KEY: credential } : {}) };
     const showConnections = remote ? undefined : connections({ app, env: runtimeEnv, configKey: !!runtimeEnv.ANTHROPIC_API_KEY });
+    // macOS has an app menu with Hide/Show; Windows and Linux get the same items under a "Thunk" menu.
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { role: "appMenu", submenu: [
+      { ...(isMac ? { role: "appMenu" } : { label: "Thunk" }), submenu: [
         { role: "about" }, { type: "separator" },
         { label: "Download Latest Release…", click: async () => {
           try {
-            const result = await dialog.showMessageBox({ message: "Download a ready-to-use update", detail: `Choose the ${process.arch === "arm64" ? "Apple Silicon" : "Intel"} ZIP. Quit Thunk before replacing the app in Applications, then reopen it. Your data and connections stay in place.`, buttons: ["Open Downloads", "Cancel"], cancelId: 1 });
+            const result = await dialog.showMessageBox({ message: "Download a ready-to-use update", detail: `Choose ${releaseAsset()}. Quit Thunk before replacing the app${isMac ? " in Applications" : ""}, then reopen it. Your data and connections stay in place.`, buttons: ["Open Downloads", "Cancel"], cancelId: 1 });
             if (result.response === 0) await shell.openExternal(releaseUrl(config));
           } catch (error) { dialog.showErrorBox("Could not open downloads", error.message); }
         } },
-        { label: "Build Update from Source…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } },
+        // The source updater rebuilds and swaps a .app bundle, so it is macOS-only for now.
+        ...(isMac ? [{ label: "Build Update from Source…", enabled: app.isPackaged, click: (item) => { updateTask = checkForUpdates(item); } }] : []),
         ...(showConnections ? [{ label: "Connections…", click: () => void showConnections().catch(fail) }] : []),
         ...(remote ? [{ label: "Sync My Setup to Server", click: () => {
           syncSetupToServer().then(
@@ -191,11 +217,11 @@ if (!app.requestSingleInstanceLock()) {
             (error) => dialog.showErrorBox("Could not sync your setup", error.message),
           );
         } }] : []),
-        { label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) },
+        ...(isMac ? [{ label: "Show Update Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "update.log")) }] : []),
         { type: "separator" },
         { label: "Show Configuration", click: () => shell.showItemInFolder(config) },
         ...(remote ? [] : [{ label: "Show Server Log", click: () => shell.showItemInFolder(path.join(app.getPath("logs"), "server.log")) }]),
-        { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },
+        ...(isMac ? [{ type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" }] : []),
         { type: "separator" }, { role: "quit" },
       ] },
       { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
@@ -229,5 +255,6 @@ if (!app.requestSingleInstanceLock()) {
       await showConnections();
       writeFileSync(onboarding, "1", { mode: 0o600 });
     }
+    if (!remote) void checkGit(runtimeEnv).catch(console.error);
   }).catch(fail);
 }

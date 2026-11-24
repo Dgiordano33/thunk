@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createWorkspace, getWorkspaceContext, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
+import { commandShell } from "@/lib/host/shell";
 import { git, tryGit } from "@/lib/projects/git";
 import { readLifecycleConfig } from "@/lib/projects/lifecycle-config";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
@@ -71,8 +72,8 @@ export async function integrateWorkers(projectId: string, taskIds: string[], { r
     const command = (await readLifecycleConfig(sessionConfigRoot(ictx))).scripts.test;
     if (!command) result.tests = { command: null, reason: "No scripts.test in thunk.json" };
     else {
-      const shell = process.env.SHELL || "/bin/bash";
-      const run = await exec(shell, ["-lc", command], { cwd: workspace.cwd, env: { ...process.env, ...processEnvironment(ictx, 0) }, timeout: INTEGRATION_TEST_MINUTES * 60_000, maxBuffer: 16 * 1024 * 1024 })
+      const shell = commandShell(command);
+      const run = await exec(shell.file, shell.args, { cwd: workspace.cwd, env: { ...process.env, ...processEnvironment(ictx, 0) }, windowsVerbatimArguments: shell.verbatim, timeout: INTEGRATION_TEST_MINUTES * 60_000, maxBuffer: 16 * 1024 * 1024 })
         .then(({ stdout, stderr }) => ({ code: 0, output: stdout + stderr }))
         .catch((err: { code?: number | string; killed?: boolean; stdout?: string; stderr?: string }) => ({
           code: typeof err.code === "number" ? err.code : 1,

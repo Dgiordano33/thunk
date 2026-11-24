@@ -1,6 +1,7 @@
 import "server-only";
 import { spawn, type IPty } from "node-pty";
 import { createServer, createConnection } from "node:net";
+import { commandShell, interactiveShell } from "../host/shell";
 import { projectEvents } from "./events";
 import { copyWorkspaceFiles, readLifecycleConfig } from "./lifecycle-config";
 import { anchorRepo, sessionConfigRoot } from "./repos";
@@ -69,8 +70,9 @@ async function launch(ctx: WorkspaceContext, kind: ProcessKind, command: string)
   const state = runtime(ctx.workspace.id);
   if (state.processes.get(kind)?.running) throw new Error(`${kind} is already running`);
   const port = await allocatePort(state);
-  const shell = process.env.SHELL || "/bin/bash";
-  const pty = spawn(shell, kind === "shell" ? ["-l"] : ["-lc", command], {
+  const shell = kind === "shell" ? interactiveShell() : commandShell(command);
+  // node-pty takes a raw command line as a string on Windows; that keeps cmd's quoting intact.
+  const pty = spawn(shell.file, shell.verbatim ? shell.args.join(" ") : shell.args, {
     cwd: ctx.workspace.cwd, env: processEnvironment(ctx, port), cols: 100, rows: 24, name: "xterm-256color",
   });
   let finish!: (code: number) => void;
@@ -125,7 +127,7 @@ export async function startWorkspaceProcess(ctx: WorkspaceContext, kind: "run" |
     if (kind === "run" && state.processes.get("setup")?.running) throw new Error("Wait for setup to finish before running the dev server");
     if (kind === "run" && state.setupError) throw new Error("Fix setup before running the dev server");
     const config = await readLifecycleConfig(sessionConfigRoot(ctx));
-    const command = kind === "shell" ? process.env.SHELL || "/bin/bash" : config.scripts.run;
+    const command = kind === "shell" ? interactiveShell().file : config.scripts.run;
     if (!command) throw new Error(anchorRepo(ctx) ? "Set scripts.run in thunk.json at the root of the first repo" : "Add a repo with a thunk.json to run this project");
     await launch(ctx, kind, command);
   });

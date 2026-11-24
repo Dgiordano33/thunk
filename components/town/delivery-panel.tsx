@@ -10,7 +10,7 @@ import { api } from "@/lib/client/api";
 import type { RuntimeSnapshot } from "@/lib/projects/runtime-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { toast } from "sonner";
-import { useLocalClient } from "@/components/mobile/local-client";
+import { fileManagerName, useLocalClient } from "@/components/mobile/local-client";
 
 /** One checkout the workspace works in: a git repo (worktree or main checkout), a shared folder, or its scratch folder. */
 export type RepoRow = { id: string | null; name: string; cwd: string; kind: "worktree" | "checkout" | "folder" | "scratch"; branch: string | null };
@@ -54,7 +54,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
           {reason && <p role="status" className="text-muted-foreground mt-1">{reason}</p>}
           {local ? <button
             type="button"
-            title="Reveal in Finder"
+            title={`Reveal in ${fileManagerName()}`}
             className="text-muted-foreground hover:text-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono"
             onClick={() => void api.revealWorkspace(workspaceId, row.id ?? undefined).catch((err: Error) => toast.error("Couldn’t reveal the folder", { description: err.message }))}
           >

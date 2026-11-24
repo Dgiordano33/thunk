@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export const DEFAULT_PARENT = "~/code";
 
-export const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
+export const tildify = (p: string) => p.replace(/^(\/Users|\/home)\/[^/]+|^[A-Za-z]:\\Users\\[^\\]+/, "~");
 
 /** A chosen folder: shows the path, click to choose another (native dialog or the in-page browser). */
 export function FolderPicker({ value, picking, native = true, onPick }: { value: string; picking: boolean; native?: boolean; onPick: () => void }) {
@@ -21,7 +21,7 @@ export function FolderPicker({ value, picking, native = true, onPick }: { value:
         <FolderIcon className="text-muted-foreground size-4 shrink-0" />
       )}
       <span className={cn("min-w-0 flex-1 truncate font-mono text-sm", !value && "text-muted-foreground")}>
-        {picking && native ? "Waiting for Finder…" : value ? tildify(value) : "No folder chosen"}
+        {picking && native ? "Waiting for the folder dialog…" : value ? tildify(value) : "No folder chosen"}
       </span>
       <span className="text-muted-foreground shrink-0 text-xs">Choose…</span>
     </button>

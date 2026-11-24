@@ -2,7 +2,7 @@ const { spawn, execFileSync } = require("node:child_process");
 const { createServer } = require("node:net");
 const { setTimeout: delay } = require("node:timers/promises");
 const path = require("node:path");
-const { readFileSync } = require("node:fs");
+const { readFileSync, existsSync } = require("node:fs");
 const { parseEnv } = require("node:util");
 
 /** THUNK_PORT from the desktop config pins the port so Tailscale Serve can target it (docs/remote.md). */
@@ -42,15 +42,30 @@ function configuredRemote(config) {
 }
 
 function loginPath() {
-  // Finder does not inherit the user's terminal PATH (nvm, Homebrew, Codex, gh).
+  // Windows apps inherit the user's PATH from Explorer; there is no login shell to ask.
+  if (process.platform === "win32") return process.env.PATH || process.env.Path || "";
+  // Finder and Linux app launchers do not inherit the user's terminal PATH (nvm, Homebrew, Codex, gh).
   try {
-    const output = execFileSync(process.env.SHELL || "/bin/zsh", ["-ilc", 'printf "\\nTHUNK_PATH=%s\\n" "$PATH"'], {
+    const output = execFileSync(process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash"), ["-ilc", 'printf "\\nTHUNK_PATH=%s\\n" "$PATH"'], {
       encoding: "utf8", timeout: 10000,
     });
     return output.split("\n").find((line) => line.startsWith("THUNK_PATH="))?.slice(11) || process.env.PATH;
   } catch {
     return process.env.PATH || "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
   }
+}
+
+/** The bundled tool folders: `bin`, plus a bundled Git for Windows (MinGit) when packaged with one. */
+function toolPath(root) {
+  const dirs = [path.join(root, "bin")];
+  const git = path.join(root, "bin", "git", "cmd");
+  if (existsSync(git)) dirs.push(git);
+  return dirs.join(path.delimiter);
+}
+
+/** The bundled Node executable. */
+function nodeBinary(root, platform = process.platform) {
+  return path.join(root, "bin", platform === "win32" ? "node.exe" : "node");
 }
 
 async function freePort() {
@@ -67,13 +82,15 @@ async function freePort() {
 async function startBackend({ root, config, log, env = process.env, timeout = 60000 }) {
   const port = configuredPort(config) ?? await freePort();
   const url = `http://127.0.0.1:${port}`;
-  const child = spawn(path.join(root, "bin/node"), [
+  const child = spawn(nodeBinary(root), [
     `--env-file-if-exists=${config}`, path.join(root, "server/server.js"),
   ], {
     cwd: path.dirname(config),
     env: { ...env, NODE_ENV: "production", HOSTNAME: "127.0.0.1", PORT: String(port),
-      PATH: `${path.join(root, "bin")}:${env.PATH || ""}`, NEXT_TELEMETRY_DISABLED: "1" },
-    stdio: ["ignore", log, log],
+      PATH: [toolPath(root), env.PATH || ""].join(path.delimiter), NEXT_TELEMETRY_DISABLED: "1" },
+    windowsHide: true,
+    // Windows cannot deliver SIGTERM; an IPC channel lets stop() ask for a clean shutdown instead.
+    stdio: process.platform === "win32" ? ["ignore", log, log, "ipc"] : ["ignore", log, log],
   });
   let failure;
   child.once("error", (error) => { failure = error; });
@@ -86,7 +103,8 @@ async function startBackend({ root, config, log, env = process.env, timeout = 60
   });
   const stop = async () => {
     if (child.exitCode !== null || child.signalCode || !child.pid) return;
-    child.kill("SIGTERM");
+    if (child.connected) child.send("thunk:shutdown");
+    else child.kill("SIGTERM");
     const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
     await exited;
     clearTimeout(timer);
@@ -117,4 +135,4 @@ function externalUrl(value) {
   }
 }
 
-module.exports = { startBackend, configuredRemote, loginPath, externalUrl };
+module.exports = { startBackend, configuredRemote, loginPath, toolPath, nodeBinary, externalUrl };
