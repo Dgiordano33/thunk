@@ -2,12 +2,14 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { DEFAULT_APP_SHORTCUT, fromEvent, label, problem, useIsMac } from "@/lib/capture/shortcut";
+import { DEFAULT_APP_SHORTCUT, fromEvent, isMac, label, problem, useIsMac } from "@/lib/capture/shortcut";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useUi } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
 import { SettingGroup, SettingRow } from "./setting-row";
 
-type Bridge = { settings: (value?: string) => Promise<{ shortcut: string }> };
+type DesktopState = { shortcut: string; unavailable?: string; openAtLogin?: boolean | null };
+type Bridge = { settings: (value?: string, options?: { openAtLogin?: boolean }) => Promise<DesktopState> };
 const bridge = () => (window as Window & { thunkCapture?: Bridge }).thunkCapture;
 
 /** Click, then press the keys. Escape cancels. */
@@ -48,16 +50,29 @@ function ShortcutRecorder({ id, value, onChange, fallback }: { id: string; value
 }
 
 function DesktopShortcut() {
-  const [value, setValue] = useState<string | null>(null);
-  useEffect(() => { void bridge()?.settings().then((r) => setValue(r.shortcut)).catch(() => {}); }, []);
-  if (value === null) return (
-    <SettingRow label="Anywhere on this computer" description="In the Thunk desktop app, a shortcut opens a small Capture window over any app. Open Thunk on the desktop to set it." />
+  const [state, setState] = useState<DesktopState | null>(null);
+  const [loginError, setLoginError] = useState("");
+  useEffect(() => { void bridge()?.settings().then(setState).catch(() => {}); }, []);
+  if (state === null) return (
+    <SettingRow label="Anywhere on your computer" description={<>Needs the Thunk desktop app running: a shortcut then opens a small Capture window over whatever app you&apos;re in. Get it from Thunk → Download Latest Release, then set the shortcut here in the app.</>} />
   );
-  return (
-    <SettingRow label="Anywhere on this computer" htmlFor="capture-desktop-shortcut" description="Opens a small Capture window over any app, even when Thunk is in the background. Stored on this computer.">
-      <ShortcutRecorder id="capture-desktop-shortcut" value={value} fallback="Alt+Space" onChange={async (accel) => { const r = await bridge()!.settings(accel); setValue(r.shortcut); }} />
+  const mac = isMac();
+  return <>
+    <SettingRow label="Anywhere on your computer" htmlFor="capture-desktop-shortcut"
+      description={<>Opens a small Capture window over whatever app is in front{mac ? ", full-screen ones included" : ""}, while Thunk is running. Stored on this computer.
+        {state.unavailable && <span role="alert" className="text-destructive mt-1 block">Another app took {label(state.unavailable)} before Thunk started, so this shortcut is off. Pick another.</span>}</>}>
+      <ShortcutRecorder id="capture-desktop-shortcut" value={state.shortcut} fallback="Alt+Space" onChange={async (accel) => setState(await bridge()!.settings(accel))} />
     </SettingRow>
-  );
+    {state.openAtLogin !== null && (
+      <SettingRow label="Open Thunk at login" htmlFor="capture-open-at-login" description={<>Keeps the shortcut working after you restart your {mac ? "Mac" : "computer"}.{loginError && <span role="alert" className="text-destructive mt-1 block">{loginError}</span>}</>}>
+        <Checkbox id="capture-open-at-login" checked={state.openAtLogin} onCheckedChange={async (checked) => {
+          const openAtLogin = checked === true;
+          setLoginError("");
+          try { setState(await bridge()!.settings(undefined, { openAtLogin })); } catch (e) { setLoginError((e as Error).message.replace(/^.*Error: /, "")); }
+        }} />
+      </SettingRow>
+    )}
+  </>;
 }
 
 export function CaptureSettings() {
