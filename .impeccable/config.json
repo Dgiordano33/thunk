@@ -1,0 +1,44 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "files": [
+          ".context/artifacts/thunk-capture/index.html"
+        ],
+        "createdAt": "2026-11-23T21:34:13.489Z",
+        "reason": "agent: mock of Thunk's existing UI; design.md specifies Geist as the body face"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "files": [
+          ".context/artifacts/thunk-capture/index.html"
+        ],
+        "createdAt": "2026-11-23T21:34:13.525Z",
+        "reason": "agent: mock of Thunk's existing UI; design.md specifies Geist Mono for metadata"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          ".context/artifacts/thunk-capture/index.html"
+        ],
+        "createdAt": "2026-11-23T21:34:13.558Z",
+        "reason": "agent: mock of Thunk's existing UI; design.md specifies the amber left edge on Inbox decision cards"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          ".context/artifacts/thunk-capture/index.html"
+        ],
+        "createdAt": "2026-11-23T21:34:13.589Z",
+        "reason": "agent: mock of Thunk's existing UI; design.md specifies bordered cards inside the Inbox panel"
+      }
+    ]
+  }
+}
