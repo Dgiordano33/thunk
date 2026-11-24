@@ -2,7 +2,7 @@ import "server-only";
 import { readFile } from 'node:fs/promises';
 import { DATA_DIR } from '@/lib/projects/paths';
 import { withFileLock } from '@/lib/notes/file-write';
-import { listCaptures, saveCapture } from '@/lib/db/repo/captures';
+import { listCaptures, notifyReady, saveCapture } from '@/lib/db/repo/captures';
 import { resolveBySubject } from '@/lib/notifications/service';
 import { updateWorkspace } from '@/lib/db/repo/workspaces';
 import { patchTask } from '@/lib/tasks/service';
@@ -66,7 +66,9 @@ export async function actOnCapture(id: string, action: string, text?: string) {
  if((await listCaptures()).length >= await captureLimit()) throw new Error('Too many open thoughts');
  if(row.workspace_id && row.mode==='worktree') await updateWorkspace(row.workspace_id,{status:'active'});
  if(row.task_id) await updateTask(row.task_id,{status:'blocked'});
- await saveCapture({...row,status:row.summary?'ready':'failed',error:row.summary?null:'Restored. Retry or message the worker to resume.'});return;
+ const restored=await saveCapture({...row,status:row.summary?'ready':'failed',error:row.summary?null:'Restored. Retry or message the worker to resume.'});
+ if(restored.status==='ready') await notifyReady(restored);
+ return;
  }
  if(action==='rule') { if(!text?.trim()) throw new Error('Rule is required');await saveRoutingRule(text.trim());return; }
  if(action==='discard') {

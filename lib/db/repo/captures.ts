@@ -19,10 +19,13 @@ export async function saveCapture(row: Capture, insert = false) {
 export async function captureTask(taskId: string, patch: Partial<Capture>) {
  const row = (await listCaptures()).find(r => r.task_id === taskId);
  if (row) { const next = await saveCapture({...row, ...patch});
- if(next.status==='ready' && row.status!=='ready' && next.project_id) {
- const {notify}=await import('@/lib/notifications/service');
- await notify({kind:'capture_ready',urgency:'action',projectId:next.project_id,workspaceId:next.workspace_id,sessionId:next.session_id,subjectKey:`capture:${next.id}`,title:next.title || next.text,detail:next.summary,href:'/inbox'});
- }
+ if(next.status==='ready' && row.status!=='ready') await notifyReady(next);
  return next;
  }
+}
+/** The Inbox Decision for a ready thought; it is what puts the thought in the feed. */
+export async function notifyReady(row: Capture) {
+ if (!row.project_id) return;
+ const {notify}=await import('@/lib/notifications/service');
+ await notify({kind:'capture_ready',urgency:'action',projectId:row.project_id,workspaceId:row.workspace_id,sessionId:row.session_id,subjectKey:`capture:${row.id}`,title:row.title || row.text,detail:row.summary,href:'/inbox'});
 }

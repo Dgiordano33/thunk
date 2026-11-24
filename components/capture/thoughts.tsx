@@ -1,17 +1,55 @@
 "use client";
-import { useEffect,useState,useCallback } from 'react';
 import type { Capture } from '@/lib/capture/types';
-import { useNotifications } from '@/lib/store/notifications-store';
-import { QuickContext } from '@/components/inbox/quick-context';
-import { toast } from 'sonner';
+import type { Captures } from './use-captures';
 import { CaptureInput } from './capture-input';
-export function Thoughts({projects}: {projects:{id:string;name:string}[]}) {
- const notifications=useNotifications(s=>s.items);
- const [context,setContext]=useState<string|null>(null);
- const [rule,setRule]=useState<{id:string;text:string}|null>(null);
- const [rows,setRows]=useState<Capture[]>([]);const [limit,setLimit]=useState(8);const [error,setError]=useState('');
- const act=async(id:string,action:string,text?:string)=>{try{const r=await fetch(`/api/captures/${id}/${action}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});if(!r.ok)throw new Error((await r.json()).error);await refresh();if(action==="redirect" && text?.includes("#"))setRule({id,text});if(action==="discard")toast("Thought discarded",{action:{label:"Undo",onClick:()=>void act(id,"restore")}});}catch(e){setError((e as Error).message);}};
- const refresh=useCallback(async()=>{try{const r=await fetch('/api/captures');if(!r.ok)throw new Error('Could not load thoughts');const data=await r.json();setRows(data.captures);setLimit(data.limit);setError('');}catch(e){setError((e as Error).message);}},[]);
- useEffect(()=>{const events=new EventSource('/api/captures/events');events.onopen=()=>void refresh();events.onmessage=()=>void refresh();return()=>events.close();},[refresh]);
- return <section aria-label="Thoughts" className="border-b p-5 space-y-3 max-h-80 overflow-y-auto"><CaptureInput disabled={rows.length>=limit} onSent={()=>void refresh()}/>{error&&<p role="alert">{error}</p>}{rows.length>0&&<h2 className="text-sm font-medium">Thoughts</h2>}{rows.map((row,index)=><article key={row.id} tabIndex={index===0?0:-1} onKeyDown={e=>{if(e.target!==e.currentTarget)return;const peers=[...e.currentTarget.parentElement!.querySelectorAll<HTMLElement>('article')];const index=peers.indexOf(e.currentTarget);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const next=peers[index+(e.key==='ArrowDown'?1:-1)];if(next){e.currentTarget.tabIndex=-1;next.tabIndex=0;next.focus();}else if(e.key==='ArrowDown')document.querySelector<HTMLElement>('[data-notification]')?.focus();}if(row.status==='ready'){if(e.key==='1')void act(row.id,'continue');if(e.key==='2')e.currentTarget.querySelector<HTMLInputElement>('input[name=text]')?.focus();if(e.key==='3')void act(row.id,'discard');}}} className="rounded border p-3 text-sm space-y-2"><h3 className="text-xs text-muted-foreground">You said</h3><p>{row.text}</p><p className="text-muted-foreground">{projects.find(p=>p.id===row.project_id)?.name??'Home'} · {row.status}</p>{row.session_id&&<a className="underline" href={`/w/${row.workspace_id}/s/${row.session_id}`}>Open session</a>}{row.status==='ready'&&<details><summary>Review</summary><h3>Assumed</h3><p>{row.assumptions.join(' · ')}</p><h3>Did</h3><p className="whitespace-pre-wrap">{row.summary}</p><pre className="whitespace-pre-wrap text-xs">{row.diff_stat ? JSON.stringify(row.diff_stat,null,2) : ""}</pre><h3>Next</h3><p>{row.next_step}</p><p>${Number(row.cost_usd).toFixed(4)} · {Math.max(0,Math.round((Date.parse(row.updated_at)-Date.parse(row.created_at))/60000))} min since capture</p><div className="flex gap-3"><button onClick={()=>void act(row.id,"continue")}>{row.next_step ? `Go ahead: ${row.next_step}` : "Go ahead"}</button><button onClick={()=>void act(row.id,"keep")}>Keep</button></div><form onSubmit={e=>{e.preventDefault();void act(row.id,"redirect",String(new FormData(e.currentTarget).get("text")));}}><input name="text" aria-label="Redirect thought" placeholder="Redirect this worker…" required/><button>Redirect</button></form></details>}{row.status!=='routing'&&<button className="ml-3 underline" onClick={()=>void act(row.id,'discard')}>Discard</button>}{row.status==='failed'&&<><p role="alert">{row.error}</p><form onSubmit={async e=>{e.preventDefault();const data=new FormData(e.currentTarget);await fetch(`/api/captures/${row.id}/retry`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectId:data.get('projectId')||undefined})});void refresh();}}><select name="projectId" aria-label="Retry project"><option value="">Choose automatically</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="border rounded px-2">Retry</button></form></>}{notifications.find(n=>n.subjectKey===`capture:${row.id}`)&&<button className="ml-3 underline" onClick={()=>setContext(context===row.id?null:row.id)}>Context</button>}{context===row.id&&notifications.filter(n=>n.subjectKey===`capture:${row.id}`).slice(0,1).map(n=><QuickContext key={n.id} n={n} lead="Thought context" focusReply={false} onFocused={()=>{}} onReplied={()=>void refresh()}/>)}</article>)}{rule&&<div className="text-sm"><p>Save this redirect as a Home routing rule?</p><button onClick={()=>{void act(rule.id,'rule',rule.text);setRule(null);}}>Save rule</button><button className="ml-3" onClick={()=>setRule(null)}>Not now</button></div>}</section>;
+
+const STATE: Record<Capture['status'], string> = { routing: 'Routing', queued: 'Queued', working: 'Working', ready: 'Ready', kept: 'Kept', discarded: 'Discarded', failed: 'Couldn’t start' };
+const minutes = (row: Capture) => Math.max(0, Math.round((Date.parse(row.updated_at) - Date.parse(row.created_at)) / 60000));
+
+/**
+ * The capture field and the thoughts that don't need you yet (routing, queued, working) or need a retry.
+ * Ready thoughts are Decisions in the feed below, in time order with everything else; `inFeed` names those.
+ */
+export function Thoughts({ projects, captures, inFeed }: { projects: { id: string; name: string }[]; captures: Captures; inFeed: Set<string> }) {
+  const { rows, limit, error, refresh, act, retry, rule, setRule } = captures;
+  const quiet = rows.filter((r) => !inFeed.has(r.id));
+  const name = (row: Capture) => projects.find((p) => p.id === row.project_id)?.name ?? 'Home';
+  return <section aria-label="Thoughts" className="shrink-0 space-y-3 border-b px-5 py-4 sm:px-8">
+    <CaptureInput disabled={rows.length >= limit} onSent={() => void refresh()} />
+    {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
+    {rule && <p role="status" className="text-xs">Save this redirect as a Home routing rule? <button className="underline" onClick={() => { void act(rule.id, 'rule', rule.text); setRule(null); }}>Save rule</button> <button className="ml-2 underline" onClick={() => setRule(null)}>Not now</button></p>}
+    {quiet.length > 0 && <ul aria-label="Thoughts in progress" className="max-h-48 space-y-1 overflow-y-auto">
+      {quiet.map((row) => <li key={row.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+        <span className="min-w-0 flex-1 truncate" title={row.text}>{row.text}</span>
+        <span className="text-muted-foreground shrink-0 text-xs">{row.status === 'routing' ? STATE.routing : `${STATE[row.status]} · ${name(row)}`}</span>
+        {row.session_id && row.workspace_id && <a className="shrink-0 text-xs underline" href={`/w/${row.workspace_id}/s/${row.session_id}`}>Open session</a>}
+        {row.status === 'ready' && <button className="shrink-0 text-xs underline" onClick={() => void act(row.id, 'keep')}>Keep</button>}
+        {row.status !== 'routing' && <button className="shrink-0 text-xs underline" onClick={() => void act(row.id, 'discard')}>Discard</button>}
+        {row.status === 'failed' && <RetryForm row={row} projects={projects} onRetry={retry} />}
+      </li>)}
+    </ul>}
+  </section>;
+}
+
+function RetryForm({ row, projects, onRetry }: { row: Capture; projects: { id: string; name: string }[]; onRetry: (id: string, projectId?: string) => Promise<void> }) {
+  return <form className="flex basis-full items-center gap-2 text-xs" onSubmit={(e) => { e.preventDefault(); void onRetry(row.id, String(new FormData(e.currentTarget).get('projectId') || '') || undefined); }}>
+    <span role="alert" className="text-destructive min-w-0 flex-1 truncate" title={row.error ?? ''}>{row.error}</span>
+    <select name="projectId" aria-label="Retry project" className="rounded border bg-background px-1 py-0.5"><option value="">Choose automatically</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+    <button className="rounded border px-2 py-0.5">Retry</button>
+  </form>;
+}
+
+/** The body of a ready thought's Decision card: You said, Assumed, Did, Next, and the redirect field. */
+export function ThoughtReview({ row, tab, onRedirect }: { row: Capture; tab: number; onRedirect: (text: string) => void }) {
+  return <div className="mt-2 space-y-2 text-sm">
+    <p><span className="text-muted-foreground text-xs">You said </span>{row.text}</p>
+    {row.assumptions.length > 0 && <p><span className="text-muted-foreground text-xs">Assumed </span>{row.assumptions.join(' · ')}</p>}
+    {row.summary && <div><span className="text-muted-foreground text-xs">Did </span><span className="whitespace-pre-wrap">{row.summary}</span></div>}
+    {row.next_step && <p><span className="text-muted-foreground text-xs">Next </span>{row.next_step}</p>}
+    <p className="text-muted-foreground font-mono text-[11px]">${Number(row.cost_usd).toFixed(4)} · {minutes(row)} min since capture{row.diff_stat ? ` · ${JSON.stringify(row.diff_stat)}` : ''}</p>
+    <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const text = String(new FormData(e.currentTarget).get('text') ?? ''); onRedirect(text); }}>
+      <input name="text" data-redirect="" tabIndex={tab} aria-label="Redirect thought" placeholder="Redirect this worker… (#project moves it)" required className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm" />
+      <button tabIndex={tab} className="rounded border px-2 text-sm">Redirect</button>
+    </form>
+  </div>;
 }

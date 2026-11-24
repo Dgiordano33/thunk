@@ -1,7 +1,9 @@
 import { NOTIFICATION_LABELS, type Notification, type NotificationKind } from "@/lib/notifications/types";
 
-/** Kinds where an agent is blocked on a person's answer. They keep full cards; everything else is a one-line row. */
-export const DECISION_KINDS: NotificationKind[] = ["permission", "question", "plan", "delegation_plan", "agent_request"];
+/** Kinds where an agent is blocked on a person's answer, or a thought waits for review. They keep full cards; everything else is a one-line row. */
+export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "permission", "question", "plan", "delegation_plan", "agent_request"];
+/** A ready thought closes through Keep, Discard, Go ahead or Redirect, never a bare dismiss that would strand the capture. */
+export const isDismissable = (n: Notification) => n.status === "open" && n.kind !== "capture_ready";
 const DELIVERY_KINDS: NotificationKind[] = ["ci_failed", "ci_stuck", "review_requested", "deploy_ready", "pr_merged"];
 export const FAILED_KINDS: NotificationKind[] = ["turn_failed", "session_error", "run_failed", "ci_failed", "script_failed"];
 
@@ -61,7 +63,7 @@ export function nextFocus(order: string[], removed: string[], current: string | 
 
 /** "Dismiss all" acts on the open items in view; it says so, and asks first when that includes a decision. */
 export function dismissScope(items: Notification[]) {
-  const open = items.filter((n) => n.status === "open");
+  const open = items.filter(isDismissable);
   return { ids: open.map((n) => n.id), count: open.length, decisions: open.filter(isDecision).length };
 }
 
