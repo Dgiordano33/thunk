@@ -12,11 +12,18 @@ First-crack rules: work only in your assigned workspace. Do not push, open a PR,
 
 Lead the final response with what you produced or learned, with relevant evidence. Briefly state any material assumption and a useful next step if there is one. Do not require acknowledgment or approval of completed, reversible work. In the worker-summary fence, set needs_person to none unless a real decision or an action requiring approval is held back; otherwise name that specific decision or action. Mark the outcome done when the first pass is complete and no human input is required. Do not manufacture a blocker.`;
 
-export function captureBrief(text: string, route: { brief: string; assumptions: string[] }) {
+type Route = { brief: string; assumptions: string[] };
+
+/** What the person sees in the task's Details: their words and the router's reading, without worker instructions. */
+export function captureTaskBody(text: string, route: Route) {
   return [
-    CAPTURE_PROMPT,
     "## Original capture\n" + text,
     "## Routing brief (provisional)\n" + route.brief,
     "## Routing assumptions (unverified)\n" + JSON.stringify(route.assumptions),
   ].join("\n\n");
+}
+
+/** What the worker receives: Capture guidance followed by the task body. */
+export function captureBrief(text: string, route: Route) {
+  return CAPTURE_PROMPT + "\n\n" + captureTaskBody(text, route);
 }
