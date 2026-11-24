@@ -3,6 +3,7 @@ import { loadSidebarProjects } from "@/components/layout/sidebar-tree";
 import { AgentSettings } from "@/components/settings/agents";
 import { AppearanceSettings } from "@/components/settings/appearance";
 import { AutomationSettings } from "@/components/settings/automation";
+import { CaptureSettings } from "@/components/settings/capture";
 import { HelpSettings } from "@/components/settings/help";
 import { IntegrationSettings } from "@/components/settings/integrations";
 import { NotificationSettings } from "@/components/settings/notifications";
@@ -21,6 +22,7 @@ export default async function SettingsSectionPage({ params }: PageProps<"/settin
   if (!section) notFound();
   switch (section.id) {
     case "appearance": return <AppearanceSettings />;
+    case "capture": return <CaptureSettings />;
     case "notifications": return <NotificationSettings />;
     case "agents": return <AgentSettings />;
     case "integrations": return <IntegrationSettings />;

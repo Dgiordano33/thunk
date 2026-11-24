@@ -5,6 +5,29 @@ import { CaptureInput } from './capture-input';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import type { Capture } from '@/lib/capture/types';
 import { chipLabel } from '@/lib/capture/chip';
+import { label as shortcutLabel, matches, useIsMac } from '@/lib/capture/shortcut';
+import { useUi } from '@/lib/store/ui-store';
+import { Kbd } from '@/components/ui/kbd';
+import { PenLineIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export const openCapture = () => window.dispatchEvent(new Event('thunk:capture'));
+
+/** The Capture bar: looks like a field, opens the Capture dialog. `hud` sits in the world map's top bar; `sidebar` under Search. */
+export function CaptureTrigger({ variant = 'hud', className }: { variant?: 'hud' | 'sidebar'; className?: string }) {
+  const shortcut = useUi((s) => s.captureShortcut);
+  const mac = useIsMac();
+  const hint = shortcut && mac !== null ? shortcutLabel(shortcut, mac) : '';
+  return (
+    <button type="button" aria-label="Capture a thought" onClick={openCapture}
+      className={cn('text-muted-foreground hover:text-foreground flex items-center gap-2 text-left text-sm transition-colors',
+        variant === 'hud' ? 'h-8 w-full rounded-md px-2.5' : 'bg-background h-10 w-full rounded-md border px-3 hover:bg-muted/50', className)}>
+      <PenLineIcon className="size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">Capture a thought…</span>
+      {hint && <Kbd>{hint}</Kbd>}
+    </button>
+  );
+}
 
 const SETTLED_MS = 4000;
 const MAX_MS = 60_000;
@@ -35,24 +58,25 @@ function SentChip({ id, onDone }: { id: string; onDone: () => void }) {
     return () => { events.close(); clearTimeout(cap); clearTimeout(settle); };
   }, [id, onDone]);
   if (!label) return null;
-  return <div role="status" aria-live="polite" className={`fixed bottom-32 right-5 z-40 rounded-full border bg-background px-3 py-1 text-xs shadow transition-opacity duration-500 md:bottom-16 ${fading ? 'opacity-0' : 'opacity-100'}`}>{label}</div>;
+  return <div role="status" aria-live="polite" className={`fixed top-[calc(4.5rem+env(safe-area-inset-top))] left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background px-3 py-1 text-xs shadow transition-opacity duration-500 ${fading ? 'opacity-0' : 'opacity-100'}`}>{label}</div>;
 }
 
 export function CaptureBar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const shortcut = useUi((s) => s.captureShortcut);
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); setOpen((v) => !v); } };
+    // Capture phase, so the shortcut wins over page handlers such as ⌘K search.
+    const key = (e: KeyboardEvent) => { if (!e.repeat && matches(e, shortcut) && !(e.target as HTMLElement | null)?.closest?.('[data-shortcut-recorder]')) { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); } };
     const show = () => setOpen(true);
-    window.addEventListener('keydown', key);
+    window.addEventListener('keydown', key, true);
     window.addEventListener('thunk:capture', show);
-    return () => { window.removeEventListener('keydown', key); window.removeEventListener('thunk:capture', show); };
-  }, []);
+    return () => { window.removeEventListener('keydown', key, true); window.removeEventListener('thunk:capture', show); };
+  }, [shortcut]);
   const done = useCallback(() => setSent(null), []);
   if (pathname === '/capture') return null;
   return <>
-    <button aria-label="Capture a thought" className="fixed bottom-20 right-5 z-40 rounded-full border bg-background px-4 py-2 text-sm shadow md:bottom-5" onClick={() => setOpen(true)}>Capture</button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Take a first crack</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); }} /></DialogContent></Dialog>
     {sent && <SentChip key={sent} id={sent} onDone={done} />}
   </>;

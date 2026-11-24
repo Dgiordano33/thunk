@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
+import { CaptureTrigger } from "@/components/capture/capture-bar";
 import { api } from "@/lib/client/api";
 import { useNotesEvents, useNotesFeed } from "@/lib/store/notes-store";
 import { useNotifications } from "@/lib/store/notifications-store";
@@ -64,6 +65,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
       </div>
 
       <AmbientHub projects={projects} />
+      <div className="px-2 pt-2"><CaptureTrigger variant="sidebar" /></div>
 
       <div className="px-2 pt-1">
         <Link

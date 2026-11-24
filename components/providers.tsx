@@ -14,19 +14,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { useUi } from "@/lib/store/ui-store";
 import { applyTheme, readTheme } from "@/lib/theme";
+import { APP_SHORTCUT_KEY, readAppShortcut } from "@/lib/capture/shortcut";
 
 export function Providers({ look, initialDesktop, children, onboarding, hasProjects }: { onboarding: HintKey[]; hasProjects: boolean; look: Look; initialDesktop: boolean; children: React.ReactNode }) {
   const captureOnly = usePathname() === "/capture";
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => applyTheme(useUi.getState().theme, media.matches);
-    useUi.setState({ theme: readTheme() });
+    useUi.setState({ theme: readTheme(), captureShortcut: readAppShortcut() });
     apply();
     const unsubscribe = useUi.subscribe((state, previous) => {
       if (state.theme !== previous.theme) apply();
     });
     const onStorage = (event: StorageEvent) => {
       if (event.key === "thunk.theme" || event.key === null) useUi.setState({ theme: readTheme() });
+      if (event.key === APP_SHORTCUT_KEY || event.key === null) useUi.setState({ captureShortcut: readAppShortcut() });
     };
     media.addEventListener("change", apply);
     window.addEventListener("storage", onStorage);
