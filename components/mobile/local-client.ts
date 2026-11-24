@@ -7,8 +7,15 @@ const noop = () => () => {};
 
 /**
  * True when this browser runs on the same machine as the Thunk server, so host-side actions
- * (the macOS folder dialog, Reveal in Finder) show up in front of the user. False during SSR.
+ * (the native folder dialog, revealing a folder) show up in front of the user. False during SSR.
  */
 export function useLocalClient() {
   return useSyncExternalStore(noop, () => LOOPBACK.has(window.location.hostname), () => false);
+}
+
+/** The host's file manager as the user knows it. Only meaningful for a local client, whose OS is the host's. */
+export function fileManagerName() {
+  if (typeof navigator === "undefined") return "Finder";
+  const ua = navigator.userAgent;
+  return /Windows/.test(ua) ? "Explorer" : /Mac OS X|Macintosh/.test(ua) ? "Finder" : "file manager";
 }

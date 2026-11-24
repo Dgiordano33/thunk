@@ -49,7 +49,7 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
   onError: (message: string | null) => void;
 }) {
   const set = (patch: Partial<RepoDraft>) => onChange({ ...draft, ...patch });
-  // The macOS dialog opens on the host, so only use it when this browser is on the host too.
+  // The native dialog opens on the host, so only use it when this browser is on the host too.
   const local = useLocalClient();
   const [browsing, setBrowsing] = useState<{ prompt: string; current: string; field: "path" | "parent" } | null>(null);
   const pick = async (prompt: string, current: string, field: "path" | "parent") => {
@@ -60,8 +60,8 @@ export function RepoSourceFields({ draft, onChange, picking, onPicking, onError 
       const picked = (await api.pickFolder({ prompt, defaultPath: current || undefined })).path;
       if (picked) set({ [field]: picked });
     } catch (err) {
-      // No native dialog on this host (not macOS): browse in the page instead.
-      if (/only available on macOS/.test((err as Error).message)) setBrowsing({ prompt, current, field });
+      // No native dialog on this host (e.g. Linux without zenity): browse in the page instead.
+      if (/No folder dialog on this host|only available on macOS/.test((err as Error).message)) setBrowsing({ prompt, current, field });
       else onError((err as Error).message);
     } finally {
       onPicking(false);

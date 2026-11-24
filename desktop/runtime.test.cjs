@@ -1,16 +1,18 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = require("node:fs");
+const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, copyFileSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
-const { startBackend, configuredRemote, externalUrl } = require("./runtime.cjs");
+const { startBackend, configuredRemote, externalUrl, toolPath, nodeBinary } = require("./runtime.cjs");
 
 function fixture(t, source) {
   const root = mkdtempSync(path.join(tmpdir(), "thunk-desktop-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, "bin"));
   mkdirSync(path.join(root, "server"));
-  symlinkSync(process.execPath, path.join(root, "bin/node"));
+  // Windows symlinks need extra privileges, so copy the runtime there.
+  if (process.platform === "win32") copyFileSync(process.execPath, path.join(root, "bin/node.exe"));
+  else symlinkSync(process.execPath, path.join(root, "bin/node"));
   writeFileSync(path.join(root, "server/server.js"), source);
   const config = path.join(root, ".env");
   writeFileSync(config, "DESKTOP_TEST_SETTING=loaded\nHOSTNAME=0.0.0.0\nPORT=1\n");
@@ -72,4 +74,14 @@ test("THUNK_REMOTE_URL in the config selects a server origin", (t) => {
   assert.equal(remote("THUNK_REMOTE_URL= https://thunk.tail1234.ts.net:8443/ \n"), "https://thunk.tail1234.ts.net:8443");
   assert.throws(() => remote("THUNK_REMOTE_URL=thunk.tail1234.ts.net\n"), /must be a URL/);
   assert.throws(() => remote("THUNK_REMOTE_URL=file:///etc/passwd\n"), /must start with https/);
+});
+
+test("bundled tools go first on PATH, with a bundled MinGit when present", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "thunk-tools-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.equal(toolPath(root), path.join(root, "bin"));
+  mkdirSync(path.join(root, "bin", "git", "cmd"), { recursive: true });
+  assert.equal(toolPath(root), [path.join(root, "bin"), path.join(root, "bin", "git", "cmd")].join(path.delimiter));
+  assert.equal(nodeBinary(root, "win32"), path.join(root, "bin", "node.exe"));
+  assert.equal(nodeBinary(root, "linux"), path.join(root, "bin", "node"));
 });

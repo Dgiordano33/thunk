@@ -5,13 +5,14 @@ const { readFileSync, writeFileSync, renameSync, existsSync, rmSync } = require(
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const exec = promisify(execFile);
+const { gitVersion } = require('./prerequisites.cjs');
 
 function readKey(file, storage = safeStorage) {
   if (!existsSync(file)) return undefined;
   return storage.decryptString(readFileSync(file));
 }
 function saveKey(file, key, storage = safeStorage) {
-  if (!storage.isEncryptionAvailable()) throw new Error('Secure credential storage is unavailable. Unlock your macOS keychain and try again.');
+  if (!storage.isEncryptionAvailable()) throw new Error('Secure credential storage is unavailable. Unlock your system keychain (on Linux, a keyring such as GNOME Keyring or KWallet) and try again.');
   writeFileSync(file + '.tmp', storage.encryptString(key), { mode: 0o600 });
   renameSync(file + '.tmp', file);
 }
@@ -23,6 +24,8 @@ function connections({ app, env, configKey }) {
   const run = (provider, args) => exec(commands[provider], args, { env, timeout: 10000 });
   const status = async () => {
     const result = { claude: existsSync(file) ? 'Key saved · restart after changes' : configKey ? 'Configured outside Connections' : 'Not connected' };
+    const git = await gitVersion(env);
+    result.git = git ? `Installed · ${git}` : 'Not installed';
     await Promise.all(['codex', 'github'].map(async provider => {
       try { await run(provider, provider === 'codex' ? ['login', 'status'] : ['auth', 'status', '--hostname', 'github.com']); result[provider] = 'Connected'; }
       catch (error) { result[provider] = error.code === 'ENOENT' ? 'Not installed · rebuild with bundled tools' : 'Not connected'; }

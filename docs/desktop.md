@@ -1,4 +1,16 @@
-# Thunk for macOS
+# Thunk desktop app
+
+Thunk packages as a standalone desktop app for macOS, Linux and Windows. Each build bundles Electron, Thunk's production server, Node, the Claude SDK runtime, node-pty, Codex CLI, ripgrep and GitHub CLI for the machine it is built on. There is no cross-compilation: build on each platform and architecture, or let the [release workflow](#publish-all-builds) do it.
+
+| Platform | Build output | Share as | Git |
+|---|---|---|---|
+| macOS | `dist-desktop/mac-arm64/Thunk.app` (`mac` on Intel) | `Thunk-<version>-Apple-Silicon.zip` / `Intel.zip` | Apple's Command Line Tools |
+| Linux | `dist-desktop/linux-unpacked/thunk` (`linux-arm64-unpacked` on ARM) | `Thunk-<version>-Linux-x64.tar.gz` / `Linux-ARM64.tar.gz` | Your package manager |
+| Windows | `dist-desktop/win-unpacked/Thunk.exe` | `Thunk-<version>-Windows-x64.zip` | Bundled (MinGit) when built with `THUNK_MINGIT_DIR` |
+
+`npm run desktop:pack` builds the unpacked app for the current machine, and `npm run desktop:release` also smoke-tests and archives it. Thunk checks for Git when it starts; if it is missing, a dialog explains how to install it on that platform (on a Mac it offers to start Apple's Command Line Tools installer). **Thunk → Connections** also shows whether Git is installed.
+
+## macOS
 
 Build a local, ad-hoc signed `Thunk.app` without an Apple Developer account:
 
@@ -14,12 +26,48 @@ You can copy the generated app to `/Applications` and launch it from Finder. The
 
 `npm run desktop:dev` prepares the same production backend and opens it in an unpackaged Electron window. `npm run test:desktop` tests startup, shutdown, configuration loading, startup failures, and external-link filtering. Packaging also runs a real PTY check using the copied Node executable. For an isolated smoke test of the finished bundle, run `node scripts/smoke-desktop.mjs dist-desktop/mac-arm64/Thunk.app/Contents/Resources/backend` (use `mac` on Intel). This checks UI assets, API access and origin protection, the bundled PTY and Claude executables, shutdown, and package isolation without using your data or credentials.
 
+## Linux
+
+```sh
+npm ci
+npm run desktop:pack
+dist-desktop/linux-unpacked/thunk
+```
+
+Build with an official Node.js 22.16+ or 24+ (nodejs.org or nvm), not a distro package: the build bundles that Node executable and rejects one that links libraries outside glibc. Install GitHub CLI (`gh`) and a C++ toolchain first; node-pty compiles from source on Linux. Run the app from any folder you own.
+
+Linux specifics:
+
+- **Sandbox.** Electron needs either unprivileged user namespaces or a setuid `chrome-sandbox`. On distributions that restrict namespaces (Ubuntu 24.04 and later), run once from the app folder: `sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox`.
+- **Folder dialog.** Choosing a folder uses `zenity` (GNOME) or `kdialog` (KDE). Without either, Thunk shows its in-page folder browser instead.
+- **Reveal in file manager** uses the desktop's FileManager1 service, falling back to `xdg-open`.
+- **API key storage** uses your keyring (GNOME Keyring or KWallet) through Electron safeStorage. Without one, saving a key in Connections fails; set `ANTHROPIC_API_KEY` in **Thunk → Show Configuration** instead.
+- **PATH.** Like on macOS, Thunk reads your login shell's PATH so nvm, asdf and other tools are found when launched from an app menu.
+
+## Windows
+
+```powershell
+npm ci
+npm run desktop:pack
+dist-desktop\win-unpacked\Thunk.exe
+```
+
+Install GitHub CLI first. To bundle Git, unzip a `MinGit-*-64-bit.zip` from the [Git for Windows releases](https://github.com/git-for-windows/git/releases) and set `THUNK_MINGIT_DIR` to that folder before packaging; the release workflow does this. Without it, recipients install Git for Windows themselves (`winget install --id Git.Git -e`).
+
+Windows specifics:
+
+- **Shells.** `thunk.json` scripts and chart source commands run through `cmd.exe` (as `npm run` does), and the workspace terminal opens PowerShell. Set `SHELL` to a POSIX shell such as Git Bash's `bash.exe` in **Thunk → Show Configuration** to use it for both instead.
+- **The build is unsigned**, so SmartScreen may ask for confirmation on first launch.
+- **Build Update from Source** is macOS-only; on Windows and Linux, download a new release and replace the folder.
+
+Windows support is new and has had less real-world use than macOS and Linux; please report problems.
+
 ## Connections
 
 On first launch, a Connections window opens. Reopen it with **Thunk → Connections…**. It is available for local desktop mode only; remote server credentials must be configured on the server.
 
 - **Codex:** click Connect ChatGPT, then Open sign-in page and enter the displayed device code. Device sign-in must be enabled for your account. Existing Codex CLI authentication is recognized; this uses the same credentials as the CLI.
-- **Claude:** paste an Anthropic API key and Save connection. Thunk validates it without starting an agent turn and encrypts it with Electron safeStorage (macOS Keychain). API usage is billed separately from Claude subscriptions. Quit and reopen Thunk after saving or removing the key; finish active work first. A saved key overrides `ANTHROPIC_API_KEY` in the desktop configuration. Removing it falls back to any key or authentication already configured outside Connections. The UI never displays a stored key. Existing local Claude authentication continues to work as before; Connections does not provide Claude subscription login.
+- **Claude:** paste an Anthropic API key and Save connection. Thunk validates it without starting an agent turn and encrypts it with Electron safeStorage (macOS Keychain, Windows DPAPI, or the Linux keyring). API usage is billed separately from Claude subscriptions. Quit and reopen Thunk after saving or removing the key; finish active work first. A saved key overrides `ANTHROPIC_API_KEY` in the desktop configuration. Removing it falls back to any key or authentication already configured outside Connections. The UI never displays a stored key. Existing local Claude authentication continues to work as before; Connections does not provide Claude subscription login.
 - **GitHub:** click Connect GitHub, then complete browser authorization with the displayed code. GitHub CLI stores credentials using its supported credential store. Existing CLI authentication is shared. This does not install Git or configure SSH keys.
 
 Closing Connections cancels a pending login. You can skip setup and return later. For Codex/GitHub account removal, use their CLI logout commands; the UI deliberately does not silently sign other apps out of shared accounts.
@@ -39,14 +87,14 @@ Send the ZIP for the recipient’s processor. They unzip it, move Thunk to Appli
 
 Set `THUNK_RELEASE_REPO=owner/downloads` in the desktop configuration to use a different release repository. This is independent of `THUNK_UPDATE_REPO`, which controls builds from source. GitHub requires repository access for downloads from a private repository; use a public download repository to share with people who cannot access your source.
 
-## Publish both Mac builds
+## Publish all builds
 
-The workflow `.github/workflows/desktop-release.yml` builds on native Apple Silicon and Intel runners, smoke-tests each bundle, and creates a **draft** release with both ZIPs and checksums. It does not publish automatically.
+The workflow `.github/workflows/desktop-release.yml` builds on native runners (macOS Apple Silicon and Intel, Linux x64 and ARM64, Windows x64), smoke-tests each bundle, and creates a **draft** release with every archive and checksum. The Windows job downloads MinGit from the latest Git for Windows release and bundles it. It does not publish automatically.
 
 1. Merge the changes you want to distribute into your release branch (normally `main`).
 2. Set a fresh version in `desktop/package.json`, such as `0.1.1`, and commit it.
 3. Tag that commit and push the tag: `git tag v0.1.1` then `git push origin v0.1.1`. The tag must match the desktop version exactly.
-4. Wait for the **Desktop release** workflow to pass for both architectures.
+4. Wait for the **Desktop release** workflow to pass for every platform.
 5. Open GitHub Releases, review the draft and publish it. Share the release link.
 
 GitHub Actions must be enabled, with permission to create releases. Builds need internet access and available macOS runner minutes. The workflow uses GitHub CLI preinstalled on those runners. No Apple signing secrets are required for this ad-hoc distribution path.

@@ -1,4 +1,6 @@
-const { test } = require("node:test");
+const { test: nodeTest } = require("node:test");
+// The source updater rebuilds a macOS .app with shell-script fakes; it is not offered on Windows.
+const test = (name, fn) => nodeTest(name, { skip: process.platform === "win32" && "macOS/Unix only" }, fn);
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");

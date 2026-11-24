@@ -2,7 +2,7 @@
 import { FolderIcon } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { toast } from "sonner";
-import { useLocalClient } from "@/components/mobile/local-client";
+import { fileManagerName, useLocalClient } from "@/components/mobile/local-client";
 
 /** The scratch folder a repo-less project works in, drawn like the workspace panel's Files row. */
 export function WorkspaceDirectory({ id, cwd }: { id: string; cwd: string }) {
@@ -15,7 +15,7 @@ export function WorkspaceDirectory({ id, cwd }: { id: string; cwd: string }) {
     </div>
     {local ? <button
       type="button"
-      title="Reveal in Finder"
+      title={`Reveal in ${fileManagerName()}`}
       className="text-muted-foreground hover:text-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono"
       onClick={() => void api.revealWorkspace(id).catch((err: Error) => toast.error("Couldn’t reveal the folder", { description: err.message }))}
     >{path}</button> : <p className="text-muted-foreground mt-1.5 flex max-w-full items-center gap-1 font-mono">{path}</p>}

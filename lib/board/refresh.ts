@@ -1,6 +1,7 @@
 import 'server-only';
 import { execFile } from 'node:child_process';
 import { HttpError } from '@/lib/api/errors';
+import { commandShell } from '@/lib/host/shell';
 import { ensureMainWorkspace } from '@/lib/projects';
 import type { Project } from '@/lib/projects/types';
 import { applyRefresh } from './chart';
@@ -10,7 +11,8 @@ const TIMEOUT_MS = 60_000, MAX_OUTPUT = 5_000_000;
 
 /** Runs a command in the user's login shell and returns its stdout. */
 export function runSource(command: string, cwd: string) {
-    return new Promise<string>((resolve, reject) => execFile(process.env.SHELL || '/bin/bash', ['-lc', command], { cwd, timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT, env: process.env }, (error, stdout, stderr) => {
+    const shell = commandShell(command);
+    return new Promise<string>((resolve, reject) => execFile(shell.file, shell.args, { cwd, timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT, env: process.env, windowsVerbatimArguments: shell.verbatim }, (error, stdout, stderr) => {
         if (!error)
             return resolve(stdout);
         const reason = error.killed ? `timed out after ${TIMEOUT_MS / 1000}s` : `exited with ${error.code ?? 'an error'}`;
