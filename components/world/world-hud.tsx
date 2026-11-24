@@ -4,6 +4,7 @@ import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileTopBar } from "@/components/mobile/top-bar";
 import { usePathname } from "next/navigation";
 import { AmbientHub } from "@/components/ambient/ambient-hub";
+import { CaptureTrigger } from "@/components/capture/capture-bar";
 import { AddProjectForm } from "@/components/home/add-project-form";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
@@ -27,6 +28,9 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount, notifi
       {!desktop ? <MobileTopBar title={crumbs.at(-1)?.label ?? "Thunk"} back={parent?.href ?? null} backLabel={parent ? `Back to ${parent.label}` : undefined} actions={<><AmbientHub projects={projects} variant="hud" />{home && <AddProjectForm compact />}</>} /> : <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
         <CivPanel className="pointer-events-auto min-w-0 max-w-full" bodyClassName="flex min-w-0 items-center gap-3 px-3 py-1.5">
           <HudTitle projects={projects} noteCount={noteCount} />
+        </CivPanel>
+        <CivPanel className="pointer-events-auto w-full max-w-md min-w-48 flex-1" bodyClassName="flex items-center p-1">
+          <CaptureTrigger />
         </CivPanel>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
           <CivPanel bodyClassName="flex items-center p-1">
