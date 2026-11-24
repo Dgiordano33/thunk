@@ -1,5 +1,8 @@
 "use client";
 
+import { Thoughts, ThoughtReview } from "@/components/capture/thoughts";
+import { useCaptures } from "@/components/capture/use-captures";
+import type { Capture } from "@/lib/capture/types";
 import { FloatingWindow } from "@/components/world/floating-window";
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
@@ -29,7 +32,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/hint";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { QuickContext } from "./quick-context";
-import { describe, destination, dismissScope, FAILED_KINDS, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, sectionOf, type Group } from "./model";
+import { describe, destination, dismissScope, FAILED_KINDS, isDismissable, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, sectionOf, type Group } from "./model";
 
 /** Group rows past this many fold behind "Show N more" so one noisy PR can't push decisions off screen. */
 const GROUP_PREVIEW = 5;
@@ -68,6 +71,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const [context, setContext] = useState<Set<string>>(() => new Set());
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const captures = useCaptures();
   const [confirm, setConfirm] = useState<{ ids: string[]; decisions: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
@@ -93,6 +97,9 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const scoped = live.filter((n) => projectId === "all" || n.projectId === projectId);
   const visible = scoped.filter((n) => kind === "all" || n.kind === kind);
   const decisions = visible.filter((n) => sectionOf(n) === "decision");
+  // A ready thought is a Decision row, in time order with the rest; the Thoughts field above lists only the ones still under way.
+  const readyCapture = (n: Notification): Capture | undefined => n.kind === "capture_ready" ? captures.rows.find((r) => r.status === "ready" && `capture:${r.id}` === n.subjectKey) : undefined;
+  const inFeed = new Set(live.filter((n) => n.status === "open").map((n) => readyCapture(n)?.id).filter((id): id is string => !!id));
   const followups = visible.filter((n) => sectionOf(n) === "followup");
   const earlier = visible.filter((n) => sectionOf(n) === "earlier");
   const groups = groupFollowups(followups);
@@ -234,12 +241,12 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
       e.preventDefault();
       if (e.key === "c") toggleContext(id); else openReply(id);
     }
-    else if (e.key === "x" || e.key === " " && onRow) { e.preventDefault(); toggleSelect(id); }
+    else if (e.key === "x" || e.key === " " && onRow) { const n = visible.find((v) => v.id === id); if (!n || !isDismissable(n)) return; e.preventDefault(); toggleSelect(id); }
     else if (e.key === "e") {
       e.preventDefault();
       if (selected.size) { dismissMany([...selected]); return; }
       const n = visible.find((v) => v.id === id);
-      if (n?.status === "open") void dismiss([id], `“${describe(n).lead}”`);
+      if (n && isDismissable(n)) void dismiss([id], `“${describe(n).lead}”`);
     } else if (e.key === "Escape" && selected.size) { e.preventDefault(); setSelected(new Set()); }
   }
 
@@ -254,7 +261,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
       <time className="shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
     </>;
   };
-  const selectBox = (n: Notification, active: boolean, lead: string) => n.status === "open" && (
+  const selectBox = (n: Notification, active: boolean, lead: string) => isDismissable(n) && (
     <button type="button" tabIndex={active ? 0 : -1} aria-pressed={selected.has(n.id)} aria-label={`Select “${lead}”`} onClick={() => toggleSelect(n.id)}
       className={cn("text-muted-foreground hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-sm outline-none", RING, selected.has(n.id) && "text-foreground")}>
       {selected.has(n.id) ? <SquareCheckIcon aria-hidden="true" className="size-4" /> : <SquareIcon aria-hidden="true" className="size-4" />}
@@ -264,7 +271,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     "data-notification": true, "data-id": n.id, tabIndex: n.id === focusId ? 0 : -1, "aria-label": label,
     onFocus: () => setActiveId(n.id),
   });
-  const dismissButton = (n: Notification, active: boolean, lead: string) => n.status === "open" && (
+  const dismissButton = (n: Notification, active: boolean, lead: string) => isDismissable(n) && (
     <Hint label="Dismiss" keys="e"><Button data-dismiss size="icon" variant="ghost" tabIndex={active ? 0 : -1} className={cn("text-muted-foreground shrink-0", RING)} aria-label={`Dismiss “${lead}”`} disabled={pending.has(n.id)} onClick={() => void dismiss([n.id], `“${lead}”`)}><XIcon /></Button></Hint>
   );
 
@@ -323,6 +330,35 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             {contextPanel(n, lead)}
           </div>
         </div>
+      </article>
+    );
+  };
+  /** A ready thought: what you said, what the worker assumed and did, and the one step it held back. */
+  const thoughtCard = (n: Notification, row: Capture) => {
+    const project = projects.find((p) => p.id === n.projectId);
+    const active = n.id === focusId;
+    const tab = active ? 0 : -1;
+    const lead = row.title || row.text;
+    const go = (action: string, text?: string) => { armAdvance(n); void captures.act(row.id, action, text); };
+    return (
+      <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className="bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5">
+        <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="text-foreground/80 font-medium">{NOTIFICATION_LABELS[n.kind]}</span>
+          <span aria-hidden="true" className="text-muted-foreground/50">/</span>
+          <span className="truncate">{project?.name || "Home"}{row.mode === "scout" ? " · scout" : ""}</span>
+          <time className="ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
+        </div>
+        <h3 className="text-[15px] leading-relaxed font-medium break-words">{lead}</h3>
+        <ThoughtReview row={row} tab={tab} onRedirect={(text) => go("redirect", text)} />
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("continue")}>{row.next_step ? `Go ahead: ${row.next_step}` : "Go ahead"}</Button></Hint>
+          <Hint label="Redirect" keys="2"><Button data-action="2" tabIndex={tab} variant="outline" className={RING} onClick={(e) => e.currentTarget.closest("article")?.querySelector<HTMLInputElement>("[data-redirect]")?.focus()}>Redirect…</Button></Hint>
+          <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant="outline" className={RING} onClick={() => go("discard")}>Discard</Button></Hint>
+          <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => go("keep")}>Keep</Button>
+          {contextButton(n, active, lead, true)}
+          {row.session_id && row.workspace_id && <Button asChild tabIndex={tab} variant="ghost" className={RING}><Link data-open="" href={`/w/${row.workspace_id}/s/${row.session_id}`}>Open session<ArrowUpRightIcon aria-hidden="true" /></Link></Button>}
+        </div>
+        {contextPanel(n, lead)}
       </article>
     );
   };
@@ -396,6 +432,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           <p className={cn("text-muted-foreground border-t px-5 pt-4 text-xs leading-relaxed", process.env.NODE_ENV === "development" ? "pb-20" /* clears the Next dev badge */ : "pb-4")}>Decisions stay until you answer or dismiss them. Follow-ups, like failed CI, clear themselves once fixed.</p>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
+          <Thoughts projects={projects} captures={captures} inFeed={inFeed} />
           <header className={cn("shrink-0 border-b px-5 sm:px-8", compact ? "py-3" : "pb-4 pt-5 sm:pt-7")}>
             <div className={cn("flex gap-x-4 gap-y-2", compact ? "flex-wrap items-center" : "items-start")}>
               <div className={cn("min-w-0", compact ? "flex items-baseline gap-3" : "flex-1")}>
@@ -444,7 +481,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             {loaded && visible.length > 0 && <>
               {(decisions.length > 0 || kind === "all") && <section aria-labelledby="decisions-heading">
                 <div className="mb-3 flex items-center gap-3"><h2 id="decisions-heading" className="pixel text-sm tracking-wide">Decisions</h2>{countBadge(decisions.length)}<span className="bg-border h-px flex-1" /></div>
-                <div className="space-y-3">{decisions.map(decisionCard)}</div>
+                <div className="space-y-3">{decisions.map((n) => { const row = readyCapture(n); return row ? thoughtCard(n, row) : decisionCard(n); })}</div>
                 {!decisions.length && <p className="text-muted-foreground flex items-center gap-2 pb-2 text-xs"><CheckCheckIcon aria-hidden="true" className="size-4 text-emerald-700 dark:text-emerald-400" />No agent is waiting on a decision.</p>}
               </section>}
               {groups.length > 0 && <section className={cn(decisions.length > 0 || kind === "all" ? "mt-8" : "")} aria-labelledby="followups-heading">

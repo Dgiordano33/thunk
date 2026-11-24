@@ -8,7 +8,7 @@ const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const root = path.resolve(__dirname, "../..");
-let state, query = "";
+let state, query = "", captureRows = [];
 const originalResolve = Module._resolveFilename;
 const originalLoad = Module._load;
 Module._resolveFilename = function (name, ...rest) {
@@ -23,6 +23,7 @@ for (const ext of [".ts", ".tsx"]) require.extensions[ext] = (mod, filename) => 
 }).outputText, filename);
 Module._load = function (name, ...rest) {
   if (name === "@/lib/store/notifications-store") return { useNotifications: (select) => select(state), useNotificationsEvents() {}, refreshNotifications() {} };
+  if (name === "@/components/capture/use-captures") return { useCaptures: () => ({ rows: captureRows, limit: 8, error: "", rule: null, setRule() {}, refresh: async () => {}, act: async () => true, retry: async () => {} }) };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(query) };
   if (name === "@/components/ai-elements/message") return { MessageResponse: ({ children }) => React.createElement("div", null, children) };
   if (name === "@/components/hint") return { Hint: ({ children }) => children };
@@ -61,6 +62,24 @@ test("project filter excludes other projects and failure does not look like load
   assert.match(filtered, /Nightly checks completed/); assert.doesNotMatch(filtered, /Allow the agent/);
   const failed = renderInbox({ loaded: false, error: "Connection lost" });
   assert.match(failed, /Your inbox couldn’t load/); assert.doesNotMatch(failed, /Loading inbox|All caught up/);
+});
+test("a ready thought is a Decision in time order; thoughts under way stay in the quiet list above", () => {
+  const at = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
+  const thought = (id, status, over = {}) => ({ id, text: `Thought ${id}`, status, project_id: "thunk", task_id: `t-${id}`, workspace_id: "inbox", session_id: `s-${id}`, mode: "scout", title: `Look into ${id}`, assumptions: ["Meant Thunk"], next_step: status === "ready" ? "Open a PR" : null, summary: status === "ready" ? "Found the flaky test" : null, diff_stat: null, cost_usd: 0.12, error: null, created_at: at(30), updated_at: at(5), ...over });
+  captureRows = [thought("ready1", "ready"), thought("busy", "working")];
+  const decisions = sample.filter((n) => n.status === "open").map((n, i) => ({ ...n, createdAt: at(i === 0 ? 1 : 10) }));
+  const ready = { ...base, id: "thought", kind: "capture_ready", urgency: "action", status: "open", subjectKey: "capture:ready1", sessionId: "s-ready1", title: "Look into ready1", createdAt: at(5) };
+  const html = renderInbox({ items: [...decisions, ready].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), counts: { total: 3, action: 3, byProject: { thunk: 3 } } });
+  captureRows = [];
+  const card = html.indexOf('aria-label="Thought ready: Look into ready1"');
+  assert.ok(card > 0, "the ready thought renders as a row in the feed");
+  assert.ok(html.indexOf("Allow the agent") < card && card < html.indexOf("inbox implementation plan"), "newest first, interleaved with other decisions");
+  assert.match(html, /Go ahead: Open a PR/); assert.match(html, /You said/); assert.match(html, /Found the flaky test/);
+  assert.match(html, /data-action="3"[^>]*>Discard/);
+  assert.doesNotMatch(html, /Dismiss “Look into ready1”/, "a thought closes through Keep or Discard, not dismiss");
+  assert.match(html, /Thought busy/); assert.match(html, /Working · Thunk/);
+  assert.equal((html.match(/Thought ready1/g) || []).length, 1, "the ready thought is not repeated in the quiet list");
+  assert.equal((html.match(/data-notification="true"[^>]*tabindex="0"|tabindex="0"[^>]*data-notification="true"/g) || []).length, 1, "one roving tab stop across thoughts and decisions");
 });
 const ci = (i, projectId = "thunk") => ({ ...base, projectId, id: `ci-${projectId}-${i}`, kind: "ci_failed", urgency: "action", status: "open", subjectKey: `pr:${i}:ci`,
   title: `CI failed · #${850 + i}`, detail: `Fix flaky test ${i}`, href: `https://github.com/acme/thunk/pull/${850 + i}`, createdAt: new Date(Date.now() - 86400000 - i * 1000).toISOString() });

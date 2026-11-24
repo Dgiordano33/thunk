@@ -9,3 +9,8 @@ contextBridge.exposeInMainWorld('thunkDesktop', {
     return () => ipcRenderer.removeListener('thunk:sync-progress', listener);
   },
 });
+
+contextBridge.exposeInMainWorld('thunkCapture', {
+  settings: (shortcut) => ipcRenderer.invoke('capture:settings', shortcut),
+  hide: () => ipcRenderer.send('capture:hide'),
+});

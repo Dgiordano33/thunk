@@ -332,3 +332,9 @@ A card is placed by `left: var(--hold-x, <x>)` / `top: var(--hold-y, <y>)`: whil
 - Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing application code, as required by `AGENTS.md`.
 
 In the game look, the workspace shell opts into the moonlit palette through `.moonlit`; in the solar-system look it sits on the sky (`.sky-surface`) with the twilight surfaces, in light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
+
+### Thoughts
+
+A shared Capture field sits above the Inbox feed, with a quiet list of thoughts still under way (routing, queued, working) or needing a retry. A ready thought is a Decision: it sits in the Decisions list in time order with permissions and questions, shares the list's single tab stop and keys, and shows You said, Assumed, Did and Next. 1 Go ahead authorizes the named next step; 2 Redirect resumes the worker (a project tag moves the work); 3 Discard stops it and offers Undo; Keep closes it. A ready thought has no dismiss or select, so it can't leave the feed without one of those. The capture_ready notification is the row.
+
+Capture also opens through Command/Ctrl+Shift+K, the HUD button, the mobile navigation button, and the desktop shortcut (configured under Appearance). Dismissed drafts survive closing the bar. The desktop window is frameless and always on top; submission, Escape or blur hides it.

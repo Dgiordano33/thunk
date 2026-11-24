@@ -1,3 +1,4 @@
+import { captureTask } from '@/lib/db/repo/captures';
 import "server-only";
 import { linearBranch } from "@/lib/integrations/linear/sync";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
@@ -141,6 +142,7 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
       entries.push({ sessionId: live.id, workspaceId: workspace.id, model: live.meta.model });
     }
     const [first] = started;
+    await captureTask(task.id, {status:'working', session_id:first.id, workspace_id:first.meta.workspaceId});
     await patchTask(task.id, { workspaceId: first.meta.workspaceId, sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
     await updateWorkerState(project, (s) => {
       const now = new Date().toISOString();
@@ -211,6 +213,7 @@ export async function drainQueue(projectId: string) {
         await launch(project, task, item.input, chiefId, note);
         startedIds.push(task.id);
       } catch (err) {
+        await captureTask(task.id, {status:'failed', error:(err as Error).message});
         await tellChief(chiefId, `<worker_queue task="${task.id}" status="blocked">Queued task "${task.title}" failed to start: ${(err as Error).message}</worker_queue>`);
       }
     }
@@ -305,8 +308,8 @@ export async function stopWorker(projectId: string, taskId: string, reason: stri
   }
   const { task, session } = await ownedWorker(projectId, taskId);
   const race = session.origin?.kind === "worker" && session.origin.raceId && project ? (await readWorkerState(project)).races[session.origin.raceId] : null;
-  for (const id of race && !race.winner ? race.entries.map((e) => e.sessionId) : [session.id]) closeSession(id);
   await patchTask(task.id, { status: "cancelled" });
+  for (const id of race && !race.winner ? race.entries.map((e) => e.sessionId) : [session.id]) closeSession(id);
   if (project) await appendWorkLog(project, `[chief] cancelled: ${task.title} · ${reason}`);
   scheduleDrain(projectId);
 }
@@ -344,6 +347,7 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
       }
       return { ...row };
     });
+    const capture = ownsTask && !newerTurn && task?.status !== 'cancelled' ? await captureTask(origin.taskId, {status: status === 'done' || status === 'blocked' ? 'ready' : 'failed', summary:report.summary, diff_stat:report.diffStat, cost_usd:stats?.costUsd ?? result.costUsd ?? 0, next_step:needsPerson || null, error:result.error}) : null;
     const overlaps = origin.scout ? [] : (await workerOverlaps(await openWorkerWorkspaces(meta.projectId))).get(origin.taskId) ?? [];
     const lines = [
       report.summary, result.error ?? "", needsPerson ? `Needs person: ${needsPerson}` : "",
@@ -354,7 +358,7 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
       `Workspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}`,
     ];
     const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
-    await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
+    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
     await queueReport(ctx.project, meta, seq, content);
     scheduleDrain(meta.projectId);
