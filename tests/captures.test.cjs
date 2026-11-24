@@ -1,0 +1,26 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const ts=require('typescript');
+const fs=require('node:fs');
+const path=require('node:path');
+const Module=require('node:module');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f);
+const resolve=Module._resolveFilename;
+Module._resolveFilename=function(r,...args){if(r.startsWith('@/'))r=path.join(__dirname,'..',r.slice(2)+'.ts');return resolve.call(this,r,...args);};
+const load=Module._load;
+Module._load=function(r,p,m){
+ if(r==='@/lib/notifications/service')return {notify:async()=>{}};
+ if(r==='server-only')return {};
+ if(r==='../server')return {db:()=>null};
+ if(r==='@/lib/notifications/brief')return {runWithClaude:()=>{throw Error('No real model in tests');}};
+ if(r==='@/lib/home/service')return {routeTargets:async()=>[{projectId:'p',name:'Project',slug:'project',workspaces:[]}],projectsOverview:async()=>[],ensureHomeProject:async()=>({id:'home',dataKey:'home'})};
+ if(r==='@/lib/projects/memory')return {readMemory:async()=>''};
+ return load.call(this,r,p,m);
+};
+const {routeCapture}=require('../lib/capture/router.ts');
+const repo=require('../lib/db/repo/captures.ts');
+const result=(projectId=null)=>JSON.stringify({projectId,mode:'worktree',title:'Try it',brief:'Build it',assumptions:['A guess']});
+test('unmatched routing uses a Home scout',async()=>{const r=await routeCapture('look into this',undefined,async()=>result());assert.equal(r.projectId,'home');assert.equal(r.mode,'scout');});
+test('project tags override model choice',async()=>{const r=await routeCapture('fix #project',undefined,async()=>result());assert.equal(r.projectId,'p');});
+test('invalid model output retries once',async()=>{let calls=0;await assert.rejects(routeCapture('test',undefined,async()=>{calls++;return '{}';}));assert.equal(calls,2);});
+test('worker lifecycle updates linked captures and excludes closed records',async()=>{await repo.saveCapture({id:'c',task_id:'task',status:'queued'},true);await repo.captureTask('task',{status:'working',session_id:'s'});assert.equal((await repo.listCaptures())[0].status,'working');await repo.captureTask('task',{status:'ready',summary:'Done'});assert.equal((await repo.listCaptures())[0].summary,'Done');await repo.captureTask('task',{status:'kept'});assert.equal((await repo.listCaptures()).length,0);assert.equal((await repo.listCaptures(true)).length,1);});

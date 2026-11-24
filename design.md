@@ -332,3 +332,9 @@ A card is placed by `left: var(--hold-x, <x>)` / `top: var(--hold-y, <y>)`: whil
 - Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing application code, as required by `AGENTS.md`.
 
 In the game look, the workspace shell opts into the moonlit palette through `.moonlit`; in the solar-system look it sits on the sky (`.sky-surface`) with the twilight surfaces, in light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
+
+### Thoughts
+
+A shared Capture field sits above the Inbox feed. Thoughts are persistent lifecycle records with quiet routing, queued and working states. Ready rows expand into You said, Assumed, Did and Next. Go ahead authorizes the named next step; Redirect resumes the worker (a project tag moves the work); Discard stops it and offers Undo. Review rows expose session context, diff, cost and the session link. Arrow keys move between thought rows; 1–3 invoke continue, focus redirect and discard. Capture-ready notifications supply delivery and counts, while the visible feed uses the thought row itself.
+
+Capture also opens through Command/Ctrl+Shift+K, the HUD button, the mobile navigation button, and the desktop shortcut (configured under Appearance). Dismissed drafts survive closing the bar. The desktop window is frameless and always on top; submission, Escape or blur hides it.

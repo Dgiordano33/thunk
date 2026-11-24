@@ -1,5 +1,6 @@
 "use client";
 
+import { Thoughts } from "@/components/capture/thoughts";
 import { FloatingWindow } from "@/components/world/floating-window";
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
@@ -89,7 +90,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const setProjectId = (id: string) => { setProjectIdState(id); setParam("projectId", id); setSelected(new Set()); };
   const setKind = (k: string) => { setKindState(k); setParam("kind", k); setSelected(new Set()); };
 
-  const live = items.filter((n) => n.status !== "dismissed" && !hidden.has(n.id));
+  const live = items.filter((n) => n.kind !== "capture_ready" && n.status !== "dismissed" && !hidden.has(n.id));
   const scoped = live.filter((n) => projectId === "all" || n.projectId === projectId);
   const visible = scoped.filter((n) => kind === "all" || n.kind === kind);
   const decisions = visible.filter((n) => sectionOf(n) === "decision");
@@ -218,6 +219,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     const id = row.dataset.id!;
     const onRow = target === row;
     const move = (to: number) => { e.preventDefault(); rows[Math.max(0, Math.min(rows.length - 1, to))].focus(); };
+    if (e.key === "ArrowUp" && index === 0) { const thoughts=document.querySelectorAll<HTMLElement>('[aria-label="Thoughts"] article');if(thoughts.length){e.preventDefault();thoughts[thoughts.length-1].focus();return;} }
     if (e.key === "j" || e.key === "ArrowDown") move(index + 1);
     else if (e.key === "k" || e.key === "ArrowUp") move(index - 1);
     else if (e.key === "Home" && onRow) move(0);
@@ -396,6 +398,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           <p className={cn("text-muted-foreground border-t px-5 pt-4 text-xs leading-relaxed", process.env.NODE_ENV === "development" ? "pb-20" /* clears the Next dev badge */ : "pb-4")}>Decisions stay until you answer or dismiss them. Follow-ups, like failed CI, clear themselves once fixed.</p>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
+          <Thoughts projects={projects} />
           <header className={cn("shrink-0 border-b px-5 sm:px-8", compact ? "py-3" : "pb-4 pt-5 sm:pt-7")}>
             <div className={cn("flex gap-x-4 gap-y-2", compact ? "flex-wrap items-center" : "items-start")}>
               <div className={cn("min-w-0", compact ? "flex items-baseline gap-3" : "flex-1")}>

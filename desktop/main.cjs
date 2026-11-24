@@ -106,7 +106,8 @@ async function openWindow() {
     show: false,
     webPreferences: {
       nodeIntegration: false, contextIsolation: true, sandbox: true,
-      ...(backend.remote ? { preload: path.join(__dirname, "app-preload.cjs") } : {}),
+      // Remote servers also get the setup-sync bridge; a local backend only gets Capture settings.
+      preload: path.join(__dirname, backend.remote ? "app-preload.cjs" : "capture-preload.cjs"),
     },
   });
   const openExternal = (url) => {
@@ -218,6 +219,7 @@ if (!app.requestSingleInstanceLock()) {
       }
       backend.exited.then(() => { if (!quitting) fail(new Error("The local server exited unexpectedly. Restart Thunk.")); });
     }
+    require("./capture.cjs").installCapture({ app, backend, mainWindow: () => window });
     starting = false;
     if (quitting) { app.quit(); return; }
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {

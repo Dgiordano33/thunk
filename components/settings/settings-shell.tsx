@@ -1,4 +1,5 @@
 "use client";
+import { CaptureShortcut } from "@/components/capture/desktop";
 import { BellIcon, BlocksIcon, BotIcon, CalendarClockIcon, ChartNoAxesColumnIcon, ChevronRightIcon, LifeBuoyIcon, MonitorIcon, ServerIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -42,7 +43,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
     return (
       <main className="h-dvh overflow-auto px-4 pt-[calc(4.5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
         {section && <div className="mb-4"><ScopeLabel scope={section.scope} /></div>}
-        {children}
+        {children}{section?.id === "appearance" && <CaptureShortcut />}
       </main>
     );
 
@@ -80,7 +81,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
               <ScopeLabel scope={section.scope} />
             </header>
           )}
-          <div className="min-h-0 flex-1 overflow-auto px-6 py-5">{children}</div>
+          <div className="min-h-0 flex-1 overflow-auto px-6 py-5">{children}{section?.id === "appearance" && <CaptureShortcut />}</div>
         </div>
       </CivPanel>
     </main>

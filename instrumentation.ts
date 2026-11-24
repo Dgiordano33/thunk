@@ -11,7 +11,7 @@ export async function register() {
     const { ensureDeliveryPolling } = await import("./lib/projects/delivery");
     ensureDeliveryPolling();
     const { recoverWorkers } = await import("./lib/workers/service");
-    void recoverWorkers().catch((err) => console.error("[thunk] worker recovery failed", err));
+    void recoverWorkers().then(async () => { const { recoverCaptures } = await import('./lib/capture/service'); await recoverCaptures(); }).catch((err) => console.error("[thunk] worker recovery failed", err));
     const { ensureScheduler } = await import("./lib/routines/scheduler");
     ensureScheduler();
     const { ensureTriageScheduler } = await import("./lib/home/triage");

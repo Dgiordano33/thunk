@@ -18,7 +18,7 @@ const cache = (g.__thunkBriefs ??= new Map());
 const running = (g.__thunkBriefRuns ??= new Map());
 
 /** A tool-less, settings-less one-shot Agent SDK query, as the Vault's reader uses. Works with an API key or the local `claude` login. */
-export const runWithClaude: BriefRunner = async (prompt, signal) => {
+export const runWithClaude = async (prompt: string, signal: AbortSignal, systemPrompt = BRIEF_SYSTEM): Promise<string> => {
   const { query } = await import("@anthropic-ai/claude-agent-sdk");
   const abortController = new AbortController();
   signal.addEventListener("abort", () => abortController.abort(), { once: true });
@@ -27,7 +27,7 @@ export const runWithClaude: BriefRunner = async (prompt, signal) => {
     options: {
       // Briefs are a Claude call even when sessions default to Codex.
       model: providerOf(env.DEFAULT_MODEL) === "claude" ? env.DEFAULT_MODEL : "claude-opus-5-5",
-      systemPrompt: BRIEF_SYSTEM,
+      systemPrompt,
       tools: [],
       settingSources: [],
       persistSession: false,
