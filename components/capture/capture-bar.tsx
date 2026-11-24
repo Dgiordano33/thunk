@@ -19,11 +19,11 @@ export function CaptureTrigger({ variant = 'hud', className }: { variant?: 'hud'
   const mac = useIsMac();
   const hint = shortcut && mac !== null ? shortcutLabel(shortcut, mac) : '';
   return (
-    <button type="button" aria-label="Capture a thought" onClick={openCapture}
+    <button type="button" aria-label="take a crack at" onClick={openCapture}
       className={cn('text-muted-foreground hover:text-foreground flex items-center gap-2 text-left text-sm transition-colors',
         variant === 'hud' ? 'h-8 w-full rounded-md px-2.5' : 'bg-background h-10 w-full rounded-md border px-3 hover:bg-muted/50', className)}>
       <PenLineIcon className="size-4 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate">Capture a thought…</span>
+      <span className="min-w-0 flex-1 truncate">take a crack at…</span>
       {hint && <Kbd>{hint}</Kbd>}
     </button>
   );
@@ -77,7 +77,7 @@ export function CaptureBar() {
   const done = useCallback(() => setSent(null), []);
   if (pathname === '/capture') return null;
   return <>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Take a first crack</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); }} /></DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>take a crack at</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); }} /></DialogContent></Dialog>
     {sent && <SentChip key={sent} id={sent} onDone={done} />}
   </>;
 }

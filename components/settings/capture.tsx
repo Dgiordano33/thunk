@@ -54,12 +54,12 @@ function DesktopShortcut() {
   const [loginError, setLoginError] = useState("");
   useEffect(() => { void bridge()?.settings().then(setState).catch(() => {}); }, []);
   if (state === null) return (
-    <SettingRow label="Anywhere on your computer" description={<>Needs the Thunk desktop app running: a shortcut then opens a small Capture window over whatever app you&apos;re in. Get it from Thunk → Download Latest Release, then set the shortcut here in the app.</>} />
+    <SettingRow label="Anywhere on your computer" description={<>Needs the Thunk desktop app running: a shortcut then opens a small Crack window over whatever app you&apos;re in. Get it from Thunk → Download Latest Release, then set the shortcut here in the app.</>} />
   );
   const mac = isMac();
   return <>
     <SettingRow label="Anywhere on your computer" htmlFor="capture-desktop-shortcut"
-      description={<>Opens a small Capture window over whatever app is in front{mac ? ", full-screen ones included" : ""}, while Thunk is running. Stored on this computer.
+      description={<>Opens a small Crack window over whatever app is in front{mac ? ", full-screen ones included" : ""}, while Thunk is running. Stored on this computer.
         {state.unavailable && <span role="alert" className="text-destructive mt-1 block">Another app took {label(state.unavailable)} before Thunk started, so this shortcut is off. Pick another.</span>}</>}>
       <ShortcutRecorder id="capture-desktop-shortcut" value={state.shortcut} fallback="Alt+Space" onChange={async (accel) => setState(await bridge()!.settings(accel))} />
     </SettingRow>
@@ -80,8 +80,8 @@ export function CaptureSettings() {
   const setShortcut = useUi((s) => s.setCaptureShortcut);
   return (
     <div className="space-y-6">
-      <SettingGroup title="Shortcuts" description="Capture opens a one-line field: type a thought, press Enter, and a worker takes a first crack at it. Click a shortcut, then press the keys you want.">
-        <SettingRow label="Inside Thunk" htmlFor="capture-app-shortcut" description="Opens Capture from any Thunk page. Stored in this browser.">
+      <SettingGroup title="Shortcuts" description="Crack opens a one-line field: type a thought, press Enter, and a worker takes a first crack at it. Click a shortcut, then press the keys you want.">
+        <SettingRow label="Inside Thunk" htmlFor="capture-app-shortcut" description="Opens Crack from any Thunk page. Stored in this browser.">
           <ShortcutRecorder id="capture-app-shortcut" value={shortcut} fallback={DEFAULT_APP_SHORTCUT} onChange={setShortcut} />
         </SettingRow>
         <DesktopShortcut />

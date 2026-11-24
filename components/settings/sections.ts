@@ -6,7 +6,7 @@ export type SettingsScope = "browser" | "server";
 
 export const SETTINGS_SECTIONS = [
   { id: "appearance", label: "Appearance", blurb: "Theme and map look", scope: "browser" },
-  { id: "capture", label: "Capture", blurb: "Shortcuts that open Capture", scope: "browser" },
+  { id: "capture", label: "Crack", blurb: "Shortcuts that open Crack", scope: "browser" },
   { id: "notifications", label: "Notifications", blurb: "What reaches you on the desktop and in Slack", scope: "server" },
   { id: "agents", label: "Agents", blurb: "Claude and Codex, and the setup sessions load", scope: "server" },
   { id: "integrations", label: "Integrations", blurb: "Slack and Linear", scope: "server" },
