@@ -67,7 +67,7 @@ async function checkForUpdates(item) {
     progressWindow = new BrowserWindow({
       parent: window || undefined, modal: true, title: "Updating Thunk",
       width: 420, height: 390, resizable: false, minimizable: false, maximizable: false,
-      show: false, titleBarStyle: "hiddenInset", backgroundColor: "#f7f3e9",
+      show: false, titleBarStyle: "hiddenInset", backgroundColor: "#eef3fa",
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
     });
     await progressWindow.loadFile(path.join(__dirname, "update.html"));
