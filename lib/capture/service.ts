@@ -14,8 +14,8 @@ import { readWorkerState } from '@/lib/workers/state';
 import { createTask } from '@/lib/tasks/service';
 import { delegate } from '@/lib/workers/service';
 import { routeCapture } from './router';
+import { captureBrief } from './prompt';
 import type { Capture } from './types';
-const RULES = `First-crack rules: work only in your assigned workspace. Do not push, open a PR, merge, deploy, send or post anything. Do not ask questions unless truly blocked. End with needs_person: naming the next step held back. Scouts must remain read-only.`;
 export async function captureLimit() {
  try { const config = JSON.parse(await readFile(`${DATA_DIR}/config/capture.json`,'utf8')); return Number.isInteger(config.maxOpen) && config.maxOpen > 0 ? config.maxOpen : 8; } catch { return 8; }
 }
@@ -40,7 +40,7 @@ export async function dispatchCapture(id: string, projectId?: string) {
  }
  row=await saveCapture({...row,status:'routing',error:null});
  const route=await routeCapture(row.text,projectId);
- const brief=route.brief+'\n\n'+RULES;
+ const brief=captureBrief(row.text,route);
  if (row.task_id && row.project_id !== route.projectId) {
  const previous=await getTask(row.task_id);
  if(previous?.sessionId && row.project_id) {const {stopWorker}=await import('@/lib/workers/service');await stopWorker(row.project_id,row.task_id,'Capture retry moved to another project');}
@@ -97,7 +97,8 @@ export async function actOnCapture(id: string, action: string, text?: string) {
  setTimeout(()=>void dispatchCapture(id,target),0); return;
  }
  }
- const content=action==='continue'? `Go ahead with this step only: ${row.next_step || 'Complete the work and report back.'}` : text?.trim();
+ if(action==='continue' && !row.next_step?.trim()) throw new Error('No next step needs approval. Redirect the worker to request more work.');
+ const content=action==='continue'? `Go ahead with this step only: ${row.next_step}` : text?.trim();
  if(!content)throw new Error('Enter a redirect');
  await resolveBySubject(`capture:${id}`);
  await saveCapture({...row,status:'working',error:null});

@@ -70,6 +70,11 @@ test("a ready thought is a Decision in time order; thoughts under way stay in th
   const decisions = sample.filter((n) => n.status === "open").map((n, i) => ({ ...n, createdAt: at(i === 0 ? 1 : 10) }));
   const ready = { ...base, id: "thought", kind: "capture_ready", urgency: "action", status: "open", subjectKey: "capture:ready1", sessionId: "s-ready1", title: "Look into ready1", createdAt: at(5) };
   const html = renderInbox({ items: [...decisions, ready].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), counts: { total: 3, action: 3, byProject: { thunk: 3 } } });
+  captureRows = [thought("ready1", "ready", { next_step: null })];
+  const completed = renderInbox({ items: [ready], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
+  assert.doesNotMatch(completed, /Go ahead/);
+  assert.match(completed, />Keep</);
+  assert.match(completed, /Found the flaky test/);
   captureRows = [];
   const card = html.indexOf('aria-label="Thought ready: Look into ready1"');
   assert.ok(card > 0, "the ready thought renders as a row in the feed");

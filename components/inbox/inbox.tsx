@@ -351,7 +351,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
         <h3 className="text-[15px] leading-relaxed font-medium break-words">{lead}</h3>
         <ThoughtReview row={row} tab={tab} onRedirect={(text) => go("redirect", text)} />
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("continue")}>{row.next_step ? `Go ahead: ${row.next_step}` : "Go ahead"}</Button></Hint>
+          {row.next_step && <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("continue")}>{`Go ahead: ${row.next_step}`}</Button></Hint>}
           <Hint label="Redirect" keys="2"><Button data-action="2" tabIndex={tab} variant="outline" className={RING} onClick={(e) => e.currentTarget.closest("article")?.querySelector<HTMLInputElement>("[data-redirect]")?.focus()}>Redirect…</Button></Hint>
           <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant="outline" className={RING} onClick={() => go("discard")}>Discard</Button></Hint>
           <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => go("keep")}>Keep</Button>
