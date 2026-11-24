@@ -10,8 +10,8 @@ const resolve=Module._resolveFilename;
 Module._resolveFilename=function(r,...args){if(r.startsWith('@/')){const base=path.join(__dirname,'..',r.slice(2));r=[base+'.ts',base+'.tsx'].find(fs.existsSync)||base;}return resolve.call(this,r,...args);};
 
 // Fakes for everything a capture touches outside its own table. `calls` records what the service asked for.
-let calls, tasks, queue, delegateResult, notified, resolved;
-const reset=()=>{calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
+let calls, tasks, queue, delegateResult, notified, resolved, routingResult;
+const reset=()=>{routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
 reset();
 const workers={
  delegate:async(projectId,chief,input)=>{calls.push(['delegate',projectId,input]);if(delegateResult instanceof Error)throw delegateResult;return delegateResult;},
@@ -23,7 +23,7 @@ Module._load=function(r,p,m){
  if(r==='server-only')return {};
  if(r==='../server')return {db:()=>null};
  if(r==='@/lib/notifications/service')return {notify:async(n)=>{notified.push(n);},resolveBySubject:async(k)=>{resolved.push(k);}};
- if(r==='@/lib/notifications/brief')return {runWithClaude:()=>{throw Error('No real model in tests');}};
+ if(r==='@/lib/notifications/brief')return {runWithClaude:async()=>{if(routingResult)return routingResult;throw Error('No real model in tests');}};
  if(r==='@/lib/home/service')return {routeTargets:async()=>[{projectId:'p',name:'Project',slug:'project',workspaces:[]},{projectId:'q',name:'Other',slug:'other',workspaces:[]},{projectId:'home',name:'Home',slug:'home',workspaces:[]}],projectsOverview:async()=>[],ensureHomeProject:async()=>({id:'home',dataKey:'home'}),saveRoutingRule:async(t)=>{calls.push(['rule',t]);}};
  if(r==='@/lib/projects/memory')return {readMemory:async()=>''};
  if(r==='@/lib/notes/file-write')return {withFileLock:(_k,fn)=>fn()};
@@ -77,3 +77,29 @@ test('a redirect naming another project re-routes there',async()=>{await repo.sa
 test('retry only accepts failed captures and known projects',async()=>{await repo.saveCapture(row({status:'working'}),true);assert.equal((await retryApi.POST(post({}),params({id:'c'}))).status,400);await repo.saveCapture(row({status:'failed'}));assert.equal((await retryApi.POST(post({projectId:'nope'}),params({id:'c'}))).status,400);assert.equal((await retryApi.POST(post({projectId:'p'}),params({id:'c'}))).status,202);await settle();assert.equal(calls.find(c=>c[0]==='delegate')[1],'p');});
 
 test('the sent chip follows the capture to its worker',()=>{const names={p:'Project'};assert.equal(chipLabel(row(),names),'Routing…');assert.equal(chipLabel(row({status:'queued',project_id:'p'}),names),'Queued in Project');assert.equal(chipLabel(row({status:'working',project_id:'p'}),names),'Working in Project');assert.equal(chipLabel(row({status:'working',project_id:'x'}),names),'Working in Home');assert.match(chipLabel(row({status:'failed'}),names),/Inbox/);assert.equal(chipLabel(undefined,names),null);});
+
+
+test('dispatch preserves original wording and routing assumptions in the task and worker handoff', async () => {
+ delete process.env.NEXT_PUBLIC_THUNK_E2E;
+ routingResult=result('p');
+ const original='Onboarding was confusing again.\nNeed something before next week, not a full rebuild.';
+ await repo.saveCapture(row({text:original}),true);
+ await service.dispatchCapture('c');
+ const input=calls.find(c=>c[0]==='delegate')[2];
+ assert.ok(input.brief.includes(original));
+ assert.ok(input.brief.includes('Build it'));
+ assert.ok(input.brief.includes('A guess'));
+ assert.equal(tasks.get(input.taskId).body,input.brief);
+ assert.deepEqual((await get()).assumptions,['A guess']);
+});
+
+test('a completed capture without a next step cannot trigger unspecified work', async () => {
+ await repo.saveCapture(row({status:'ready',project_id:'p',task_id:'t1',session_id:'s1',summary:'Draft ready',next_step:null}),true);
+ const response=await actionApi.POST(post({}),params({id:'c',action:'continue'}));
+ assert.equal(response.status,400);
+ assert.equal(calls.filter(c=>c[0]==='message').length,0);
+ assert.equal((await get()).status,'ready');
+ assert.deepEqual(resolved,[]);
+ await service.actOnCapture('c','keep');
+ assert.equal((await get()).status,'kept');
+});
