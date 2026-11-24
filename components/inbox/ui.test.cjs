@@ -62,6 +62,14 @@ test("project filter excludes other projects and failure does not look like load
   const failed = renderInbox({ loaded: false, error: "Connection lost" });
   assert.match(failed, /Your inbox couldn’t load/); assert.doesNotMatch(failed, /Loading inbox|All caught up/);
 });
+test("the Thoughts field sits above the feed and capture_ready rows stay out of the notification list", () => {
+  const ready = { ...base, id: "thought", kind: "capture_ready", urgency: "action", status: "open", subjectKey: "capture:c1", title: "Look into flaky checks" };
+  const html = renderInbox({ items: [...sample, ready], counts: { total: 3, action: 3, byProject: { thunk: 3 } } });
+  assert.match(html, /aria-label="Thoughts"/); assert.match(html, /aria-label="Capture a thought"/);
+  assert.ok(html.indexOf('aria-label="Thoughts"') < html.indexOf(">Decisions<"), "the field leads the feed");
+  assert.doesNotMatch(html, /Look into flaky checks/, "the Thoughts row, not a notification, shows a ready thought");
+  assert.equal((html.match(/data-notification="true"/g) || []).length, 4);
+});
 const ci = (i, projectId = "thunk") => ({ ...base, projectId, id: `ci-${projectId}-${i}`, kind: "ci_failed", urgency: "action", status: "open", subjectKey: `pr:${i}:ci`,
   title: `CI failed · #${850 + i}`, detail: `Fix flaky test ${i}`, href: `https://github.com/acme/thunk/pull/${850 + i}`, createdAt: new Date(Date.now() - 86400000 - i * 1000).toISOString() });
 test("many CI failures collapse into one grouped list of one-line rows behind the decisions", () => {
