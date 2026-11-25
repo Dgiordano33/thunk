@@ -179,3 +179,11 @@ The Library's **Top level** notebook holds notes that belong to no single projec
 - **Daily triage.** The calendar button beside **Top level** schedules triage (weekdays at 08:30 by default, off until you turn it on), or runs it now. Triage sends every unrouted item to the top chief, asks for one routing plan per note, and has it write the day's summary to the top-level **Work log**. It skips the model turn when nothing is new.
 
 The top chief lives in an internal Home project (`~/.thunk/projects/__home/`). That project is left out of every project list, map and picker. Its routing plans and routes live in `config/routing/state.json`. Claude top chiefs cannot use Edit, Write, NotebookEdit or Bash; Codex top chiefs follow the rule through their prompt. Routing plans reuse the `delegation_plan` notification kind, so no migration is needed.
+
+### Project notes and workspace links
+
+Notes belong to projects. Use **Link workspace** in the note editor to link a note to one or more workspaces; workspace lists are filters over the same project notes. Unlinking, archiving, or removing a workspace does not delete its notes. Repo notebooks remain files in the project's registered repository folders.
+
+Legacy workspace notes migrate into project storage on access, including notes belonging to archived workspaces. Migration preserves metadata, adds the original workspace link, updates task references, and uses stable IDs to avoid filename collisions. Old workspace note URLs continue to resolve while that workspace exists. Historical files already saved in the Granary stay there.
+
+Workspace agent memory/task logs remain separate runtime state. Harvest copies selected lessons into project memory; deleting a workspace preserves nonempty logs in the Granary. Ordinary notes no longer require Harvest.

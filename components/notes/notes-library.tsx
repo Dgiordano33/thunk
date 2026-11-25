@@ -140,7 +140,7 @@ function AllNotes({
   const paths = usePaths();
   const desktop = useIsDesktop();
   const notes = useMemo<NoteMeta[] | null>(
-    () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.workspaces.flatMap((w) => w.notes), ...f.repos.flatMap((r) => r.notes)])) : null),
+    () => (folders ? sortNotes(folders.flatMap((f) => [...f.notes, ...f.repos.flatMap((r) => r.notes)])) : null),
     [folders],
   );
   const keyOf = (n: NoteMeta) => `${scopeKey(n.scope)}/${n.id}`;
@@ -184,7 +184,7 @@ function AllNotes({
             onDelete={(n) => void remove(n)}
             groupMemory
             createControl={<NewNoteMenu folders={folders} onCreate={createIn} />}
-            emptyText="Notes are plans and reference that agents can read and write. Start one at the top level, or in a project or workspace."
+            emptyText="Notes are plans and reference that agents can read and write. Start one at the top level or in a project. Project notes can be linked to workspaces."
           />
         )}
         {!hintDismissed && hintProject && (

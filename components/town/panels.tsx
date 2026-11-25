@@ -190,8 +190,13 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
       name: "Notes",
       label: "Notes",
       icon: <NotebookPenIcon />,
-      content: <Section title="Notes">
-        <TownNotes townHref={projectPath(project)} scope={workspace.visibility === "project" || workspace.slug === "main" ? { kind: "projects", id: project.id } : { kind: "workspaces", id: workspace.id }} />
+      content: <Section title="Project notes">
+        <p className="text-muted-foreground mb-3 text-xs">Notes stay with the project when this workspace closes.</p>
+        <TownNotes townHref={projectPath(project)} scope={{ kind: "projects", id: project.id }} />
+        <div className="mt-5 border-t pt-3">
+          <h3 className="mb-2 text-sm font-medium">Linked to this workspace</h3>
+          <TownNotes townHref={projectPath(project)} scope={{ kind: "workspaces", id: workspace.id }} />
+        </div>
       </Section>,
     },
   ];

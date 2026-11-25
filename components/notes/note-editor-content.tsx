@@ -77,7 +77,7 @@ export function NoteEditor({
       </div>
     );
   if (!note) return <EditorLoading />;
-  return <NoteEditorBody key={key} scope={scope} initial={note} onDeleted={onDeleted} topLevel={topLevel} />;
+  return <NoteEditorBody key={key} scope={note.scope} initial={note} onDeleted={onDeleted} topLevel={topLevel} />;
 }
 
 type SaveState = "saved" | "dirty" | "saving" | "error";

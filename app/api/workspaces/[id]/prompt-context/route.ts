@@ -17,6 +17,6 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
     Promise.all(dirs.repos.map((d) => listNotes(d).catch(() => []))),
   ]);
   // Notes are offered under @ alongside files; the mention inserts the note's absolute path.
-  const notes = [...workspaceNotes, ...projectNotes, ...repoNotes.flat()].map((n) => ({ title: n.title, path: n.path }));
+  const notes = [...new Map([...workspaceNotes, ...projectNotes, ...repoNotes.flat()].map((n) => [n.path, n])).values()].map((n) => ({ title: n.title, path: n.path }));
   return Response.json({ ...base, notes });
 });

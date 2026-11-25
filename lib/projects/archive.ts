@@ -13,6 +13,7 @@ export async function archiveWorkspace(id: string, { name }: { name?: string } =
       for (const live of listLiveSessions()) if (live.meta.workspaceId === id) closeSession(live.id);
       await archiveWorkspaceProcesses(ctx);
     }
+    await (await import("../notes/resolve")).migrateProjectNotes(ctx.project, { force: true });
     await updateWorkspace(id, { status: "archived", ...(name ? { name } : {}) });
   });
 }

@@ -17,7 +17,7 @@ Module._resolveFilename = function (request, ...rest) {
 const load = Module._load;
 Module._load = function (request, parent, isMain) {
   if (request === "server-only") return {};
-  if (request === "@/lib/agent") return {};
+  if (request === "@/lib/agent") return { listLiveSessions: () => [], closeSession: () => {} };
   if (request === "@/lib/projects") return require("../lib/projects/index.ts");
   if (request === "../server") return { db: () => null }; // Memory mode: never connect to a configured database.
   return load.call(this, request, parent, isMain);
@@ -35,7 +35,7 @@ const paths = require("../lib/projects/paths.ts");
 const { moveToGranary } = require("../lib/projects/granary.ts");
 const { harvestWorkspace, readHarvest } = require("../lib/projects/harvest.ts");
 const { workspaceNoteDirs, projectNoteDirs } = require("../lib/notes/resolve.ts");
-const { createNote, readNote } = require("../lib/notes/store.ts");
+const { createNote, readNote, listNotes, writeNote } = require("../lib/notes/store.ts");
 const { insertTask, getTask } = require("../lib/db/repo/tasks.ts");
 const { hierarchyPrompt, buildOptions } = require("../lib/agent/options.ts");
 
@@ -57,7 +57,8 @@ test("delete preserves populated memory, notes and topics; trivial logs leave no
   assert.equal(entries.length, 1);
   const saved = path.join(paths.projectGranaryDir(ctx.project.dataKey), entries[0]);
   assert.match(await fs.readFile(path.join(saved, "memory/MEMORY.md"), "utf8"), /durable lesson/);
-  assert.match(await fs.readFile(path.join(saved, "notes", `${note.id}.md`), "utf8"), /facts/);
+  assert.equal((await readNote(projectNoteDirs(ctx.project), note.id)).markdown, "facts");
+  assert.equal(note.scope.kind, "projects");
   assert.equal(await projects.getWorkspaceContext(ctx.workspace.id), null);
   const empty = await context("empty");
   assert.equal((await readHarvest(empty)).empty, true);
@@ -84,24 +85,46 @@ test("harvest appends dated memory, preserves note IDs and moves task links to p
   assert.ok(await getTask(task.id));
 });
 
-test("collisions keep both notes and repoint only the source workspace's tasks", async () => {
+test("legacy migration preserves colliding IDs, unknown metadata, and task references", async () => {
   const ctx = await context("collision");
-  const source = workspaceNoteDirs(ctx.project, ctx.workspace), target = projectNoteDirs(ctx.project);
-  const note = await createNote(source, { markdown: "source" });
+  const source = paths.workspaceNotesDir(ctx.project.dataKey, ctx.workspace.slug), target = projectNoteDirs(ctx.project);
+  await fs.mkdir(source, { recursive: true });
   await fs.mkdir(target.notesDir, { recursive: true });
-  await fs.writeFile(path.join(target.notesDir, `${note.id}.md`), "destination");
-  const task = await insertTask({ projectId: ctx.project.id, workspaceId: ctx.workspace.id, title: "linked", noteId: note.id });
-  const other = await insertTask({ projectId: ctx.project.id, title: "existing", noteId: note.id });
-  const result = await harvestWorkspace(ctx, { memory: null, noteIds: [note.id, note.id] });
-  const id = result.notes[0].to;
-  assert.notEqual(id, note.id);
-  assert.equal((await readNote(target, note.id)).markdown, "destination");
-  assert.equal((await readNote(target, id)).markdown, "source");
-  assert.equal((await getTask(task.id)).noteId, id);
-  assert.equal((await getTask(other.id)).noteId, note.id);
-  await assert.rejects(harvestWorkspace(ctx, { memory: "should not append", noteIds: ["../escape"] }), /Invalid/);
-  await assert.rejects(harvestWorkspace(ctx, { memory: null, noteIds: ["missing"] }), /Reload Harvest/);
+  await fs.writeFile(path.join(source, "same.md"), "---\ncustom: keep\n---\nsource");
+  await fs.writeFile(path.join(target.notesDir, "same.md"), "destination");
+  const task = await insertTask({ projectId: ctx.project.id, workspaceId: ctx.workspace.id, title: "linked", noteId: "same" });
+  const other = await insertTask({ projectId: ctx.project.id, title: "existing", noteId: "same" });
+  const notes = await listNotes(target);
+  const migrated = notes.find((n) => n.markdown === "source");
+  assert.ok(migrated);
+  assert.notEqual(migrated.id, "same");
+  assert.deepEqual(migrated.workspaceIds, [ctx.workspace.id]);
+  assert.equal((await readNote(target, "same")).markdown, "destination");
+  assert.match(await fs.readFile(migrated.path, "utf8"), /custom: keep/);
+  assert.equal((await getTask(task.id)).noteId, migrated.id);
+  assert.equal((await getTask(other.id)).noteId, "same");
+  assert.equal((await readNote(workspaceNoteDirs(ctx.project, ctx.workspace), "same")).id, migrated.id);
+  assert.equal((await listNotes(target)).length, notes.length);
+  assert.deepEqual(await fs.readdir(source), []);
+  assert.equal((await listNotes(workspaceNoteDirs(ctx.project, ctx.workspace))).length, 1);
 });
+
+test("project notes can link to multiple workspaces and survive archive and removal", async () => {
+  const ctx = await context("links");
+  const second = await projects.createWorkspace({ projectId: ctx.project.id, name: "second", worktree: false, setup: "skip" });
+  const target = projectNoteDirs(ctx.project);
+  const note = await createNote(target, { title: "Shared plan", workspaceIds: [ctx.workspace.id, second.id] });
+  assert.equal((await listNotes(workspaceNoteDirs(ctx.project, ctx.workspace))).length, 1);
+  assert.equal((await listNotes(workspaceNoteDirs(ctx.project, second))).length, 1);
+  await writeNote(target, note.id, { workspaceIds: [second.id] });
+  assert.equal((await listNotes(workspaceNoteDirs(ctx.project, ctx.workspace))).length, 0);
+  assert.ok(await readNote(target, note.id));
+  await require("../lib/projects/archive.ts").archiveWorkspace(second.id);
+  assert.ok(await readNote(target, note.id));
+  await projects.removeWorkspace(second.id);
+  assert.ok(await readNote(target, note.id));
+});
+
 
 test("Claude uses project auto-memory; Codex still gets injected project memory", async () => {
   const ctx = await context("options");
@@ -113,11 +136,12 @@ test("Claude uses project auto-memory; Codex still gets injected project memory"
   assert.match(hierarchyPrompt(live, "unique fact", "codex"), /unique fact/);
 });
 
-test("a header-only log suggests nothing, even when notes need harvesting", async () => {
+test("a header-only log needs no harvest because notes already belong to the project", async () => {
   const ctx = await context("header-only");
   await createNote(workspaceNoteDirs(ctx.project, ctx.workspace), { title: "Keep", markdown: "facts" });
   const data = await readHarvest(ctx);
-  assert.equal(data.empty, false);
+  assert.equal(data.empty, true);
+  assert.deepEqual(data.notes, []);
   assert.equal(data.suggested, "");
 });
 
@@ -143,4 +167,19 @@ test("Claude gets project memory injected once it outgrows the auto-memory limit
   assert.doesNotMatch(hierarchyPrompt(live, lines(200), "claude"), /line 199/);
   assert.match(hierarchyPrompt(live, lines(201), "claude"), /line 200/);
   assert.match(hierarchyPrompt(live, `tail fact ${"x".repeat(25_000)}`, "claude"), /tail fact/);
+});
+
+test("note routes reject cross-project links and create canonical notes from workspace views", async () => {
+  const ctx = await context("note-routes");
+  const other = await context("other-project");
+  const { notesCollection, noteItem } = require("../lib/notes/routes.ts");
+  const body = (data) => new Request("http://localhost/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  const response = await notesCollection("workspaces").POST(body({ title: "Linked" }), { params: Promise.resolve({ id: ctx.workspace.id }) });
+  assert.equal(response.status, 200);
+  const { note } = await response.json();
+  assert.deepEqual(note.scope, { kind: "projects", id: ctx.project.id });
+  assert.deepEqual(note.workspaceIds, [ctx.workspace.id]);
+  const denied = await noteItem("projects").PATCH(body({ workspaceIds: [other.workspace.id] }), { params: Promise.resolve({ id: ctx.project.id, noteId: note.id }) });
+  assert.equal(denied.status, 400);
+  assert.deepEqual((await readNote(projectNoteDirs(ctx.project), note.id)).workspaceIds, [ctx.workspace.id]);
 });

@@ -50,12 +50,10 @@ function renderTask(task: Task, heading: string, linked: Note | null) {
   return [`## ${heading}: ${task.title}`, "", ...meta, "", task.body?.trim() || "_No description._"].join("\n");
 }
 
-/** A task's linked note lives in its workspace's notebook, or the project's. */
+/** Tasks reference project-owned notes independently of workspace links. */
 async function linkedNote(project: Project, task: Task) {
   if (!task.noteId) return null;
-  const scope = task.workspaceId ? { kind: "workspaces" as const, id: task.workspaceId } : { kind: "projects" as const, id: project.id };
-  const dirs = scope.kind === "projects" ? projectNoteDirs(project) : await dirsForScope(scope).catch(() => null);
-  return dirs ? readNote(dirs, task.noteId).catch(() => null) : null;
+  return readNote(projectNoteDirs(project), task.noteId).catch(() => null);
 }
 
 /**

@@ -64,7 +64,7 @@ export function projectNotesDir(key: string) {
   return path.join(projectDir(key), "notes");
 }
 
-/** Workspace notes: sit beside the workspace's memory dir. */
+/** Legacy workspace notes, migrated into project notes on access. */
 export function workspaceNotesDir(key: string, slug: string) {
   return path.join(projectDir(key), "workspaces", slug, "notes");
 }

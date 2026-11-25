@@ -12,6 +12,7 @@ const DEFAULTS: NoteFrontmatter = {
   inject: false,
   actionable: false,
   tags: [],
+  workspaceIds: [],
   created: null,
   updated: null,
 };
@@ -50,10 +51,10 @@ export function parseNote(raw: string): ParsedNote {
     const key = kv[1].toLowerCase();
     let value = kv[2].trim();
     // YAML block list: `tags:` followed by `- a` lines.
-    if (!value && key === "tags") {
+    if (!value && (key === "tags" || key === "workspaceids")) {
       const items: string[] = [];
       while (i + 1 < lines.length && /^\s*-\s+/.test(lines[i + 1])) items.push(unquote(lines[++i].replace(/^\s*-\s+/, "").trim()));
-      fm.tags = items.filter(Boolean);
+      fm[key === "tags" ? "tags" : "workspaceIds"] = items.filter(Boolean);
       continue;
     }
     value = value.replace(/\s+#.*$/, "");
@@ -68,6 +69,9 @@ export function parseNote(raw: string): ParsedNote {
         if (b !== null) fm[key] = b;
         break;
       }
+      case "workspaceids":
+        fm.workspaceIds = parseList(value);
+        break;
       case "tags":
         fm.tags = parseList(value);
         break;
@@ -112,6 +116,7 @@ export function serializeNote(fm: NoteFrontmatter, body: string, original?: Pars
     `inject: ${fm.inject}`,
     `actionable: ${fm.actionable}`,
     `tags: [${fm.tags.map(quote).join(", ")}]`,
+    ...(fm.workspaceIds?.length ? [`workspaceIds: [${fm.workspaceIds.map(quote).join(", ")}]`] : []),
     ...(fm.created ? [`created: ${fm.created}`] : []),
     ...(fm.updated ? [`updated: ${fm.updated}`] : []),
     "---",

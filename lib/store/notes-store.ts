@@ -66,7 +66,7 @@ export function useNotesEvents() {
 export function useScopeNotes(scope: NoteScope | null) {
   useNotesEvents();
   const key = scope ? scopeKey(scope) : "";
-  const rev = useNotesFeed((s) => s.scopeRev[key] ?? 0);
+  const rev = useNotesFeed((s) => scope?.kind === "workspaces" ? s.rev : s.scopeRev[key] ?? 0);
   const [state, setState] = useState<{ key: string; notes: NoteMeta[]; dir: string; error: string | null } | null>(null);
   const [reloads, setReloads] = useState(0);
 

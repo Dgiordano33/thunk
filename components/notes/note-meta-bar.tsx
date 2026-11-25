@@ -9,6 +9,7 @@ import { Hint } from "@/components/hint";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MEMORY_NOTE_ID, type NoteFlags, type NoteMeta } from "@/lib/notes/types";
+import { WorkspaceLinks } from "./workspace-links";
 import { cn } from "@/lib/utils";
 
 const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
@@ -141,6 +142,7 @@ export function NoteMetaBar({
               {note.inject ? "In session context" : "Add to session context"}
             </button>
           </Hint>
+          {note.scope.kind === "projects" && !topLevel && <WorkspaceLinks note={note} onChange={(workspaceIds) => onChange({ workspaceIds })} disabled={blocked} />}
           {onDelegate && (
             <Hint label={delegateHint}>
               {/* A span keeps the hint reachable while the button is disabled. */}

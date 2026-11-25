@@ -22,7 +22,7 @@ export function LibraryFolders({
   onSelect: (scope: NoteScope | null) => void;
 }) {
   const active = selected ? scopeKey(selected) : null;
-  const total = folders?.reduce((n, f) => n + f.repos.reduce((m, r) => m + r.notes.length, 0) + f.notes.length + f.workspaces.reduce((m, w) => m + w.notes.length, 0), 0) ?? 0;
+  const total = folders?.reduce((n, f) => n + f.repos.reduce((m, r) => m + r.notes.length, 0) + f.notes.length, 0) ?? 0;
   const row = (on: boolean) =>
     cn(
       "focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] outline-none focus-visible:ring-2",
@@ -72,6 +72,7 @@ export function LibraryFolders({
                 >
                   <Icon className="text-muted-foreground size-3.5 shrink-0" />
                   <span className="min-w-0 truncate">{workspace.name}</span>
+                  <span className="text-muted-foreground text-[10px]">linked</span>
                   {count(notes.length)}
                 </button>
               );

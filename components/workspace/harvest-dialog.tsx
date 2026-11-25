@@ -11,8 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client/api";
 import type { HarvestData } from "@/lib/projects/harvest";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Hint } from "@/components/hint";
 
 export type HarvestAction = "harvest" | "delete" | "merge" | "archive";
@@ -22,7 +20,6 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
 }) {
   const onboarding = useOnboarding();
   const [memory, setMemory] = useState(data.suggested);
-  const [noteIds, setNoteIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [harvested, setHarvested] = useState(false);
@@ -31,7 +28,7 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
     setBusy(true); setError("");
     try {
       if (keep && !harvested) {
-        await api.harvestWorkspace(workspaceId, { memory, noteIds });
+        await api.harvestWorkspace(workspaceId, { memory, noteIds: [] });
         setHarvested(true);
       }
       if (action === "delete") {
@@ -47,8 +44,8 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" showCloseButton={!busy}>
-      <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Copy what this workspace learned into the project: its task log into project memory, and chosen notes into project notes. Anything left behind is kept in the granary when the workspace is deleted.</DialogDescription></DialogHeader>
-      {!data.empty && <OnboardingHint name="harvest">Harvest keeps what this workspace learned in the project. Choose the memory and notes below, then use Harvest to keep them for future sessions.</OnboardingHint>}
+      <DialogHeader><DialogTitle>Harvest · {label}</DialogTitle><DialogDescription>Copy lessons from this workspace’s task log into project memory. Notes already belong to the project and stay there when this workspace closes. Remaining task logs are kept in the granary when the workspace is deleted.</DialogDescription></DialogHeader>
+      {!data.empty && <OnboardingHint name="harvest">Harvest keeps what this workspace learned in the project. Choose the memory below to share with future sessions.</OnboardingHint>}
       {action === "merge" && <p className="text-sm">Merge committed changes into the local default branch, run the archive hook, then delete the worktree and sessions.</p>}
       {action === "delete" && <p className="text-sm">{hasGit ? "Delete this workspace, its sessions and worktree. Worktree deletion requires committed changes merged into the default branch." : "Delete this workspace and its sessions. Shared folders and non-empty scratch folders are kept."}</p>}
       <fieldset disabled={busy || harvested} className="space-y-4">
@@ -56,9 +53,6 @@ export function HarvestDialog({ workspaceId, label, data, action, hasGit = false
           <div><p className="mb-2 text-sm font-medium">Workspace task log</p><pre className="bg-muted max-h-64 overflow-auto whitespace-pre-wrap rounded p-3 text-xs">{data.memory || "No task log yet."}</pre></div>
           <label className="text-sm font-medium">Keep in project memory<Textarea className="mt-2 min-h-48 font-mono text-xs" value={memory} onChange={e => setMemory(e.target.value)} /></label>
         </div>
-        <fieldset><legend className="mb-2 text-sm font-medium">Move to project notes</legend>
-          {data.notes.length ? data.notes.map(note => <Label key={note.id} className="py-1 font-normal"><Checkbox checked={noteIds.includes(note.id)} onCheckedChange={on => setNoteIds(ids => on === true ? [...ids, note.id] : ids.filter(id => id !== note.id))} />{note.title}</Label>) : <p className="text-muted-foreground text-sm">No workspace notes.</p>}
-        </fieldset>
         <details><summary className="cursor-pointer text-sm">Project memory today</summary><pre className="bg-muted mt-2 max-h-48 overflow-auto whitespace-pre-wrap p-3 text-xs">{data.projectMemory || "No project memory yet."}</pre></details>
       </fieldset>
       {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
@@ -77,7 +71,7 @@ export function HarvestButton({ workspaceId, label }: { workspaceId: string; lab
   const [data, setData] = useState<HarvestData | null>(null);
   const [busy, setBusy] = useState(false);
   return <>
-    <Hint label="Copy this workspace’s memory and notes into the project">
+    <Hint label="Copy lessons from this workspace into project memory">
     <Button size="sm" variant="outline" disabled={busy} onClick={async () => {
       setBusy(true);
       try { setData(await api.getHarvest(workspaceId)); } catch (err) { toast.error((err as Error).message); }

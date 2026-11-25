@@ -39,7 +39,7 @@ export function WorkspaceNotes({ workspaceId, projectId }: { workspaceId: string
           className="hover:bg-muted/50 flex w-full items-center gap-1.5 px-3 py-2 text-left text-xs font-medium"
         >
           <ChevronRightIcon className={cn("text-muted-foreground size-3.5 transition-transform", workspaceOpen && "rotate-90")} />
-          Workspace notes
+          Linked to this workspace
           {ws.notes && <span className="text-muted-foreground tabular-nums">{ws.notes.length}</span>}
         </button>
         {workspaceOpen && (

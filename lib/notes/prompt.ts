@@ -19,7 +19,7 @@ export async function loadSessionNotes(project: Project, workspace: Workspace): 
     listNotes(dirs.project, { withMemory: false }).catch(() => []),
     listNotes(dirs.workspace, { withMemory: false }).catch(() => []),
   ]);
-  return { projectDir: dirs.project.notesDir, workspaceDir: dirs.workspace.notesDir, project: p, workspace: w, repos: await Promise.all(dirs.repos.map(async (d) => {
+  return { projectDir: dirs.project.notesDir, workspaceDir: dirs.workspace.notesDir, project: p.filter((n) => !n.workspaceIds?.includes(workspace.id)), workspace: w, repos: await Promise.all(dirs.repos.map(async (d) => {
     const folder = project.repoFolders.find((f) => f.id === d.scope.id)!;
     return { label: folder.label, dir: d.notesDir, extra: !d.notesDir.startsWith(`${workspace.cwd}${path.sep}`), notes: await listNotes(d) };
   })) };
@@ -38,13 +38,13 @@ function indexLine(n: Note) {
 export function notesPrompt(notes: SessionNotes) {
   const lines = [
     "# Thunk notes",
-    "Besides memory, the user keeps a notebook per project and per workspace. Each note is a markdown file with a small frontmatter block (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). Read and edit them with your file tools:",
+    "Besides memory, notes belong to projects and can optionally link to workspaces. Each note is a markdown file with a small frontmatter block (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). Read and edit them with your file tools:",
     `- Project notes: \`${notes.projectDir}\``,
-    `- Workspace notes: \`${notes.workspaceDir}\``,
+    `- Linked workspace notes use the same project directory.`,
     "",
-    "New notes belong in Project notes by default; use Workspace notes only when the user asks for effort-specific notes. Edit notes in place and keep the frontmatter intact. Track follow-up work with tasks_create, tasks_update, and tasks_complete; note checklists are not the task list. When a topic doesn't fit an existing note, create `<random-lowercase-id>.md` with frontmatter (title, `pinned: false`, `inject: false`, `tags: []`). This list was captured when the session started; re-read the files for current contents.",
+    "All new notes belong in Project notes. For effort-specific notes, add the workspace ID to the optional `workspaceIds: [id]` frontmatter list; do not create a separate workspace notebook. Edit notes in place and keep the frontmatter intact. Track follow-up work with tasks_create, tasks_update, and tasks_complete; note checklists are not the task list. When a topic doesn't fit an existing note, create `<random-lowercase-id>.md` with frontmatter (title, `pinned: false`, `inject: false`, `tags: []`). This list was captured when the session started; re-read the files for current contents.",
   ];
-  for (const [label, list] of [["Project notes", notes.project], ["Workspace notes", notes.workspace]] as const) {
+  for (const [label, list] of [["Project notes", notes.project], ["Project notes linked to this workspace", notes.workspace]] as const) {
     lines.push("", `## ${label}`, ...(list.length ? list.map(indexLine) : ["- (none yet)"]));
   }
 
