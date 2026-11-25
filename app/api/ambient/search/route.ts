@@ -98,7 +98,7 @@ async function loadNoteIndex(): Promise<IndexedNote[]> {
     { dirs: projectNoteDirs(p), where: p.name },
     ...workspaces
       .filter((w) => w.projectId === p.id && w.status === "active")
-      .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
+      .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.name}` })),
   ]);
   return (await Promise.all(scopes.flat().map(async ({ dirs, where }) =>
     (await listNotes(dirs).catch(() => [])).map((note) => ({ note, where })),

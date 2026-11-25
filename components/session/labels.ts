@@ -30,7 +30,7 @@ export function isLocalWorkspace(w: Pick<Workspace, "slug" | "branch">) {
 }
 
 export function workspaceLabel(w: Pick<Workspace, "slug" | "branch" | "name">) {
-  return isLocalWorkspace(w) ? "Local" : w.name;
+  return w.name;
 }
 
 /** What to show in lists: the branch for worktrees (like Conductor), else the label. */

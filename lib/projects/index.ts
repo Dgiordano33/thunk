@@ -120,7 +120,7 @@ export async function ensureMainWorkspace(project: Project): Promise<Workspace> 
   const cwd = project.repos[0]?.path ?? (await ensureHome(project));
   let ws: Workspace;
   try {
-    ws = await insertWorkspace({ projectId: project.id, name: "main", slug: "main", cwd, branch: null, visibility: "project" });
+    ws = await insertWorkspace({ projectId: project.id, name: await pickWorkspaceName(project.id), slug: "main", cwd, branch: null, visibility: "project" });
   } catch (err) {
     // Two requests can both find no main workspace; the loser uses the winner's.
     const raced = (err as { code?: string }).code === "23505" ? await findWorkspace(project.id, { slug: "main" }) : null;
