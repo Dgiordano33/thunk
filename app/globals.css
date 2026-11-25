@@ -738,3 +738,11 @@
   .floating-window[data-window-sized="true"] > .civ-panel { height: 100%; }
   .floating-window [data-window-resize="se"]::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid var(--muted-foreground); border-bottom: 2px solid var(--muted-foreground); opacity: .5; }
 }
+
+/* Sidebar rows keep their resting count on one right edge; row actions join beside it on hover or keyboard focus.
+   Until then they are visually hidden but still in the tab order (display:none would drop them from it). */
+@media (min-width: 768px) {
+  .sidebar-row:not(:hover, :focus-within, :has([data-state="open"], :disabled)) .sidebar-row-actions {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}

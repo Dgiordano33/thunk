@@ -10,6 +10,7 @@ import type { CanvasSession } from "@/lib/board/types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { canvasPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { FOCUS, ROW } from "@/components/layout/sidebar-row";
 
 /** The board a pathname shows, when it is one of this project's canvases. */
 export function canvasIdFromPath(pathname: string, slug: string) {
@@ -24,25 +25,27 @@ export function SidebarCanvases({ project, canvases, pathname }: { project: { id
   const active = canvasIdFromPath(pathname, project.slug);
   return (
     <div className="mt-1" role="group" aria-label={`${project.name} canvases`}>
-      <div className="group/cv flex items-center pr-1 pl-8">
+      <div className="sidebar-row flex items-center pr-2 pl-8">
         <span className="text-muted-foreground pixel flex-1 py-1 text-[10px] tracking-widest uppercase">Canvas</span>
-        <Button size="icon-xs" variant="ghost" aria-label={`New canvas in ${project.name}`} title="New canvas" className="md:opacity-0 group-hover/cv:opacity-100 focus-visible:opacity-100" onClick={() => setCreating(true)}>
-          <PlusIcon />
-        </Button>
+        <span className="sidebar-row-actions flex shrink-0 items-center">
+          <Button size="icon-xs" variant="ghost" aria-label={`New canvas in ${project.name}`} title="New canvas" onClick={() => setCreating(true)}>
+            <PlusIcon />
+          </Button>
+        </span>
       </div>
       <ul className="flex flex-col gap-0.5">
         {canvases.map((c) => {
           const status = live.find((l) => l.projectId === project.id && l.boardId === c.id)?.status ?? "idle";
           return (
-            <li key={c.id}>
+            <li key={c.id} className={cn(ROW, active === c.id && WORLD_SELECTION)}>
               <Link
                 href={canvasPath(project, c.id)}
                 aria-current={active === c.id ? "page" : undefined}
-                className={cn("hover:bg-sidebar-accent flex min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 pl-8 transition-colors", active === c.id && WORLD_SELECTION)}
+                className={cn("flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-8", FOCUS)}
               >
-                <ShapesIcon className="text-muted-foreground size-3.5 shrink-0" />
+                <ShapesIcon className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate text-[13px]">{c.name}</span>
-                {status !== "idle" && <span className={cn("ml-auto size-2 shrink-0 rounded-full", status === "running" ? "bg-sky-500" : "bg-amber-500")} role="img" aria-label={CANVAS_STATUS_LABEL[status]} title={CANVAS_STATUS_LABEL[status]} />}
+                {status !== "idle" && <span className={cn("ml-auto size-2 shrink-0 rounded-full", status === "running" ? "bg-[var(--status-running)]" : "bg-[var(--status-attention-ink)]")} role="img" aria-label={CANVAS_STATUS_LABEL[status]} title={CANVAS_STATUS_LABEL[status]} />}
               </Link>
             </li>
           );

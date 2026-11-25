@@ -8,20 +8,29 @@ import { chipLabel } from '@/lib/capture/chip';
 import { label as shortcutLabel, matches, useIsMac } from '@/lib/capture/shortcut';
 import { useUi } from '@/lib/store/ui-store';
 import { Kbd } from '@/components/ui/kbd';
+import { Hint } from '@/components/hint';
 import { PenLineIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const openCapture = () => window.dispatchEvent(new Event('thunk:capture'));
 
-/** The Capture bar: looks like a field, opens the Capture dialog. `hud` sits in the world map's top bar; `sidebar` under Search. */
-export function CaptureTrigger({ variant = 'hud', className }: { variant?: 'hud' | 'sidebar'; className?: string }) {
+/** The Capture bar: looks like a field, opens the Capture dialog. `hud` sits in the world map's top bar; `sidebar` under the logo row. */
+export function CaptureTrigger({ variant = 'hud', className }: { variant?: 'hud' | 'sidebar' | 'rail'; className?: string }) {
   const shortcut = useUi((s) => s.captureShortcut);
   const mac = useIsMac();
   const hint = shortcut && mac !== null ? shortcutLabel(shortcut, mac) : '';
+  if (variant === 'rail') return (
+    <Hint label="take a crack at" keys={hint || undefined} side="right">
+      <button type="button" aria-label="take a crack at" onClick={openCapture}
+        className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent flex size-9 items-center justify-center rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+        <PenLineIcon className="size-4" aria-hidden="true" />
+      </button>
+    </Hint>
+  );
   return (
     <button type="button" aria-label="take a crack at" onClick={openCapture}
       className={cn('text-muted-foreground hover:text-foreground flex items-center gap-2 text-left text-sm transition-colors',
-        variant === 'hud' ? 'h-8 w-full rounded-md px-2.5' : 'bg-background h-10 w-full rounded-md border px-3 hover:bg-muted/50', className)}>
+        variant === 'hud' ? 'h-8 w-full rounded-md px-2.5' : 'bg-background h-9 w-full rounded-md border px-2 hover:bg-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', className)}>
       <PenLineIcon className="size-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">take a crack at…</span>
       {hint && <Kbd>{hint}</Kbd>}
