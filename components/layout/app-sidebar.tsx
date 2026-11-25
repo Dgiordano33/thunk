@@ -25,6 +25,8 @@ import { isLocalWorkspace, workspaceDisplayName } from "@/components/session/lab
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
+import { SidebarCanvases } from "@/components/layout/sidebar-canvases";
+import type { CanvasSession } from "@/lib/board/types";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
 import { projectSlugFromPath, isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
@@ -32,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
 
-export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
+export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const notificationCounts = useNotifications((s) => s.counts.byProject);
   const taskCounts = useTaskCounts();
   const sessions = useAmbient((s) => s.sessions);
@@ -191,6 +193,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     })}
                   </ul>
                 )}
+                {open && canvases[p.id] && <SidebarCanvases project={p} canvases={canvases[p.id]} pathname={pathname} />}
               </li>
             );
           })}

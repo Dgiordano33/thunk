@@ -42,7 +42,7 @@ test('agent tools preserve snapshots, reject ambiguous edits, reply and emit per
   assert.deepEqual(boardTools({meta:{origin:null}},()=>{}),[]);
 });
 test('send stamps only the dispatched scope, preserves baseline for mentions, and retains pending work on dispatch failure',async t=>{
- const d=await dir(t);let fail=false,content='';const live={id:'session',meta:{sdkSessionId:'sdk'},events:[]};const load=Module._load;
+ const d=await dir(t);let fail=false,content='';const live={id:'session',meta:{sdkSessionId:'sdk',model:require('../lib/env.ts').env.DEFAULT_MODEL},events:[]};const load=Module._load;
  Module._load=function(request,...rest){if(request==='@/lib/agent')return{resumeSession:async()=>live,startSession:async()=>live,subscribe:()=>{},emit:()=>{},pushUserMessage:(_,text)=>{if(fail)throw new Error('dispatch failed');content=text;}};if(request==='@/lib/projects')return{ensureMainWorkspace:async()=>({id:'main'})};if(request==='./service'&&rest[0]?.filename.endsWith('/board/session.ts'))return{boardFor:async()=>({project:{id:'p'},dir:d})};return load.call(this,request,...rest);};t.after(()=>{Module._load=load;});
  const {sendBoard}=require('../lib/board/session.ts');const c=await store.addCard(d,{markdown:'new',baselineMarkdown:'old',comments:[{id:'t',quote:'new',body:'question',author:'user',sentAt:null,resolved:false,replies:[]}]});
  await sendBoard('p',{cardId:c.id,targetId:'t'});let saved=await store.readCard(d,c.id);assert.equal(saved.baselineMarkdown,'old');assert.ok(saved.comments[0].sentAt);assert.match(content,/mode="mention"/);
@@ -98,7 +98,7 @@ test('focus scope returns every listed card in reading order and the focus paylo
   assert.match(text,new RegExp(`source_card_id="${drawing.id}"`));assert.match(text,/x="0" y="500" width="900"/);assert.match(text,new RegExp(`<drawing>${drawing.id}.annotated.png</drawing>`));assert.doesNotMatch(text,/<deleted>/);
 });
 test('focus send stamps the group, attaches drawings and rejects more than five images',async t=>{
-  const d=await dir(t);let message=null;const live={id:'session',meta:{sdkSessionId:'sdk'},events:[]};const load=Module._load;
+  const d=await dir(t);let message=null;const live={id:'session',meta:{sdkSessionId:'sdk',model:require('../lib/env.ts').env.DEFAULT_MODEL},events:[]};const load=Module._load;
   Module._load=function(request,...rest){if(request==='@/lib/agent')return{resumeSession:async()=>live,startSession:async()=>live,subscribe:()=>{},emit:()=>{},pushUserMessage:(_,text,opts)=>{message={text,opts};}};if(request==='@/lib/projects')return{ensureMainWorkspace:async()=>({id:'main'})};if(request==='./service'&&rest[0]?.filename.endsWith('/board/session.ts'))return{boardFor:async()=>({project:{id:'p'},dir:d})};return load.call(this,request,...rest);};t.after(()=>{Module._load=load;});
   delete require.cache[require.resolve('../lib/board/session.ts')];const {sendBoard}=require('../lib/board/session.ts');
   const empty=await store.addCard(d,{markdown:'  '});assert.equal((await sendBoard('p',{focus:[empty.id]})).sent,false);assert.equal(message,null);
@@ -127,7 +127,7 @@ test('focus send stamps the group, attaches drawings and rejects more than five 
   await assert.rejects(sendBoard('p',{focus:many}),e=>e.status===400);
 });
 test('send all holds images over the per-turn cap instead of marking them sent',async t=>{
-  const d=await dir(t);let message=null;const live={id:'session',meta:{sdkSessionId:'sdk'},events:[]};const load=Module._load;
+  const d=await dir(t);let message=null;const live={id:'session',meta:{sdkSessionId:'sdk',model:require('../lib/env.ts').env.DEFAULT_MODEL},events:[]};const load=Module._load;
   Module._load=function(request,...rest){if(request==='@/lib/agent')return{resumeSession:async()=>live,startSession:async()=>live,subscribe:()=>{},emit:()=>{},pushUserMessage:(_,text,opts)=>{message={text,opts};}};if(request==='@/lib/projects')return{ensureMainWorkspace:async()=>({id:'main'})};if(request==='./service'&&rest[0]?.filename.endsWith('/board/session.ts'))return{boardFor:async()=>({project:{id:'p'},dir:d})};return load.call(this,request,...rest);};t.after(()=>{Module._load=load;});
   delete require.cache[require.resolve('../lib/board/session.ts')];const {sendBoard}=require('../lib/board/session.ts');
   const png=Buffer.from('89504e470d0a1a0a00','hex');const ids=[];
@@ -226,4 +226,20 @@ test('interaction helpers: positions, stacks, move patches, widths, lasso, outli
   const view={left:0,top:0,right:400,bottom:300};
   assert.deepEqual(visibleIds([a,d],view,1),['a']);assert.deepEqual(visibleIds([a,d],view,.39),[]);
   assert.deepEqual(visibleIds([card('e',400,0)],view,1),[]);assert.deepEqual(visibleIds([card('e',399,0)],view,1),['e']);
+});
+test('a board agent runs the board\'s model, else the app default',()=>{const {boardModel}=require('../lib/board/model.ts');const {env}=require('../lib/env.ts');assert.equal(boardModel({model:'claude-haiku-5-5'}),'claude-haiku-5-5');assert.equal(boardModel({}),env.DEFAULT_MODEL);assert.equal(boardModel({model:''}),env.DEFAULT_MODEL);});
+test('canvas status: waiting on the person beats running; a chief\'s question or no session is idle',()=>{const {canvasStatus}=require('../lib/board/status.ts');assert.equal(canvasStatus(null),'idle');assert.equal(canvasStatus({status:'running'}),'running');assert.equal(canvasStatus({status:'starting'}),'running');assert.equal(canvasStatus({status:'running'},1),'waiting');assert.equal(canvasStatus({status:'awaiting',waitingOn:null}),'waiting');assert.equal(canvasStatus({status:'awaiting',waitingOn:'chief'}),'idle');assert.equal(canvasStatus({status:'idle'}),'idle');});
+test('ensureBoardSession starts with the board\'s model or the default, and switches a live session in place',async t=>{
+  const d=await dir(t);const started=[],switched=[];let live=null;const load=Module._load;
+  const make=model=>({id:'s'+started.length,meta:{sdkSessionId:null,model,status:'idle'},events:[],driver:{setModel:async m=>{switched.push(m);}}});
+  Module._load=function(request,...rest){if(request==='@/lib/agent')return{resumeSession:async()=>live,startSession:async input=>{started.push(input.model);live=make(input.model);return live;},subscribe:()=>{},emit:()=>{},pushUserMessage:()=>{},closeSession:()=>{live=null;},getSession:()=>live,isTerminated:()=>false,setState:()=>{}};if(request==='@/lib/projects')return{ensureMainWorkspace:async()=>({id:'main'})};if(request==='./service'&&rest[0]?.filename.endsWith('/board/session.ts'))return{boardFor:async()=>({project:{id:'p'},dir:d})};return load.call(this,request,...rest);};t.after(()=>{Module._load=load;});
+  for(const k of Object.keys(require.cache))if(k.endsWith('/lib/board/session.ts'))delete require.cache[k];
+  const {ensureBoardSession}=require('../lib/board/session.ts');const {env}=require('../lib/env.ts');
+  await ensureBoardSession('p');assert.deepEqual(started,[env.DEFAULT_MODEL]);
+  // A Claude model change on a live session switches it without a new session.
+  let b=await store.readBoard(d);b.model='claude-haiku-5-5';await store.saveBoard(d,b);
+  await ensureBoardSession('p');assert.deepEqual(started,[env.DEFAULT_MODEL]);assert.deepEqual(switched,['claude-haiku-5-5']);assert.equal(live.meta.model,'claude-haiku-5-5');
+  // A provider change can't continue the transcript: it starts a new session on the new model.
+  b=await store.readBoard(d);b.model='gpt-5.5-codex';await store.saveBoard(d,b);
+  await ensureBoardSession('p');assert.deepEqual(started,[env.DEFAULT_MODEL,'gpt-5.5-codex']);
 });

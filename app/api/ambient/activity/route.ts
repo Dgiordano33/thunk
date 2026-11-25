@@ -1,7 +1,8 @@
 import { workspaceDeliveries } from "@/lib/projects/delivery";
 import { listLiveSessions } from "@/lib/agent";
 import { noticeFor } from "@/lib/ambient/summary";
-import type { ActivitySession } from "@/lib/ambient/types";
+import type { ActivitySession, CanvasActivity } from "@/lib/ambient/types";
+import { canvasStatus } from "@/lib/board/status";
 import { handle } from "@/lib/api/http";
 import { ensureScheduler } from "@/lib/routines/scheduler";
 import type { RoutineRunActivity } from "@/lib/routines/types";
@@ -23,15 +24,21 @@ async function recentRuns(): Promise<RoutineRunActivity[]> {
 
 export const GET = handle(async () => {
   ensureScheduler();
-  const sessions: ActivitySession[] = listLiveSessions().filter(live => live.meta.origin?.kind !== "board").map((live) => {
+  const live = listLiveSessions();
+  // A person's pending requests; questions a chief is handling don't need the person.
+  const pending = (l: (typeof live)[number]) => [...l.pending.values()].filter((p) => p.routedTo !== "chief").length;
+  // Canvas agents stay out of the session list; their status shows on the canvas instead.
+  const canvases: CanvasActivity[] = live.flatMap((l) => l.meta.origin?.kind === "board" && !l.driver.isClosed
+    ? [{ projectId: l.meta.projectId, boardId: l.meta.origin.boardId ?? "main", status: canvasStatus(l.meta, pending(l)) }]
+    : []);
+  const sessions: ActivitySession[] = live.filter(live => live.meta.origin?.kind !== "board").map((live) => {
     const event = live.events.findLast((e) => noticeFor(e) !== null);
     return {
       ...live.meta,
       live: !live.driver.isClosed,
       projectName: live.ctx.project.name,
       workspaceName: live.ctx.workspace.name,
-      // Questions a chief is handling don't need the person.
-      pending: [...live.pending.values()].filter((p) => p.routedTo !== "chief").length,
+      pending: pending(live),
       notice: event ? { seq: event.seq, message: noticeFor(event)! } : null,
     };
   });
@@ -39,5 +46,5 @@ export const GET = handle(async () => {
     console.error("[thunk] recent routine runs failed", err);
     return [];
   });
-  return Response.json({ sessions, runs, deliveries: workspaceDeliveries(true) }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ sessions, runs, deliveries: workspaceDeliveries(true), canvases }, { headers: { "Cache-Control": "no-store" } });
 });

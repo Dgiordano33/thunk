@@ -3,7 +3,7 @@
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { DocumentCard } from "@/components/canvas/document-card";
+import { DocumentCard } from "@/components/document/document-card";
 import { AskQuestionForm } from "@/components/approvals/ask-question-form";
 import { PermissionCard } from "@/components/approvals/permission-card";
 import { useSession } from "@/lib/store/session-store";

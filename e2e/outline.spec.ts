@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { box, card, doc, drag, focus, inFocus, newBoard, openCanvas, seed, settled, startAt } from './canvas';
 
+// The sidebar takes ~17% of the window; this keeps the board pane as wide as the layouts these tests seed.
+test.use({ viewport: { width: 1700, height: 900 } });
+
 /** The focus outline's eight handles redefine the focus as what sits inside it. */
 
 const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;

@@ -1,9 +1,9 @@
 'use client';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
-import { CornerDownRightIcon, GripVerticalIcon, RefreshCwIcon, TableIcon, MessageSquarePlusIcon, PencilIcon, MapPinIcon, Trash2Icon } from 'lucide-react';
+import { CornerDownRightIcon, EllipsisIcon, GripVerticalIcon, ListTodoIcon, MessageSquareTextIcon, NotebookPenIcon, RefreshCwIcon, TableIcon, MessageSquarePlusIcon, PencilIcon, MapPinIcon, Trash2Icon } from 'lucide-react';
 import { Composer } from '@/components/comments/composer';
-import { DiffView } from '@/components/canvas/diff-view';
+import { DiffView } from '@/components/document/diff-view';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/store/board-store';
 import { BoardDocEditor } from './board-doc-editor';
@@ -14,17 +14,20 @@ import { MENTION, mentions } from '@/lib/board/agent-mention';
 import type { MentionScope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
 import { BoardCard, BoardGrip, BoardWidthHandle } from './use-board-primitive';
-import { BoardButton, BoardToggle, BoardToolbar, BoardToolbarButton, Confirm, Hint } from './board-ui';
+import { BoardButton, BoardMenu, BoardToggle, BoardToolbar, BoardToolbarButton, Confirm, Hint } from './board-ui';
 
 /** Accessible name for an item: the first line of its text, falling back to the stored title. */
 export const itemLabel = (c: Card) => c.kind === 'doc' ? c.markdown.split('\n').map(l => l.replace(/^[#>\-*\s\d.[\]x]+/, '').trim()).find(Boolean)?.slice(0, 80) || c.title || 'Text' : c.title || (c.kind === 'image' ? 'Image' : c.kind === 'chart' ? 'Chart' : 'Drawing');
+
+/** What a card can become elsewhere in the project: a task, a note, or the first prompt of a session. */
+export type CardAction = 'task' | 'note' | 'session';
 
 /** Text blocks whose live editor has been measured this session. */
 const measured = new Set<string>();
 
 type Thread = { quote: string; id?: string; x?: number; y?: number; anchor?: ChartAnchor };
 
-export const BoardItem = memo(function BoardItem({ card: c, base, visible, selected, onRemove, onMention, onRevert }: {
+export const BoardItem = memo(function BoardItem({ card: c, base, visible, selected, onRemove, onMention, onRevert, onAction }: {
     card: Card;
     base: string;
     visible: boolean;
@@ -32,6 +35,7 @@ export const BoardItem = memo(function BoardItem({ card: c, base, visible, selec
     onRemove: (c: Card) => void;
     onMention: (scope: MentionScope) => void;
     onRevert: (c: Card, keep: boolean) => Promise<void>;
+    onAction: (c: Card, action: CardAction) => Promise<void>;
 }) {
     const ref = useRef<HTMLElement>(null);
     const [thread, setThread] = useState<Thread | null>(null), [review, setReview] = useState(false), [tool, setTool] = useState<'none' | 'pin' | 'draw'>('none'), [showData, setShowData] = useState(false);
@@ -119,6 +123,11 @@ export const BoardItem = memo(function BoardItem({ card: c, base, visible, selec
           <div className="flex justify-end gap-1"><BoardButton size="xs" variant="ghost" onClick={() => setConfirming(false)}>Cancel</BoardButton><BoardButton size="xs" onClick={() => void refresh()}>Run</BoardButton></div>
         </Confirm>}
         {!c.prompt && <BoardToolbarButton size="xs" onClick={() => setThread({ quote: '' })}><MessageSquarePlusIcon aria-hidden="true"/>Comment</BoardToolbarButton>}
+        {!c.prompt && <BoardMenu hint="Use elsewhere" trigger={<BoardToolbarButton size="xs" aria-label={`More actions for ${label}`}><EllipsisIcon aria-hidden="true"/></BoardToolbarButton>} items={[
+            { value: 'task', label: <><ListTodoIcon aria-hidden="true"/>Create task</>, onSelect: () => onAction(latest(), 'task') },
+            { value: 'note', label: <><NotebookPenIcon aria-hidden="true"/>Save as note</>, onSelect: () => onAction(latest(), 'note') },
+            { value: 'session', label: <><MessageSquareTextIcon aria-hidden="true"/>Start session from card</>, onSelect: () => onAction(latest(), 'session') },
+        ]}/>}
         <Hint label="Delete" shortcut="delete"><BoardToolbarButton size="xs" aria-label={`Delete ${label}`} onClick={() => onRemove(c)}><Trash2Icon aria-hidden="true"/></BoardToolbarButton></Hint>
       </BoardToolbar>
       {c.kind !== 'drawing' && !c.prompt && <Hint label="Drag to change width" side="right"><BoardWidthHandle box={c.id} type="button" aria-label={`Resize ${label}`} className={cn('absolute -right-3 top-0 bottom-0 w-2 rounded bg-primary/0 hover:bg-primary/20', handle)}/></Hint>}

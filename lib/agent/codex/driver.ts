@@ -19,7 +19,7 @@ import { readMemory } from "@/lib/projects/memory";
 import { projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
-import { CANVAS_PROMPT, hierarchyPrompt } from "../options";
+import { DOCUMENT_PROMPT, hierarchyPrompt } from "../options";
 import { otherRepoDirectories } from "@/lib/projects/repos-prompt";
 import { emit, setState, type AgentDriver, type LiveSession, type PendingRequest } from "../session-registry";
 import { CodexRpc, type RpcId } from "./rpc";
@@ -174,7 +174,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
   }
 
   const developerInstructions = [
-    CANVAS_PROMPT,
+    DOCUMENT_PROMPT,
     hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
     teamPrompt(live.meta.origin),

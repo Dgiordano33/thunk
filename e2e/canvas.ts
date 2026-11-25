@@ -6,7 +6,7 @@ import type { Card } from '../lib/board/types';
 
 /** Helpers for driving the Canvas in a browser: a fresh board per test, seeded cards, and what the page saved. */
 
-export type Board = { projectId: string; slug: string; dir: string; api: string };
+export type Board = { projectId: string; slug: string; name: string; dir: string; api: string };
 type Seed = Partial<Card> & Pick<Card, 'x' | 'y'>;
 export type Box = { x: number; y: number; width: number; height: number };
 
@@ -22,7 +22,7 @@ export async function newBoard(request: APIRequestContext): Promise<Board> {
     const res = await request.post('/api/projects', { data: { name: `Canvas ${Date.now().toString(36)} ${++made}`, repos: [] } });
     expect(res.ok(), await res.text()).toBe(true);
     const { project } = await res.json();
-    return { projectId: project.id, slug: project.slug, dir: path.join(DATA(), 'projects', project.dataKey, 'boards', 'main'), api: `/api/projects/${project.id}/board` };
+    return { projectId: project.id, slug: project.slug, name: project.name, dir: path.join(DATA(), 'projects', project.dataKey, 'boards', 'main'), api: `/api/projects/${project.id}/board` };
 }
 
 /** Writes cards straight into the board's files, for kinds and layouts the API only lets the agent make (charts, stacks). */
@@ -83,10 +83,10 @@ export function recordSaves(page: Page) {
 }
 
 /** Opens the board's canvas and waits until its cards are on screen and their heights have settled. */
-export async function openCanvas(page: Page, board: Board, cards: number) {
+export async function openCanvas(page: Page, board: Board, cards: number, path = `/${board.slug}/canvas`) {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(String(e)));
-    await page.goto(`/${board.slug}/canvas`);
+    await page.goto(path);
     await expect(page.locator('[data-card]')).toHaveCount(cards);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(1200);
@@ -187,3 +187,6 @@ export function pngSize(bytes: Buffer) {
     if (at < 0) return null;
     return { width: bytes.readUInt32BE(at + 16), height: bytes.readUInt32BE(at + 20) };
 }
+
+/** The board's project's Canvas group in the sidebar. */
+export const sidebarCanvases = (page: Page, board: Board) => page.getByRole('group', { name: `${board.name} canvases`, exact: true });

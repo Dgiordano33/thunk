@@ -32,6 +32,7 @@ export function NewChat({
   defaultMode,
   disabled,
   firstSession = false,
+  initialPrompt,
 }: {
   workspaceId: string;
   workspaceLabel: string;
@@ -39,6 +40,8 @@ export function NewChat({
   defaultMode: string;
   disabled?: boolean;
   firstSession?: boolean;
+  /** Text the composer starts with, like a canvas card handed over to a new session. */
+  initialPrompt?: string;
 }) {
   const router = useRouter();
   const base = useWorkspaceBase();
@@ -72,7 +75,8 @@ export function NewChat({
         {unavailable || error ? <AgentStatus /> : <AgentStatus onlyUnavailable />}
       <PromptComposer
           workspaceId={workspaceId}
-          starters={firstSession ? ["Explain how this repo is organised", "Plan a change to …", "Find something worth fixing"] : []}
+          starters={firstSession && !initialPrompt ? ["Explain how this repo is organised", "Plan a change to …", "Find something worth fixing"] : []}
+          initialText={initialPrompt}
           disabled={disabled || submitting || !!unavailable}
           autoFocus
           placeholder="Ask the agent to do something…"

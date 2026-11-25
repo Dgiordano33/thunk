@@ -5,7 +5,7 @@ import { useBoard } from '@/lib/store/board-store';
 import { bounds, focusIds, type Rect } from '@/lib/board/focus';
 import type { MentionScope, Scope } from '@/lib/board/pending';
 import type { Card } from '@/lib/board/types';
-import { BoardItem } from './board-item';
+import { BoardItem, type CardAction } from './board-item';
 import { BoardHandle, BoardLasso, BoardOutline, BoardRoot, BoardWorld, type BoardHandle as Handle } from './use-board-primitive';
 import type { ResizeHandle } from './board-primitive';
 import { Hint } from './board-ui';
@@ -34,7 +34,7 @@ export function useOutline(ids: string[]): Rect | null {
 const editableTarget = (t: EventTarget | null) => t instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable);
 const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by });
 
-export function BoardSurface({ base, board: handle, space, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert }: {
+export function BoardSurface({ base, board: handle, space, tool, setTool, onCreateDoc, onDraw, onUpload, onRemove, onSend, onRevert, onAction }: {
     base: string;
     board: Handle;
     /** Whether Space is held, which pans from anywhere. */
@@ -47,6 +47,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     onRemove: (c: Card) => void;
     onSend: (scope?: Scope) => void;
     onRevert: (c: Card, keep: boolean) => Promise<void>;
+    onAction: (c: Card, action: CardAction) => Promise<void>;
 }) {
     const toWorld = handle.api.viewport.toCanvas;
     const ref = useRef<HTMLDivElement>(null);
@@ -76,13 +77,14 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
     }, [handle]);
     useLayoutEffect(() => readShown.current(), [cards]);
     const [initialTransform] = useState(() => { const v = handle.api.viewport.get(); return `translate(${v.x}px,${v.y}px) scale(${v.zoom})`; });
-    const state = useRef({ ids, tool, onSend, onRemove, onRevert, setTool });
-    useEffect(() => { state.current = { ids, tool, onSend, onRemove, onRevert, setTool }; });
+    const state = useRef({ ids, tool, onSend, onRemove, onRevert, onAction, setTool });
+    useEffect(() => { state.current = { ids, tool, onSend, onRemove, onRevert, onAction, setTool }; });
     // Stable callbacks, so a memoized card only re-renders when its own props change.
     const [item] = useState(() => ({
         remove: (c: Card) => state.current.onRemove(c),
         mention: (s: MentionScope) => state.current.onSend(s),
         revert: (c: Card, keep: boolean) => state.current.onRevert(c, keep),
+        action: (c: Card, action: CardAction) => state.current.onAction(c, action),
     }));
 
     useEffect(() => {
@@ -200,7 +202,7 @@ export function BoardSurface({ base, board: handle, space, tool, setTool, onCrea
             <p className="mt-1.5 px-1 text-xs text-muted-foreground">↵ send · empty ↵ sends the group as-is · esc close</p>
           </form>}
         </BoardOutline>}
-        {cards.map(c => <BoardItem key={c.id} card={c} base={base} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert}/>)}
+        {cards.map(c => <BoardItem key={c.id} card={c} base={base} visible={shownIds.includes(c.id) || c.id === anchorId} selected={c.id === anchorId} onRemove={item.remove} onMention={item.mention} onRevert={item.revert} onAction={item.action}/>)}
         {stroke && <svg className="pointer-events-none absolute overflow-visible text-foreground" width="1" height="1" aria-hidden="true"><polyline points={stroke.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </BoardWorld>
       <BoardLasso className="rounded-md border border-primary/60 bg-primary/10"/>
