@@ -4,8 +4,6 @@ import { RotateCcwIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ProjectDetailsLink } from "@/components/project/project-details-link";
-import { relativeTime } from "@/components/session/labels";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { CONTROL_BUTTON, IsoViewport } from "@/components/world/iso-viewport";
 import type { ProjectSummary } from "@/lib/projects/types";
 import { projectPath } from "@/lib/routes";
@@ -15,7 +13,7 @@ import { bodyKind } from "@/lib/world/bodies";
 import { cityActivity, cityLevel, cityMood, type CityActivity } from "@/lib/world/cities";
 import { POSITIONS_COOKIE, POSITIONS_MAX_AGE, clampOffset, encodePositions, floatLayout, positionKey, type Offset } from "@/lib/world/positions";
 import { TILT, planetPalette, planetRadius } from "@/lib/world/system";
-import { CardEyebrow, CardStats, shortAge } from "./card";
+import { shortAge } from "./card";
 import { SceneContext, makeBody, useBodyHover, useSceneStore, type SceneData, type SceneStore } from "./scene/scene-store";
 import { SpaceCanvas } from "./scene/space-canvas";
 import { Sphere, StarMark } from "./sphere";
@@ -147,7 +145,6 @@ export function Orbits({ w, h, radii, star = true }: { w: number; h: number; rad
   );
 }
 
-const tildify = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 const Planet = memo(function Planet({ planet, mover, activity }: { planet: Placed; mover: Mover; activity: CityActivity }) {
@@ -159,7 +156,6 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
   const hover = useBodyHover(project.id);
   const scene = useContext(SceneContext);
   const meta = dormant ? (project.lastActivityAt ? `Idle ${shortAge(project.lastActivityAt)}` : "No activity") : `${project.workspaceCount} ws · ${project.sessionCount} sess`;
-  const [cardOpen, setCardOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; at: Offset; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
@@ -212,62 +208,40 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
       className="absolute flex flex-col items-center"
       style={{ left: x, top: y, transform: `translate(-50%, -${r}px)`, zIndex: dragging ? 10_000 : Math.round(y), "--i": order } as React.CSSProperties}
     >
-    <HoverCard openDelay={120} closeDelay={60} open={cardOpen && !dragging} onOpenChange={setCardOpen}>
-      <HoverCardTrigger asChild>
-        <Link
-          href={projectPath(project)}
-          draggable={false}
-          aria-label={`${project.name}, ${plural(project.workspaceCount, "workspace")}, ${plural(project.sessionCount, "session")}${activity ? `, ${activity}` : dormant ? ", idle" : ""}`}
-          aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
-          className={cn("sp-body group flex touch-none flex-col items-center outline-none", dragging && "is-dragging cursor-grabbing")}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onKeyDown={onKeyDown}
-          onClick={(event) => {
-            // A drag that ends over the planet must not open it.
-            if (suppressClick.current) {
-              event.preventDefault();
-              suppressClick.current = false;
-            }
-          }}
-          {...hover}
-        >
-          <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
-            {tone === "running" && <span className="orbit-pulse absolute rounded-full" style={{ inset: -7 }} />}
-            <span className="sp-enter-body sp-fallback-hover absolute flex items-center justify-center">
-              <Sphere r={r} palette={planetPalette(project.id)} light={light} bands={level >= 3} ringed={level >= 4} dim={dormant} />
-            </span>
-            <span className="absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2" style={{ inset: -4 }} />
+      <Link
+        href={projectPath(project)}
+        draggable={false}
+        aria-label={`${project.name}, ${plural(project.workspaceCount, "workspace")}, ${plural(project.sessionCount, "session")}${activity ? `, ${activity}` : dormant ? ", idle" : ""}`}
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
+        className={cn("sp-body group flex touch-none flex-col items-center outline-none", dragging && "is-dragging cursor-grabbing")}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
+        onClick={(event) => {
+          // A drag that ends over the planet must not open it.
+          if (suppressClick.current) {
+            event.preventDefault();
+            suppressClick.current = false;
+          }
+        }}
+        {...hover}
+      >
+        <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
+          {tone === "running" && <span className="orbit-pulse absolute rounded-full" style={{ inset: -7 }} />}
+          <span className="sp-enter-body sp-fallback-hover absolute flex items-center justify-center">
+            <Sphere r={r} palette={planetPalette(project.id)} light={light} bands={level >= 3} ringed={level >= 4} dim={dormant} />
           </span>
-          <span className="planet-label sp-enter-label flex flex-col items-center whitespace-nowrap">
-            <span className="sp-tick" aria-hidden="true" />
-            <span className={cn("sp-name", dormant && "is-dim")}>{project.name}</span>
-            <span className="sp-meta">{meta}</span>
-            {activity && <StatusBadge activity={activity} className="mt-1" />}
-          </span>
-        </Link>
-      </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" sideOffset={14} className="w-72">
-        <CardEyebrow>Project</CardEyebrow>
-        <p className="mt-1 truncate text-[15px] leading-5 font-semibold tracking-[-0.011em]">{project.name}</p>
-        <p className="text-muted-foreground mt-0.5 truncate font-mono text-[11px]">
-          {project.repos.length > 1 ? `${project.repos.length} repositories` : project.repos[0] ? tildify(project.repos[0].path) : "No repositories"}
-        </p>
-        <CardStats
-          rows={[
-            ["Workspaces", project.workspaceCount],
-            ["Sessions", project.sessionCount],
-            ["Last activity", project.lastActivityAt ? relativeTime(project.lastActivityAt) : "Never"],
-            ...(activity || dormant ? [["Status", activity ?? "Idle 30+ days"] as [string, React.ReactNode]] : []),
-          ]}
-        />
-        <Link href={projectPath(project)} className="mt-2 block text-right text-xs font-medium underline-offset-2 hover:underline">
-          Open project →
-        </Link>
-      </HoverCardContent>
-    </HoverCard>
+          <span className="absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2" style={{ inset: -4 }} />
+        </span>
+        <span className="planet-label sp-enter-label flex flex-col items-center whitespace-nowrap">
+          <span className="sp-tick" aria-hidden="true" />
+          <span className={cn("sp-name", dormant && "is-dim")}>{project.name}</span>
+          <span className="sp-meta">{meta}</span>
+          {activity && <StatusBadge activity={activity} className="mt-1" />}
+        </span>
+      </Link>
       <ProjectDetailsLink project={project} />
     </div>
   );

@@ -229,52 +229,33 @@ const Moon = memo(function Moon({ moon, order, href, menuHref, selected, tone, c
       style={{ left: moon.x, top: moon.y, transform: `translate(-50%, -${r}px)`, zIndex: Math.round(moon.y) + 1, "--i": order } as React.CSSProperties}
       {...hover}
     >
-    <HoverCard openDelay={150} closeDelay={60}>
-      <HoverCardTrigger asChild>
-        <Link
-          href={href}
-          scroll={false}
-          draggable={false}
-          aria-label={`Workspace ${moon.label}${cue ? `, ${cue.label}` : ""}${tone === "attention" ? ", needs attention" : tone === "running" ? ", running" : tone === "error" ? ", error" : ""}${serving ? ", dev server running" : ""}`}
-          className="group flex flex-col items-center outline-none"
-        >
-          <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
-            {tone === "running" && <span className="orbit-pulse absolute rounded-full" style={{ inset: -5 }} />}
-            <span className="sp-enter-body sp-fallback-hover absolute flex items-center justify-center">
-              <Sphere r={r} palette={planetPalette(moon.id)} light={LIGHT} />
-            </span>
-            <span className={cn("absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2", selected && "ring-2 ring-offset-2 ring-(--foreground)/70")} style={{ inset: -3 }} />
+      <Link
+        href={href}
+        scroll={false}
+        draggable={false}
+        aria-label={`Workspace ${moon.label}${cue ? `, ${cue.label}` : ""}${tone === "attention" ? ", needs attention" : tone === "running" ? ", running" : tone === "error" ? ", error" : ""}${serving ? ", dev server running" : ""}`}
+        className="group flex flex-col items-center outline-none"
+      >
+        <span className="relative flex items-center justify-center" style={{ width: 2 * r, height: 2 * r }}>
+          {tone === "running" && <span className="orbit-pulse absolute rounded-full" style={{ inset: -5 }} />}
+          <span className="sp-enter-body sp-fallback-hover absolute flex items-center justify-center">
+            <Sphere r={r} palette={planetPalette(moon.id)} light={LIGHT} />
           </span>
-          <span className="planet-label sp-enter-label flex flex-col items-center gap-0.5 whitespace-nowrap" style={{ marginTop: moon.sessionCount ? LABEL_DROP - r : 6 }}>
-            <span className="flex items-center gap-1.5 text-[13px] leading-4 font-medium tracking-[-0.006em]">
-              {moon.label}
-              {serving && <span className="status-dot is-ok" title="Dev server running" />}
-            </span>
-            <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] leading-4">
-              {branch && <span className="max-w-36 truncate font-mono text-[10.5px]">{branch}</span>}
-              {cue && <span className={cn("status-cue", `is-${cue.kind}`)} title={cue.label}>{cue.symbol} {cue.kind === "pass" ? "PR" : cue.kind === "fail" ? "PR failing" : cue.kind === "pending" ? "checks" : cue.kind === "draft" ? "draft" : "PR"}</span>}
-              {moon.overflow > 0 && <span className="font-mono text-[10.5px] tabular-nums">+{moon.overflow}</span>}
-            </span>
-            {tone && tone !== "running" && <StatusBadge tone={tone} />}
+          <span className={cn("absolute rounded-full ring-(--ring) ring-offset-(--void) group-focus-visible:ring-2 group-focus-visible:ring-offset-2", selected && "ring-2 ring-offset-2 ring-(--foreground)/70")} style={{ inset: -3 }} />
+        </span>
+        <span className="planet-label sp-enter-label flex flex-col items-center gap-0.5 whitespace-nowrap" style={{ marginTop: moon.sessionCount ? LABEL_DROP - r : 6 }}>
+          <span className="flex items-center gap-1.5 text-[13px] leading-4 font-medium tracking-[-0.006em]">
+            {moon.label}
+            {serving && <span className="status-dot is-ok" title="Dev server running" />}
           </span>
-        </Link>
-      </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" sideOffset={12} className="w-64 text-xs">
-        <CardEyebrow>Workspace</CardEyebrow>
-        <p className="mt-1 truncate text-[15px] leading-5 font-semibold tracking-[-0.011em]">{moon.label}</p>
-        {moon.branch && <p className="text-muted-foreground truncate font-mono text-[11px]">{moon.branch}</p>}
-        <CardStats
-          className="mt-2"
-          rows={[
-            ["Sessions", moon.sessionCount],
-            ...(cue ? [["Pull request", cue.label] as [string, React.ReactNode]] : []),
-            ["Last activity", relativeTime(moon.lastActivityAt)],
-          ]}
-        />
-        {moon.overflow > 0 && <p className="text-muted-foreground mt-2">{moon.overflow} older sessions are listed in the panel.</p>}
-        <p className="mt-2 text-right font-medium">Open workspace →</p>
-      </HoverCardContent>
-    </HoverCard>
+          <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] leading-4">
+            {branch && <span className="max-w-36 truncate font-mono text-[10.5px]">{branch}</span>}
+            {cue && <span className={cn("status-cue", `is-${cue.kind}`)} title={cue.label}>{cue.symbol} {cue.kind === "pass" ? "PR" : cue.kind === "fail" ? "PR failing" : cue.kind === "pending" ? "checks" : cue.kind === "draft" ? "draft" : "PR"}</span>}
+            {moon.overflow > 0 && <span className="font-mono text-[10.5px] tabular-nums">+{moon.overflow}</span>}
+          </span>
+          {tone && tone !== "running" && <StatusBadge tone={tone} />}
+        </span>
+      </Link>
       <Link
         href={menuHref}
         scroll={false}
