@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    ".next",
+    ".next-e2e",
+    ".next-b",
+    "build",
+    "dist-desktop"
+  ]
+}

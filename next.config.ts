@@ -3,6 +3,10 @@ import { parseTrustedHosts } from "./lib/access";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Only validate generated routes from the slot being built, never the older live slot.
+  ...([".next-a", ".next-b"].includes(process.env.THUNK_DIST_DIR ?? "")
+    ? { typescript: { tsconfigPath: `tsconfig.server-${process.env.THUNK_DIST_DIR!.slice(-1)}.json` } }
+    : {}),
   // `next dev` blocks dev assets for non-localhost origins; allow the Tailscale names (docs/remote.md).
   allowedDevOrigins: parseTrustedHosts(process.env.THUNK_TRUSTED_HOSTS),
   // Browser tests run their own dev server beside yours; Next allows one dev server per build directory.

@@ -2,7 +2,7 @@
 
 Thunk can run around the clock on a Linux server, so you can use it from your phone or any computer without keeping your Mac awake. These steps use a DigitalOcean Droplet, but any Ubuntu 24.04 machine works. The server is reachable only over your private Tailscale network. Requests are checked the same way as in [Use Thunk from your phone](remote.md).
 
-Pushing to the branch the server follows (normally `main` of the repo it was cloned from) is enough to deploy: the server picks up new commits within about five minutes and switches to them once nothing is running. For everything else there is one command, `thunk`, which runs on the server.
+Pushing to the branch the server follows (normally `main` of the repo it was cloned from) is enough to deploy: the server picks up new commits within about one minute and switches to them once nothing is running. For everything else there is one command, `thunk`, which runs on the server.
 
 Replace these placeholders with your own values throughout:
 
@@ -17,7 +17,7 @@ The server's address is `https://<host>.<tailnet>`. `scripts/server/setup.sh` wo
 
 ## Deploying
 
-A timer on the server checks GitHub every five minutes. When the checkout's branch (normally `main`) has new commits, it builds them beside the running version straight away. It restarts onto the new build only when no agent is working, no routine is running and no workspace is being set up or archived. Agents waiting for your answer, open terminals and Run previews do not hold it back; terminals and previews have to be reopened after the restart.
+A timer on the server checks GitHub every minute. When the checkout's branch (normally `main`) has new commits, it builds them beside the running version straight away. It restarts onto the new build only when no agent is working, no routine is running and no workspace is being set up or archived. Agents waiting for your answer, open terminals and Run previews do not hold it back; terminals and previews have to be reopened after the restart.
 
 - `thunk status` shows what the server is doing (`Activity`) and whether automatic updates are on.
 - `thunk auto` lists recent automatic updates, including "waiting to restart: 1 agent working".
