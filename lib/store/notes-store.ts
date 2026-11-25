@@ -62,12 +62,16 @@ export function useNotesEvents() {
   }, []);
 }
 
+type ScopeSnapshot = { key: string; notes: NoteMeta[]; dir: string; error: string | null };
+// Metadata only; editable note bodies still load fresh for conflict-safe editing.
+const scopeSnapshots = new Map<string, ScopeSnapshot>();
+
 /** A scope's notes (memory first), refetched whenever the feed reports a change in it. */
 export function useScopeNotes(scope: NoteScope | null) {
   useNotesEvents();
   const key = scope ? scopeKey(scope) : "";
   const rev = useNotesFeed((s) => scope?.kind === "workspaces" ? s.rev : s.scopeRev[key] ?? 0);
-  const [state, setState] = useState<{ key: string; notes: NoteMeta[]; dir: string; error: string | null } | null>(null);
+  const [state, setState] = useState<ScopeSnapshot | null>(() => scopeSnapshots.get(key) ?? null);
   const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
@@ -75,7 +79,14 @@ export function useScopeNotes(scope: NoteScope | null) {
     let cancelled = false;
     api
       .listNotes(scope.kind, scope.id)
-      .then((r) => !cancelled && setState({ key, notes: r.notes, dir: r.dir, error: null }))
+      .then((r) => {
+        if (cancelled) return;
+        const snapshot = { key, notes: r.notes, dir: r.dir, error: null };
+        scopeSnapshots.delete(key);
+        scopeSnapshots.set(key, snapshot);
+        if (scopeSnapshots.size > 30) scopeSnapshots.delete(scopeSnapshots.keys().next().value!);
+        setState(snapshot);
+      })
       .catch((err: Error) => !cancelled && setState((s) => ({ key, notes: s?.key === key ? s.notes : [], dir: "", error: err.message })));
     return () => {
       cancelled = true;
@@ -84,6 +95,6 @@ export function useScopeNotes(scope: NoteScope | null) {
   }, [key, rev, reloads]);
 
   const reload = useCallback(() => setReloads((n) => n + 1), []);
-  const current = state?.key === key ? state : null;
+  const current = state?.key === key ? state : scopeSnapshots.get(key) ?? null;
   return { notes: current?.notes ?? null, dir: current?.dir ?? "", error: current?.error ?? null, reload };
 }

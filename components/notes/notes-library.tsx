@@ -34,17 +34,19 @@ import { NoteList } from "./note-list";
 const LAST_NOTEBOOK_KEY = "thunk.notes.lastNotebook";
 const HINT_DISMISSED_KEY = "thunk.notes.repoHintDismissed";
 
+let lastFolders: NoteFolder[] | null = null;
+
 /** Every notebook across projects and workspaces, refetched on any note change. A failed load is an error, not an empty library. */
 export function useAllNotes() {
   useNotesEvents();
   const rev = useNotesFeed((s) => s.rev);
-  const [folders, setFolders] = useState<NoteFolder[] | null>(null);
+  const [folders, setFolders] = useState<NoteFolder[] | null>(() => lastFolders);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     api.listAllNotes().then(
-      (r) => { if (!cancelled) { setFolders(r.projects); setError(null); } },
+      (r) => { if (!cancelled) { lastFolders = r.projects; setFolders(r.projects); setError(null); } },
       (err: Error) => !cancelled && setError(err.message),
     );
     return () => {

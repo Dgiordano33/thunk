@@ -4,7 +4,7 @@ import { sessionStatus, sessionDot } from "@/components/session/labels";
 import { WORLD_SELECTION } from "@/components/world/selection";
 
 import { CopyIcon, ChevronRightIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { useState } from "react";
 import { MODE_LABELS, modelLabel, relativeTime } from "@/components/session/labels";
 import { providerOf, type SessionMeta } from "@/lib/agent/types";

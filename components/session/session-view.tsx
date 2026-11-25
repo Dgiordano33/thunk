@@ -43,7 +43,8 @@ export function SessionView({
     let frame: number | undefined;
     const flush = () => {
       frame = undefined;
-      useSession.getState().applyEvents(pending);
+      // Layout effects can hydrate the next session before this stream cleans up.
+      if (useSession.getState().sessionId === meta.id) useSession.getState().applyEvents(pending);
       pending = [];
     };
     const conn = connectSession(meta.id, {

@@ -3,7 +3,7 @@
 import { FloatingWindow, WindowControls } from "@/components/world/floating-window";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { XIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { CivPanel } from "@/components/world/civ-panel";

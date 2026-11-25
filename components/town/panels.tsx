@@ -1,7 +1,7 @@
 import { ChiefPanel } from "@/components/project/chief-panel";
 // Panel bodies for the town view. Server components; the interactive parts are existing client components.
 import { ArchiveIcon, ExternalLinkIcon, FolderGit2Icon, FolderIcon, InfoIcon, MessagesSquareIcon, MonitorPlayIcon, NotebookPenIcon, PlusIcon, SettingsIcon, TerminalIcon, UsersRoundIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { ExternalSessions } from "@/components/project/external-sessions";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
 import { ProjectRepos } from "@/components/project/project-repos";

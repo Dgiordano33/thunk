@@ -4,7 +4,7 @@ import { Checklist } from "@/components/onboarding/checklist";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileTabBar } from "@/components/mobile/tab-bar";
 import { AnimatePresence, motion } from "motion/react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { ArchiveIcon, InboxIcon, NotebookTextIcon, OrbitIcon, RepeatIcon, SettingsIcon, type LucideIcon } from "lucide-react";
@@ -112,10 +112,10 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
           <motion.nav
             id="civ-toolbar-menu"
             aria-label="Main"
-            initial={{ opacity: 0, y: 16, scale: 0.94 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 420, damping: 30 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 2 }}
+            transition={{ duration: 0.1, ease: "easeOut" }}
             style={{ transformOrigin: "bottom left" }}
           >
             <CivPanel bodyClassName="flex flex-col gap-1 p-1.5">

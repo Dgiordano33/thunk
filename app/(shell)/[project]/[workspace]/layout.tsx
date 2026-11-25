@@ -16,13 +16,12 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   if (!ctx) notFound();
   const id = ctx.workspace.id;
   const base = workspacePath(ctx.project, ctx.workspace);
-  const [sessions, statuses] = await Promise.all([
-    listSessions({ workspaceId: id, limit: 50 }),
-    // Uncommitted files count across every repo of the workspace.
-    Promise.all(ctx.workspace.repos.map((r) => worktreeStatus(r.cwd))),
-  ]);
-  const dirty = statuses.reduce((n, s) => n + (s?.dirty ?? 0), 0);
-  const git = statuses[ctx.workspace.repos.findIndex((r) => r.cwd === ctx.workspace.cwd)] ?? null;
+  // Stream Git decoration independently: slow repositories must not block the chat.
+  const gitStatus = Promise.all(ctx.workspace.repos.map((r) => worktreeStatus(r.cwd))).then(statuses => ({
+    dirty: statuses.reduce((n, status) => n + (status?.dirty ?? 0), 0),
+    branch: statuses[ctx.workspace.repos.findIndex((r) => r.cwd === ctx.workspace.cwd)]?.branch ?? ctx.workspace.branch,
+  })).catch(() => ({ dirty: 0, branch: ctx.workspace.branch }));
+  const sessions = await listSessions({ workspaceId: id, limit: 50 });
 
   const ordered = [...sessions].reverse();
   return (
@@ -37,8 +36,7 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
           workspace={ctx.workspace}
           base={base}
           sessions={ordered}
-          branch={git?.branch ?? null}
-          dirty={dirty}
+          gitStatus={gitStatus}
         />
       }
     >

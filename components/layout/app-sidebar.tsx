@@ -6,7 +6,7 @@ import { projectSectionPath } from "@/lib/routes";
 import { WORLD_SELECTION } from "@/components/world/selection";
 
 import { BotIcon, ChevronRightIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, InboxIcon, PlusIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { AmbientHub, SidebarActivity } from "@/components/ambient/ambient-hub";

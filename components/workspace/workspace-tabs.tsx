@@ -4,9 +4,9 @@ import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileDrawer } from "@/components/mobile/drawer";
 
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, use } from "react";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { Workspace } from "@/lib/projects/types";
 import { useSession } from "@/lib/store/session-store";
@@ -19,14 +19,12 @@ export function WorkspaceTabs({
   workspace,
   base,
   sessions,
-  branch,
-  dirty,
+  gitStatus,
 }: {
   workspace: Workspace;
   base: string;
   sessions: SessionMeta[];
-  branch: string | null;
-  dirty: number;
+  gitStatus: Promise<{ branch: string | null; dirty: number }>;
 }) {
   const desktop = useIsDesktop();
   const pathname = usePathname();
@@ -74,8 +72,8 @@ export function WorkspaceTabs({
           </nav>
         </MobileDrawer>
         {workspace.repos.length > 0 && (
-          <MobileDrawer title="Branch and PR" className="relative px-0" trigger={<><GitBranchIcon className="mx-auto size-5" />{dirty > 0 && <span aria-hidden="true" className="absolute top-2.5 right-2.5 size-1.5 rounded-full bg-[var(--status-attention)]" />}</>}>
-            <p className="px-4 pb-4 font-mono text-sm break-words">{branch ?? workspace.name}<span className="text-muted-foreground font-sans"> · {dirty} changed</span></p>
+          <MobileDrawer title="Branch and PR" className="relative px-0" trigger={<><GitBranchIcon className="mx-auto size-5" /><Suspense fallback={null}><GitDirtyIndicator status={gitStatus} /></Suspense></>}>
+            <p className="px-4 pb-4 font-mono text-sm break-words"><Suspense fallback={workspace.branch ?? workspace.name}><GitLabel status={gitStatus} name={workspace.name} /></Suspense></p>
             <div className="flex flex-col items-start gap-2 px-4 pb-4">
               {branched.length > 1 ? branched.map(r => <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />) : <PrButton workspaceId={workspace.id} />}
             </div>
@@ -136,8 +134,7 @@ export function WorkspaceTabs({
 
       <div className="text-muted-foreground flex shrink-0 items-center gap-2 border-l px-3 text-xs" title={workspace.cwd}>
         <GitBranchIcon className="size-3.5" />
-        <span className="max-w-48 truncate font-mono">{branch ?? workspace.name}</span>
-        {dirty > 0 && <span className="tabular-nums">{dirty} changed</span>}
+        <Suspense fallback={<span className="max-w-48 truncate font-mono">{workspace.branch ?? workspace.name}</span>}><GitLabel status={gitStatus} name={workspace.name} /></Suspense>
         {/* Several branched repos each get their own PR; a single one needs no repo label. */}
         {branched.length > 1 ? branched.map((r) => (
           <PrButton key={r.repoId} workspaceId={workspace.id} repo={{ id: r.repoId, name: r.name, cwd: r.cwd }} />
@@ -145,4 +142,15 @@ export function WorkspaceTabs({
       </div>
     </div>
   );
+}
+
+/** Only this decoration suspends; session tabs and the conversation stay interactive. */
+function GitLabel({ status, name }: { status: Promise<{ branch: string | null; dirty: number }>; name: string }) {
+  const { branch, dirty } = use(status);
+  return <><span className="max-w-48 truncate font-mono">{branch ?? name}</span>{dirty > 0 && <span className="ml-2 tabular-nums">{dirty} changed</span>}</>;
+}
+
+function GitDirtyIndicator({ status }: { status: Promise<{ branch: string | null; dirty: number }> }) {
+  const { dirty } = use(status);
+  return dirty > 0 ? <span aria-hidden="true" className="absolute top-2.5 right-2.5 size-1.5 rounded-full bg-[var(--status-attention)]" /> : null;
 }
