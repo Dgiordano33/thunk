@@ -3,6 +3,7 @@
 import { RotateCcwIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ProjectDetailsLink } from "@/components/project/project-details-link";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { CONTROL_BUTTON, IsoViewport } from "@/components/world/iso-viewport";
@@ -206,16 +207,19 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
   };
 
   return (
+    <div
+      ref={scene ? scene.float(project.id) : undefined}
+      className="absolute flex flex-col items-center"
+      style={{ left: x, top: y, transform: `translate(-50%, -${r}px)`, zIndex: dragging ? 10_000 : Math.round(y), "--i": order } as React.CSSProperties}
+    >
     <HoverCard openDelay={120} closeDelay={60} open={cardOpen && !dragging} onOpenChange={setCardOpen}>
       <HoverCardTrigger asChild>
         <Link
-          ref={scene ? scene.float(project.id) : undefined}
           href={projectPath(project)}
           draggable={false}
           aria-label={`${project.name}, ${plural(project.workspaceCount, "workspace")}, ${plural(project.sessionCount, "session")}${activity ? `, ${activity}` : dormant ? ", idle" : ""}`}
           aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
-          className={cn("sp-body group absolute flex touch-none flex-col items-center outline-none", dragging && "is-dragging cursor-grabbing")}
-          style={{ left: x, top: y, transform: `translate(-50%, -${r}px)`, zIndex: dragging ? 10_000 : Math.round(y), "--i": order } as React.CSSProperties}
+          className={cn("sp-body group flex touch-none flex-col items-center outline-none", dragging && "is-dragging cursor-grabbing")}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -264,5 +268,7 @@ const Planet = memo(function Planet({ planet, mover, activity }: { planet: Place
         </Link>
       </HoverCardContent>
     </HoverCard>
+      <ProjectDetailsLink project={project} />
+    </div>
   );
 });
