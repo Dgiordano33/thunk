@@ -91,7 +91,7 @@ export async function noteImportCandidates(scope: NoteImportScope) {
     const workspace = await getWorkspace(taskId(workspaceId));
     if (!workspace) throw new HttpError(404, "Workspace not found");
     projectId = workspace.projectId;
-    workspaceNotes = await listNotes(await dirsForScope({ kind: "workspaces", id: workspaceId }));
+    workspaceNotes = (await listNotes(await dirsForScope({ kind: "workspaces", id: workspaceId })));
   } else projectId = taskId(scope.projectId);
   const project = await getProject(projectId);
   if (!project) throw new HttpError(404, "Project not found");
@@ -99,7 +99,7 @@ export async function noteImportCandidates(scope: NoteImportScope) {
   const projectNotes = await listNotes(await dirsForScope({ kind: "projects", id: projectId }));
   const items = [
     ...tasksOf(workspaceNotes).map((item) => ({ ...item, workspaceId })),
-    ...tasksOf(projectNotes).map((item) => ({ ...item, workspaceId: null })),
+    ...tasksOf(projectNotes.filter((n) => !workspaceNotes.some((w) => w.id === n.id))).map((item) => ({ ...item, workspaceId: null })),
     ...repoNotes.flatMap((note) => extractTasks(note.markdown).map((item) => ({ ...item, noteId: repoTaskLink(note.scope.id, note.id), workspaceId: null, folder: project.repoFolders.find((f) => f.id === note.scope.id)!.path }))),
   ];
   const occurrences = new Map<string, number>();

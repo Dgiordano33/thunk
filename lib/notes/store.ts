@@ -1,4 +1,5 @@
 import "server-only";
+import { migratedNoteId } from "./migrate";
 import { customAlphabet } from "nanoid";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile, lstat, realpath, link } from "node:fs/promises";
 import path from "node:path";
@@ -12,6 +13,9 @@ export type NoteDirs = {
   scope: NoteScope; notesDir: string; memoryFile?: string; memoryTitle?: string; checkoutRoot?: string;
   /** Repo notebooks narrowed to some files: only these note ids are listed or readable. */
   include?: string[];
+  /** A workspace is a filtered view of project-owned notes. */
+  workspaceId?: string;
+  prepare?: () => Promise<void>;
 };
 
 const included = (dirs: NoteDirs, id: string) => !dirs.include || id === MEMORY_NOTE_ID || dirs.include.includes(id);
@@ -28,7 +32,14 @@ export function isNoteId(id: string) {
 async function fileFor(dirs: NoteDirs, id: string) {
   if (id === MEMORY_NOTE_ID) return dirs.memoryFile;
   if (!ID.test(id)) throw new Error("Invalid note id");
-  const file = path.join(dirs.notesDir, `${id}.md`);
+  let file = path.join(dirs.notesDir, `${id}.md`);
+  if (dirs.workspaceId) {
+    const raw = await readOptional(file);
+    if (raw === null || !parseNote(raw).frontmatter.workspaceIds?.includes(dirs.workspaceId)) {
+      const legacy = path.join(dirs.notesDir, `${migratedNoteId(dirs.workspaceId, id)}.md`);
+      if (await readOptional(legacy) !== null) file = legacy;
+    }
+  }
   if (dirs.scope.kind === "repos") {
     const root = await realpath(dirs.checkoutRoot ?? dirs.notesDir);
     const folder = await realpath(dirs.notesDir);
@@ -92,6 +103,7 @@ function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Da
     inject: fm.inject,
     actionable: fm.actionable,
     tags: fm.tags,
+    workspaceIds: fm.workspaceIds ?? [],
     createdAt: fm.created ?? birth.toISOString(),
     // Agents edit the body without touching `updated`; the file's mtime is the truth.
     updatedAt: mtime.toISOString(),
@@ -104,6 +116,7 @@ function toNote(dirs: NoteDirs, id: string, file: string, raw: string, mtime: Da
 }
 
 export async function readNote(dirs: NoteDirs, id: string): Promise<Note | null> {
+  await dirs.prepare?.();
   if (!included(dirs, id)) return null;
   const file = await fileFor(dirs, id);
   if (!file) return null;
@@ -113,15 +126,18 @@ export async function readNote(dirs: NoteDirs, id: string): Promise<Note | null>
     return toNote(dirs, id, file, raw ?? "", st?.mtime ?? now, st?.birthtime ?? now);
   }
   if (raw === null || !st) return null;
-  return toNote(dirs, id, file, raw, st.mtime, st.birthtime);
+  const note = toNote(dirs, path.basename(file, ".md"), file, raw, st.mtime, st.birthtime);
+  return dirs.workspaceId && !note.workspaceIds?.includes(dirs.workspaceId) ? null : note;
 }
 
 /** Every note in the scope, memory first. Files that fail to read are skipped. */
 export async function listNotes(dirs: NoteDirs, { withMemory = true } = {}): Promise<Note[]> {
+  await dirs.prepare?.();
+  dirs = { ...dirs, prepare: undefined };
   const entries = await readdir(dirs.notesDir).catch(() => [] as string[]);
   const ids = entries.filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((id) => ID.test(id) && id !== MEMORY_NOTE_ID && included(dirs, id));
-  const notes = await Promise.all([...(withMemory && dirs.memoryFile ? [MEMORY_NOTE_ID] : []), ...ids].map((id) => readNote(dirs, id).catch(() => null)));
-  return sortNotes(notes.filter((n): n is Note => n !== null));
+  const notes = await Promise.all([...(withMemory && dirs.memoryFile ? [MEMORY_NOTE_ID] : []), ...ids].map((id) => readNote({ ...dirs, workspaceId: undefined }, id).catch(() => null)));
+  return sortNotes(notes.filter((n): n is Note => n !== null && (!dirs.workspaceId || Boolean(n.workspaceIds?.includes(dirs.workspaceId)))));
 }
 
 export function metaOf(note: Note): NoteMeta {
@@ -133,6 +149,8 @@ export function metaOf(note: Note): NoteMeta {
 export type NotePatch = Partial<NoteFlags> & { title?: string; markdown?: string; task?: NoteTaskPatch; expectedUpdatedAt?: string };
 
 export async function createNote(dirs: NoteDirs, input: { id?: string; title?: string; markdown?: string } & Partial<NoteFlags> = {}, { keepId = false } = {}) {
+  await dirs.prepare?.();
+  dirs = { ...dirs, prepare: undefined };
   const id = dirs.scope.kind === "repos" || keepId ? input.id : newNoteId();
   if (!id || !ID.test(id) || id.toLowerCase() === MEMORY_NOTE_ID) throw new Error("A valid filename (without .md) is required");
   const now = new Date().toISOString();
@@ -142,6 +160,7 @@ export async function createNote(dirs: NoteDirs, input: { id?: string; title?: s
     inject: input.inject ?? false,
     actionable: input.actionable ?? false,
     tags: input.tags ?? [],
+    workspaceIds: [...new Set([...(input.workspaceIds ?? []), ...(dirs.workspaceId ? [dirs.workspaceId] : [])])],
     created: now,
     updated: now,
   };
@@ -154,9 +173,11 @@ export async function createNote(dirs: NoteDirs, input: { id?: string; title?: s
 
 /** Update a note in place. Memory only takes `markdown`; its flags are fixed. */
 export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): Promise<Note | null> {
+  await dirs.prepare?.();
   if (!included(dirs, id)) return null;
   const file = await fileFor(dirs, id);
   if (!file) return null;
+  if (dirs.workspaceId && !(await readNote({ ...dirs, prepare: undefined }, id))) return null;
   return withFileLock(file, async () => {
     const raw = await readOptional(file);
     const modified = (await stat(file).catch((err: NodeJS.ErrnoException) => { if (err.code === "ENOENT") return null; throw err; }))?.mtime.toISOString() ?? new Date(0).toISOString();
@@ -184,14 +205,17 @@ export async function writeNote(dirs: NoteDirs, id: string, patch: NotePatch): P
       inject: patch.inject ?? parsed.frontmatter.inject,
       actionable: patch.actionable ?? parsed.frontmatter.actionable,
       tags: patch.tags ?? parsed.frontmatter.tags,
+      workspaceIds: patch.workspaceIds ?? parsed.frontmatter.workspaceIds,
       updated: dirs.scope.kind === "repos" ? parsed.frontmatter.updated : new Date().toISOString(),
     };
     await replaceFile(file, serializeNote(fm, markdown, parsed), raw);
-    return readNote(dirs, id);
+    return readNote({ ...dirs, prepare: undefined, workspaceId: undefined }, path.basename(file, ".md"));
   });
 }
 
 export async function deleteNote(dirs: NoteDirs, id: string) {
+  await dirs.prepare?.();
+  if (dirs.workspaceId && !(await readNote({ ...dirs, prepare: undefined }, id))) return;
   if (id === MEMORY_NOTE_ID) throw new Error("Memory can't be deleted");
   // Files outside a narrowed notebook aren't the notebook's to delete.
   if (!included(dirs, id)) return;
@@ -209,10 +233,16 @@ export function tasksOf(notes: Note[], { includeDone = false } = {}): NoteTask[]
     );
 }
 
-/** How many notes (memory included) live in these scopes, without reading the files. */
+/** Count project notes once even when workspace filters are also supplied. */
 export async function countNotes(all: NoteDirs[]) {
-  const counts = await Promise.all(
-    all.map(async (d) => Number(Boolean(d.memoryFile)) + (await readdir(d.notesDir, { withFileTypes: true }).catch(() => [])).filter((f) => f.isFile() && f.name.endsWith(".md") && f.name !== "memory.md" && ID.test(f.name.slice(0, -3)) && included(d, f.name.slice(0, -3))).length),
-  );
-  return counts.reduce((a, b) => a + b, 0);
+  const covered = new Set(all.filter((d) => !d.workspaceId && !d.include).map((d) => d.notesDir));
+  const keys = await Promise.all(all.filter((d) => !d.workspaceId || !covered.has(d.notesDir)).map(async (d) => {
+    if (d.workspaceId) return (await listNotes(d)).map((n) => `${n.scope.kind}/${n.scope.id}/${n.id}`);
+    await d.prepare?.();
+    const files = await readdir(d.notesDir, { withFileTypes: true }).catch(() => []);
+    const ids = files.filter((f) => f.isFile() && f.name.endsWith(".md") && f.name !== "memory.md" && ID.test(f.name.slice(0, -3)) && included(d, f.name.slice(0, -3))).map((f) => f.name.slice(0, -3));
+    if (d.memoryFile) ids.push(MEMORY_NOTE_ID);
+    return ids.map((id) => `${d.scope.kind}/${d.scope.id}/${id}`);
+  }));
+  return new Set(keys.flat()).size;
 }

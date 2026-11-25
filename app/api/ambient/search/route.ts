@@ -1,11 +1,10 @@
 import { listLiveSessions } from "@/lib/agent";
 import type { SearchResult } from "@/lib/ambient/types";
 import { handle, HttpError } from "@/lib/api/http";
-import { projectNoteDirs, workspaceNoteDirs } from "@/lib/notes/resolve";
+import { projectNoteDirs } from "@/lib/notes/resolve";
 import { listNotes } from "@/lib/notes/store";
 import { scopeKey } from "@/lib/notes/types";
 import { listProjects } from "@/lib/db/repo/projects";
-import { listAllWorkspaces } from "@/lib/db/repo/workspaces";
 import { listDocumentsForSessions } from "@/lib/db/repo/documents";
 import { db } from "@/lib/db/server";
 import { listTasks } from "@/lib/db/repo/tasks";
@@ -93,12 +92,10 @@ async function searchNotes(term: string): Promise<SearchResult[]> {
 
 /** shortcut: snapshots may lag edits by two seconds; use a watcher index if this becomes noticeable. */
 async function loadNoteIndex(): Promise<IndexedNote[]> {
-  const [projects, workspaces] = await Promise.all([listProjects().catch(() => []), listAllWorkspaces().catch(() => [])]);
+  const projects = await listProjects().catch(() => []);
   const scopes = projects.map((p) => [
     { dirs: projectNoteDirs(p), where: p.name },
-    ...workspaces
-      .filter((w) => w.projectId === p.id && w.status === "active")
-      .map((w) => ({ dirs: workspaceNoteDirs(p, w), where: `${p.name} / ${w.slug === "main" ? "Local" : w.name}` })),
+
   ]);
   return (await Promise.all(scopes.flat().map(async ({ dirs, where }) =>
     (await listNotes(dirs).catch(() => [])).map((note) => ({ note, where })),

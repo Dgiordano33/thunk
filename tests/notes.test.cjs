@@ -253,3 +253,36 @@ test("notes edited by hand after Thunk's last write are marked as edited outside
   assert.equal((await store.writeNote(d, note.id, { markdown: "Plan, revised\n" })).editedOutside, false);
   assert.ok(!(await store.readNote(d, "memory")).editedOutside);
 });
+
+test("workspace filters share canonical project files and unlink without deleting", async (t) => {
+  const project = await dirs(t);
+  const workspace = { ...project, memoryFile: undefined, workspaceId: "w1" };
+  const note = await store.createNote(workspace, { title: "Plan" });
+  assert.deepEqual(note.scope, project.scope);
+  assert.deepEqual(note.workspaceIds, ["w1"]);
+  assert.equal((await store.listNotes(workspace)).length, 1);
+  assert.equal(await store.countNotes([project, workspace]), 2);
+  const unlinked = await store.writeNote(workspace, note.id, { workspaceIds: [] });
+  assert.deepEqual(unlinked.workspaceIds, []);
+  assert.equal((await store.listNotes(workspace)).length, 0);
+  assert.ok(await store.readNote(project, note.id));
+  assert.equal(await store.writeNote(workspace, note.id, { markdown: "wrong scope" }), null);
+  await store.deleteNote(workspace, note.id);
+  assert.ok(await store.readNote(project, note.id));
+});
+
+test("migration resumes after reference failure without duplicating or overwriting", async (t) => {
+  const project = await dirs(t);
+  const source = path.join(path.dirname(project.notesDir), "legacy");
+  await fs.mkdir(source);
+  await fs.writeFile(path.join(source, "plan.md"), "original");
+  const { migrateWorkspaceNotes } = require("../lib/notes/migrate.ts");
+  await assert.rejects(migrateWorkspaceNotes(source, project.notesDir, "w1", async () => { throw new Error("interrupted"); }), /interrupted/);
+  assert.equal(await fs.readFile(path.join(source, "plan.md"), "utf8"), "original");
+  await migrateWorkspaceNotes(source, project.notesDir, "w1");
+  await migrateWorkspaceNotes(source, project.notesDir, "w1");
+  assert.equal((await store.listNotes(project, { withMemory: false })).length, 1);
+  await fs.writeFile(path.join(source, "plan.md"), "new edit");
+  await assert.rejects(migrateWorkspaceNotes(source, project.notesDir, "w1"), /Both files were preserved/);
+  assert.equal(await fs.readFile(path.join(source, "plan.md"), "utf8"), "new edit");
+});

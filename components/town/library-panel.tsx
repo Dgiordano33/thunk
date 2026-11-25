@@ -81,7 +81,7 @@ export function LibraryPanel({
                 <SelectContent>
                   <SelectItem value="project">Project notes</SelectItem>
                   {workspaces.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>Workspace · {w.label}</SelectItem>
+                    <SelectItem key={w.id} value={w.id}>Linked to · {w.label}</SelectItem>
                   ))}
                   {repoNotebooks.map((r) => (
                     <SelectItem key={r.id} value={`repo:${r.id}`}>Repo · {r.label}</SelectItem>

@@ -15,6 +15,8 @@ export type NoteFlags = {
   /** Unchecked `- [ ]` items surface as tasks. */
   actionable: boolean;
   tags: string[];
+  /** Optional links; the project owns the note regardless of workspace lifecycle. */
+  workspaceIds?: string[];
 };
 
 export type NoteMeta = NoteFlags & {

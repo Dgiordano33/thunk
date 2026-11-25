@@ -345,6 +345,7 @@ export async function removeWorkspace(id: string, opts: { removeWorktree?: boole
           if (repo && checkout.worktreePath) await removeWorktree(repo.path, checkout.worktreePath);
         }
       }
+      await (await import("../notes/resolve")).migrateProjectNotes(project, { force: true });
       const saved = await moveToGranary(project.dataKey, ws.slug);
       try { await deleteWorkspaceRow(id); }
       catch (err) {
