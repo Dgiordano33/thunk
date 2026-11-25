@@ -86,7 +86,7 @@ export function NotesLibrary() {
       set(scopeKey({ kind: "projects", id: f.project.id }), f.project.name);
       for (const r of f.repos) set(`r:${r.notebook.id}`, `${f.project.name} / ${r.notebook.label}`);
       for (const w of f.workspaces)
-        set(scopeKey({ kind: "workspaces", id: w.workspace.id }), `${f.project.name} / ${w.workspace.slug === "main" ? "Local" : w.workspace.name}`);
+        set(scopeKey({ kind: "workspaces", id: w.workspace.id }), `${f.project.name} / ${w.workspace.name}`);
     }
     return { label: names, projectOf: projects };
   }, [folders]);
@@ -241,7 +241,7 @@ function NewNoteMenu({
                 const wScope: NoteScope = { kind: "workspaces", id: workspace.id };
                 return (
                   <DropdownMenuItem key={workspace.id} className="pl-5" onSelect={() => onCreate(wScope)}>
-                    <span className="truncate">{workspace.slug === "main" ? "Local" : workspace.name}</span>
+                    <span className="truncate">{workspace.name}</span>
                   </DropdownMenuItem>
                 );
               })}
