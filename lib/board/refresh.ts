@@ -2,7 +2,8 @@ import 'server-only';
 import { execFile } from 'node:child_process';
 import { HttpError } from '@/lib/api/errors';
 import { commandShell } from '@/lib/host/shell';
-import { ensureMainWorkspace } from '@/lib/projects';
+import path from 'node:path';
+import { ensureBoardWorkspace } from './workspace';
 import type { Project } from '@/lib/projects/types';
 import { applyRefresh } from './chart';
 import { lock, readCard, saveCard } from './store';
@@ -21,7 +22,7 @@ export function runSource(command: string, cwd: string) {
 }
 
 /**
- * Re-runs a chart's source command in the project's main workspace and swaps in the rows it prints, without an agent turn.
+ * Re-runs a chart's source command in the canvas's shared workspace and swaps in the rows it prints, without an agent turn.
  * `confirmed` is the command the user was shown; it must still be the card's command, and running it approves it.
  */
 export async function refreshChart(project: Project, dir: string, cardId: string, confirmed: string) {
@@ -30,7 +31,7 @@ export async function refreshChart(project: Project, dir: string, cardId: string
         throw new HttpError(400, 'This chart has no source command');
     if (before.chartSource.command !== confirmed)
         throw new HttpError(409, 'The source command changed. Review it and refresh again.');
-    const stdout = await runSource(confirmed, (await ensureMainWorkspace(project)).cwd);
+    const stdout = await runSource(confirmed, (await ensureBoardWorkspace(project.id, path.basename(dir))).cwd);
     return lock(dir, async () => {
         const c = await readCard(dir, cardId);
         if (!c.chart || c.chartSource?.command !== confirmed)

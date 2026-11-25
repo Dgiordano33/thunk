@@ -75,8 +75,10 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
 
   const newNote = async () => {
     try {
-      const { note } = await api.createNote("workspaces", workspace.id, { title: "Untitled" });
-      router.push(`/notes?scope=w:${workspace.id}&note=${note.id}`);
+      const projectScope = workspace.visibility === "project" || isMain;
+      const id = projectScope ? workspace.projectId : workspace.id;
+      const { note } = await api.createNote(projectScope ? "projects" : "workspaces", id, { title: "Untitled" });
+      router.push(`/notes?scope=${projectScope ? "p" : "w"}:${id}&note=${note.id}`);
     } catch (err) {
       toast.error("Couldn’t create the note", { description: (err as Error).message });
     }
@@ -91,6 +93,12 @@ export function WorkspaceMenu({ project, workspace, label, className }: { projec
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
+        {!isMain && <DropdownMenuItem onSelect={async () => {
+          try {
+            await api.updateWorkspace(workspace.id, { visibility: workspace.visibility === "project" ? "workspace" : "project" });
+            router.refresh();
+          } catch (err) { toast.error((err as Error).message); }
+        }}>{workspace.visibility === "project" ? "Show workspace in sidebar" : "Keep under project"}</DropdownMenuItem>}
         <DropdownMenuItem onSelect={newNote}>
           <NotebookPenIcon /> New note
         </DropdownMenuItem>

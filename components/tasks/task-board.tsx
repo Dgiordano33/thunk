@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/client/api";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { Task } from "@/lib/tasks/types";
@@ -16,14 +15,12 @@ import { confirm } from "@/components/confirm";
 export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspaces = [] }: { projectId: string; workspaceId?: string; workspaces?: TaskWorkspace[] }) {
   const router = useRouter();
   const { tree, tasks, projectTasks, error: loadError } = useScopeTasks({ projectId, workspaceId });
-  const [scope, setScope] = useState(workspaceId ?? "project");
+  const [scope, setScope] = useState("project");
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [inputVersion, setInputVersion] = useState(0);
   const [editor, setEditor] = useState<{ task?: Task; title?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [sending, setSending] = useState<Task | null>(null);
-  const [destination, setDestination] = useState("");
   const workspaces = tree?.workspaces.map((w) => w.workspace) ?? initialWorkspaces;
   useEffect(() => {
     let cancelled = false;
@@ -40,10 +37,8 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
   const create = async (draft: TaskDraft) => { await api.createTask(draft); refreshTasks(); };
   const send = (task: Task, sessionId: string | null, targetWorkspace?: string) => {
     const ws = targetWorkspace ?? task.workspaceId ?? workspaceId;
-    if (!sessionId && !ws) { setDestination(workspaces[0]?.id ?? ""); setSending(task); return; }
     void run(task.id, async () => {
       const result = await api.sendTask(task.id, sessionId === "worker" ? { worker: true } : sessionId ? { sessionId } : { workspaceId: ws });
-      setSending(null);
       if (!result.href) { setError(`Queued: ${"reason" in result ? result.reason : "waiting for a worker slot"}. It starts on its own.`); return; }
       router.push(result.href); router.refresh();
     });
@@ -75,12 +70,6 @@ export function TaskBoard({ projectId, workspaceId, workspaces: initialWorkspace
         refreshTasks();
       } else { await create(draft); setInputVersion((v) => v + 1); }
     }} />}
-    <Dialog open={!!sending} onOpenChange={(open) => !open && !busyId && setSending(null)}><DialogContent>
-      <DialogTitle>Send task to a new chat</DialogTitle><DialogDescription>Choose the workspace where the session should work.</DialogDescription>
-      <Select value={destination} onValueChange={setDestination}><SelectTrigger aria-label="Destination workspace" className="w-full"><SelectValue placeholder="Choose workspace" /></SelectTrigger><SelectContent>{workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent></Select>
-      {!workspaces.length && <p className="text-xs text-muted-foreground">Create a workspace before starting a chat.</p>}
-      {error && <p role="alert" className="text-destructive text-xs">{error}</p>}
-      <Button disabled={!destination || !!busyId} onClick={() => sending && send(sending, null, destination)}>{busyId ? "Sending…" : "Start chat"}</Button>
-    </DialogContent></Dialog>
+
   </div>;
 }

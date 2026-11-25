@@ -20,7 +20,7 @@ import { workspaceLabel } from "@/components/session/labels";
 import { listSessions, liveMeta } from "@/lib/agent";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
 import type { PersistedDocument } from "@/lib/documents/types";
-import { ensureMainWorkspace, listExternalSessions } from "@/lib/projects";
+import { listExternalSessions } from "@/lib/projects";
 import { loadDocuments } from "@/lib/db/repo/documents";
 import { loadEvents } from "@/lib/db/repo/messages";
 import { getProjectBySlug } from "@/lib/db/repo/projects";
@@ -51,7 +51,6 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   const project = await getProjectBySlug(slug);
   if (!project) notFound();
   const id = project.id;
-  await ensureMainWorkspace(project);
 
   const [workspaces, rows, vaultItems, look, canvases] = await Promise.all([
     listWorkspaces(id),

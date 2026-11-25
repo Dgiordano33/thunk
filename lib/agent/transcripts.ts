@@ -1,5 +1,5 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { deleteSession as sdkDeleteSession } from "@anthropic-ai/claude-agent-sdk";
@@ -29,4 +29,23 @@ export async function deleteTranscript(session: Pick<SessionMeta, "sdkSessionId"
 
 export async function deleteTranscripts(sessions: Pick<SessionMeta, "sdkSessionId" | "cwd" | "model">[]) {
   await Promise.all(sessions.map(deleteTranscript));
+}
+
+/**
+ * Make a Claude transcript resumable from `cwd`. The CLI looks transcripts up per cwd, so a session
+ * continued in another directory (a recreated canvas workspace, an imported terminal session) needs a
+ * copy there. The original is left in place.
+ */
+export async function ensureTranscriptAt(cwd: string, sdkSessionId: string) {
+  if (!/^[\w-]+$/.test(sdkSessionId)) return;
+  const dest = transcriptPath(cwd, sdkSessionId);
+  if (await stat(dest).catch(() => null)) return;
+  const root = path.join(CLAUDE_DIR, "projects");
+  for (const dir of await readdir(root).catch(() => [])) {
+    const src = path.join(root, dir, `${sdkSessionId}.jsonl`);
+    if (!(await stat(src).catch(() => null))) continue;
+    await mkdir(path.dirname(dest), { recursive: true });
+    await copyFile(src, dest);
+    return;
+  }
 }

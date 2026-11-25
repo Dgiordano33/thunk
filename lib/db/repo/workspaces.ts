@@ -14,12 +14,13 @@ type Row = {
   cwd: string;
   branch: string | null;
   status: string;
+  visibility: "project" | "workspace";
   created_at: string;
   updated_at: string;
   workspace_repos?: WorkspaceRepoRow[] | null;
 };
 
-const COLUMNS = `w.id, w.project_id, w.name, w.slug, w.cwd, w.branch, w.status, w.created_at, w.updated_at, ${WORKSPACE_REPOS_JSON}`;
+const COLUMNS = `w.id, w.project_id, w.name, w.slug, w.cwd, w.branch, w.status, w.visibility, w.created_at, w.updated_at, ${WORKSPACE_REPOS_JSON}`;
 
 async function findOne(where: string, params: unknown[]): Promise<Workspace | null> {
   const [row] = await db()!.query<Row>(`select ${COLUMNS} from workspaces w where ${where} order by w.created_at limit 1`, params);
@@ -36,6 +37,7 @@ function toWorkspace(r: Row): Workspace {
     branch: r.branch,
     repos: toWorkspaceRepos(r.workspace_repos),
     status: r.status as Workspace["status"],
+    visibility: r.visibility,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -54,7 +56,7 @@ export async function insertWorkspace(
   const client = db();
   const now = new Date().toISOString();
   if (!client) {
-    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, repos: [], status: "active", createdAt: now, updatedAt: now };
+    const ws: Workspace = { id: input.id ?? crypto.randomUUID(), ...input, visibility: input.visibility ?? "workspace", repos: [], status: "active", createdAt: now, updatedAt: now };
     mem.set(ws.id, ws);
     return withRepos(ws);
   }
@@ -65,6 +67,7 @@ export async function insertWorkspace(
     slug: input.slug,
     cwd: input.cwd,
     branch: input.branch,
+    visibility: input.visibility ?? "workspace",
   }, { returning: "id" }));
   return (await getWorkspace(id))!;
 }
@@ -103,7 +106,7 @@ export async function findWorkspaceByCwd(cwd: string): Promise<Workspace | null>
   return findOne("w.cwd = $1", [cwd]);
 }
 
-export async function updateWorkspace(id: string, patch: Partial<Pick<Workspace, "name" | "status" | "cwd">>): Promise<void> {
+export async function updateWorkspace(id: string, patch: Partial<Pick<Workspace, "name" | "status" | "cwd" | "visibility">>): Promise<void> {
   const client = db();
   if (!client) {
     const w = mem.get(id);

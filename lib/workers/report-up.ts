@@ -51,7 +51,7 @@ export function enqueue(file: string, report: Report) {
 export async function currentChiefId(chiefId: string) {
   const meta = getSession(chiefId)?.meta ?? await getSessionRow(chiefId);
   if (!meta) return null;
-  return (await listSessions({ workspaceId: meta.workspaceId, limit: 10_000 })).find((s) => s.origin?.kind === "chief")?.id ?? chiefId;
+  return (await listSessions({ projectId: meta.projectId, limit: 10_000 })).find((s) => s.origin?.kind === "chief")?.id ?? chiefId;
 }
 async function markDelivered(pending: { file: string; report: Report }[]) {
   for (const { file, report } of pending) await withFileLock(file, async () => {

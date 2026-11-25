@@ -2,6 +2,8 @@ import "server-only";
 import { getSession, listSessions } from "@/lib/agent";
 import { getWorkspaceContext, type WorkspaceContext } from "@/lib/projects";
 import { archiveWorkspace } from "@/lib/projects/archive";
+import { releaseCheckouts } from "@/lib/projects/checkouts";
+import { listAllWorkspaces } from "@/lib/db/repo/workspaces";
 import { git, tryGit, workspaceChanges } from "@/lib/projects/git";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
@@ -83,4 +85,29 @@ export async function cleanupWorkerWorkspaces(projectId?: string) {
     }
   }
   return archived;
+}
+
+/** How long an automatic effort workspace sits unused before its empty worktrees are released. */
+export const IDLE_RELEASE_MS = 24 * 60 * 60_000;
+
+/**
+ * Release the worktrees and branches of automatic effort workspaces (chats, canvases, chiefs, workers)
+ * that have been idle for a day and hold no work. The workspace and its chats stay; the next session
+ * start or resume restores the worktrees fresh from their base. Explicit workspaces are the person's to manage.
+ */
+export async function releaseIdleWorkspaces(now = Date.now()) {
+  const released: string[] = [];
+  const sessions = await listSessions({ limit: 100_000, includeHidden: true });
+  for (const w of await listAllWorkspaces()) {
+    if (w.visibility !== "project" || w.slug === "main" || w.status !== "active") continue;
+    const list = sessions.filter((s) => s.workspaceId === w.id);
+    if (list.some((s) => ["starting", "running", "awaiting"].includes(getSession(s.id)?.meta.status ?? ""))) continue;
+    const last = Math.max(Date.parse(w.updatedAt), ...list.map((s) => Date.parse(s.updatedAt ?? s.createdAt)));
+    if (now - last < IDLE_RELEASE_MS) continue;
+    const ctx = await getWorkspaceContext(w.id);
+    if (!ctx) continue;
+    try { if (await releaseCheckouts(ctx)) released.push(w.id); }
+    catch (err) { console.error("[thunk] releasing idle workspace failed", w.id, err); }
+  }
+  return released;
 }

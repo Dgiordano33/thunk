@@ -1,3 +1,4 @@
+import { ensureBoardWorkspace } from "@/lib/board/workspace";
 import { ImagesSchema } from "@/lib/prompts/schema";
 import { sessionConfigRoot } from "@/lib/projects/repos";
 import { expandCommand } from "@/lib/prompts/context";
@@ -19,6 +20,8 @@ export const GET = handle(async (req: Request) => {
 
 const CreateBody = z
   .object({
+    projectId: z.string().min(1).optional(),
+    boardId: z.string().min(1).optional(),
     workspaceId: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
     model: z.string().optional(),
@@ -29,11 +32,13 @@ const CreateBody = z
     resumeSdkSessionId: z.string().min(1).optional(),
     title: z.string().max(120).optional(),
   })
-  .refine((b) => b.workspaceId || b.cwd, { message: "workspaceId or cwd is required" });
+  .refine((b) => b.projectId || b.workspaceId || b.cwd, { message: "projectId, workspaceId or cwd is required" })
+  .refine((b) => !b.boardId || (b.projectId && !b.workspaceId && !b.cwd), { message: "A canvas requires projectId and no other destination" });
 
 export const POST = handle(async (req: Request) => {
   const body = await parseBody(req, CreateBody);
-  const live = await startSession(body).catch((err: Error) => {
+  const target = body.boardId ? { ...body, workspaceId: (await ensureBoardWorkspace(body.projectId!, body.boardId)).id, origin: { kind: "board" as const, boardId: body.boardId } } : body;
+  const live = await startSession(target).catch((err: Error) => {
     throw new HttpError(400, err.message);
   });
   if (body.prompt?.trim() || body.images.length) pushUserMessage(live, body.prompt?.trim() ?? "", { images: body.images, expandedContent: await expandCommand(body.prompt?.trim() ?? "", sessionConfigRoot(live.ctx)) });

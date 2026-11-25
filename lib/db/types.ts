@@ -729,6 +729,7 @@ export type Database = {
           name: string
           project_id: string
           slug: string
+          visibility: string
           status: string
           updated_at: string
           worktree_path: string | null
@@ -742,6 +743,7 @@ export type Database = {
           name: string
           project_id: string
           slug: string
+          visibility?: string
           status?: string
           updated_at?: string
           worktree_path?: string | null
@@ -755,6 +757,7 @@ export type Database = {
           name?: string
           project_id?: string
           slug?: string
+          visibility?: string
           status?: string
           updated_at?: string
           worktree_path?: string | null

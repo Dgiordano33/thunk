@@ -66,7 +66,8 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
               ["Created", relativeTime(project.createdAt)],
             ]}
           />
-          <div className="mt-3">
+          <div className="mt-3 flex gap-2">
+            <Button asChild><Link href={newChatPath(project)}><PlusIcon /> New chat</Link></Button>
             <NewWorkspaceButton projectId={project.id} projectSlug={project.slug} projectName={project.name} repos={project.repos} />
           </div>
         </Section>
@@ -190,7 +191,7 @@ export function FarmPanel({ project, workspace, fields, closeHref }: {
       label: "Notes",
       icon: <NotebookPenIcon />,
       content: <Section title="Notes">
-        <TownNotes townHref={projectPath(project)} scope={{ kind: "workspaces", id: workspace.id }} />
+        <TownNotes townHref={projectPath(project)} scope={workspace.visibility === "project" || workspace.slug === "main" ? { kind: "projects", id: project.id } : { kind: "workspaces", id: workspace.id }} />
       </Section>,
     },
   ];

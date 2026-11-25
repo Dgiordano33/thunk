@@ -29,11 +29,11 @@ function Images() {
   </div>;
 }
 
-export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, onSubmit, children, starters = [], initialText = "" }: {
+export function PromptComposer({ workspaceId = "", disabled, placeholder, autoFocus, onSubmit, children, starters = [], initialText = "" }: {
   starters?: string[];
   /** What the message box starts with. */
   initialText?: string;
-  workspaceId: string;
+  workspaceId?: string;
   disabled?: boolean;
   placeholder: string;
   autoFocus?: boolean;
@@ -57,6 +57,7 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
   const historyKey = `thunk:prompt-history:${workspaceId}`;
 
   useEffect(() => {
+    if (!workspaceId) return;
     let active = true;
     api.promptContext(workspaceId).then((data) => { contextCache.set(workspaceId, data); if (active) setContext(data); }).catch((err: Error) => { if (active) setError(err.message); });
     return () => { active = false; };

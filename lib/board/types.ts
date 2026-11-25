@@ -67,6 +67,8 @@ export type Card = {
 export type CanvasStatus = 'idle' | 'running' | 'waiting';
 export type CanvasSession = { id: string; name: string; status: CanvasStatus };
 export type Board = {
+    workspaceId?: string;
+    workspaceReady?: boolean;
     name?: string;
     /** The agent's model; unset means the app default. */
     model?: string;

@@ -63,6 +63,31 @@ async function ensureExcluded(root: string, pattern: string) {
 }
 
 /** Pick the ref a new worktree branches from: origin/<default> when it exists, else local HEAD. */
+const FETCH_FRESH_MS = 60_000;
+const fetches = new Map<string, { at: number; done: Promise<void> }>();
+/** Tests only: drop the fetch throttle. */
+export const __forgetFetches = () => fetches.clear();
+
+/**
+ * Best-effort `git fetch origin <defaultBranch>` so new and restored worktrees branch from the remote's
+ * latest. Uses the person's own Git credentials, never prompts, gives up after 20s, and is shared and
+ * throttled per repo so a burst of chats fetches once. Offline or unauthenticated, the local ref is used.
+ */
+export async function refreshBase(root: string, defaultBranch: string | null) {
+  if (!defaultBranch) return;
+  const key = `${root}\0${defaultBranch}`;
+  const recent = fetches.get(key);
+  if (recent && Date.now() - recent.at < FETCH_FRESH_MS) return recent.done;
+  const done = (async () => {
+    if (!(await tryGit(root, ["remote", "get-url", "origin"]))) return;
+    await exec("git", ["fetch", "--quiet", "--no-tags", "origin", defaultBranch], {
+      cwd: root, timeout: 20_000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    }).catch((err: Error) => console.warn("[thunk] fetch failed; using the local base", root, err.message));
+  })();
+  fetches.set(key, { at: Date.now(), done });
+  return done;
+}
+
 export async function pickBaseRef(root: string, defaultBranch: string | null) {
   if (defaultBranch) {
     const remoteRef = `origin/${defaultBranch}`;

@@ -91,7 +91,7 @@ export const api = {
   getProject: (id: string) => call<{ project: Project }>(`/api/projects/${id}`),
   listProjects: () => call<{ projects: ProjectSummary[] }>("/api/projects"),
   createProject: (body: CreateProjectBody) =>
-    post<{ project: Project; workspace: Workspace; repos: RepoResult<ProjectRepo>[] }>("/api/projects", body),
+    post<{ project: Project; repos: RepoResult<ProjectRepo>[] }>("/api/projects", body),
   pickFolder: (body: { prompt?: string; defaultPath?: string } = {}) =>
     post<{ path: string | null }>("/api/fs/pick-folder", body),
   listDirs: (path: string) => call<DirListing>(`/api/fs/list?path=${encodeURIComponent(path)}`),
@@ -114,7 +114,7 @@ export const api = {
     repoIds?: string[];
   }) =>
     post<{ workspace: Workspace }>("/api/workspaces", body),
-  updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived" }) =>
+  updateWorkspace: (id: string, body: { name?: string; status?: "active" | "archived"; visibility?: "project" | "workspace" }) =>
     call(`/api/workspaces/${id}`, { method: "PATCH", json: body }),
   deleteWorkspace: (id: string, opts: { worktree?: boolean } = {}) =>
     call<{ ok: true; retainedDirectory?: string }>(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
@@ -208,6 +208,8 @@ export const api = {
   listModels: () => call<{ models: ModelOption[]; codexError: string | null }>("/api/models"),
   // Sessions
   createSession: (body: {
+    projectId?: string;
+    boardId?: string;
     workspaceId?: string;
     cwd?: string;
     model?: string;

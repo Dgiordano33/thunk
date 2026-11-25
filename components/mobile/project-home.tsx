@@ -4,7 +4,7 @@ import { ChiefPanel } from "@/components/project/chief-panel";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
 import type { Project } from "@/lib/projects/types";
 import type { TownFarmhouse } from "@/components/town/town-view";
-import { projectSectionPath } from "@/lib/routes";
+import { newChatPath, projectSectionPath } from "@/lib/routes";
 import { useAmbient } from "@/lib/store/ambient-store";
 
 export function ProjectHome({ project, workspaces, closeHref, counts }: {
@@ -18,6 +18,7 @@ export function ProjectHome({ project, workspaces, closeHref, counts }: {
     <main className="h-dvh overflow-y-auto px-4 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <h1 className="mb-4 break-words text-xl">{project.name}</h1>
       <section className="mb-4 rounded-lg border p-4"><ChiefPanel projectId={project.id} /></section>
+      <Link href={newChatPath(project)} className="mb-3 block rounded-md border px-4 py-2 text-sm">New chat</Link>
       <NewWorkspaceButton projectId={project.id} projectSlug={project.slug} projectName={project.name} repos={project.repos} />
       <h2 className="my-4 font-medium">Workspaces</h2>
       <div className="space-y-3">

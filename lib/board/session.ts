@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import 'server-only';
-import { startSession, resumeSession, subscribe, emit, pushUserMessage, closeSession, getSession, isTerminated, setState, type LiveSession } from '@/lib/agent';
+import { startSession, resumeSession, liveMeta, subscribe, emit, pushUserMessage, closeSession, getSession, isTerminated, setState, type LiveSession } from '@/lib/agent';
 import { providerOf } from '@/lib/agent/types';
 import { boardModel } from './model';
-import { ensureMainWorkspace } from '@/lib/projects';
+import { getSessionRow } from '@/lib/db/repo/sessions';
+import { ensureBoardWorkspace } from './workspace';
 import { withFileLock } from '@/lib/notes/file-write';
 import { boardFor } from './service';
 import { addCard, assetBytes, lock, readBoard, saveBoard, saveCard, snapshot } from './store';
@@ -15,8 +16,11 @@ import { payload } from './payload';
 import type { PromptImage } from '@/lib/prompts/schema';
 export async function ensureBoardSession(projectId: string, boardId = 'main') {
     return withFileLock(`board-session:${projectId}:${boardId}`, async () => {
-        const { project, dir } = await boardFor(projectId, boardId), board = await readBoard(dir), model = boardModel(board);
-        let live = board.agent ? await resumeSession(board.agent.sessionId) : null, fresh = false;
+        const { dir } = await boardFor(projectId, boardId);
+        const workspace = await ensureBoardWorkspace(projectId, boardId), board = await readBoard(dir), model = boardModel(board);
+        // A session from a replaced workspace starts over in the new one; the transcript is carried across.
+        const previous = board.agent ? liveMeta(board.agent.sessionId) ?? await getSessionRow(board.agent.sessionId) : null;
+        let live = previous?.workspaceId === workspace.id && board.agent ? await resumeSession(board.agent.sessionId) : null, fresh = false;
         // Claude and Codex transcripts aren't interchangeable: a provider change starts the conversation over.
         if (live && providerOf(live.meta.model) !== providerOf(model)) {
             closeSession(live.id);
@@ -25,7 +29,6 @@ export async function ensureBoardSession(projectId: string, boardId = 'main') {
         }
         if (live && live.meta.model !== model) await applyModel(live, model);
         if (!live) {
-            const workspace = await ensureMainWorkspace(project);
             live = await startSession({ workspaceId: workspace.id, model, permissionMode: 'default', title: board.name ?? 'Canvas', origin: { kind: 'board', boardId }, resumeSdkSessionId: fresh ? undefined : board.agent?.sdkSessionId ?? undefined });
         }
         const session = live;

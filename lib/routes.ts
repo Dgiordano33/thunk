@@ -37,7 +37,8 @@ export function workspacePath(project: Slugged, workspace: Slugged) {
   return `/${project.slug}/${workspace.slug}`;
 }
 
-export function newChatPath(project: Slugged, workspace: Slugged) {
+export function newChatPath(project: Slugged, workspace?: Slugged) {
+  if (!workspace) return `/projects/${project.slug}/chat`;
   return `${workspacePath(project, workspace)}/new`;
 }
 

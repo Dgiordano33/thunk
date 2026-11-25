@@ -18,6 +18,7 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/workspac
 });
 
 const PatchBody = z.object({
+  visibility: z.enum(["project", "workspace"]).optional(),
   name: z.string().min(1).max(80).optional(),
   status: z.enum(["active", "archived"]).optional(),
 });

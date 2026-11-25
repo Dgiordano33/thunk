@@ -13,7 +13,7 @@ export const DelegateObject = z.object({
   repoIds: z.array(z.uuid()).min(1).optional().describe("Optional existing project repository UUIDs. Omit to use all Git repositories; never invent IDs."), model: Model.optional(),
   // bypassPermissions stays a person's choice: delegate is auto-approved for the chief.
   permissionMode: z.enum(["default", "acceptEdits", "plan"]).optional(),
-  mode: z.enum(WORKER_MODES).optional().describe("worktree (default): edits code in its own worktree. scout: read-only in the main checkout and returns a report; works without a Git repository."),
+  mode: z.enum(WORKER_MODES).optional().describe("worktree (default): edits code in its own worktree. scout: read-only in its own environment and returns a report; works without a Git repository."),
   dependsOn: z.array(z.uuid()).max(10).optional().describe("Task IDs that must be done (accepted) before this one starts. The task is queued until then."),
   race: z.array(Model).min(2).max(3).optional().describe("Run the same task on 2–3 models, each in its own worktree. Pick the winner with workers_pick."),
 }).strict();

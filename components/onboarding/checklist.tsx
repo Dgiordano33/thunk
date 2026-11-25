@@ -21,13 +21,11 @@ export function Checklist({ projects }: { projects: SidebarProject[] }) {
     window.addEventListener("focus", load);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener("focus", load); };
   }, [dismissed, pathname]);
-  if (dismissed || !progress || Object.values(progress).every((n) => n > 0)) return null;
+  if (dismissed || !progress || [progress.projects, progress.sessions, progress.notes, progress.tasksOrRoutines].every((n) => n > 0)) return null;
   const project = projects[0];
-  const workspace = project?.workspaces[0];
   const items = [
     ["Add a project", progress.projects, "/projects"],
-    ["Create a workspace", progress.workspaces, project ? projectPath(project) : "/projects"],
-    ["Run a session", progress.sessions, project && workspace ? newChatPath(project, workspace) : "/projects"],
+    ["Run a session", progress.sessions, project ? newChatPath(project) : "/projects"],
     ["Write a note", progress.notes, "/notes"],
     ["Create a task or routine", progress.tasksOrRoutines, project ? projectSectionPath(projectPath(project), "tasks") : "/routines"],
   ] as const;
