@@ -18,7 +18,7 @@ export function chiefTools(live: LiveSession) {
   const projectId = live.meta.projectId;
   const service = () => import("./service");
   return [
-    define("delegate", "Delegate a task. Supply workspaceId to use an existing project workspace; omit it for a fresh worktree. One active worker per existing workspace; workspaceId cannot combine with repoIds, scout or race. Supply title and brief to create a task, or taskId to use an existing one. Omit repoIds to use the project Git repositories. mode \"scout\" is read-only research in the main checkout with no worktree. dependsOn queues the task until those tasks are done; when all four worker slots are busy the task is queued too, and it starts on its own. race runs the same task on 2–3 models. Waits for worktree setup, which can take a minute.", DelegateObject.shape, async (input) => (await service()).delegate(projectId, live.id, input)),
+    define("delegate", "Delegate a task. Supply workspaceId to use an existing project workspace; omit it for a fresh worktree. One active worker per existing workspace; workspaceId cannot combine with repoIds, scout or race. Supply title and brief to create a task, or taskId to use an existing one. Omit repoIds to use the project Git repositories. mode \"scout\" is read-only research in its own environment. dependsOn queues the task until those tasks are done; when all four worker slots are busy the task is queued too, and it starts on its own. race runs the same task on 2–3 models. Waits for worktree setup, which can take a minute.", DelegateObject.shape, async (input) => (await service()).delegate(projectId, live.id, input)),
     define("delegate_plan", "Propose how you will split a request into tasks, for the person to approve in their inbox before anything starts. Use it before starting two or more workers for one request. You get a <delegation_plan> message with the decision; approved tasks are delegated for you, in order, with dependsOn keys mapped to task ids.", DelegationPlanObject.shape, async (input) => (await import("./plans")).proposePlan(projectId, live.id, input)),
     define("workers_status", "Snapshot of worker tasks (live states, pending prompts, branches, diffs, files that overlap with other workers, races, cost) and the queue. No polling needed.", {}, async () => (await service()).workersStatus(projectId, true)),
     define("workers_message", "Send follow-up instructions to a worker; queued if it is mid-turn. Pass sessionId to reach a specific racer.", { taskId: z.uuid(), content: z.string().trim().min(1).max(20_000), sessionId: z.uuid().optional() }, async ({ taskId, content, sessionId }) => (await service()).messageWorker(projectId, taskId, content, sessionId)),
@@ -36,7 +36,7 @@ export function chiefTools(live: LiveSession) {
     }),
     define("chief_log", "Append outcomes or decisions to today's work log. Optionally replace workspace memory with the current plan.", { entry: z.string().trim().min(1).max(20_000), plan: z.string().max(24_000).optional() }, async ({ entry, plan }) => {
       const { appendWorkLog, saveChiefPlan } = await import("./log");
-      if (plan !== undefined) await saveChiefPlan(live.ctx.project, plan);
+      if (plan !== undefined) await saveChiefPlan(live.ctx.project, live.ctx.workspace.slug, plan);
       const note = await appendWorkLog(live.ctx.project, `[chief] outcome: ${entry}`);
       return { path: note?.path };
     }),

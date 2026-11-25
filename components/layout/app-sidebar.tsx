@@ -32,10 +32,10 @@ import { COUNT, FOCUS, ROW } from "@/components/layout/sidebar-row";
 import type { CanvasSession } from "@/lib/board/types";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
-import { projectSlugFromPath, isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
+import { projectSlugFromPath, isProjectPath, PROJECTS_PATH, projectPath, workspacePath, newChatPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
-export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
+export type SidebarProject = ProjectSummary & { defaultSessionCount?: number; workspaces: (WorkspaceSummary & { worker?: boolean })[] };
 
 const COLLAPSED_KEY = "thunk.sidebar.collapsed";
 /** Collapsed projects, remembered across reloads. Read through useSyncExternalStore so hydration agrees with the server. */
@@ -73,7 +73,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
   const workspaceSlug = pathname.startsWith("/projects/") ? undefined : pathname.split("/")[2];
   // Within a project, the town (/{project}) highlights the project and its pages (/{project}/{workspace}/…) the workspace.
   const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
-  const activeProjectId = activeProject && !workspaceSlug ? activeProject.id : undefined;
+  const activeProjectId = activeProject && (!workspaceSlug || !activeProject.workspaces.some(w => w.slug === workspaceSlug && w.visibility !== "project" && w.slug !== "main")) ? activeProject.id : undefined;
   const activeWorkspaceId = workspaceSlug ? activeProject?.workspaces.find((w) => w.slug === workspaceSlug)?.id : undefined;
   const collapsedRaw = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => "{}");
   const collapsed = useMemo<Record<string, boolean>>(() => { try { return JSON.parse(collapsedRaw); } catch { return {}; } }, [collapsedRaw]);
@@ -173,6 +173,11 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
           {projects.length === 0 && <li className="text-muted-foreground px-2 py-1.5 text-xs">No projects yet.</li>}
           {projects.map((p) => {
             const open = !collapsed[p.id];
+            const visibleWorkspaces = p.workspaces.filter(w => w.visibility !== "project" && w.slug !== "main");
+            const visibleIds = new Set(visibleWorkspaces.map(w => w.id));
+            const defaultSessions = sessions.filter(s => s.projectId === p.id && !visibleIds.has(s.workspaceId));
+            const activity = workspaceActivity(defaultSessions.map(s => ({ ...s, workspaceId: p.id })), p.id);
+            const chatCount = p.defaultSessionCount ?? Math.max(0, p.sessionCount - visibleWorkspaces.reduce((n, w) => n + Number(w.sessionCount), 0));
             const tasks = taskCounts[p.id];
             const openTasks = (tasks?.project ?? 0) + Object.values(tasks?.byWorkspace ?? {}).reduce((sum, count) => sum + count, 0);
             const attention = notificationCounts[p.id] ?? 0;
@@ -211,6 +216,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
                       </Link>
                     )}
                     {attention > 0 && openTasks > 0 && tasksLink}
+                    <Button size="icon-xs" variant="ghost" asChild><Link href={newChatPath(p)} aria-label={`New chat in ${p.name}`} title="New chat" className={FOCUS}><PlusIcon /></Link></Button>
                     <NewWorkspaceButton compact projectId={p.id} projectSlug={p.slug} projectName={p.name} repos={p.repos} />
                   </span>
                   {attention > 0 ? (
@@ -218,11 +224,13 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
                       <AttentionCount count={attention} />
                     </Link>
                   ) : openTasks > 0 && tasksLink}
+                  {activity && <span className={cn("size-2 shrink-0 rounded-full", ACTIVITY_DOT[activity] ?? ACTIVITY_DOT.Running)} role="img" aria-label={activity} title={activity} />}
+                  {chatCount > 0 && <span className={COUNT} aria-label={`${chatCount} chats`}>{chatCount}</span>}
                 </div>
 
                 {open && (
                   <ul className="mt-0.5 flex flex-col gap-0.5">
-                    {p.workspaces.map((w) => {
+                    {visibleWorkspaces.map((w) => {
                       const activity = workspaceActivity(sessions, w.id);
                       const worker = w.worker || sessions.some((s) => s.workspaceId === w.id && s.origin?.kind === "worker");
                       const wsTasks = tasks?.byWorkspace[w.id] ?? 0;

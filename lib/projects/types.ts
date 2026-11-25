@@ -59,6 +59,8 @@ export type Workspace = {
   branch: string | null;
   /** The repos this workspace covers (a subset of the project's), each with its own checkout. */
   repos: WorkspaceRepo[];
+  /** Automatic effort workspaces belong to the project; explicit ones appear in navigation. */
+  visibility?: "project" | "workspace";
   status: WorkspaceStatus;
   createdAt: string;
   updatedAt: string;

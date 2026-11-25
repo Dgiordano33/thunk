@@ -27,7 +27,7 @@ export function ExternalSessions({ projectSlug, sessions, workspaces }: { projec
 
   const importSession = async (s: ExternalSession) => {
     const ws = targetFor(s);
-    if (!ws) return;
+    if (!ws) { setError("This project has no workspace to import into yet. Start a chat or create a workspace first."); return; }
     setBusy(s.sdkSessionId);
     setError(null);
     try {
@@ -72,7 +72,7 @@ export function ExternalSessions({ projectSlug, sessions, workspaces }: { projec
                 size="sm"
                 variant="ghost"
                 className="h-7"
-                disabled={busy !== null || !ws}
+                disabled={busy !== null}
                 onClick={() => importSession(s)}
               >
                 {busy === s.sdkSessionId ? <Loader2Icon className="animate-spin" /> : <ImportIcon />}

@@ -1,11 +1,12 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { contextForDirectory, getWorkspaceContext } from "@/lib/projects";
+import { projectForDirectory, getWorkspaceContext, createWorkspace } from "@/lib/projects";
 import { loadEvents, maxSeq } from "@/lib/db/repo/messages";
 import { deleteSessionRow, getSessionRow, listSessionRows, type SessionRow } from "@/lib/db/repo/sessions";
 import "./persist";
 import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
-import { deleteTranscripts } from "./transcripts";
+import { restoreCheckouts } from "@/lib/projects/checkouts";
+import { deleteTranscripts, ensureTranscriptAt } from "./transcripts";
 import type { SessionOrigin } from "@/lib/agent/types";
 import { permissionModesFor, providerOf, type SessionMeta } from "./types";
 
@@ -19,9 +20,11 @@ export class WorkspaceArchivedError extends Error {
 }
 
 export type StartSessionInput = {
+  /** A standalone project effort gets its own worktree. */
+  projectId?: string;
   /** Start inside an existing workspace... */
   workspaceId?: string;
-  /** ...or quick-start from a directory: its project and "main" workspace are created on demand. */
+  /** ...or quick-start from a directory: its project and isolated effort workspace are created on demand. */
   cwd?: string;
   model?: string;
   permissionMode?: string;
@@ -34,12 +37,17 @@ export type StartSessionInput = {
 export async function startSession(input: StartSessionInput) {
   const ctx = input.workspaceId
     ? await getWorkspaceContext(input.workspaceId)
+    : input.projectId
+      ? await getWorkspaceContext((await createWorkspace({ projectId: input.projectId, visibility: "project" })).id)
     : input.cwd
-      ? await contextForDirectory(input.cwd)
+      ? await getWorkspaceContext((await createWorkspace({ projectId: (await projectForDirectory(input.cwd)).id, visibility: "project" })).id)
       : null;
-  if (!ctx) throw new Error(input.workspaceId ? "Workspace not found" : "workspaceId or cwd is required");
+  if (!ctx) throw new Error(input.workspaceId ? "Workspace not found" : "projectId, workspaceId or cwd is required");
+  if (input.projectId && ctx.project.id !== input.projectId) throw new Error("Workspace does not belong to this project");
   if (ctx.workspace.status === "archived") throw new Error("Workspace is archived");
+  if (input.workspaceId) await restoreCheckouts(ctx);
   const model = input.model || env.DEFAULT_MODEL;
+  if (input.resumeSdkSessionId && providerOf(model) === "claude") await ensureTranscriptAt(ctx.workspace.cwd, input.resumeSdkSessionId);
   const permissionMode = permissionModesFor(providerOf(model)).includes(input.permissionMode as never)
     ? input.permissionMode!
     : "default";
@@ -59,7 +67,9 @@ export async function resumeSession(id: string) {
   if (live && !isTerminated(live)) return live;
   if (live) {
     // live.ctx is a snapshot from when the session started, so read the workspace's current status.
-    if ((await getWorkspaceContext(live.meta.workspaceId))?.workspace.status === "archived") throw new WorkspaceArchivedError();
+    const current = await getWorkspaceContext(live.meta.workspaceId);
+    if (current?.workspace.status === "archived") throw new WorkspaceArchivedError();
+    if (current) await restoreCheckouts(current);
     // The runtime exited or crashed: start a new one on the same SDK session / thread, keeping history.
     evictSession(live);
     return createSession({
@@ -81,6 +91,7 @@ export async function resumeSession(id: string) {
   const ctx = await getWorkspaceContext(row.workspaceId);
   if (!ctx) throw new Error("This session's workspace no longer exists");
   if (ctx.workspace.status === "archived") throw new WorkspaceArchivedError();
+  await restoreCheckouts(ctx);
   return createSession({
     id: row.id,
     ctx,

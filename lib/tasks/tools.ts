@@ -7,7 +7,7 @@ import { createTask, patchTask } from "./service";
 import { OPEN_TASK_STATUSES, type Task } from "./types";
 
 /** `routine`: the session was started by a routine. Its work defaults to project scope so it outlives the run's worktree. */
-export type TaskToolContext = { projectId: string; workspaceId: string; sessionId: string; routine?: boolean };
+export type TaskToolContext = { projectId: string; workspaceId: string; sessionId: string; routine?: boolean; projectScope?: boolean };
 export const TASK_TOOL_NAMES = ["tasks_list", "tasks_create", "tasks_update", "tasks_complete"] as const;
 
 /** Resolve only against the caller's project-scoped candidates, including completed tasks. */
@@ -49,11 +49,11 @@ export function tasksTools(ctx: TaskToolContext) {
     return tasks.find((task) => task.id === resolved)!;
   }
   const id = z.string().min(1).max(36);
-  const defaultScope = ctx.routine ? "project" : "workspace";
+  const defaultScope = ctx.routine || ctx.projectScope ? "project" : "workspace";
   return [
-    defineTool("tasks_list", `List tasks in this project. Workspace scope shows this workspace; project scope shows project-level tasks; all includes every workspace. Defaults to ${ctx.routine ? "all" : "workspace"} scope.`, {
+    defineTool("tasks_list", `List tasks in this project. Workspace scope shows this workspace; project scope shows project-level tasks; all includes every workspace. Defaults to ${ctx.routine ? "all" : defaultScope} scope.`, {
       scope: z.enum(["workspace", "project", "all"]).optional(), status: z.enum(["open", "all"]).optional(),
-    }, async ({ scope = ctx.routine ? "all" : "workspace", status = "open" }) => {
+    }, async ({ scope = ctx.routine ? "all" : defaultScope, status = "open" }) => {
       const tasks = await projectTasks();
       return compact(tasks.filter((t) => (scope === "all" || t.workspaceId === (scope === "workspace" ? ctx.workspaceId : null))
         && (status === "all" || OPEN_TASK_STATUSES.some((s) => s === t.status))));

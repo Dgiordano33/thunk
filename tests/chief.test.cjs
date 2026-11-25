@@ -11,7 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "thunk-chief-"));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 const id = () => crypto.randomUUID();
 const project = { id: id(), dataKey: "test", name: "Test", repos: [{ id: id(), kind: "repo" }], repoFolders: [] };
-const main = { id: id(), projectId: project.id, slug: "main", branch: null, cwd: tmp, repos: [] };
+const main = { id: id(), projectId: project.id, slug: "main", branch: null, cwd: tmp, repos: [], status: "active" };
 const workspaces = new Map([[main.id, main]]);
 const sessions = new Map();
 const persisted = new Map();
@@ -36,7 +36,8 @@ const agent = {
   subscribe: (live, fn) => { live.subscribers.add(fn); return () => live.subscribers.delete(fn); },
   onSessionCreated: () => {},
   startSession: async (input) => {
-    const workspace = workspaces.get(input.workspaceId);
+    const workspace = input.workspaceId ? workspaces.get(input.workspaceId) : { ...main, id: id(), slug: "chief-effort", visibility: "project" };
+    workspaces.set(workspace.id, workspace);
     const sessionId = id();
     const live = { id: sessionId, meta: { ...input, id: sessionId, projectId: project.id, workspaceId: workspace.id, status: "idle", createdAt: new Date().toISOString() }, ctx: { project, workspace }, events: [], seq: 0, pending: new Map(), queuedMessages: [], subscribers: new Set(), driver: { isClosed: false, interrupt: async () => {} } };
     sessions.set(sessionId, live); return live;
@@ -179,7 +180,7 @@ test("work log serializes concurrent appends, memory uses explicit replacement",
   const logNotes = [...notes.values()].filter((n) => n.title.startsWith("Work log"));
   assert.equal(logNotes.length, 1, "one note per day");
   assert.match(logNotes[0].markdown, /one\n- [^\n]*two/);
-  await logs.saveChiefPlan(project, "Plan for next chief");
+  await logs.saveChiefPlan(project, "main", "Plan for next chief");
   assert.equal(fs.readFileSync(path.join(tmp, "MEMORY.md"), "utf8"), "Plan for next chief");
 });
 
@@ -299,6 +300,7 @@ test("a new chief takes over reports from running workers", async () => {
   const old = await service.openChief(project.id);
   const worker = await service.delegate(project.id, old.id, { title: "Handed over" });
   const fresh = await service.openChief(project.id, true);
+  assert.equal(fresh.meta.workspaceId, old.meta.workspaceId, "a fresh chief keeps the chief workspace and its memory");
   fresh.meta.createdAt = new Date(Date.now() + 60_000).toISOString();
   const before = old.events.length;
   finish(sessions.get(worker.sessionId), "Handover complete");
@@ -471,16 +473,15 @@ test("stopping a queued task removes it from the queue", async () => {
   await service.stopWorker(project.id, blocker.taskId, "Cleanup");
 });
 
-test("a scout runs read-only in the main checkout, needs no Git repository and reports without a diff", async () => {
+test("a scout runs read-only in its own environment, needs no Git repository and reports without a diff", async () => {
   await stopAll();
   const saved = project.repos;
   project.repos = [];
   try {
-    await assert.rejects(service.delegate(project.id, null, { title: "Needs a repo" }), /Use mode "scout"/);
     const before = workspaceInputs.length;
     const scout = await service.delegate(project.id, null, { title: "Investigate flaky test", brief: "Find the cause", mode: "scout" });
-    assert.equal(workspaceInputs.length, before, "no worktree is created");
-    assert.equal(scout.workspaceId, main.id);
+    assert.equal(workspaceInputs.length, before + 1, "a private environment is created");
+    assert.notEqual(scout.workspaceId, main.id);
     const live = sessions.get(scout.sessionId);
     assert.equal(live.meta.origin.scout, true);
     assert.equal(prompt.readOnlySession(live.meta.origin), true);

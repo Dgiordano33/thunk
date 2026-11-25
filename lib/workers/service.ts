@@ -2,7 +2,7 @@ import { captureTask } from '@/lib/db/repo/captures';
 import "server-only";
 import { linearBranch } from "@/lib/integrations/linear/sync";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
-import { createWorkspace, ensureMainWorkspace, getWorkspaceContext } from "@/lib/projects";
+import { createWorkspace, getWorkspaceContext } from "@/lib/projects";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
 import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { subscribeTasks } from "@/lib/tasks/events";
@@ -16,7 +16,7 @@ import type { SessionMeta } from "@/lib/agent/types";
 import { startWorkerSession, sendBrief } from "./start";
 import { watchWorker, type WorkerResult } from "./watch";
 import { collectReport } from "./report";
-import { appendWorkLog } from "./log";
+import { appendWorkLog, carryChiefPlan } from "./log";
 import { noteBrief } from "./notes";
 import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
 
@@ -34,15 +34,21 @@ export async function openChief(projectId: string, fresh = false) {
   return withFileLock(`chief:${projectId}`, async () => {
     const project = await getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const workspace = await ensureMainWorkspace(project);
-    if (!fresh) {
-      const current = (await listSessions({ workspaceId: workspace.id, limit: 10_000 })).find((s) => s.origin?.kind === "chief");
-      if (current) {
-        const live = await resumeSession(current.id);
-        if (live) return live;
-      }
+    const current = (await listSessions({ projectId, limit: 10_000 })).find((s) => s.origin?.kind === "chief");
+    if (current && !fresh) {
+      const live = await resumeSession(current.id);
+      if (live) return live;
     }
-    return startWorkerSession({ workspaceId: workspace.id, title: "Chief", permissionMode: "default", origin: { kind: "chief" } });
+    // The chief keeps one workspace across restarts, so its memory (the plan) carries over to the next chief.
+    // If that workspace was archived, a new one takes over the plan.
+    const previous = current ? await getWorkspace(current.workspaceId) : null;
+    let workspaceId = previous?.status === "active" ? previous.id : undefined;
+    if (previous && !workspaceId) {
+      const workspace = await createWorkspace({ projectId, visibility: "project" });
+      await carryChiefPlan(project, previous.slug, workspace.slug);
+      workspaceId = workspace.id;
+    }
+    return startWorkerSession({ ...(workspaceId ? { workspaceId } : { projectId }), title: "Chief", permissionMode: "default", origin: { kind: "chief" } });
   });
 }
 
@@ -106,8 +112,7 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
 }
 
 function selectRepos(project: Project, repoIds?: string[]) {
-  const selected = project.repos.filter((r) => repoIds ? repoIds.includes(r.id) : r.kind === "repo");
-  if (!selected.length || selected.some((r) => r.kind !== "repo")) throw new Error("Delegation needs a Git repository for an isolated worktree. Use mode \"scout\" for read-only work.");
+  const selected = project.repos.filter((r) => !repoIds || repoIds.includes(r.id));
   return selected;
 }
 
@@ -132,8 +137,7 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     const target = args.workspaceId ? await workerTarget(projectId, args.workspaceId) : null;
     const entries: RaceEntry[] = [];
     for (const model of models) {
-      const workspace = scout ? await ensureMainWorkspace(project)
-        : target ?? await createWorkspace({ projectId, name: `${routineSlug(task.title)}-${shortId()}`, repoIds: selectRepos(project, args.repoIds).map((r) => r.id), worktree: true, setup: "await",
+      const workspace = target ?? await createWorkspace({ projectId, visibility: "project", name: `${routineSlug(task.title)}-${shortId()}`, repoIds: selectRepos(project, args.repoIds).map((r) => r.id), worktree: true, setup: "await",
           // Linear attaches the PR to the issue when the branch carries its key.
           ...(task.external?.source === "linear" ? { branch: linearBranch(task.external.key, task.title) } : {}) });
       const live = await startWorkerSession({ workspaceId: workspace.id, title: raceId ? `${task.title} · ${model}` : task.title, model, permissionMode: scout ? "default" : args.permissionMode ?? "default",
@@ -143,7 +147,7 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     }
     const [first] = started;
     await captureTask(task.id, {status:'working', session_id:first.id, workspace_id:first.meta.workspaceId});
-    await patchTask(task.id, { workspaceId: first.meta.workspaceId, sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
+    await patchTask(task.id, { ...(target ? { workspaceId: target.id } : {}), sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
     await updateWorkerState(project, (s) => {
       const now = new Date().toISOString();
       const stats = s.stats[task.id] ??= { taskId: task.id, title: task.title, models: [], mode: scout ? "scout" : "worktree", startedAt: now, finishedAt: null, durationMs: 0, costUsd: 0, rounds: 0, outcome: null, counted: [] };
@@ -322,7 +326,7 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     if (!ctx) return;
     const previous = await savedReport(ctx.project, meta.id);
     if (previous && previous.seq >= seq) { enqueue(reportFile(ctx.project, meta.id), previous); return; }
-    // A scout runs in the main checkout: its diff is the person's own work, not the scout's.
+    // A scout reports research rather than code changes.
     const report = await collectReport({ ...ctx, workspace: origin.scout ? null : ctx.workspace, markdown: result.markdown });
     const needsPerson = /^needs_person:[ \t]*(.*)$/im.exec(result.markdown)?.[1]?.trim().replace(/^(none|false|no|n\/a)\.?$/i, "");
     const status = result.status === "cancelled" ? "cancelled" : result.status === "failed" || report.outcome === "failed" ? "failed" : report.outcome === "blocked" || needsPerson ? "blocked" : "done";
@@ -453,13 +457,13 @@ export async function recoverWorkers() {
 
 /**
  * Start queued work when a task changes (a dependency may now be done), and archive finished
- * worker workspaces now and then. Replaces the previous subscription and timer, so HMR does not stack them.
+ * worker workspaces and release idle effort worktrees now and then. Replaces the previous subscription and timer, so HMR does not stack them.
  */
 export function ensureWorkerHousekeeping() {
   const previous = g.__thunkWorkerHousekeeping;
   if (previous) { previous.unsubscribe(); clearInterval(previous.timer); }
   const unsubscribe = subscribeTasks((e) => { if (e.kind === "changed") scheduleDrain(e.projectId); });
-  const timer = setInterval(() => void import("./cleanup").then((m) => m.cleanupWorkerWorkspaces()).catch((err) => console.error("[thunk] worker cleanup failed", err)), 10 * 60_000);
+  const timer = setInterval(() => void import("./cleanup").then(async (m) => { await m.cleanupWorkerWorkspaces(); await m.releaseIdleWorkspaces(); }).catch((err) => console.error("[thunk] workspace cleanup failed", err)), 10 * 60_000);
   timer.unref?.();
   g.__thunkWorkerHousekeeping = { unsubscribe, timer };
   void listProjects().then((projects) => { for (const p of projects) scheduleDrain(p.id, 0); }).catch((err) => console.error("[thunk] worker queue recovery failed", err));

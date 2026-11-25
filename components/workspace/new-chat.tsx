@@ -27,6 +27,7 @@ import { useWorkspaceBase } from "./route-context";
 /** A blank chat. The session is only created when the first message is sent. */
 export function NewChat({
   workspaceId,
+  projectId,
   workspaceLabel,
   defaultModel,
   defaultMode,
@@ -34,7 +35,8 @@ export function NewChat({
   firstSession = false,
   initialPrompt,
 }: {
-  workspaceId: string;
+  workspaceId?: string;
+  projectId?: string;
   workspaceLabel: string;
   defaultModel: string;
   defaultMode: string;
@@ -85,8 +87,8 @@ export function NewChat({
             setError(null);
             setSubmitting(true);
             try {
-              const { id } = await api.createSession({ workspaceId, model, permissionMode: mode, prompt: text, images: files });
-              router.push(`${base}/${id}`);
+              const { id, workspaceId: createdWorkspaceId } = await api.createSession({ workspaceId, projectId, model, permissionMode: mode, prompt: text, images: files });
+              router.push(projectId ? `/w/${createdWorkspaceId}/s/${id}` : `${base}/${id}`);
               router.refresh();
             } catch (err) {
               setError((err as Error).message);

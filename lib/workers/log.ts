@@ -17,7 +17,14 @@ export async function appendWorkLog(project: Project, entry: string) {
       : createNote(dirs, { id, title: `Work log ${date}`, markdown: line }, { keepId: true });
   });
 }
-export async function saveChiefPlan(project: Project, plan: string) {
-  const file = workspaceMemoryFile(project.dataKey, "main");
+/** The plan is the chief's workspace memory, which openChief carries over to the next chief. */
+export async function saveChiefPlan(project: Project, workspaceSlug: string, plan: string) {
+  const file = workspaceMemoryFile(project.dataKey, workspaceSlug);
   return withFileLock(file, async () => replaceFile(file, plan, await readOptional(file)));
+}
+
+/** Hand the plan from a retired chief workspace to its replacement. */
+export async function carryChiefPlan(project: Project, fromSlug: string, toSlug: string) {
+  const plan = await readOptional(workspaceMemoryFile(project.dataKey, fromSlug));
+  if (plan) await saveChiefPlan(project, toSlug, plan);
 }

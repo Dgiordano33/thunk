@@ -6,7 +6,7 @@ import { boardModel } from '@/lib/board/model';
 import { lock, snapshot } from '@/lib/board/store';
 import { BoardView } from '@/components/board/board-view';
 import { resolveCanvasUrl } from '@/lib/routes';
-import { ensureMainWorkspace } from '@/lib/projects';
+import { getWorkspace } from '@/lib/db/repo/workspaces';
 export const dynamic = 'force-dynamic';
 const one = (v: string | string[] | undefined) => typeof v === 'string' ? v : undefined;
 export async function generateMetadata({ params }: PageProps<'/[project]/canvas/[[...board]]'>) {
@@ -28,9 +28,11 @@ export default async function CanvasPage({ params, searchParams }: PageProps<'/[
     const sessions = await listCanvases(project.dataKey);
     if (!sessions.some(s => s.id === boardId)) notFound();
     const { dir } = await boardFor(project.id, boardId);
-    const [initial, main] = await Promise.all([lock(dir, () => snapshot(dir)), ensureMainWorkspace(project)]);
+    const initial = await lock(dir, () => snapshot(dir));
+    // Chats started from a card share the canvas workspace once it exists; until then they start a project chat.
+    const canvasWorkspace = initial.board.workspaceId ? await getWorkspace(initial.board.workspaceId) : null;
     // The board owns its scroll and gestures, so it fills the pane instead of scrolling inside it.
     return <div className="sky-surface h-full overflow-hidden bg-background text-foreground">
-      <DesktopOnly href={`/${project.slug}`}><BoardView key={`${project.id}:${boardId}`} sessions={sessions} boardId={boardId} projectId={project.id} slug={project.slug} model={boardModel(initial.board)} mainWorkspace={main.slug} focusCard={one(query.card)} initial={initial}/></DesktopOnly>
+      <DesktopOnly href={`/${project.slug}`}><BoardView key={`${project.id}:${boardId}`} sessions={sessions} boardId={boardId} projectId={project.id} slug={project.slug} model={boardModel(initial.board)} chatWorkspace={canvasWorkspace?.status === 'active' ? canvasWorkspace.slug : undefined} focusCard={one(query.card)} initial={initial}/></DesktopOnly>
     </div>;
 }

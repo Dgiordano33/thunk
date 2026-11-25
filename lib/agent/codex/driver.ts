@@ -181,7 +181,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine" }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;

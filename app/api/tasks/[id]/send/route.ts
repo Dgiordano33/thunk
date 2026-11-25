@@ -23,16 +23,15 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   if (body.sessionId && !session) throw new HttpError(404, "Session not found");
   if (session && body.workspaceId && session.workspaceId !== body.workspaceId) throw new HttpError(400, "Session and workspace disagree");
   const workspaceId = session?.workspaceId ?? body.workspaceId ?? task.workspaceId;
-  if (!workspaceId) throw new HttpError(400, "Choose a workspace or session for this project task");
-  const workspace = await getWorkspace(workspaceId);
-  if (!workspace || workspace.projectId !== task.projectId || (task.workspaceId && task.workspaceId !== workspace.id))
+  const workspace = workspaceId ? await getWorkspace(workspaceId) : null;
+  if (workspaceId && (!workspace || workspace.projectId !== task.projectId || (task.workspaceId && task.workspaceId !== workspace.id)))
     throw new HttpError(400, "Destination does not belong to task scope");
-  if (workspace.status === "archived") throw new HttpError(400, "Workspace is archived");
-  const live = body.sessionId ? await resumeSession(body.sessionId) : await startSession({ workspaceId, title: task.title.slice(0, 120) });
+  if (workspace?.status === "archived") throw new HttpError(400, "Workspace is archived");
+  const live = body.sessionId ? await resumeSession(body.sessionId) : await startSession({ workspaceId: workspaceId ?? undefined, projectId: task.projectId, title: task.title.slice(0, 120) });
   if (!live) throw new HttpError(404, "Session not found");
   // Session-created persistence is asynchronous; ensure the FK exists before assigning the task.
   await upsertSession(live.meta);
   await patchTask(task.id, { sessionId: live.id });
   pushUserMessage(live, `${task.title}${task.body ? `\n\n${task.body}` : ""}\n\nTask id: ${task.id}. Claim it with tasks_update and complete it with tasks_complete.`);
-  return Response.json({ sessionId: live.id, workspaceId, href: await hrefForSession(workspaceId, live.id) });
+  return Response.json({ sessionId: live.id, workspaceId: live.meta.workspaceId, href: await hrefForSession(live.meta.workspaceId, live.id) });
 });

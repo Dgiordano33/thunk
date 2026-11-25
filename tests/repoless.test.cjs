@@ -12,7 +12,10 @@ const Module = require("node:module");
 require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(require("node:fs").readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, filename);
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
-  if (request.startsWith("@/")) request = path.join(__dirname, "..", `${request.slice(2)}.ts`);
+  if (request.startsWith("@/")) {
+    const base = path.join(__dirname, "..", request.slice(2));
+    request = require("node:fs").existsSync(`${base}.ts`) ? `${base}.ts` : path.join(base, "index.ts");
+  }
   return resolve.call(this, request, ...rest);
 };
 const load = Module._load;
@@ -24,6 +27,7 @@ Module._load = function (request, parent, isMain) {
 
 const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "thunk-repoless-")));
 process.env.THUNK_DATA_DIR = path.join(base, "data");
+process.env.CLAUDE_CONFIG_DIR = path.join(base, "claude");
 const projects = require("../lib/projects/index.ts");
 const paths = require("../lib/projects/paths.ts");
 const { getProject } = require("../lib/db/repo/projects.ts");
@@ -45,8 +49,10 @@ async function makeRepo(name) {
 const makeFolder = async (name) => { const dir = path.join(base, name); await fs.mkdir(dir); return dir; };
 const existing = (p, name) => ({ source: "existing", path: p, name });
 
-test("a project with no repos has a main workspace in its home directory, and creates isolated non-git workspaces", async () => {
-  const { project, workspace, repos } = await projects.createProject({ name: "Empty Idea", repos: [] });
+test("a project starts without a workspace and allocates isolated environments on demand", async () => {
+  const { project, repos } = await projects.createProject({ name: "Empty Idea", repos: [] });
+  assert.deepEqual(await require("../lib/db/repo/workspaces.ts").listWorkspaces(project.id), []);
+  const workspace = await projects.ensureMainWorkspace(project);
   assert.equal(project.dataKey, "empty-idea");
   assert.deepEqual(project.repos, []);
   assert.deepEqual(repos, []);
@@ -78,7 +84,8 @@ test("data keys are suffixed on collision, including with directories left on di
 test("the first repo re-anchors the main workspace; any repo can be removed and the anchor moves on", async () => {
   const first = await makeRepo("first");
   const second = await makeRepo("second");
-  const { project, workspace } = await projects.createProject({ name: "Grows", repos: [] });
+  const { project } = await projects.createProject({ name: "Grows", repos: [] });
+  const workspace = await projects.ensureMainWorkspace(project);
   const home = workspace.cwd;
 
   const repoA = await projects.addProjectRepo(project.id, first);
@@ -146,7 +153,8 @@ test("contextForDirectory is idempotent, finds worktrees and repos held by wizar
 test("plain folders are in a project but out of its git targets", async () => {
   const code = await makeRepo("code");
   const docs = await makeFolder("docs-folder");
-  const { project, workspace } = await projects.createProject({ name: "Mixed", repos: [existing(docs), existing(code)] });
+  const { project } = await projects.createProject({ name: "Mixed", repos: [existing(docs), existing(code)] });
+  const workspace = await projects.ensureMainWorkspace(project);
   assert.deepEqual(project.repos.map((r) => r.kind), ["folder", "repo"]);
   assert.deepEqual(workspaceRepoTargets({ project, workspace }).map((t) => t.root), [code]);
 
@@ -156,9 +164,9 @@ test("plain folders are in a project but out of its git targets", async () => {
 
   const onlyFolder = await projects.createProject({ name: "Folder Only", repos: [existing(await makeFolder("only-folder"))] });
   const folderWorkspace = await projects.createWorkspace({ projectId: onlyFolder.project.id, setup: "skip" });
-  assert.equal(folderWorkspace.cwd, onlyFolder.workspace.cwd);
+  assert.equal(folderWorkspace.cwd, onlyFolder.project.repos[0].path);
   assert.equal(folderWorkspace.branch, null);
-  assert.equal((await projects.contextForDirectory(folderWorkspace.cwd)).workspace.id, onlyFolder.workspace.id);
+  assert.equal((await projects.contextForDirectory(folderWorkspace.cwd)).workspace.id, folderWorkspace.id);
 });
 
 test("preflight rejects impossible specs with nothing created", async () => {
@@ -189,8 +197,7 @@ test("a failing middle spec is reported and the rest are still added", async () 
   assert.deepEqual(result.repos.map((r) => r.status), ["added", "failed", "added", "added"]);
   assert.ok(result.repos[1].error);
   assert.deepEqual(result.project.repos.map((r) => r.name), ["left", "right", "brand-new"]);
-  assert.equal(result.workspace.cwd, left);
-  assert.deepEqual(result.workspace.repos.map((r) => r.name), ["left", "right", "brand-new"]);
+  assert.deepEqual(await require("../lib/db/repo/workspaces.ts").listWorkspaces(result.project.id), []);
   assert.equal(result.project.repos[2].kind, "repo");
 
   // Once the failure is fixed, the retry goes through the single-repo path.
@@ -231,10 +238,118 @@ test("projects sharing repos allocate different paths and branches, including co
 });
 
 test("removing the last folder gives each workspace its own scratch directory", async () => {
-  const { project, workspace } = await projects.createProject({ name: "Folder removal", repos: [existing(await makeFolder("remove-folder"))] });
+  const { project } = await projects.createProject({ name: "Folder removal", repos: [existing(await makeFolder("remove-folder"))] });
+  const workspace = await projects.ensureMainWorkspace(project);
   const extra = await projects.createWorkspace({ projectId: project.id });
   await projects.removeProjectRepo(project.id, project.repos[0].id);
   const a = await projects.getWorkspaceContext(workspace.id);
   const b = await projects.getWorkspaceContext(extra.id);
   assert.notEqual(a.workspace.cwd, b.workspace.cwd);
+});
+
+test("automatic efforts start in independent clean worktrees and leave source edits alone", async () => {
+  const root = await makeRepo("effort-isolation");
+  const { project } = await projects.createProject({ name: "Efforts", repos: [existing(root)] });
+  await fs.writeFile(path.join(root, "README"), "uncommitted source edit\n");
+  const [a, b] = await Promise.all([1, 2].map(() => projects.createWorkspace({ projectId: project.id, visibility: "project", setup: "skip" })));
+  assert.notEqual(a.cwd, b.cwd);
+  assert.notEqual(a.branch, b.branch);
+  assert.equal(a.visibility, "project");
+  assert.equal(git(a.cwd, "status", "--porcelain"), "");
+  assert.equal(git(b.cwd, "status", "--porcelain"), "");
+  await fs.writeFile(path.join(a.cwd, "README"), "effort A\n");
+  assert.equal(await fs.readFile(path.join(b.cwd, "README"), "utf8"), "effort-isolation\n");
+  assert.equal(await fs.readFile(path.join(root, "README"), "utf8"), "uncommitted source edit\n");
+  const explicit = await projects.createWorkspace({ projectId: project.id, setup: "skip" });
+  assert.equal(explicit.visibility, "workspace");
+});
+
+test("plain-folder automatic efforts work in the folder itself, so the work lands there", async () => {
+  const root = await makeFolder("in-place-source");
+  await fs.writeFile(path.join(root, "draft.md"), "original");
+  const { project } = await projects.createProject({ name: "Folder efforts", repos: [existing(root)] });
+  const a = await projects.createWorkspace({ projectId: project.id, visibility: "project", setup: "skip" });
+  assert.equal(a.cwd, root);
+  await fs.writeFile(path.join(a.cwd, "draft.md"), "changed");
+  assert.equal(await fs.readFile(path.join(root, "draft.md"), "utf8"), "changed");
+});
+
+test("idle efforts release empty worktrees and restore them at the same path; work is never released", async () => {
+  const checkouts = require("../lib/projects/checkouts.ts");
+  const root = await makeRepo("release-efforts");
+  const { project } = await projects.createProject({ name: "Release efforts", repos: [existing(root)] });
+  const ws = await projects.createWorkspace({ projectId: project.id, visibility: "project", setup: "skip" });
+  const ctx = await projects.getWorkspaceContext(ws.id);
+  assert.equal(await checkouts.releaseCheckouts(ctx), true);
+  assert.equal(await fs.stat(ws.cwd).catch(() => null), null);
+  assert.equal(git(root, "branch", "--list", ws.branch), "", "the branch goes too");
+  assert.equal(await checkouts.restoreCheckouts(ctx), true);
+  assert.equal(git(ws.cwd, "rev-parse", "--abbrev-ref", "HEAD"), ws.branch, "restored at the same path and branch");
+  await fs.writeFile(path.join(ws.cwd, "work.txt"), "unsaved");
+  assert.equal(await checkouts.releaseCheckouts(ctx), false, "uncommitted work keeps the worktree");
+  git(ws.cwd, "add", "work.txt"); git(ws.cwd, "commit", "-qm", "work");
+  assert.equal(await checkouts.releaseCheckouts(ctx), false, "unmerged commits keep the worktree");
+  assert.ok(await fs.stat(path.join(ws.cwd, "work.txt")));
+});
+
+test("canvas callers share one persisted worktree, separate canvases remain isolated", async () => {
+  const { ensureBoardWorkspace } = require("../lib/board/workspace.ts");
+  const { createCanvas } = require("../lib/board/service.ts");
+  const { readBoard } = require("../lib/board/store.ts");
+  const { listWorkspaces, updateWorkspace } = require("../lib/db/repo/workspaces.ts");
+  const root = await makeRepo("canvas-efforts");
+  const { project } = await projects.createProject({ name: "Canvas efforts", repos: [existing(root)] });
+  const [a, b] = await Promise.all([ensureBoardWorkspace(project.id), ensureBoardWorkspace(project.id)]);
+  assert.equal(a.id, b.id);
+  assert.equal((await listWorkspaces(project.id)).length, 1);
+  await fs.writeFile(path.join(a.cwd, "shared.txt"), "visible to every canvas agent");
+  assert.equal(await fs.readFile(path.join(b.cwd, "shared.txt"), "utf8"), "visible to every canvas agent");
+  assert.equal((await readBoard(paths.projectBoardsDir(project.dataKey))).workspaceId, a.id);
+  assert.equal((await ensureBoardWorkspace(project.id)).id, a.id);
+  const other = await createCanvas(project.dataKey, "Other effort");
+  const c = await ensureBoardWorkspace(project.id, other.id);
+  assert.notEqual(a.id, c.id);
+  assert.equal(git(c.cwd, "status", "--porcelain"), "");
+  await updateWorkspace(a.id, { status: "archived" });
+  const replaced = await ensureBoardWorkspace(project.id);
+  assert.notEqual(replaced.id, a.id, "an archived canvas workspace is replaced instead of breaking the canvas");
+  assert.equal((await readBoard(paths.projectBoardsDir(project.dataKey))).workspaceId, replaced.id);
+  assert.equal((await ensureBoardWorkspace(project.id)).id, replaced.id);
+});
+
+test("a transcript resumed from another directory is copied there, leaving the original", async () => {
+  const { ensureTranscriptAt } = require("../lib/agent/transcripts.ts");
+  const id = "0f2c7f4e-1111-4222-8333-444455556666";
+  const from = path.join(base, "claude", "projects", "-old-canvas"), to = path.join(base, "new-canvas");
+  await fs.mkdir(from, { recursive: true });
+  await fs.writeFile(path.join(from, `${id}.jsonl`), "history");
+  await ensureTranscriptAt(to, id);
+  assert.equal(await fs.readFile(path.join(base, "claude", "projects", to.replace(/[^a-zA-Z0-9]/g, "-"), `${id}.jsonl`), "utf8"), "history");
+  assert.equal(await fs.readFile(path.join(from, `${id}.jsonl`), "utf8"), "history");
+  await ensureTranscriptAt(to, "../escape");
+});
+
+test("new and restored efforts branch from the remote's latest, not a stale local ref", async () => {
+  const checkouts = require("../lib/projects/checkouts.ts");
+  const root = await makeRepo("fetch-source");
+  const remote = path.join(base, "fetch-remote.git");
+  git(base, "clone", "--bare", "-q", root, remote);
+  git(root, "remote", "add", "origin", remote); git(root, "fetch", "-q", "origin");
+  const { project } = await projects.createProject({ name: "Fetch efforts", repos: [existing(root)] });
+  const pushFromElsewhere = async (name) => {
+    const other = path.join(base, `fetch-${name}`);
+    git(base, "clone", "-q", remote, other);
+    git(other, "config", "user.name", "Elsewhere"); git(other, "config", "user.email", "x@example.invalid");
+    await fs.writeFile(path.join(other, `${name}.txt`), name);
+    git(other, "add", "."); git(other, "commit", "-qm", name); git(other, "push", "-q", "origin", "main");
+  };
+  await pushFromElsewhere("first");
+  const ws = await projects.createWorkspace({ projectId: project.id, visibility: "project", setup: "skip" });
+  assert.equal(await fs.readFile(path.join(ws.cwd, "first.txt"), "utf8"), "first", "a new effort sees commits pushed since the last fetch");
+  const ctx = await projects.getWorkspaceContext(ws.id);
+  await checkouts.releaseCheckouts(ctx);
+  await pushFromElsewhere("second");
+  require("../lib/projects/git.ts").__forgetFetches(); // the throttle would otherwise reuse the first fetch
+  await checkouts.restoreCheckouts(ctx);
+  assert.equal(await fs.readFile(path.join(ws.cwd, "second.txt"), "utf8"), "second", "a restored effort starts from the remote's latest");
 });

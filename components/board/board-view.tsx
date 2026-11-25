@@ -41,10 +41,11 @@ function focusEditor(id: string, tries = 60) {
     if (tries > 0) requestAnimationFrame(() => focusEditor(id, tries - 1));
 }
 
-export function BoardView({ projectId, slug, initial, boardId, sessions, model: initialModel, focusCard, mainWorkspace }: {
+export function BoardView({ projectId, slug, initial, boardId, sessions, model: initialModel, focusCard, chatWorkspace }: {
     projectId: string;
     /** Slug of the project's main workspace, where "Start session from card" opens a chat. */
-    mainWorkspace: string;
+    /** The canvas workspace's slug, where chats from a card start; a project chat until it exists. */
+    chatWorkspace?: string;
     boardId: string;
     sessions: CanvasSession[];
     slug: string;
@@ -250,7 +251,7 @@ export function BoardView({ projectId, slug, initial, boardId, sessions, model: 
             await flushAll(projectId, boardId);
             const project = { slug }, label = itemLabel(c);
             const text = c.kind === 'doc' ? c.markdown.trim() : '', back = `From the canvas “${title}”: [${label}](${canvasPath(project, boardId, c.id)})`;
-            if (action === 'session') return router.push(`${newChatPath(project, { slug: mainWorkspace })}?${new URLSearchParams({ canvas: boardId, card: c.id })}`);
+            if (action === 'session') return router.push(`${newChatPath(project, chatWorkspace ? { slug: chatWorkspace } : undefined)}?${new URLSearchParams({ canvas: boardId, card: c.id })}`);
             if (action === 'task') {
                 const { task } = await boardRequest('/api/tasks', 'POST', { projectId, title: label.slice(0, 200), body: [text.slice(0, 19000), back].filter(Boolean).join('\n\n') });
                 toast('Task created', { description: task.title, action: { label: 'Open tasks', onClick: () => router.push(projectSectionPath(`/${slug}`, 'tasks')) } });

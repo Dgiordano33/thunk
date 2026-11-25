@@ -78,7 +78,8 @@ test("both providers get capped project instructions, and Claude protects projec
   for (const withFolder of [false, true]) {
     const folder = path.join(base, "folder");
     await fs.mkdir(folder, { recursive: true });
-    const { project, workspace } = await projects.createProject({ name: `Instructions ${withFolder}`, repos: withFolder ? [{ source: "existing", path: folder }] : [] });
+    const { project } = await projects.createProject({ name: `Instructions ${withFolder}`, repos: withFolder ? [{ source: "existing", path: folder }] : [] });
+    const workspace = await projects.createWorkspace({ projectId: project.id, visibility: "project" });
     await fs.mkdir(paths.projectConfigDir(project.dataKey), { recursive: true });
     await fs.writeFile(paths.projectInstructionsFile(project.dataKey), "Use plain language");
     const live = { id: "test", ctx: { project, workspace }, meta: { cwd: workspace.cwd, model: "test", permissionMode: "default" }, stderrTail: [] };
