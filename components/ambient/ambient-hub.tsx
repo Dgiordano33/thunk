@@ -11,12 +11,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ActivityResponse, SearchResult } from "@/lib/ambient/types";
 import { RUN_STATUS_LABELS, type RoutineRunActivity } from "@/lib/routines/types";
-import { useNotifications, useNotificationsEvents } from "@/lib/store/notifications-store";
+import { useNotificationsEvents } from "@/lib/store/notifications-store";
+import { useIsMac } from "@/lib/capture/shortcut";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { useSession } from "@/lib/store/session-store";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { canvasPath, pathsFor, projectPath, workspacePath } from "@/lib/routes";
 import { Kbd } from "@/components/ui/kbd";
+import { Hint } from "@/components/hint";
 import { SETTINGS_PATH, SETTINGS_SECTIONS, settingsPath } from "@/components/settings/sections";
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -31,13 +33,11 @@ function runHref(run: RoutineRunActivity, paths: ReturnType<typeof pathsFor>) {
   return run.sessionId && run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : projectSectionPath(paths.project(run.projectId), "workshop", { routine: run.routineId });
 }
 
-/** Activity polling and ⌘K search. `hud` renders only a compact search button, for the world map. */
-export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" }) {
+/** Activity polling and ⌘K search, shown as a compact Search button: in the world map's HUD, or the sidebar's logo row. */
+export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" | "rail" }) {
   const router = useRouter();
   useNotificationsEvents();
-  const notices = useNotifications((s) => s.items);
-  const notificationError = useNotifications((s) => s.error);
-  const activityError = useAmbient((s) => s.error);
+  const mac = useIsMac();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -104,8 +104,6 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     if (docId && useSession.getState().documents[docId]) useSession.getState().setActiveDocument(docId);
     router.push(href);
   };
-  const attention = notices.filter((n) => n.status === "open" && n.urgency === "action");
-  const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
   const navigation: SearchResult[] = projects.flatMap((p) => [
     { id: p.id, label: p.name, detail: p.repos[0]?.path ?? "No repositories", href: projectPath(p), kind: "Project" },
     { id: `${p.id}:canvas`, label: "Canvas", detail: p.name, href: canvasPath(p), kind: "Project" },
@@ -134,49 +132,44 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
     </Dialog>
   );
 
-  if (variant === "hud") {
-    return (
-      <>
-        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSearchOpen(true)}>
-          <SearchIcon /> Search <Kbd>⌘K</Kbd>
-        </Button>
-        {searchDialog}
-      </>
-    );
-  }
-
+  const keys = mac === false ? "Ctrl K" : "⌘K";
+  if (variant === "rail") return (
+    <>
+      <Hint label="Search" keys={keys} side="right">
+        <Button variant="ghost" size="icon" className="text-muted-foreground size-9" onClick={() => setSearchOpen(true)} aria-label={`Search (${keys})`}><SearchIcon /></Button>
+      </Hint>
+      {searchDialog}
+    </>
+  );
   return (
-    <div>
-      <div className="border-b px-4 pb-3">
-        <h2 className="text-muted-foreground text-xs font-medium">Needs attention <span className="tabular-nums">{attention.length || ""}</span></h2>
-        {notificationError ? <p role="status" className="text-destructive mt-1 text-xs">Inbox unavailable. Retrying…</p> : attention.length === 0 ? <p className="text-muted-foreground mt-1 text-xs">All clear</p> : (
-          <ul className="mt-1 max-h-40 overflow-y-auto">
-            {attention.slice(0, 3).map((n) => <li key={n.id}><Link href={n.href} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
-              <span className="block truncate font-medium">{n.title}</span>
-              <span className="text-muted-foreground block truncate">{projects.find((p) => p.id === n.projectId)?.name}</span>
-            </Link></li>)}
-          </ul>
-        )}
-        <Link href="/inbox" className="mt-2 block text-xs hover:underline">Open inbox</Link>
-        {activityError && <p role="status" className="text-destructive mt-1 text-xs">Activity unavailable. Retrying…</p>}
-      </div>
+    <>
+      <Button variant="ghost" size="sm" className={variant === "sidebar" ? "text-muted-foreground h-7 gap-1.5 px-2 text-xs" : "text-xs"} onClick={() => setSearchOpen(true)} aria-label={`Search (${keys})`}>
+        <SearchIcon /> Search <Kbd>{keys}</Kbd>
+      </Button>
+      {searchDialog}
+    </>
+  );
+}
+
+/** Routine runs under way, and a note when activity polling fails. Lives under the sidebar's Inbox and Library rows. */
+export function SidebarActivity({ projects }: { projects: SidebarProject[] }) {
+  const activityError = useAmbient((s) => s.error);
+  const runs = useAmbient((s) => s.runs).filter((r) => !r.error?.startsWith("Skipped"));
+  if (!activityError && runs.length === 0) return null;
+  return (
+    <div className="px-2 pt-2">
+      {activityError && <p role="status" className="text-destructive px-2 text-xs">Activity unavailable. Retrying…</p>}
       {runs.length > 0 && (
-        <div className="border-b px-4 py-3">
-          <h2 className="text-muted-foreground text-xs font-medium">Routines</h2>
-          <ul className="mt-1 max-h-40 overflow-y-auto">
-            {runs.map((r) => <li key={r.id}><Link href={runHref(r, pathsFor(projects))} className="hover:bg-sidebar-accent block rounded-md py-1.5 text-xs">
+        <>
+          <h2 className="text-muted-foreground px-2 pt-1 text-xs font-medium">Routines</h2>
+          <ul className="mt-0.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+            {runs.map((r) => <li key={r.id}><Link href={runHref(r, pathsFor(projects))} title={r.routineName} className="hover:bg-sidebar-accent block rounded-md px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring">
               <span className="block truncate font-medium">{r.routineName}</span>
               <span className="text-muted-foreground block truncate">{RUN_STATUS_LABELS[r.status]}{r.summary ? ` · ${r.summary.split("\n")[0]}` : r.error ? ` · ${r.error}` : ""}</span>
             </Link></li>)}
           </ul>
-        </div>
+        </>
       )}
-      <div className="px-2 pt-3">
-        <Button variant="outline" className="bg-background text-muted-foreground h-10 w-full justify-start gap-2 text-sm font-normal" onClick={() => setSearchOpen(true)}>
-          <SearchIcon className="size-4" /> Search anything…
-        </Button>
-      </div>
-      {searchDialog}
     </div>
   );
 }
