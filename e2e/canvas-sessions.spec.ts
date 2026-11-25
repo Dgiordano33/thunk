@@ -9,6 +9,8 @@ test('create and switch canvases from the sidebar, preserving existing cards and
     await openCanvas(page, board, 1);
     const canvases = sidebarCanvases(page, board);
     await expect(canvases.getByRole('link', { name: 'Canvas', exact: true })).toHaveAttribute('aria-current', 'page');
+    // A canvas row reveals its new-canvas button on hover.
+    await canvases.getByRole('link', { name: 'Canvas', exact: true }).hover();
     await canvases.getByRole('button', { name: `New canvas in ${board.name}`, exact: true }).click();
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Research');
     await page.getByRole('button', { name: 'Create canvas', exact: true }).click();

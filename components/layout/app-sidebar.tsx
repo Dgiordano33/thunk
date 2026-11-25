@@ -27,7 +27,7 @@ import { isLocalWorkspace, workspaceDisplayName } from "@/components/session/lab
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
-import { SidebarCanvases } from "@/components/layout/sidebar-canvases";
+import { canvasIdFromPath, SidebarCanvases } from "@/components/layout/sidebar-canvases";
 import { COUNT, FOCUS, ROW } from "@/components/layout/sidebar-row";
 import type { CanvasSession } from "@/lib/board/types";
 import { gitRepos } from "@/lib/projects/repos";
@@ -71,9 +71,9 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
   const pathname = usePathname();
   const section = pathname.split("/")[1];
   const workspaceSlug = pathname.startsWith("/projects/") ? undefined : pathname.split("/")[2];
-  // Within a project, the town (/{project}) highlights the project and its pages (/{project}/{workspace}/…) the workspace.
+  // A canvas highlights its own row, not the project. Within a project, the town (/{project}) highlights the project and its pages (/{project}/{workspace}/…) the workspace.
   const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
-  const activeProjectId = activeProject && (!workspaceSlug || !activeProject.workspaces.some(w => w.slug === workspaceSlug && w.visibility !== "project" && w.slug !== "main")) ? activeProject.id : undefined;
+  const activeProjectId = activeProject && canvasIdFromPath(pathname, activeProject.slug) === null && (!workspaceSlug || !activeProject.workspaces.some(w => w.slug === workspaceSlug && w.visibility !== "project" && w.slug !== "main")) ? activeProject.id : undefined;
   const activeWorkspaceId = workspaceSlug ? activeProject?.workspaces.find((w) => w.slug === workspaceSlug)?.id : undefined;
   const collapsedRaw = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => "{}");
   const collapsed = useMemo<Record<string, boolean>>(() => { try { return JSON.parse(collapsedRaw); } catch { return {}; } }, [collapsedRaw]);
