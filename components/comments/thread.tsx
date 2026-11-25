@@ -2,7 +2,7 @@
 
 import { CheckIcon, HelpCircleIcon, MoreHorizontalIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
-import { removeCommentMark } from "@/components/canvas/document-editor";
+import { removeCommentMark } from "@/components/document/document-editor";
 import { relativeTime } from "@/components/session/labels";
 import { Button } from "@/components/ui/button";
 import {

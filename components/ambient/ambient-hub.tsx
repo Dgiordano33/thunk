@@ -67,9 +67,9 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
       try {
         const data = await get<ActivityResponse>("/api/ambient/activity", controller.signal);
         if (stopped) return;
-        const next = { sessions: data.sessions, runs: data.runs ?? [], deliveries: data.deliveries ?? [], error: null };
+        const next = { sessions: data.sessions, runs: data.runs ?? [], deliveries: data.deliveries ?? [], canvases: data.canvases ?? [], error: null };
         const current = useAmbient.getState();
-        if (current.error || JSON.stringify([current.sessions, current.runs, current.deliveries]) !== JSON.stringify([next.sessions, next.runs, next.deliveries])) useAmbient.setState(next);
+        if (current.error || JSON.stringify([current.sessions, current.runs, current.deliveries, current.canvases]) !== JSON.stringify([next.sessions, next.runs, next.deliveries, next.canvases])) useAmbient.setState(next);
       } catch (error) {
         if (!stopped) useAmbient.setState({ error: error instanceof Error ? error.message : "Activity unavailable" });
       } finally {

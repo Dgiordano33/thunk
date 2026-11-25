@@ -6,6 +6,7 @@
 //   /{project}/{workspace}/new              new chat
 //   /{project}/{workspace}/{sessionId}      session
 //   /{project}/{workspace}/file/{path}     a workspace file (optional ?root=)
+//   /{project}/canvas[/{boardId}]          a canvas (optional ?card=)
 //   /projects/{project}/{section}          project screens
 
 /** Top-level paths a project slug may never take: app pages, legacy redirects and framework paths. */
@@ -74,6 +75,8 @@ export function pathsFor(projects: ProjectTree[]) {
     return null;
   };
   return {
+    /** The project a workspace belongs to, when the tree has it. */
+    projectOf: (workspaceId: string) => projects.find((p) => p.workspaces.some((w) => w.id === workspaceId))?.id ?? null,
     project: (projectId: string) => {
       const p = projects.find((p) => p.id === projectId);
       return p ? projectPath(p) : `/p/${projectId}`;
@@ -87,7 +90,21 @@ export function pathsFor(projects: ProjectTree[]) {
 }
 
 export const RESERVED_WORKSPACE_SLUGS = ["canvas"];
-export const canvasPath = (project: Slugged, boardId?: string) => `/${project.slug}/canvas${boardId && boardId !== "main" ? `?session=${encodeURIComponent(boardId)}` : ""}`;
+/** A canvas: `/{project}/canvas` is the main one, `/{project}/canvas/{boardId}` the others. `card` centres and focuses that card. */
+export const canvasPath = (project: Slugged, boardId?: string, card?: string) =>
+  `/${project.slug}/canvas${boardId && boardId !== "main" ? `/${encodeURIComponent(boardId)}` : ""}${card ? `?card=${encodeURIComponent(card)}` : ""}`;
+
+/**
+ * Reads a canvas URL: the board it shows, or where to send it instead. Old links named the board in
+ * `?session=`; `/canvas/main` is spelled `/canvas`. Null when the URL names no canvas.
+ */
+export function resolveCanvasUrl(project: Slugged, segments: string[] | undefined, session: string | undefined, card?: string): { boardId: string } | { redirect: string } | null {
+  if (segments && segments.length > 1) return null;
+  const named = segments?.[0];
+  if (session !== undefined) return named ? null : { redirect: canvasPath(project, session, card) };
+  if (named === "main") return { redirect: canvasPath(project, "main", card) };
+  return { boardId: named ?? "main" };
+}
 
 /** Read the editor path once, preserving literal percent signs and encoded filename characters. */
 export function filePathFromUrl(base: string, pathname: string) {

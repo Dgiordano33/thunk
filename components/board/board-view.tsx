@@ -1,16 +1,22 @@
 'use client';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { flattenChart, flattenDrawing, flattenImage } from "@/lib/board/flatten.client";
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PencilIcon, PlusIcon, TypeIcon } from 'lucide-react';
+import { CanvasNameDialog, NewCanvasDialog } from './canvas-name-dialog';
+import { ModelSelect } from '@/components/chat/model-select';
+import { useModels } from '@/lib/client/use-models';
+import { providerOf } from '@/lib/agent/types';
+import { CANVAS_STATUS_LABEL } from '@/lib/board/status';
+import { cn } from '@/lib/utils';
 import { NeedsYouTray } from './needs-you-tray';
-import { itemLabel } from './board-item';
+import { itemLabel, type CardAction } from './board-item';
+import { toast } from 'sonner';
+import { canvasPath, newChatPath, projectSectionPath } from '@/lib/routes';
 import { BoardButton, BoardSegmented, BoardToolbar, BoardToolbarButton, Hint } from './board-ui';
 import { BoardSurface, useFocusIds, useOutline, type Tool } from './board-surface';
 import { useBoardPrimitive, useView, type BoardHandle } from './use-board-primitive';
-import { boardBase, boardRequest, flushAll, useBoard } from '@/lib/store/board-store';
+import { boardBase, boardRequest, flushAll, mountBoard, useBoard } from '@/lib/store/board-store';
 import { useBoardPersistence } from '@/lib/client/use-board-persistence';
 import { useSession } from '@/lib/store/session-store';
 import { connectSession } from '@/lib/client/sse';
@@ -35,38 +41,39 @@ function focusEditor(id: string, tries = 60) {
     if (tries > 0) requestAnimationFrame(() => focusEditor(id, tries - 1));
 }
 
-export function BoardView({ projectId, slug, name, initial, boardId, sessions }: {
+export function BoardView({ projectId, slug, initial, boardId, sessions, model: initialModel, focusCard, mainWorkspace }: {
     projectId: string;
+    /** Slug of the project's main workspace, where "Start session from card" opens a chat. */
+    mainWorkspace: string;
     boardId: string;
     sessions: CanvasSession[];
     slug: string;
-    name: string;
+    /** The model the board's agent runs: the board's pick, else the app default. */
+    model: string;
+    /** A card to centre and focus on open, from `?card=`. */
+    focusCard?: string;
     initial: Snapshot;
 }) {
     const router = useRouter();
     const cards = useBoard(s => s.cards), board = useBoard(s => s.board), error = useBoard(s => s.error);
     const base = boardBase(projectId, boardId);
-    const [switching, setSwitching] = useState(false);
-    const [creating, setCreating] = useState(false), [sessionName, setSessionName] = useState('');
-    const activeCanvas = useRef<HTMLButtonElement>(null);
-    useEffect(() => { activeCanvas.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [boardId]);
-    const switchSession = async (id: string) => {
-        if (switching || id === boardId) return;
-        setSwitching(true);
-        try {
-            await flushAll(projectId, boardId);
-            window.location.assign(`/${slug}/canvas?session=${id}`);
-        } catch (e) { fail(e); setSwitching(false); }
+    const current = sessions.find(s => s.id === boardId);
+    const [creating, setCreating] = useState(false), [renaming, setRenaming] = useState(false);
+    const [title, setTitle] = useState(current?.name ?? 'Canvas');
+    const models = useModels(), [model, setModel] = useState(initialModel);
+    // Leaving for another page keeps this board's tail of unsaved edits, even once the next board has loaded.
+    useEffect(() => mountBoard(projectId, boardId), [projectId, boardId]);
+    const rename = async (next: string) => {
+        await boardRequest(base, 'PATCH', { name: next });
+        setTitle(next);
+        router.refresh();
     };
-    const newSession = async () => {
-        const name = sessionName.trim();
-        if (!name) return;
-        setSwitching(true);
-        try {
-            await flushAll(projectId, boardId);
-            const { session } = await boardRequest(`/api/projects/${projectId}/boards`, 'POST', { name });
-            window.location.assign(`/${slug}/canvas?session=${session.id}`);
-        } catch (e) { fail(e); setSwitching(false); }
+    const pickModel = (next: string) => {
+        const before = model;
+        setModel(next);
+        void boardRequest(base, 'PATCH', { model: next }).then(() => {
+            if (providerOf(next) !== providerOf(before)) setActivity(`The next send starts a new ${providerOf(next) === 'codex' ? 'Codex' : 'Claude'} conversation; this canvas's content stays.`);
+        }).catch(e => { setModel(before); fail(e); });
     };
     const space = useRef(false), imageInput = useRef<HTMLInputElement>(null);
     const focusIds = useFocusIds(), outline = useOutline(focusIds);
@@ -90,6 +97,19 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
         onSelectedChange: keys => { const { cards, focus, setFocus } = useBoard.getState(); setFocus(lassoFocus(focus, keys, focusIdsOf(cards, focus))); },
     });
     const [sessionId, setSessionId] = useState(initial.board.agent?.sessionId), [activity, setActivity] = useState(''), [busy, setBusy] = useState(false), [deferred, setDeferred] = useState(false);
+    // A link to one card (`?card=`) centres it and makes it the focus, once the surface has laid out.
+    const focused0 = useRef(false);
+    useEffect(() => {
+        if (!focusCard || focused0.current) return;
+        const c = initial.cards.find(x => x.id === focusCard);
+        if (!c) return void setActivity('That card is no longer on this canvas.');
+        focused0.current = true;
+        requestAnimationFrame(() => {
+            handle.api.viewport.fit({ left: c.x, top: c.y, right: c.x + c.width, bottom: c.y + c.height }, { padding: 96, maxZoom: 1 }, { reason: 'imperative' });
+            useBoard.getState().anchor(c.id);
+            document.querySelector<HTMLElement>(`[data-card][data-id="${CSS.escape(c.id)}"]`)?.focus({ preventScroll: true });
+        });
+    }, [focusCard, initial.cards, handle]);
     const [tool, setTool] = useState<Tool>('write');
     const deferredRef = useRef(false), sendRef = useRef<(scope?: Scope) => Promise<void>>(async () => { });
     useEffect(() => { useBoard.getState().init(initial); }, [initial]);
@@ -224,6 +244,22 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
     catch (e) {
         fail(e);
     } };
+    // A card handed to the rest of the project carries a link back to itself on this canvas.
+    const act = async (c: Card, action: CardAction) => {
+        try {
+            await flushAll(projectId, boardId);
+            const project = { slug }, label = itemLabel(c);
+            const text = c.kind === 'doc' ? c.markdown.trim() : '', back = `From the canvas “${title}”: [${label}](${canvasPath(project, boardId, c.id)})`;
+            if (action === 'session') return router.push(`${newChatPath(project, { slug: mainWorkspace })}?${new URLSearchParams({ canvas: boardId, card: c.id })}`);
+            if (action === 'task') {
+                const { task } = await boardRequest('/api/tasks', 'POST', { projectId, title: label.slice(0, 200), body: [text.slice(0, 19000), back].filter(Boolean).join('\n\n') });
+                toast('Task created', { description: task.title, action: { label: 'Open tasks', onClick: () => router.push(projectSectionPath(`/${slug}`, 'tasks')) } });
+            } else {
+                const { note } = await boardRequest(`/api/projects/${projectId}/notes`, 'POST', { title: label.slice(0, 200), markdown: [text, back].filter(Boolean).join('\n\n') });
+                toast('Saved as note', { description: note.title, action: { label: 'Open note', onClick: () => router.push(projectSectionPath(`/${slug}`, 'library', { note: note.id })) } });
+            }
+        } catch (e) { fail(e); }
+    };
     const center = () => { const v = handle.api.viewport.visible(); return { x: (v.left + v.right) / 2, y: v.top + (v.bottom - v.top) / 3 }; };
     const count = board ? pendingOf(board, cards).cards.length + board.tombstones.length : 0;
     const focused = focusIds.length > 0;
@@ -231,13 +267,13 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
     const later = deferred || busy;
 
     return <div className="relative flex h-full min-w-0 flex-col">
-    <header className="z-20 shrink-0 border-b bg-background">
-      <div className="flex items-center gap-3 px-3 pt-3 pb-2"><BoardButton variant="ghost" className="min-w-0 max-w-64" onClick={() => void flushAll(projectId, boardId).then(() => router.push(`/${slug}`)).catch(fail)}><span className="truncate">← {name}</span></BoardButton><h1 className="font-semibold">Canvases</h1><span className="text-xs text-muted-foreground tabular-nums">{sessions.length}</span></div>
-      <div className="flex items-center gap-3 px-3 pb-3">
-        <nav aria-label="Project canvases" aria-busy={switching} className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-1">
-          {sessions.map(s => <BoardButton key={s.id} ref={s.id === boardId ? activeCanvas : undefined} variant={s.id === boardId ? 'secondary' : 'ghost'} aria-current={s.id === boardId ? 'page' : undefined} disabled={switching} onClick={() => void switchSession(s.id)}>{s.name}</BoardButton>)}
-        </nav>
-        <BoardButton variant="outline" disabled={switching} onClick={() => { setSessionName(''); setCreating(true); }}><PlusIcon aria-hidden="true"/>New canvas</BoardButton>
+    <header className="z-20 flex shrink-0 items-center gap-2 border-b bg-background px-3 py-2">
+      <h1 className="min-w-0 truncate font-semibold">{title}</h1>
+      <Hint label="Rename canvas"><BoardButton size="icon-xs" variant="ghost" aria-label="Rename canvas" onClick={() => setRenaming(true)}><PencilIcon aria-hidden="true"/></BoardButton></Hint>
+      <span className={cn('size-2 shrink-0 rounded-full', busy ? 'bg-sky-500' : 'bg-transparent')} role="status" aria-label={busy ? CANVAS_STATUS_LABEL.running : CANVAS_STATUS_LABEL.idle}/>
+      <div className="ml-auto flex items-center gap-2">
+        <Hint label={providerOf(model) === 'codex' ? "The canvas agent's model. Codex keeps its model until the canvas's agent session next starts." : "The canvas agent's model. A change applies from the next send."} side="bottom"><span role="group" aria-label="Canvas agent model"><ModelSelect models={models} value={model} onValueChange={pickModel}/></span></Hint>
+        <BoardButton size="sm" variant="outline" onClick={() => setCreating(true)}><PlusIcon aria-hidden="true"/>New canvas</BoardButton>
       </div>
     </header>
     <div className="z-10 flex shrink-0 flex-wrap items-center gap-3 border-b bg-background px-3 py-2">
@@ -252,18 +288,10 @@ export function BoardView({ projectId, slug, name, initial, boardId, sessions }:
       </BoardToolbar>
       <input ref={imageInput} className="sr-only" tabIndex={-1} aria-hidden="true" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={e => { if (e.target.files) void upload(e.target.files, center()); e.target.value = ''; }}/>
       <ZoomLabel board={handle}/></div>
-    <Dialog open={creating} onOpenChange={open => { if (!switching) setCreating(open); }}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>New canvas</DialogTitle><DialogDescription>Give this canvas a name. Each canvas has its own content and agent conversation.</DialogDescription></DialogHeader>
-        <form onSubmit={e => { e.preventDefault(); void newSession(); }}>
-          <label htmlFor="canvas-session-name" className="text-sm">Name</label>
-          <Input id="canvas-session-name" autoFocus placeholder="e.g. Research or Launch plan" maxLength={200} value={sessionName} onChange={e => setSessionName(e.target.value)} disabled={switching} />
-          <DialogFooter className="mt-4"><BoardButton type="button" variant="outline" disabled={switching} onClick={() => setCreating(false)}>Cancel</BoardButton><BoardButton type="submit" disabled={switching || !sessionName.trim()}>{switching ? 'Creating…' : 'Create canvas'}</BoardButton></DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <NewCanvasDialog open={creating} onOpenChange={setCreating} project={{ id: projectId, slug }} beforeLeave={() => flushAll(projectId, boardId)}/>
+    <CanvasNameDialog open={renaming} onOpenChange={setRenaming} title="Rename canvas" description="The name shows in the sidebar and the project's Canvas section." submitLabel="Rename" busyLabel="Renaming…" initial={title} onSubmit={rename}/>
     {error && <div role="alert" className="z-30 bg-destructive/10 p-3 text-sm">{error} <BoardButton size="xs" onClick={() => useBoard.setState({ error: null })}>Dismiss</BoardButton></div>}
-    <BoardSurface base={base} board={handle} space={space} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert}/>
+    <BoardSurface base={base} board={handle} space={space} tool={tool} setTool={setTool} onCreateDoc={createDoc} onDraw={draw} onUpload={(files, at) => void upload(files, at)} onRemove={remove} onSend={scope => void sendRef.current(scope)} onRevert={revert} onAction={act}/>
     <footer className="z-20 flex items-center gap-3 border-t bg-background p-3"><p className="flex-1 truncate text-xs" aria-live="polite">{activity || 'Click anywhere to write, drop an image, or press D to draw. Drag the background or hold Space to pan, Shift-drag to select; pinch, ⌘-scroll or + / − to zoom.'}</p><span className="text-sm">{focused && !quiet ? `${focusIds.length} in focus · ` : ''}{count} pending</span>{focused && <Hint label="Send what's in the focus" shortcut="mod+enter"><BoardButton onClick={() => void send({ focus: focusIds })}>Send focus</BoardButton></Hint>}<Hint label="Send every pending edit, comment and deletion on the canvas" shortcut={focused ? 'shift+mod+enter' : 'mod+enter'}><BoardButton variant={focused ? 'outline' : 'default'} onClick={() => void send()} disabled={!count} focusableWhenDisabled>{later ? 'Send all after this turn' : 'Send all'}</BoardButton></Hint></footer>
     {sessionId && <NeedsYouTray />}
   </div>;

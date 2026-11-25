@@ -63,9 +63,13 @@ export type Card = {
         summary: string;
     };
 };
-export type CanvasSession = { id: string; name: string };
+/** What a canvas's agent is doing: working, waiting on you, or neither. */
+export type CanvasStatus = 'idle' | 'running' | 'waiting';
+export type CanvasSession = { id: string; name: string; status: CanvasStatus };
 export type Board = {
     name?: string;
+    /** The agent's model; unset means the app default. */
+    model?: string;
     id: string;
     rev: number;
     viewport: {

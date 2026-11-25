@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import 'server-only';
-import { startSession, resumeSession, subscribe, emit, pushUserMessage } from '@/lib/agent';
+import { startSession, resumeSession, subscribe, emit, pushUserMessage, closeSession, getSession, isTerminated, setState, type LiveSession } from '@/lib/agent';
+import { providerOf } from '@/lib/agent/types';
+import { boardModel } from './model';
 import { ensureMainWorkspace } from '@/lib/projects';
 import { withFileLock } from '@/lib/notes/file-write';
 import { boardFor } from './service';
@@ -13,11 +15,18 @@ import { payload } from './payload';
 import type { PromptImage } from '@/lib/prompts/schema';
 export async function ensureBoardSession(projectId: string, boardId = 'main') {
     return withFileLock(`board-session:${projectId}:${boardId}`, async () => {
-        const { project, dir } = await boardFor(projectId, boardId), board = await readBoard(dir);
-        let live = board.agent ? await resumeSession(board.agent.sessionId) : null;
+        const { project, dir } = await boardFor(projectId, boardId), board = await readBoard(dir), model = boardModel(board);
+        let live = board.agent ? await resumeSession(board.agent.sessionId) : null, fresh = false;
+        // Claude and Codex transcripts aren't interchangeable: a provider change starts the conversation over.
+        if (live && providerOf(live.meta.model) !== providerOf(model)) {
+            closeSession(live.id);
+            live = null;
+            fresh = true;
+        }
+        if (live && live.meta.model !== model) await applyModel(live, model);
         if (!live) {
             const workspace = await ensureMainWorkspace(project);
-            live = await startSession({ workspaceId: workspace.id, model: 'claude-sonnet-5-5', permissionMode: 'default', title: board.name ?? 'Canvas', origin: { kind: 'board', boardId }, resumeSdkSessionId: board.agent?.sdkSessionId ?? undefined });
+            live = await startSession({ workspaceId: workspace.id, model, permissionMode: 'default', title: board.name ?? 'Canvas', origin: { kind: 'board', boardId }, resumeSdkSessionId: fresh ? undefined : board.agent?.sdkSessionId ?? undefined });
         }
         const session = live;
         await lock(dir, async () => { const b = await readBoard(dir); b.agent = { sessionId: session.id, sdkSessionId: session.meta.sdkSessionId ?? board.agent?.sdkSessionId ?? null }; await saveBoard(dir, b); });
@@ -36,6 +45,28 @@ export async function ensureBoardSession(projectId: string, boardId = 'main') {
             });
         }
         return session;
+    });
+}
+/** Switches a live session's model in place. Codex can't, so it keeps its model until the session next starts. */
+async function applyModel(live: LiveSession, model: string) {
+    if (providerOf(model) === 'codex') return;
+    await live.driver.setModel(model);
+    live.meta.model = model;
+    setState(live, live.meta.status);
+}
+/**
+ * Applies a model change to a board's live agent, when it has one. A different provider can't continue the
+ * same transcript, so that closes the session and forgets it; the next send starts a new one.
+ */
+export async function changeBoardModel(dir: string) {
+    await lock(dir, async () => {
+        const board = await readBoard(dir), live = board.agent ? getSession(board.agent.sessionId) : undefined, model = boardModel(board);
+        // A session that isn't running picks the model up when the next send resumes it.
+        if (!live || isTerminated(live) || live.meta.model === model) return;
+        if (providerOf(model) === providerOf(live.meta.model)) return applyModel(live, model);
+        closeSession(live.id);
+        board.agent = null;
+        await saveBoard(dir, board);
     });
 }
 // Pinned to globalThis so a dev hot reload does not attach a second listener (which duplicated fallback cards).

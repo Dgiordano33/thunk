@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { barChart, box, card, doc, drag, newBoard, openCanvas, pngSize, seed, settled, startAt, stored, uploadImage, view, widthHandle } from './canvas';
 
+// The sidebar takes ~17% of the window; this keeps the board pane as wide as the layouts these tests seed.
+test.use({ viewport: { width: 1700, height: 900 } });
+
 /** Chart and image cards: width changes, the Pin / Draw / Data tools, Refresh, and sending them as pictures. */
 
 const toolbar = (page: Page, id: string) => card(page, id).getByRole('toolbar');

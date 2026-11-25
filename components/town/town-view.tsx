@@ -85,6 +85,7 @@ export function TownView({
   library,
   workshop,
   vault,
+  canvas,
   selected,
   children,
 }: {
@@ -102,12 +103,15 @@ export function TownView({
   library: Cell;
   workshop: Cell;
   vault: TownVault;
+  /** The Canvas studio: where it opens, how many canvases the project has, and whether one's agent waits on you. */
+  canvas: { href: string; count: number; attention: boolean };
   selected: TownSelection;
   /** The open panel, if any. */
   children?: React.ReactNode;
 }) {
   const sessions = useAmbient((s) => s.sessions);
   const runs = useAmbient((s) => s.runs);
+  const canvasAttention = useAmbient((s) => s.canvases.some((c) => c.projectId === projectId && c.status === "waiting")) || canvas.attention;
   const workshopAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
   const live = new Map(sessions.map((s) => [s.id, { status: s.status, pending: s.pending, waitingOn: s.waitingOn }]));
   const base = townHref;
@@ -150,7 +154,7 @@ export function TownView({
           <Building cell={center} grid={grid} name="Town center" href={projectSectionPath(base, "center")} selected={selected.building === "center"} size={TOWN_CENTER_SIZE} ground={41} blurb="Project memory, farms, archived workspaces and settings." attention={sessions.some((s) => s.projectId === projectId && (s.pending > 0 || needsPerson(s) || s.status === "error"))}>
             <TownCenterSprite />
           </Building>
-          <Building cell={studio} grid={grid} name="Canvas" href={`${base}/canvas`} selected={false} size={{ w: 80, h: 90 }} ground={30} blurb="Plan, discuss and draw with your agent."><StudioSprite /></Building>
+          <Building cell={studio} grid={grid} name="Canvas" href={canvas.href} selected={false} size={{ w: 80, h: 90 }} ground={30} blurb={`${canvas.count} ${canvas.count === 1 ? "canvas" : "canvases"}. Plan, discuss and draw with your agent.${canvasAttention ? " A canvas agent is waiting on you." : ""}`} attention={canvasAttention}><StudioSprite /></Building>
           <Building
             cell={library}
             grid={grid}

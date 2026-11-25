@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
-import { Trash2Icon } from "lucide-react";
+import { ShapesIcon, Trash2Icon } from "lucide-react";
+import { useAddToCanvas } from "@/components/board/add-to-canvas";
+import { projectSectionPath } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import type { SessionMeta } from "@/lib/agent/types";
 import { TASK_STATUS_LABELS, type Task } from "@/lib/tasks/types";
@@ -22,6 +24,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
   const owner = sessions.find((s) => s.id === task.sessionId);
   const workspaceId = owner?.workspaceId ?? task.workspaceId;
   const paths = usePaths();
+  const addToCanvas = useAddToCanvas();
   return <li className="group hover:bg-muted/50 flex items-start gap-2 border-b px-3 py-2 last:border-0">
     <Checkbox className="mt-0.5" checked={task.status === "done"} disabled={busy} aria-label={`Mark ${task.title} ${task.status === "done" ? "open" : "done"}`} onCheckedChange={() => onToggle(task)} />
     <div className="min-w-0 flex-1">
@@ -34,6 +37,7 @@ export function TaskRow({ task, sessions, busy, onToggle, onPatch, onSend, onDel
       </div>
     </div>
     <SendMenu compact label="Send" disabled={busy} sessions={sessions.filter((s) => s.live && (!task.workspaceId || s.workspaceId === task.workspaceId))} onPick={(id) => onSend(task, id)} />
+    <Button size="icon-xs" variant="ghost" className="sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" disabled={busy} aria-label={`Add ${task.title} to Canvas`} title="Add to Canvas" onClick={() => void addToCanvas(task.projectId, { title: task.title, markdown: task.body ?? "", from: "the task list", href: projectSectionPath(paths.project(task.projectId), "tasks") })}><ShapesIcon /></Button>
     <Button size="icon-xs" variant="ghost" className="sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" disabled={busy} aria-label={`Delete ${task.title}`} onClick={() => onDelete(task)}><Trash2Icon /></Button>
   </li>;
 }

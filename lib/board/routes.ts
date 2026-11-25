@@ -5,9 +5,10 @@ import { atomic } from './store';
 import { visualKey } from './pending';
 import { rm } from 'node:fs/promises';
 import { handle, HttpError, parseBody } from '@/lib/api/http';
-import { boardFor, addImageCard, createCanvas, listCanvases } from './service';
+import { boardFor, addImageCard, createCanvas, updateCanvas } from './service';
+import { listCanvasesWithStatus } from './canvases';
 import { addCard, assetBytes, cardFile, lock, patchCard, readBoard, readCard, saveBoard, saveCard, snapshot } from './store';
-import { sendBoard } from './session';
+import { changeBoardModel, sendBoard } from './session';
 import { parseChart } from './chart';
 import { refreshChart } from './refresh';
 const validChart = (input: unknown) => { try {
@@ -36,7 +37,14 @@ const coord = z.number().finite().min(-1e6).max(1e6);
 const patch = z.object({ baseRev: z.number().int().min(0), below: z.null().optional(), title: z.string().max(200).optional(), markdown: z.string().max(100000).optional(), contentJson: z.record(z.string(), z.unknown()).optional(), x: z.number().finite().optional(), y: z.number().finite().optional(), width: z.number().min(24).max(4000).optional(), height: z.number().min(1).max(20000).optional(), comments: z.array(reply.extend({ quote: z.string().max(100000), resolved: z.boolean(), detached: z.boolean().optional(), replies: z.array(reply).max(500), x: point.shape.x.optional(), y: point.shape.y.optional(), anchor: z.object({ x: z.union([z.string().max(200), z.number().finite()]), series: z.string().max(80).optional(), row: z.number().int().min(0).optional() }).strict().optional() })).max(500).optional(), chart: z.unknown().optional(), strokes: z.array(stroke).max(500).optional() }).strict();
 export const collection = {
     GET: handle(async (_: Request, ctx: ProjectCtx) => { const { dir } = await boardFor((await ctx.params).id, (await ctx.params).boardId); return Response.json(await lock(dir, () => snapshot(dir))); }),
-    PATCH: handle(async (req: Request, ctx: ProjectCtx) => { const { dir } = await boardFor((await ctx.params).id, (await ctx.params).boardId); const body = await parseBody(req, z.object({ viewport: z.object({ x: z.number().finite(), y: z.number().finite(), zoom: z.number().min(.2).max(2) }) }).strict()); await lock(dir, async () => { const b = await readBoard(dir); b.viewport = body.viewport; await saveBoard(dir, b); }); return Response.json({ ok: true }); }),
+    PATCH: handle(async (req: Request, ctx: ProjectCtx) => {
+        const { dir } = await boardFor((await ctx.params).id, (await ctx.params).boardId);
+        const body = await parseBody(req, z.object({ viewport: z.object({ x: z.number().finite(), y: z.number().finite(), zoom: z.number().min(.2).max(2) }).optional(), name: z.string().trim().min(1).max(200).optional(), model: z.string().trim().max(200).nullable().optional() }).strict());
+        if (body.viewport) { const viewport = body.viewport; await lock(dir, async () => { const b = await readBoard(dir); b.viewport = viewport; await saveBoard(dir, b); }); }
+        if (body.name !== undefined || body.model !== undefined) await updateCanvas(dir, { name: body.name, model: body.model });
+        if (body.model !== undefined) await changeBoardModel(dir);
+        return Response.json({ ok: true });
+    }),
 };
 export const cards = { POST: handle(async (req: Request, ctx: ProjectCtx) => {
         const { dir } = await boardFor((await ctx.params).id, (await ctx.params).boardId);
@@ -89,7 +97,7 @@ export const refresh = { POST: handle(async (req: Request, ctx: Ctx) => { const 
 export const sessions = {
     GET: handle(async (_: Request, ctx: ProjectCtx) => {
         const { project } = await boardFor((await ctx.params).id);
-        return Response.json({ sessions: await listCanvases(project.dataKey) });
+        return Response.json({ sessions: await listCanvasesWithStatus(project.dataKey) });
     }),
     POST: handle(async (req: Request, ctx: ProjectCtx) => {
         const { project } = await boardFor((await ctx.params).id);

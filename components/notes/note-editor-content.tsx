@@ -17,6 +17,8 @@ import { extractTasks } from "@/lib/notes/frontmatter";
 import { MEMORY_NOTE_ID, scopeKey, type Note, type NoteFlags, type NoteScope } from "@/lib/notes/types";
 import { useNotesFeed } from "@/lib/store/notes-store";
 import { NoteMetaBar } from "./note-meta-bar";
+import { useAddToCanvas } from "@/components/board/add-to-canvas";
+import { usePaths } from "@/components/layout/paths-context";
 import { confirm } from "@/components/confirm";
 
 const SAVE_MS = 800;
@@ -258,6 +260,13 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
     }
   };
 
+  const paths = usePaths(), addToCanvas = useAddToCanvas();
+  // Project and workspace notes go to their project's canvas; repo notebooks have no single project here.
+  const canvasProject = scope.kind === "projects" ? scope.id : scope.kind === "workspaces" ? paths.projectOf(scope.id) : null;
+  const toCanvas = canvasProject ? () => {
+    const editor = editorRef.current;
+    void addToCanvas(canvasProject, { title: storedTitle(titleRef.current) || note.title, markdown: editor ? docToMarkdown(editor) : note.markdown, from: "the note", href: `/notes?scope=${scopeKey(scope)}&note=${encodeURIComponent(initial.id)}` });
+  } : undefined;
   const remove = async () => {
     if (!(await confirm(note.source === "repo"
       ? { title: `Delete ${note.path}?`, description: "This removes the file from the working tree.", action: "Delete", destructive: true }
@@ -326,6 +335,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
         note={note}
         onChange={patchFlags}
         onDelete={memory ? undefined : remove}
+        onAddToCanvas={toCanvas}
         onDelegate={memory ? undefined : () => void delegate()}
         delegating={delegating}
         blocked={Boolean(conflict) || broken}

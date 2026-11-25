@@ -79,6 +79,8 @@ export async function boardRequest(url: string, method = 'GET', body?: unknown) 
     return data;
 }
 let saving: Promise<void> = Promise.resolve();
+/** The revision each card's last save returned, for saves that run after the store has moved on to another board. */
+const savedRevs = new Map<string, number>();
 export function flushAll(projectId: string, boardId = 'main'): Promise<void> {
     const base = `${boardBase(projectId, boardId)}/cards`;
     saving = saving.catch(() => { }).then(async () => {
@@ -91,6 +93,7 @@ export function flushAll(projectId: string, boardId = 'main'): Promise<void> {
             const data = s.drafts[id]
                 ? await boardRequest(base, 'POST', { id, kind: 'doc', title: card.title, markdown: card.markdown, ...(card.contentJson ? { contentJson: card.contentJson } : {}), x: card.x, y: card.y, width: card.width, height: card.height })
                 : await boardRequest(`${base}/${id}`, 'PATCH', { ...patch, baseRev: card.rev });
+            savedRevs.set(id, data.card.rev);
             useBoard.setState(now => { const dirty = { ...now.dirty }, drafts = { ...now.drafts }; delete drafts[id]; if (dirty[id] === patch)
                 delete dirty[id];
             else {
@@ -106,6 +109,36 @@ export function flushAll(projectId: string, boardId = 'main'): Promise<void> {
         }
     });
     return saving;
+}
+/**
+ * Saves what a board still has unsaved as it unmounts. The next board may load into the store before the
+ * saves run, so this captures the edits first and writes them without reading the store back.
+ */
+const mounted = new Map<string, number>();
+/** Marks a board's view as mounted; the returned cleanup unmarks it and saves what it left unsaved. */
+export function mountBoard(projectId: string, boardId = 'main') {
+    const key = boardBase(projectId, boardId);
+    mounted.set(key, (mounted.get(key) ?? 0) + 1);
+    return () => {
+        mounted.set(key, mounted.get(key)! - 1);
+        flushDetached(projectId, boardId);
+    };
+}
+function flushDetached(projectId: string, boardId = 'main') {
+    const ids = unsavedIds();
+    if (!ids.length) return;
+    const base = `${boardBase(projectId, boardId)}/cards`, s = useBoard.getState();
+    const jobs = ids.flatMap(id => { const card = s.cards.find(c => c.id === id); return card ? [{ id, card, patch: s.dirty[id], draft: !!s.drafts[id] }] : []; });
+    saving = saving.catch(() => { }).then(async () => {
+        for (const { id, card, patch, draft } of jobs) {
+            // Mounted again with the edit still pending (a dev remount): its own saves cover it.
+            if (mounted.get(boardBase(projectId, boardId)) && useBoard.getState().dirty[id]) continue;
+            const rev = Math.max(card.rev, savedRevs.get(id) ?? 0), created = savedRevs.has(id);
+            await (draft && !created
+                ? boardRequest(base, 'POST', { id, kind: 'doc', title: card.title, markdown: card.markdown, ...(card.contentJson ? { contentJson: card.contentJson } : {}), x: card.x, y: card.y, width: card.width, height: card.height })
+                : boardRequest(`${base}/${id}`, 'PATCH', { ...(draft ? { markdown: card.markdown, ...(card.contentJson ? { contentJson: card.contentJson } : {}) } : patch), baseRev: rev })).catch(e => console.error('[thunk] saving canvas edits on leave failed', e));
+        }
+    });
 }
 // Browser tests drive the store directly, like an agent edit arriving mid-gesture. Only in their dev server.
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_THUNK_E2E === '1')

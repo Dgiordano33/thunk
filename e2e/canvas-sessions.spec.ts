@@ -1,48 +1,77 @@
 import { expect, test } from '@playwright/test';
-import { newBoard, seed, doc, openCanvas } from './canvas';
+import { newBoard, seed, doc, openCanvas, sidebarCanvases } from './canvas';
 
-test('create and switch canvas sessions, preserving existing cards and saving edits before leaving', async ({ page, request }) => {
+const idFromUrl = (url: string) => new URL(url).pathname.split('/canvas/')[1];
+
+test('create and switch canvases from the sidebar, preserving existing cards and saving edits before leaving', async ({ page, request }) => {
     const board = await newBoard(request);
     const [original] = seed(board, [doc('Original canvas', { x: 100, y: 120 })]);
     await openCanvas(page, board, 1);
-    await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+    const canvases = sidebarCanvases(page, board);
+    await expect(canvases.getByRole('link', { name: 'Canvas', exact: true })).toHaveAttribute('aria-current', 'page');
+    await canvases.getByRole('button', { name: `New canvas in ${board.name}`, exact: true }).click();
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Research');
     await page.getByRole('button', { name: 'Create canvas', exact: true }).click();
-    await expect(page).toHaveURL(/canvas\?session=/);
-    const id = new URL(page.url()).searchParams.get('session')!;
+    await expect(page).toHaveURL(new RegExp(`/${board.slug}/canvas/[\\w-]+$`));
+    const id = idFromUrl(page.url());
     const api = `/api/projects/${board.projectId}/boards/${id}`;
     await expect(page.locator('[data-card]')).toHaveCount(0);
-    const canvases = page.getByRole('navigation', { name: 'Project canvases' });
-    await expect(canvases.getByRole('button', { name: 'Research', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expect(canvases.getByRole('button', { name: 'Canvas', exact: true })).toBeVisible();
+    await expect(canvases.getByRole('link', { name: 'Research', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { name: 'Research', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Add text', exact: true }).click();
     const editor = page.locator('[contenteditable=true]').first();
     await editor.fill('Only in Research');
-    await canvases.getByRole('button', { name: 'Canvas', exact: true }).click();
-    await expect(page).toHaveURL(/session=main/);
+    // A client-side switch: the edit still saves once the next canvas has loaded.
+    await canvases.getByRole('link', { name: 'Canvas', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${board.slug}/canvas$`));
     await expect(page.locator('[data-card]')).toHaveCount(1);
     await expect(page.locator('[data-card]')).toContainText('Original canvas');
-    const saved = await (await request.get(api)).json();
-    expect(saved.cards).toHaveLength(1);
-    expect(saved.cards[0].markdown).toContain('Only in Research');
+    await expect.poll(async () => (await (await request.get(api)).json()).cards.map((c: { markdown: string }) => c.markdown).join()).toContain('Only in Research');
     expect((await (await request.get(board.api)).json()).cards[0].id).toBe(original.id);
 
-    await canvases.getByRole('button', { name: 'Research', exact: true }).click();
+    await canvases.getByRole('link', { name: 'Research', exact: true }).click();
     await expect(page.locator('[data-card]')).toHaveCount(1);
     await expect(page.locator('[data-card]')).toContainText('Only in Research');
     await page.reload();
     await expect(page.locator('[data-card]')).toContainText('Only in Research');
 
+    // The board header creates one too.
     await page.getByRole('button', { name: 'New canvas', exact: true }).click();
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Launch plan');
     await page.getByRole('button', { name: 'Create canvas', exact: true }).click();
-    await expect(canvases.getByRole('button')).toHaveCount(3);
-    await expect(canvases.getByRole('button', { name: 'Launch plan', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(canvases.getByRole('link')).toHaveCount(3);
+    await expect(canvases.getByRole('link', { name: 'Launch plan', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('[data-card]')).toHaveCount(0);
 });
 
-test('many canvases scroll without hiding creation or overflowing the smallest supported canvas screen', async ({ page, request }) => {
+test('rename a canvas from its header; the sidebar and title follow', async ({ page, request }) => {
+    const board = await newBoard(request);
+    await openCanvas(page, board, 0);
+    await page.getByRole('button', { name: 'Rename canvas', exact: true }).click();
+    const name = page.getByRole('textbox', { name: 'Name', exact: true });
+    await expect(name).toHaveValue('Canvas');
+    await name.fill('Whiteboard');
+    await page.getByRole('button', { name: 'Rename', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Whiteboard', exact: true })).toBeVisible();
+    await expect(sidebarCanvases(page, board).getByRole('link', { name: 'Whiteboard', exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Whiteboard', exact: true })).toBeVisible();
+});
+
+test('old ?session= links and /canvas/main redirect to the canvas path', async ({ page, request }) => {
+    const board = await newBoard(request);
+    const { session } = await (await request.post(`/api/projects/${board.projectId}/boards`, { data: { name: 'Old link' } })).json();
+    await page.goto(`/${board.slug}/canvas?session=${session.id}`);
+    await expect(page).toHaveURL(new RegExp(`/${board.slug}/canvas/${session.id}$`));
+    await expect(page.getByRole('heading', { name: 'Old link', exact: true })).toBeVisible();
+    await page.goto(`/${board.slug}/canvas/main`);
+    await expect(page).toHaveURL(new RegExp(`/${board.slug}/canvas$`));
+    expect((await page.goto(`/${board.slug}/canvas/missing`))?.status()).toBe(404);
+    expect((await page.goto(`/${board.slug}/canvas/a/b`))?.status()).toBe(404);
+});
+
+test('many canvases list in the sidebar without overflowing the smallest supported canvas screen', async ({ page, request }) => {
     const board = await newBoard(request);
     for (let i = 1; i <= 8; i++) {
         const response = await request.post(`/api/projects/${board.projectId}/boards`, { data: { name: `Research and planning ${i}` } });
@@ -50,24 +79,20 @@ test('many canvases scroll without hiding creation or overflowing the smallest s
     }
     await page.setViewportSize({ width: 768, height: 1024 });
     await openCanvas(page, board, 0);
-    const canvases = page.getByRole('navigation', { name: 'Project canvases' });
-    await expect(canvases.getByRole('button')).toHaveCount(9);
+    const canvases = sidebarCanvases(page, board);
+    await expect(canvases.getByRole('link')).toHaveCount(9);
     const create = page.getByRole('button', { name: 'New canvas', exact: true });
     await expect(create).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await canvases.getByRole('button').last().focus();
-    await expect(canvases.getByRole('button').last()).toBeInViewport();
-    await page.keyboard.press('Enter');
-    await expect(canvases.getByRole('button').last()).toHaveAttribute('aria-current', 'page');
-    await expect(canvases.getByRole('button').last()).toBeInViewport();
-    await page.reload();
-    await expect(canvases.getByRole('button').last()).toBeInViewport();
-    await expect(create).toBeInViewport();
+    // The board fills the pane and scrolls nothing but itself.
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+    await canvases.getByRole('link').last().click();
+    await expect(canvases.getByRole('link').last()).toHaveAttribute('aria-current', 'page');
     await create.click();
     await expect(page.getByRole('dialog', { name: 'New canvas', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create canvas', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(canvases.getByRole('button')).toHaveCount(9);
+    await expect(canvases.getByRole('link')).toHaveCount(9);
 });
 
 test('session APIs validate names and IDs and isolate cards and viewports', async ({ request }) => {
@@ -89,7 +114,18 @@ test('session APIs validate names and IDs and isolate cards and viewports', asyn
     const main = await (await request.get(board.api)).json();
     expect(main.cards).toEqual([]);
     expect(main.board.viewport.x).toBe(0);
-    expect((await (await request.get(root)).json()).sessions).toEqual([{ id: 'main', name: 'Canvas' }, session]);
+    expect((await (await request.get(root)).json()).sessions).toEqual([{ id: 'main', name: 'Canvas', status: 'idle' }, session]);
     expect((await request.get(`${root}/missing`)).status()).toBe(404);
     expect((await request.get(`${root}/bad.id`)).status()).toBe(400);
+
+    // Rename and model live on the board; an empty model goes back to the default.
+    expect((await request.patch(api, { data: { name: '  ' } })).status()).toBe(400);
+    expect((await request.patch(api, { data: { name: 'Renamed', model: 'claude-haiku-5-5' } })).ok()).toBe(true);
+    let saved = await (await request.get(api)).json();
+    expect(saved.board.name).toBe('Renamed');
+    expect(saved.board.model).toBe('claude-haiku-5-5');
+    expect(saved.board.viewport.x).toBe(200);
+    expect((await request.patch(api, { data: { model: null } })).ok()).toBe(true);
+    saved = await (await request.get(api)).json();
+    expect(saved.board.model).toBeUndefined();
 });

@@ -2,6 +2,7 @@
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import type { VariantProps } from 'class-variance-authority';
 import { Button as SdkButton } from '@ui-sdk/react/button';
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '@ui-sdk/react/menu';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@ui-sdk/react/popover';
 import { SegmentedControl, SegmentedControlIndicator, SegmentedControlItem } from '@ui-sdk/react/segmented-control';
 import { Toggle as SdkToggle } from '@ui-sdk/react/toggle';
@@ -83,4 +84,21 @@ export function Confirm({ open, onOpenChange, trigger, hint, title, children }: 
         {children}
       </PopoverContent>
     </Popover>;
+}
+
+/**
+ * A menu of actions from a button. An item's `onSelect` can return a Promise: the item shows as pending and
+ * the menu stays open until it settles. Like `Confirm`, it opens in the top layer, clear of the canvas's transform.
+ */
+export function BoardMenu({ trigger, hint, items }: {
+    trigger: ReactElement<Record<string, unknown>>;
+    hint?: ReactNode;
+    items: { value: string; label: ReactNode; onSelect: () => void | Promise<void> }[];
+}) {
+    return <Menu>
+      {hint ? <Hint label={hint}><MenuTrigger render={trigger}/></Hint> : <MenuTrigger render={trigger}/>}
+      <MenuContent side="bottom" align="end" sideOffset={6} data-scroll className="z-50 min-w-48 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md">
+        {items.map(item => <MenuItem key={item.value} value={item.value} onSelect={item.onSelect} className="flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-pending:opacity-60 [&_svg]:size-3.5">{item.label}</MenuItem>)}
+      </MenuContent>
+    </Menu>;
 }
