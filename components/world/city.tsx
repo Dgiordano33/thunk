@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { memo } from "react";
+import { ProjectDetailsLink } from "@/components/project/project-details-link";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { LEVEL_NAMES, cityScore, type CityActivity, type CityLevel, type WorldCity } from "@/lib/world/cities";
@@ -118,15 +119,18 @@ export const City = memo(function City({ city, activity }: { city: WorldCity; ac
   const alert = activity === "Needs attention" || activity === "Session error";
 
   return (
+    <div
+      className="absolute flex flex-col items-center"
+      // Anchor the sprite's ground line on the tile centre; the name plate hangs below.
+      style={{ left: x, top: y + 8, transform: `translate(-50%, -${SPRITE_H * SCALE - 4}px)`, zIndex: city.col + city.row + 10 }}
+    >
     <HoverCard openDelay={120} closeDelay={60}>
       <HoverCardTrigger asChild>
         <Link
           href={projectPath(project)}
           draggable={false}
           aria-label={`${project.name}, ${LEVEL_NAMES[level - 1]}${activity ? `, ${activity}` : dormant ? ", dormant" : ""}`}
-          className="group absolute flex flex-col items-center outline-none"
-          // Anchor the sprite's ground line on the tile centre; the name plate hangs below.
-          style={{ left: x, top: y + 8, transform: `translate(-50%, -${SPRITE_H * SCALE - 4}px)`, zIndex: city.col + city.row + 10 }}
+          className="group flex flex-col items-center outline-none"
         >
           <span className={cn("relative block transition-transform duration-150 group-hover:-translate-y-0.5", dormant && "grayscale-[0.8] brightness-90")}>
             <Sprite level={level} roof={roof} banner={banner} />
@@ -184,5 +188,7 @@ export const City = memo(function City({ city, activity }: { city: WorldCity; ac
         </CivPanel>
       </HoverCardContent>
     </HoverCard>
+      <ProjectDetailsLink project={project} className="bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+    </div>
   );
 });

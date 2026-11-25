@@ -71,7 +71,7 @@ export function LibraryFolders({
                   aria-current={active === scopeKey(wScope) ? "true" : undefined}
                 >
                   <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                  <span className="min-w-0 truncate">{local ? "Local" : workspace.name}</span>
+                  <span className="min-w-0 truncate">{workspace.name}</span>
                   <span className="text-muted-foreground text-[10px]">linked</span>
                   {count(notes.length)}
                 </button>

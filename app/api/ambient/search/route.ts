@@ -95,7 +95,6 @@ async function loadNoteIndex(): Promise<IndexedNote[]> {
   const projects = await listProjects().catch(() => []);
   const scopes = projects.map((p) => [
     { dirs: projectNoteDirs(p), where: p.name },
-
   ]);
   return (await Promise.all(scopes.flat().map(async ({ dirs, where }) =>
     (await listNotes(dirs).catch(() => [])).map((note) => ({ note, where })),

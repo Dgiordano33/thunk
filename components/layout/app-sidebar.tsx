@@ -241,7 +241,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
                           href={workspacePath(p, w)}
                           title={
                             isLocalWorkspace(w)
-                              ? `Local: works directly in ${w.cwd}, no worktree`
+                              ? `${w.name}: works directly in ${w.cwd}, no worktree`
                               : `${w.name}\n${w.cwd}`
                           }
                           className={cn("flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-8", FOCUS)}
