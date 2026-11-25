@@ -11,7 +11,7 @@ import {
 } from "@/components/ai-elements/conversation";
 import { AskQuestionForm } from "@/components/approvals/ask-question-form";
 import { PermissionCard } from "@/components/approvals/permission-card";
-import { DocumentCard } from "@/components/canvas/document-card";
+import { DocumentCard } from "@/components/document/document-card";
 import { useSession } from "@/lib/store/session-store";
 import { AssistantTurn } from "./assistant-turn";
 import { UserMessage } from "./user-message";

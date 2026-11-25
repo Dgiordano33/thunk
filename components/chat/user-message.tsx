@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 import { ChevronRightIcon, FilePenLineIcon } from "lucide-react";
 import { useState } from "react";
-import { plural } from "@/components/canvas/revision-bar";
+import { plural } from "@/components/document/revision-bar";
 import type { TimelineItem } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
 

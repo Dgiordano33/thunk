@@ -27,6 +27,9 @@ import { isLocalWorkspace, workspaceDisplayName } from "@/components/session/lab
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
+import { SidebarCanvases } from "@/components/layout/sidebar-canvases";
+import { COUNT, FOCUS, ROW } from "@/components/layout/sidebar-row";
+import type { CanvasSession } from "@/lib/board/types";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
 import { projectSlugFromPath, isProjectPath, PROJECTS_PATH, projectPath, workspacePath } from "@/lib/routes";
@@ -34,10 +37,6 @@ import { cn } from "@/lib/utils";
 
 export type SidebarProject = ProjectSummary & { workspaces: (WorkspaceSummary & { worker?: boolean })[] };
 
-/** Every sidebar row: one right edge for its resting count, actions revealed beside it (see `.sidebar-row` in globals.css). */
-const ROW = "sidebar-row group relative flex items-center gap-1.5 rounded-md pr-2 transition-colors hover:bg-sidebar-accent";
-const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring rounded-md";
-const COUNT = "text-muted-foreground shrink-0 text-[11px] tabular-nums";
 const COLLAPSED_KEY = "thunk.sidebar.collapsed";
 /** Collapsed projects, remembered across reloads. Read through useSyncExternalStore so hydration agrees with the server. */
 const collapsedListeners = new Set<() => void>();
@@ -62,7 +61,7 @@ function AttentionCount({ count }: { count: number }) {
   return <span className="rounded-sm bg-[var(--status-attention-soft)] px-1 font-mono text-[11px] leading-[18px] font-medium text-[var(--status-attention-ink)] tabular-nums">! {count}</span>;
 }
 
-export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
+export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const notificationCounts = useNotifications((s) => s.counts.byProject);
   const attentionTotal = useNotifications((s) => s.counts.action);
   const notificationsLoaded = useNotifications((s) => s.loaded);
@@ -264,6 +263,7 @@ export function AppSidebar({ projects }: { projects: SidebarProject[] }) {
                     })}
                   </ul>
                 )}
+                {open && canvases[p.id] && <SidebarCanvases project={p} canvases={canvases[p.id]} pathname={pathname} />}
               </li>
             );
           })}

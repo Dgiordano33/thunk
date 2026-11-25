@@ -2,7 +2,7 @@
 
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { MobileDrawer } from "@/components/mobile/drawer";
-import { BrainIcon, CopyIcon, EllipsisIcon, PinIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { BrainIcon, CopyIcon, ShapesIcon, EllipsisIcon, PinIcon, SendIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Hint } from "@/components/hint";
@@ -30,6 +30,7 @@ export function NoteMetaBar({
   note,
   onChange,
   onDelete,
+  onAddToCanvas,
   onDelegate,
   delegating,
   blocked,
@@ -38,6 +39,8 @@ export function NoteMetaBar({
   note: NoteMeta;
   onChange: (flags: Partial<NoteFlags>) => void;
   onDelete?: () => void;
+  /** Adds the note to its project's canvas as a text card. */
+  onAddToCanvas?: () => void;
   onDelegate?: () => void;
   delegating?: boolean;
   /** Delegation can't run right now (an unresolved conflict, an unreadable file). */
@@ -98,6 +101,11 @@ export function NoteMetaBar({
           <DropdownMenuItem onSelect={() => void copyPath(note.path)}>
             <CopyIcon /> Copy file path
           </DropdownMenuItem>
+          {onAddToCanvas && (
+            <DropdownMenuItem onSelect={onAddToCanvas}>
+              <ShapesIcon /> Add to Canvas
+            </DropdownMenuItem>
+          )}
           {onDelete && (
             <>
               <DropdownMenuSeparator />

@@ -1,7 +1,7 @@
 import 'server-only';
 import path from 'node:path';
 import { readFile, readdir } from 'node:fs/promises';
-import type { CanvasSession } from './types';
+import type { Board, CanvasSession } from './types';
 import { getProject } from '@/lib/db/repo/projects';
 import { projectBoardsDir } from '@/lib/projects/paths';
 import { HttpError } from '@/lib/api/errors';
@@ -19,27 +19,44 @@ export async function boardFor(id: string, boardId = 'main') {
     }
     return { project, dir };
 }
-export async function listCanvases(key: string): Promise<CanvasSession[]> {
+/**
+ * A project's canvases, main first. `status` says what each one's agent is doing, by looking its session up
+ * with `agentStatus`; without one, every canvas reads as idle.
+ */
+export async function listCanvases(key: string, agentStatus: (board: Board) => CanvasSession['status'] = () => 'idle'): Promise<CanvasSession[]> {
     const root = path.dirname(projectBoardsDir(key));
     const entries = await readdir(root, { withFileTypes: true }).catch((e: NodeJS.ErrnoException) => {
         if (e.code === 'ENOENT') return [];
         throw e;
     });
-    const sessions: CanvasSession[] = [{ id: 'main', name: 'Canvas' }];
+    const sessions: CanvasSession[] = [{ id: 'main', name: 'Canvas', status: 'idle' }];
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         if (!entry.isDirectory() || !validId(entry.name)) continue;
-        const board = await readBoard(path.join(root, entry.name));
-        if (entry.name === 'main') sessions[0].name = board.name ?? 'Canvas';
-        else sessions.push({ id: entry.name, name: board.name ?? 'Untitled canvas' });
+        const board = await readBoard(path.join(root, entry.name)), status = agentStatus(board);
+        if (entry.name === 'main') sessions[0] = { ...sessions[0], name: board.name ?? 'Canvas', status };
+        else sessions.push({ id: entry.name, name: board.name ?? 'Untitled canvas', status });
     }
     return sessions;
+}
+/** Renames a canvas or sets its agent's model; an empty model goes back to the app default. */
+export async function updateCanvas(dir: string, input: { name?: string; model?: string | null }) {
+    return lock(dir, async () => {
+        const board = await readBoard(dir);
+        if (input.name !== undefined) board.name = input.name;
+        if (input.model !== undefined) {
+            if (input.model) board.model = input.model;
+            else delete board.model;
+        }
+        await saveBoard(dir, board);
+        return board;
+    });
 }
 export async function createCanvas(key: string, name: string): Promise<CanvasSession> {
     const id = crypto.randomUUID(), dir = projectBoardsDir(key, id);
     const board = await readBoard(dir);
     board.name = name;
     await saveBoard(dir, board);
-    return { id, name };
+    return { id, name, status: 'idle' };
 }
 /** Height / width of an image, read from its header where that is cheap; null when unknown. */
 export function imageAspect(bytes: Buffer, mime: string): number | null {

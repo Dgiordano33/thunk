@@ -24,7 +24,8 @@ import { ensureMainWorkspace, listExternalSessions } from "@/lib/projects";
 import { loadDocuments } from "@/lib/db/repo/documents";
 import { loadEvents } from "@/lib/db/repo/messages";
 import { getProjectBySlug } from "@/lib/db/repo/projects";
-import { projectPath, workspacePath } from "@/lib/routes";
+import { canvasPath, projectPath, workspacePath } from "@/lib/routes";
+import { listCanvasesWithStatus } from "@/lib/board/canvases";
 import { getSessionRow, listSessionRows } from "@/lib/db/repo/sessions";
 import { listWorkspaces } from "@/lib/db/repo/workspaces";
 import { cityHue, cityLevel } from "@/lib/world/cities";
@@ -52,7 +53,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   const id = project.id;
   await ensureMainWorkspace(project);
 
-  const [workspaces, rows, vaultItems, look] = await Promise.all([
+  const [workspaces, rows, vaultItems, look, canvases] = await Promise.all([
     listWorkspaces(id),
     listSessionRows({ projectId: id, limit: 500 }).catch((err) => {
       console.error("[thunk] list sessions failed", err);
@@ -60,7 +61,9 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     }),
     listItems(vaultDirOf(project)).catch(() => []),
     getLook(),
+    listCanvasesWithStatus(project.dataKey).catch(() => []),
   ]);
+  const canvasesWaiting = canvases.some((c) => c.status === "waiting");
   const sessions = await listSessions({ projectId: id, limit: 500 }, rows);
   const active = workspaces.filter((w) => w.status === "active");
   const archived = workspaces.filter((w) => w.status === "archived");
@@ -173,7 +176,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       { key: "tasks", label: "Tasks", href: projectSectionPath(closeHref, "tasks"), count: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, selected: selected.building === "tasks" },
       { key: "routines", label: "Routines", href: projectSectionPath(closeHref, "workshop"), count: routines?.length ?? 0, selected: selected.building === "workshop" },
       { key: "vault", label: "Vault", href: projectSectionPath(closeHref, "vault"), count: vaultItems.length, attention: vaultItems.some((i) => i.status === "failed"), selected: selected.building === "vault" },
-      { key: "canvas", label: "Canvas", href: `${closeHref}/canvas` },
+      { key: "canvas", label: "Canvas", href: canvasPath(project), count: canvases.length, attention: canvasesWaiting },
     ];
     return (
       <ResponsiveView mobile={mobile}><PlanetView
@@ -211,6 +214,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       library={layout.library}
       workshop={layout.workshop}
       vault={{ ...layout.vault, busy: vaultItems.some(isBusy), failed: vaultItems.some((i) => i.status === "failed") }}
+      canvas={{ href: canvasPath(project), count: canvases.length, attention: canvasesWaiting }}
       selected={selected}
     >
       {panel}

@@ -29,8 +29,10 @@ function Images() {
   </div>;
 }
 
-export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, onSubmit, children, starters = [] }: {
+export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, onSubmit, children, starters = [], initialText = "" }: {
   starters?: string[];
+  /** What the message box starts with. */
+  initialText?: string;
   workspaceId: string;
   disabled?: boolean;
   placeholder: string;
@@ -38,8 +40,8 @@ export function PromptComposer({ workspaceId, disabled, placeholder, autoFocus, 
   onSubmit: (message: { text: string; files: PromptImage[] }) => Promise<void>;
   children: ReactNode;
 }) {
-  const [text, setText] = useState("");
-  const [cursor, setCursor] = useState(0);
+  const [text, setText] = useState(initialText);
+  const [cursor, setCursor] = useState(initialText.length);
   const [context, setContext] = useState<PromptContext>(() => contextCache.get(workspaceId) ?? EMPTY_CONTEXT);
   const [contextWorkspace, setContextWorkspace] = useState(workspaceId);
   if (contextWorkspace !== workspaceId) {

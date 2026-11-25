@@ -45,8 +45,10 @@ test("send menu offers live sessions in scope while the owner label still resolv
   let offered;
   const { TaskRow } = load("task-row.tsx", {
     "next/link": { __esModule: true, default: ({ children }) => React.createElement("a", null, children) },
-    "lucide-react": { Trash2Icon: () => null },
+    "lucide-react": { Trash2Icon: () => null, ShapesIcon: () => null },
     "@/components/ui/button": { Button: () => null },
+    "@/components/board/add-to-canvas": { useAddToCanvas: () => () => {} },
+    "@/lib/routes": { projectSectionPath: () => "" },
     "@/lib/tasks/types": types,
     "./send-menu": { SendMenu: ({ sessions }) => { offered = sessions.map((s) => s.id); return null; } },
     "@/components/layout/paths-context": { usePaths: () => ({ session: (w, s) => `/p/${w}/${s}` }) },

@@ -97,6 +97,7 @@ export function PlanetView({
   const deliveries = useAmbient((s) => s.deliveries);
   const runs = useAmbient((s) => s.runs);
   const routineAttention = runs.some((r) => r.projectId === projectId && r.status === "needs_attention");
+  const canvasAttention = useAmbient((s) => s.canvases.some((c) => c.projectId === projectId && c.status === "waiting"));
   const live = new Map<string, Live>(liveOverride ? Object.entries(liveOverride) : sessions.map((s) => [s.id, s]));
   const toneOf = (id: string, closed: boolean): Tone => {
     const l = live.get(id);
@@ -177,7 +178,7 @@ export function PlanetView({
           </>
         }
       >
-        <SectionDock sections={routineAttention ? sections.map((s) => (s.key === "routines" ? { ...s, attention: true } : s)) : sections} aside={panelOpen} />
+        <SectionDock sections={sections.map((s) => (s.key === "routines" && routineAttention) || (s.key === "canvas" && canvasAttention) ? { ...s, attention: true } : s)} aside={panelOpen} />
         {children}
       </IsoViewport>
     </div>

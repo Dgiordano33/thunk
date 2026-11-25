@@ -28,7 +28,7 @@ import { buildCanUseTool } from "./permissions";
 import { emit, type LiveSession } from "./session-registry";
 import type { AgentProvider } from "./types";
 
-export const CANVAS_PROMPT = `
+export const DOCUMENT_PROMPT = `
 # Thunk canvas
 You are running inside Thunk, a harness where your final prose in each turn is shown to the user as an editable document (a "canvas"), not a chat bubble. Write that final prose as a clean, well-structured markdown document. Avoid filler like "Let me know if...".
 
@@ -140,7 +140,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       type: "preset",
       preset: "claude_code",
       append: [
-        live.meta.origin?.kind === "board" ? boardPrompt : CANVAS_PROMPT,
+        live.meta.origin?.kind === "board" ? boardPrompt : DOCUMENT_PROMPT,
         hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
         teamPrompt(live.meta.origin),
