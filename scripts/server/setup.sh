@@ -109,11 +109,12 @@ put /etc/systemd/system/thunk-autoupdate.service "$TMP"
 TMP=$(mktemp)
 cat > "$TMP" <<UNIT_EOF
 [Unit]
-Description=Check for new Thunk commits every 5 minutes
+Description=Check for new Thunk commits every minute
 
 [Timer]
-OnBootSec=5min
-OnUnitInactiveSec=5min
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=5s
 
 [Install]
 WantedBy=timers.target
