@@ -1,4 +1,5 @@
 "use client";
+import { ProjectDetailsLink } from "@/components/project/project-details-link";
 import { Checklist } from "@/components/onboarding/checklist";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -26,11 +27,14 @@ export function ProjectList({ projects }: { projects: SidebarProject[] }) {
       const waiting = active.filter(s => s.pending > 0).length;
       const running = active.filter(s => s.status === "running").length;
       const count = tasks[p.id];
-      return <Link key={p.id} href={projectPath(p)} className="block rounded-lg border bg-background p-4">
+      return <div key={p.id} className="rounded-lg border bg-background p-4">
+        <Link href={projectPath(p)} className="block">
         <h2 className="break-words font-medium">{p.name}</h2>
         <p className="text-sm text-muted-foreground">{p.workspaces.length} {p.workspaces.length === 1 ? "workspace" : "workspaces"} · {count ? count.project + Object.values(count.byWorkspace).reduce((a, b) => a + b, 0) : 0} tasks · {notes[p.id] ?? "…"} notes</p>
         <p className="mt-2 text-sm"><span className="text-emerald-600">●</span> {running} running · <span className="text-amber-600">●</span> {waiting} waiting</p>
-      </Link>;
+        </Link>
+        <ProjectDetailsLink project={p} className="min-h-11 min-w-11" />
+      </div>;
     })}{!projects.length && <div className="flex flex-col items-start gap-3 rounded-lg border bg-background p-4"><p>Clone a repo, open a folder, or start something new.</p><AddProjectForm /></div>}</div>
   </main>;
 }
