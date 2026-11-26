@@ -2,8 +2,11 @@
   "name": "nextjs",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.16"
+  },
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 --port ${PORT:-0}",
+    "dev": "next dev -H 127.0.0.1 --port ${PORT:-${THUNK_PORT:-${CONDUCTOR_PORT:-4500}}}",
     "build": "next build",
     "db:pull": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db-pull.mjs",
     "server:sync-config": "node scripts/server/sync-config.mjs",

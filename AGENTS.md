@@ -13,7 +13,7 @@ If `node_modules/next/dist/docs/` is missing, run `npm install` first. Middlewar
 ## Commands
 
 ```bash
-npm run dev          # binds 127.0.0.1 on $PORT (random if unset); Thunk sets $THUNK_PORT per workspace
+npm run dev          # binds 127.0.0.1 on $PORT, else $THUNK_PORT, else $CONDUCTOR_PORT, else 4500
 npm run typecheck
 npm run lint
 npm test             # all node:test suites (lib + tests/ + component ui tests)
