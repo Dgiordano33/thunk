@@ -1,6 +1,6 @@
 "use client";
 
-import { FloatingWindow } from "@/components/world/floating-window";
+import { FloatingWindow, WindowControls, useWindowHandle } from "@/components/world/floating-window";
 
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { projectSectionPath } from "@/lib/routes";
@@ -30,13 +30,14 @@ export function RoutinesOverview({
   const desktop = useIsDesktop();
   const { routines, refresh } = useRoutines(undefined, initial);
   const paths = usePaths();
+  const handle = useWindowHandle();
   const list = routines ?? [];
 
   if (!list.length)
     return (
       <div className="fog absolute inset-0">
       {/* Mobile keeps the full-screen centred card; desktop floats the same card as a window. */}
-      <FloatingWindow title="Routines" className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
+      <FloatingWindow dragAnywhere className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
         <CivPanel parchment className="w-full max-w-md md:max-w-none md:min-h-0 md:flex-1" bodyClassName="flex flex-col items-center px-8 py-8 text-center md:h-full md:justify-center md:overflow-auto">
           <EmptyMark name="hourglass" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Routines</p>
@@ -60,9 +61,9 @@ export function RoutinesOverview({
 
   const head = "text-muted-foreground px-3 py-2 text-left text-[11px] font-medium";
   return (
-    <FloatingWindow title="Routines" className="absolute inset-x-4 top-20 z-10 flex flex-col justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+    <FloatingWindow className="absolute inset-x-4 top-20 z-10 flex flex-col justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
       <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
+        <header {...handle} className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">Standing orders</p>
             <h2 className="pixel text-lg leading-tight">
@@ -70,6 +71,7 @@ export function RoutinesOverview({
             </h2>
           </div>
           <p className="text-muted-foreground hidden text-[11px] sm:block">Routines fire only while Thunk is running.</p>
+          <WindowControls />
         </header>
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full text-xs">

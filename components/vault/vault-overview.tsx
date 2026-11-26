@@ -1,6 +1,6 @@
 "use client";
 
-import { FloatingWindow } from "@/components/world/floating-window";
+import { FloatingWindow, WindowControls, useWindowHandle } from "@/components/world/floating-window";
 
 import { projectSectionPath } from "@/lib/routes";
 
@@ -23,6 +23,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
   const pathname = usePathname();
   const params = useSearchParams();
   const paths = usePaths();
+  const handle = useWindowHandle();
   const [items, setItems] = useState<Row[]>(initial);
   const project = params.get("project");
   const projectId = projects.some((p) => p.id === project) ? project : null;
@@ -60,7 +61,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
     return (
       <div className="fog absolute inset-0">
       {/* Mobile keeps the full-screen centred card; desktop floats the same card as a window. */}
-      <FloatingWindow title="Vault" className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
+      <FloatingWindow dragAnywhere className="absolute inset-0 flex items-center justify-center p-6 md:inset-auto md:top-20 md:bottom-20 md:left-[calc(50%-224px)] md:z-10 md:w-md md:flex-col md:items-stretch md:p-0">
         <CivPanel parchment className="w-full max-w-md md:max-w-none md:min-h-0 md:flex-1" bodyClassName="flex flex-col items-center px-8 py-8 text-center md:h-full md:justify-center md:overflow-auto">
           <EmptyMark name="chest" className="mb-4" pixelClassName="mb-4 size-14" />
           <p className="pixel text-xs tracking-widest uppercase opacity-60">Vault</p>
@@ -73,9 +74,9 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
     );
 
   return (
-    <FloatingWindow title="Vault" className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
+    <FloatingWindow className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
       <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
+        <header {...handle} className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <p className="pixel text-muted-foreground text-[11px] tracking-widest uppercase">Vault</p>
             <h2 className="pixel text-lg leading-tight">
@@ -94,6 +95,7 @@ export function VaultOverview({ projects, initial }: { projects: { id: string; n
           {projectId && (
             <Link href={projectSectionPath(paths.project(projectId), "vault")} className="pixel hover:bg-muted px-2 py-1 text-xs whitespace-nowrap">Open project →</Link>
           )}
+          <WindowControls />
         </header>
         {!projectId && (
           <p className="text-muted-foreground border-b px-4 py-1.5 text-[11px]">Pick a project to upload into its Vault.</p>

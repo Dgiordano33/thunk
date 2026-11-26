@@ -3,7 +3,7 @@
 import { Thoughts, ThoughtReview } from "@/components/capture/thoughts";
 import { useCaptures } from "@/components/capture/use-captures";
 import type { Capture } from "@/lib/capture/types";
-import { FloatingWindow } from "@/components/world/floating-window";
+import { FloatingWindow, WindowControls, useWindowHandle } from "@/components/world/floating-window";
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
@@ -56,6 +56,7 @@ function OpenLink({ n, className, tabIndex, children, ...rest }: { n: Notificati
 export function Inbox({ projects }: { projects: SidebarProject[] }) {
   useNotificationsEvents();
   const items = useNotifications((s) => s.items);
+  const handle = useWindowHandle();
   const counts = useNotifications((s) => s.counts);
   const loaded = useNotifications((s) => s.loaded);
   const feedError = useNotifications((s) => s.error);
@@ -419,10 +420,10 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const kindLabel = kind === "all" ? "All kinds" : NOTIFICATION_LABELS[kind as NotificationKind] ?? "All kinds";
 
   return (
-    <FloatingWindow title="Inbox" className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
+    <FloatingWindow className="absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] md:inset-x-4 md:top-20 md:bottom-[var(--panel-bottom)] z-10 flex flex-col justify-center" style={{ "--panel-bottom": process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" } as React.CSSProperties}>
       <CivPanel className="w-full min-h-0 flex-1" bodyClassName="flex h-full min-h-0">
         <aside className="bg-muted/20 hidden w-52 shrink-0 flex-col border-r lg:flex" aria-label="Inbox projects">
-          <div className="flex items-center gap-3 border-b px-5 py-5"><PixelIcon name="bell" className="size-7" /><span className="pixel text-lg">Inbox</span></div>
+          <div {...handle} className="flex items-center gap-3 border-b px-5 py-5"><PixelIcon name="bell" className="size-7" /><span className="pixel text-lg">Inbox</span></div>
           <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Filter notifications by project">
             {scopeButton("all", "All projects", counts.action)}
             <p className="pixel text-muted-foreground mb-2 mt-7 px-3 text-[11px] tracking-widest uppercase">Your projects</p>
@@ -433,7 +434,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <Thoughts projects={projects} captures={captures} inFeed={inFeed} />
-          <header className={cn("shrink-0 border-b px-5 sm:px-8", compact ? "py-3" : "pb-4 pt-5 sm:pt-7")}>
+          <header {...handle} className={cn("shrink-0 border-b px-5 sm:px-8", compact ? "py-3" : "pb-4 pt-5 sm:pt-7")}>
             <div className={cn("flex gap-x-4 gap-y-2", compact ? "flex-wrap items-center" : "items-start")}>
               <div className={cn("min-w-0", compact ? "flex items-baseline gap-3" : "flex-1")}>
                 {!compact && <p className="pixel text-muted-foreground mb-1 text-[11px] tracking-widest uppercase">{selectedProject?.name || "Across your projects"}</p>}
@@ -450,6 +451,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
                     {scope.decisions > 0 && followupScope.count > 0 && <DropdownMenuItem onSelect={() => void dismiss(followupScope.ids, plural(followupScope.count, "follow-up"))}><XIcon />Dismiss {plural(followupScope.count, "follow-up")} only</DropdownMenuItem>}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <WindowControls />
               </div>
             </div>
             {!compact && <div className="mt-6 flex flex-wrap items-center gap-2">

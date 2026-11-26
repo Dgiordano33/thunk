@@ -8,6 +8,11 @@ import { cn } from "@/lib/utils";
 type Rect = { x: number; y: number; width: number; height: number };
 const Controls = createContext<React.ReactNode>(null);
 export function WindowControls() { return useContext(Controls); }
+/** Marks a window's own header as its drag handle (double-click maximizes; arrow keys move, Shift+arrows resize). */
+export function useWindowHandle() {
+  const desktop = useIsDesktop();
+  return { "data-window-drag": "", tabIndex: desktop ? 0 : undefined, title: desktop ? "Drag to move · double-click to maximize" : undefined } as const;
+}
 const handles = {
   n: "inset-x-2 -top-1 h-2 cursor-ns-resize", s: "inset-x-2 -bottom-1 h-2 cursor-ns-resize",
   e: "inset-y-2 -right-1 w-2 cursor-ew-resize", w: "inset-y-2 -left-1 w-2 cursor-ew-resize",
@@ -17,8 +22,10 @@ const handles = {
 const interactive = "button,a,input,textarea,select,[role=button],[contenteditable=true]";
 
 /** Keeps route content mounted while its desktop frame moves; mobile retains its original layout. */
-export function FloatingWindow({ children, title, className, style, as: Tag = "main" }: {
-  children: React.ReactNode; title?: string; className?: string; style?: CSSProperties; as?: "main" | "aside";
+export function FloatingWindow({ children, className, style, as: Tag = "main", dragAnywhere }: {
+  children: React.ReactNode; className?: string; style?: CSSProperties; as?: "main" | "aside";
+  /** Small cards with no header: drag from any non-interactive spot. */
+  dragAnywhere?: boolean;
 }) {
   const desktop = useIsDesktop();
   const ref = useRef<HTMLElement>(null);
@@ -86,7 +93,7 @@ export function FloatingWindow({ children, title, className, style, as: Tag = "m
   const geometry: CSSProperties = !desktop ? {} : maximized
     ? { left: 8, top: 80, right: 8, bottom: 16, width: "auto", height: "auto" }
     : rect ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height, right: "auto", bottom: "auto" } : {};
-  return <Controls.Provider value={controls}><Tag ref={ref} data-floating-window="" data-maximized={maximized} data-window-sized={desktop && (!!rect || maximized)} className={cn(className, "floating-window", moving && "select-none")} style={{ ...style, ...geometry, ...(active ? { zIndex: 31 } : {}) }}
+  return <Controls.Provider value={controls}><Tag ref={ref} data-floating-window="" data-window-drag={desktop && dragAnywhere ? "" : undefined} data-maximized={maximized} data-window-sized={desktop && (!!rect || maximized)} className={cn(className, "floating-window", moving && "select-none")} style={{ ...style, ...geometry, ...(active ? { zIndex: 31 } : {}) }}
     onPointerDownCapture={() => setActive(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setActive(false); }}
     onPointerDown={event => { const target = event.target as HTMLElement; if (target.closest("[data-window-drag]") && !target.closest(interactive)) begin(event); }}
     onDoubleClick={event => { const target = event.target as HTMLElement; if (desktop && target.closest("[data-window-drag]") && !target.closest(interactive)) toggleMaximize(); }}
@@ -97,7 +104,6 @@ export function FloatingWindow({ children, title, className, style, as: Tag = "m
       setRect(fit(event.shiftKey ? { ...r, width: Math.max(360, r.width + dx), height: Math.max(240, r.height + dy) } : { ...r, x: r.x + dx, y: r.y + dy }));
     }}
     onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
-    {title && <header data-window-drag="" tabIndex={desktop ? 0 : undefined} aria-label="Window title bar. Arrow keys move; Shift and arrow keys resize." className="hidden h-10 shrink-0 items-center border border-b-0 bg-background px-3 md:flex"><span className="pixel flex-1 text-sm">{title}</span>{controls}</header>}
     {children}
     {desktop && !maximized && Object.entries(handles).map(([edge, classes]) => <div key={edge} data-window-resize={edge} aria-hidden="true" className={cn("absolute z-10 touch-none", classes)} onPointerDown={event => begin(event, edge)} />)}
   </Tag></Controls.Provider>;
