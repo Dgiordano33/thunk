@@ -48,8 +48,13 @@ jobs:
           gh release download --repo git-for-windows/git --pattern 'MinGit-*-64-bit.zip' --dir mingit-zip
           zip=$(ls mingit-zip/MinGit-*-64-bit.zip | grep -v busybox | head -1)
           mkdir mingit && unzip -q "$zip" -d mingit
-          echo "THUNK_MINGIT_DIR=$PWD/mingit" >> "$GITHUB_ENV"
+          # A Windows path: Node would read Git Bash's /d/a/... as D:\d\a\...
+          echo "THUNK_MINGIT_DIR=$(cygpath -m "$PWD/mingit")" >> "$GITHUB_ENV"
       - run: npm run desktop:release
+        env:
+          # electron-builder skips signing on pull requests to protect certificates. The Mac build
+          # is ad-hoc signed with no secrets, and the archive step verifies that signature.
+          CSC_FOR_PULL_REQUEST: 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ runner.os }}-${{ matrix.arch }}
