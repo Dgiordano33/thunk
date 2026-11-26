@@ -17,7 +17,7 @@ import { api } from "@/lib/client/api";
 import { collectRevision } from "@/lib/revisions/collect";
 import { useSession, type DocState } from "@/lib/store/session-store";
 import { cn } from "@/lib/utils";
-import { DocumentEditor } from "./document-editor";
+import { DeferredDocumentEditor } from "./deferred-editor";
 import { plural, RevisionBar, sendResponseRevision, useRevisionStat } from "./revision-bar";
 import { RevisionDialog } from "./revision-dialog";
 
@@ -89,7 +89,7 @@ export function DocumentCard({ documentId }: { documentId: string }) {
       </header>
 
       <div className={cn(collapsed && "max-h-40 overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]")}>
-        <DocumentEditor documentId={documentId} editable={editable} onSubmitShortcut={editable ? send : undefined} />
+        <DeferredDocumentEditor key={documentId} documentId={documentId} editable={editable} onSubmitShortcut={editable ? send : undefined} />
       </div>
 
       {editable && doc.kind === "response" && (

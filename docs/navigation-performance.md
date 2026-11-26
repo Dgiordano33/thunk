@@ -8,4 +8,10 @@ Workspace navigation renders the saved branch immediately and loads current bran
 
 Sidebar action controls reserve their space while hidden so revealing them does not move the click target. Session stream callbacks ignore updates belonging to the previous session.
 
+Long chats keep their full history. Event replay copies each changed collection once per batch, while preserving published snapshots, edited documents, and event ordering. Hydration and streaming both reject foreign-session and stale events.
+
+The active document opens its editor immediately. Older documents keep their text in the page and initialize editors within 600px of the conversation viewport, or on focus/pointer interaction. Once initialized, an editor stays mounted until its document leaves the timeline, preserving selection and undo state. Scrolling through all of history can therefore still grow memory use. Browsers without IntersectionObserver initialize all editors.
+
 Measure navigation in a production build with representative data: reload the project, click its workspace, and wait for the chat heading and composer. Record route-request counts as well as elapsed time, and use the same completion condition before and after. Development compilation and server deployments distort timings.
+
+See [the November 26 performance measurements](performance-2026-11-26.md) for the isolated production comparison, validation, and remaining bottlenecks.
