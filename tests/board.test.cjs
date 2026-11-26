@@ -41,6 +41,30 @@ test('agent tools preserve snapshots, reject ambiguous edits, reply and emit per
   assert.equal((await store.snapshot(d)).cards.some(c=>c.markdown==='separate conversation'),false);
   assert.deepEqual(boardTools({meta:{origin:null}},()=>{}),[]);
 });
+test('canvas tools let other sessions create a canvas, write to it by id and broadcast the change',async t=>{
+  const d=await dir(t);const load=Module._load;
+  Module._load=function(request,...rest){if(request==='@/lib/projects/paths')return{projectBoardsDir:(_,boardId)=>boardId&&boardId!=='main'?path.join(d,boardId):path.join(d,'main')};return load.call(this,request,...rest);};
+  t.after(()=>{Module._load=load;});
+  for(const k of Object.keys(require.cache))if(k.endsWith('/lib/board/tools.ts')||k.endsWith('/lib/board/service.ts'))delete require.cache[k];
+  const {canvasTools,boardTools,hasCanvasTools}=require('../lib/board/tools.ts');const {subscribeBoardChanges}=require('../lib/board/events.ts');
+  const changes=[];t.after(subscribeBoardChanges(c=>changes.push(c)));
+  const project={id:'p1',slug:'proj',dataKey:'test'};
+  assert.deepEqual(canvasTools({meta:{origin:{kind:'board'}},ctx:{project}}),[]);assert.deepEqual(canvasTools({meta:{origin:{kind:'top_chief'}},ctx:{project}}),[]);
+  assert.equal(hasCanvasTools({meta:{origin:{kind:'worker',taskId:'t',chiefSessionId:null,scout:true}}}),true);
+  const tools=canvasTools({meta:{origin:{kind:'worker',taskId:'t',chiefSessionId:null}},ctx:{project}}),call=async(name,args)=>{const r=await tools.find(t=>t.name===name).handler(args);if(r.isError)return r;return JSON.parse(r.content[0].text);};
+  assert.equal(boardTools({meta:{origin:{kind:'worker'}}},()=>{}).length,0);
+  const created=await call('canvas_create',{name:'Research'});assert.equal(created.name,'Research');assert.equal(created.path,`/proj/canvas/${created.id}`);
+  assert.ok((await call('canvas_list',{})).some(c=>c.id===created.id&&c.name==='Research'));
+  assert.equal((await call('canvas_add_card',{canvas_id:'missing',markdown:'x'})).isError,true);assert.equal((await call('canvas_add_card',{canvas_id:'../x',markdown:'x'})).isError,true);
+  const card=await call('canvas_add_card',{canvas_id:created.id,markdown:'| a |\n|---|\n| 1 |',title:'Table'});
+  assert.equal(card.canvas_id,created.id);assert.equal(card.author,'agent');assert.equal(card.path,`/proj/canvas/${created.id}?card=${card.id}`);
+  assert.deepEqual(changes.at(-1),{projectId:'p1',boardId:created.id,cardId:card.id});
+  const chart=await call('canvas_add_chart',{canvas_id:created.id,type:'bar',title:'Runs',x:'day',series:[{key:'ok'}],rows:[{day:'Mon',ok:1}],source_card_id:card.id,placement:'below'});
+  assert.equal(chart.kind,'chart');const snap=await store.snapshot(path.join(d,created.id));assert.equal(snap.cards.length,2);assert.deepEqual(snap.board.edges,[{source:card.id,target:chart.id}]);
+  const main=await call('canvas_add_card',{canvas_id:'main',markdown:'on main'});assert.equal(main.path,`/proj/canvas?card=${main.id}`);assert.equal((await store.snapshot(path.join(d,'main'))).cards.length,1);
+  assert.equal((await call('canvas_edit_card',{canvas_id:created.id,card_id:card.id,markdown:'revised'})).markdown,'revised');
+  assert.match(tools.find(t=>t.name==='canvas_read').description,/Canvas cards/);
+});
 test('send stamps only the dispatched scope, preserves baseline for mentions, and retains pending work on dispatch failure',async t=>{
  const d=await dir(t);let fail=false,content='';const live={id:'session',meta:{sdkSessionId:'sdk',model:require('../lib/env.ts').env.DEFAULT_MODEL},events:[]};const load=Module._load;
  Module._load=function(request,...rest){if(request==='@/lib/agent')return{liveMeta:()=>null,resumeSession:async()=>live,startSession:async()=>live,subscribe:()=>{},emit:()=>{},pushUserMessage:(_,text)=>{if(fail)throw new Error('dispatch failed');content=text;}};if(request==='./workspace')return{ensureBoardWorkspace:async()=>({id:'main'})};if(request==='@/lib/db/repo/sessions')return{getSessionRow:async()=>null};if(request==='./service'&&rest[0]?.filename.endsWith('/board/session.ts'))return{boardFor:async()=>({project:{id:'p'},dir:d})};return load.call(this,request,...rest);};t.after(()=>{Module._load=load;});

@@ -1,4 +1,4 @@
-import { boardTools, boardPrompt } from "@/lib/board/tools";
+import { boardTools, boardPrompt, canvasPrompt, canvasTools, hasCanvasTools } from "@/lib/board/tools";
 import { projectBoardsDir } from "@/lib/projects/paths";
 import { chiefTools } from "@/lib/workers/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
@@ -110,6 +110,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       name: "thunk", alwaysLoad: true,
       tools: [
         ...boardTools(live, emit).map(t => tool(t.name, t.description, t.schema, t.handler)),
+        ...canvasTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...[...routeReportTool(live), ...topChiefTools(live)].map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
@@ -141,6 +142,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       preset: "claude_code",
       append: [
         live.meta.origin?.kind === "board" ? boardPrompt : DOCUMENT_PROMPT,
+        ...(hasCanvasTools(live) ? [canvasPrompt] : []),
         hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
         teamPrompt(live.meta.origin),
