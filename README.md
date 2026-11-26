@@ -1,26 +1,55 @@
 # Thunk
 
-For a standalone desktop app on macOS, Linux or Windows, see [Thunk desktop app](docs/desktop.md). Build with `npm run desktop:pack`, or create a shareable archive with `npm run desktop:release`. The desktop app includes a Connections window for agent setup; see the guide for publishing releases for every platform.
-
-To use Thunk from your phone or another computer over a private Tailscale network, see [Use Thunk from your phone](docs/remote.md). To run it around the clock on a Linux server, see [Run Thunk on a server](docs/server.md).
-
-Implemented features are documented in [docs/](docs/); unfinished proposals and projects live in [plans/](plans/).
-
 A personal Claude Code harness where assistant responses aren't chat bubbles: each turn's final prose becomes an editable document. Edit it directly, highlight spans to comment or ask questions, then **Send revisions**. Claude receives a unified diff, the quoted comment threads, and the full edited document, and replies with a revised version (v2, v3, …). Plans from plan mode use the same flow: edit or comment, then **Request changes** or **Approve**.
 
-## Setup
+Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
+
+## Install
+
+There are two ways to run Thunk. Both keep your data in `~/.thunk` and need no database or account setup.
+
+### Desktop app
+
+No Node, npm or source checkout needed.
+
+1. Download the archive for your machine from the [latest release](https://github.com/Dgiordano33/thunk/releases/latest): `Apple-Silicon` or `Intel` for macOS, `Linux-x64` or `Linux-ARM64`, or `Windows-x64`.
+2. Unzip it. On macOS, move `Thunk.app` to Applications.
+3. Open it. The builds are not signed with a developer certificate, so the first launch needs your approval:
+   - **macOS:** open Thunk once, dismiss the warning, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/Thunk.app` before opening it.
+   - **Windows:** in the SmartScreen dialog, click **More info → Run anyway**.
+   - **Linux:** on Ubuntu 24.04 and later, see the sandbox step in [docs/desktop.md](docs/desktop.md#linux).
+4. In the Connections window that opens, connect Claude (an Anthropic API key, or your existing `claude` login is picked up automatically), and optionally GitHub and Codex.
+
+You need Git installed; Thunk tells you how if it is missing. To build the app yourself or publish releases, see [Thunk desktop app](docs/desktop.md).
+
+### From source
+
+You need:
+
+- **Node.js 22.16 or later** (24 recommended; `nvm use` picks it up from `.nvmrc`) and **Git**.
+- **Claude access:** a logged-in [Claude Code](https://claude.com/claude-code) CLI (`claude`), or an Anthropic API key.
+- **GitHub CLI** (`gh auth login`), optional: PR, check and deployment status need it.
 
 ```bash
+git clone https://github.com/Dgiordano33/thunk.git
+cd thunk
 npm install
 cp .env.local.example .env.local   # every setting is optional
-npm run dev
+npm run dev                        # http://127.0.0.1:4500
 ```
 
-- **Auth:** set `ANTHROPIC_API_KEY`, or leave it empty to use your local `claude` login.
+Open the URL, add a project (any git repo or folder), and start a session.
+
+- **Auth:** set `ANTHROPIC_API_KEY` in `.env.local`, or leave it empty to use your local `claude` login.
+- **Port:** `npm run dev` uses `$PORT`, else `$THUNK_PORT`, else `$CONDUCTOR_PORT`, else 4500.
 - **Database:** projects, workspaces, sessions, documents, comments, tasks, routines and notifications are stored in Postgres, so they survive restarts and sessions can be resumed (SDK `resume`). With no settings, Thunk runs an embedded Postgres (PGlite) in `~/.thunk/db`: nothing to install. To use your own Postgres (Supabase, Neon, RDS, a local server), set `DATABASE_URL`. See [Database](#database).
 - **Memory and notes files:** always on disk under `~/.thunk` (override with `THUNK_DATA_DIR`).
-- **Remote access:** set `THUNK_TRUSTED_HOSTS` and `THUNK_TRUSTED_USER` to reach Thunk through Tailscale Serve. See [docs/remote.md](docs/remote.md).
 - **Browser tests:** `npx playwright install chromium` once, then `npm run test:e2e`. They start their own dev server (port 4517, build dir `.next-e2e`) with in-memory projects and a temp data dir, so they run beside your dev server without touching your data.
+
+### Other ways to run it
+
+- **From your phone or another computer:** over a private Tailscale network. See [Use Thunk from your phone](docs/remote.md).
+- **Around the clock on a Linux server:** see [Run Thunk on a server](docs/server.md).
 
 ## Database
 
