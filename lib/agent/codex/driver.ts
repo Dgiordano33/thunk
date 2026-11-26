@@ -1,4 +1,5 @@
 import { chiefTools } from "@/lib/workers/tools";
+import { canvasPrompt, canvasTools, hasCanvasTools } from "@/lib/board/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
 import { teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
@@ -177,11 +178,12 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     DOCUMENT_PROMPT,
     hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions),
     ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
+    ...(hasCanvasTools(live) ? [canvasPrompt] : []),
     teamPrompt(live.meta.origin),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...canvasTools(live), ...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;
