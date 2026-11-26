@@ -1,7 +1,7 @@
 "use client";
 
 import { RotateCcwIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ProjectDetailsLink } from "@/components/project/project-details-link";
 import { CONTROL_BUTTON, IsoViewport } from "@/components/world/iso-viewport";

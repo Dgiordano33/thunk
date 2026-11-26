@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
 import { useLook } from "@/components/look-context";
 import { Logo } from "@/components/logo";
