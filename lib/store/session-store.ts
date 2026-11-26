@@ -140,23 +140,48 @@ function newDoc(
   };
 }
 
+/** Copy each collection on its first write in a batch. Published snapshots and their entries stay immutable. */
+function batchWriter() {
+  const owned = new WeakSet<object>();
+  const copy = <T extends object>(value: T): T => {
+    if (owned.has(value)) return value;
+    const next = (Array.isArray(value) ? [...value] : { ...value }) as T;
+    owned.add(next);
+    return next;
+  };
+  return {
+    copy,
+    put<T>(record: Record<string, T>, id: string, value: T) {
+      const next = copy(record);
+      next[id] = value;
+      return next;
+    },
+    append<T>(items: T[], value: T) {
+      const next = copy(items);
+      next.push(value);
+      return next;
+    },
+  };
+}
+type BatchWriter = ReturnType<typeof batchWriter>;
+
 /** Index a new request by tool call; only orphan requests (no rendered tool call) get their own timeline row. */
-function addRequest(s: SessionData, req: PendingRequest): Partial<SessionData> {
+function addRequest(s: SessionData, req: PendingRequest, write: BatchWriter): Partial<SessionData> {
   const inline = Boolean(s.tools[req.toolUseId]);
   return {
-    requests: { ...s.requests, [req.id]: req },
-    requestByToolUse: { ...s.requestByToolUse, [req.toolUseId]: req.id },
-    items: inline ? s.items : [...s.items, { kind: "request", id: req.id }],
+    requests: write.put(s.requests, req.id, req),
+    requestByToolUse: write.put(s.requestByToolUse, req.toolUseId, req.id),
+    items: inline ? s.items : write.append(s.items, { kind: "request", id: req.id }),
   };
 }
 
-function setDocStatus(s: SessionData, id: string | undefined, status: DocumentStatus): Partial<SessionData> {
+function setDocStatus(s: SessionData, id: string | undefined, status: DocumentStatus, write: BatchWriter): Partial<SessionData> {
   if (!id || !s.documents[id]) return {};
-  return { documents: { ...s.documents, [id]: { ...s.documents[id], status } } };
+  return { documents: write.put(s.documents, id, { ...s.documents[id], status }) };
 }
 
-/** Pure event reducer: (state, event) → patch. Shared by live SSE and database hydration. */
-function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
+/** Shared by live SSE and hydration. Only collections owned by this unpublished batch can be mutated. */
+function reduce(s: SessionData, e: HarnessEvent, write: BatchWriter): Partial<SessionData> {
   switch (e.type) {
     case "board_op": return {};
     case "init":
@@ -177,10 +202,10 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         };
       if (e.resumed) {
         // A new process can't answer requests parked by the previous one.
-        const requests = { ...s.requests };
+        const requests = write.copy(s.requests);
         for (const [id, r] of Object.entries(requests))
           if (r.status === "pending") requests[id] = { ...r, status: "expired" };
-        const turns = { ...s.turns };
+        const turns = write.copy(s.turns);
         for (const [id, t] of Object.entries(turns))
           if (t.status === "streaming") turns[id] = { ...t, status: "complete" };
         patch.requests = requests;
@@ -194,58 +219,49 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
 
     case "user_message":
       return {
-        items: [
-          ...s.items,
-          {
-            kind: "user",
-            id: e.messageId,
-            content: e.content,
-            images: e.images,
-            queued: e.queued,
-            revision:
-              e.kind === "revision" && e.documentId
-                ? { documentId: e.documentId, edits: e.stat?.edits ?? 0, comments: e.stat?.comments ?? 0 }
-                : undefined,
-          },
-        ],
-        ...setDocStatus(s, e.kind === "revision" ? e.documentId : undefined, "sent"),
+        items: write.append(s.items, {
+          kind: "user",
+          id: e.messageId,
+          content: e.content,
+          images: e.images,
+          queued: e.queued,
+          revision:
+            e.kind === "revision" && e.documentId
+              ? { documentId: e.documentId, edits: e.stat?.edits ?? 0, comments: e.stat?.comments ?? 0 }
+              : undefined,
+        }),
+        ...setDocStatus(s, e.kind === "revision" ? e.documentId : undefined, "sent", write),
       };
 
     case "turn_start":
       if (s.turns[e.turnId]) return {};
       return {
-        turns: {
-          ...s.turns,
-          [e.turnId]: { id: e.turnId, parts: [], thinking: "", status: "streaming", documentId: null },
-        },
-        items: [...s.items, { kind: "turn", id: e.turnId }],
+        turns: write.put(s.turns, e.turnId, { id: e.turnId, parts: [], thinking: "", status: "streaming", documentId: null }),
+        items: write.append(s.items, { kind: "turn", id: e.turnId }),
       };
 
     case "text_delta": {
       const t = s.turns[e.turnId];
       if (!t) return {};
-      const parts = [...t.parts];
+      const parts = write.copy(t.parts);
       const last = parts[parts.length - 1];
       if (last?.kind === "text") parts[parts.length - 1] = { kind: "text", text: last.text + e.text };
       else parts.push({ kind: "text", text: e.text });
-      return { turns: { ...s.turns, [t.id]: { ...t, parts } } };
+      return { turns: write.put(s.turns, t.id, { ...t, parts }) };
     }
 
     case "thinking_delta": {
       const t = s.turns[e.turnId];
       if (!t) return {};
-      return { turns: { ...s.turns, [t.id]: { ...t, thinking: t.thinking + e.text } } };
+      return { turns: write.put(s.turns, t.id, { ...t, thinking: t.thinking + e.text }) };
     }
 
     case "tool_use": {
       const t = s.turns[e.turnId];
       return {
-        tools: {
-          ...s.tools,
-          [e.toolUseId]: { id: e.toolUseId, turnId: e.turnId, name: e.name, input: e.input, status: "running" },
-        },
+        tools: write.put(s.tools, e.toolUseId, { id: e.toolUseId, turnId: e.turnId, name: e.name, input: e.input, status: "running" }),
         turns: t
-          ? { ...s.turns, [t.id]: { ...t, parts: [...t.parts, { kind: "tool", toolUseId: e.toolUseId }] } }
+          ? write.put(s.turns, t.id, { ...t, parts: write.append(t.parts, { kind: "tool", toolUseId: e.toolUseId }) })
           : s.turns,
       };
     }
@@ -254,10 +270,7 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       const tool = s.tools[e.toolUseId];
       if (!tool) return {};
       return {
-        tools: {
-          ...s.tools,
-          [e.toolUseId]: { ...tool, output: e.content, isError: e.isError, status: e.isError ? "error" : "done" },
-        },
+        tools: write.put(s.tools, e.toolUseId, { ...tool, output: e.content, isError: e.isError, status: e.isError ? "error" : "done" }),
       };
     }
 
@@ -273,15 +286,15 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         description: e.description,
         decisionReason: e.decisionReason,
         suggestions: e.suggestions,
-      });
+      }, write);
 
     case "permission_resolved": {
       const r = s.requests[e.requestId];
       if (!r || r.kind !== "permission") return {};
       const tool = s.tools[r.toolUseId];
       return {
-        requests: { ...s.requests, [r.id]: { ...r, status: "resolved", decision: e.decision } },
-        tools: tool ? { ...s.tools, [tool.id]: { ...tool, approval: e.decision } } : s.tools,
+        requests: write.put(s.requests, r.id, { ...r, status: "resolved", decision: e.decision }),
+        tools: tool ? write.put(s.tools, tool.id, { ...tool, approval: e.decision }) : s.tools,
       };
     }
 
@@ -293,18 +306,18 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
         status: "pending",
         questions: e.questions,
         routedTo: e.routedTo,
-      });
+      }, write);
 
     case "question_escalated": {
       const r = s.requests[e.requestId];
       if (!r || r.kind !== "question") return {};
-      return { requests: { ...s.requests, [r.id]: { ...r, escalation: { recommendation: e.recommendation, reason: e.reason } } } };
+      return { requests: write.put(s.requests, r.id, { ...r, escalation: { recommendation: e.recommendation, reason: e.reason } }) };
     }
 
     case "question_resolved": {
       const r = s.requests[e.requestId];
       if (!r || r.kind !== "question") return {};
-      return { requests: { ...s.requests, [r.id]: { ...r, status: "resolved", answers: e.answers, by: e.by } } };
+      return { requests: write.put(s.requests, r.id, { ...r, status: "resolved", answers: e.answers, by: e.by }) };
     }
 
     case "plan_proposed":
@@ -315,19 +328,18 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
           toolUseId: e.toolUseId,
           status: "pending",
           documentId: e.documentId,
-        }),
-        documents: {
-          ...s.documents,
+        }, write),
+        documents: write.put(s.documents, e.documentId,
           // Keep a hydrated doc (with the user's edits) when SSE replays this event, but restore
           // its request linkage — persisted docs don't carry it.
-          [e.documentId]: s.documents[e.documentId]
+          s.documents[e.documentId]
             ? { ...s.documents[e.documentId], requestId: e.requestId }
             : newDoc(e.documentId, "plan", e.plan, {
               parentDocumentId: e.parentDocumentId,
               version: e.version,
               requestId: e.requestId,
             }),
-        },
+        ),
         activeDocumentId: e.documentId,
       };
 
@@ -337,8 +349,8 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       const docStatus: DocumentStatus | null =
         e.decision === "approve" ? "approved" : e.decision === "changes" ? "sent" : null;
       return {
-        requests: { ...s.requests, [r.id]: { ...r, status: "resolved", decision: e.decision } },
-        ...(docStatus ? setDocStatus(s, r.documentId, docStatus) : {}),
+        requests: write.put(s.requests, r.id, { ...r, status: "resolved", decision: e.decision }),
+        ...(docStatus ? setDocStatus(s, r.documentId, docStatus, write) : {}),
       };
     }
 
@@ -346,21 +358,20 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       const t = s.turns[e.turnId];
       if (!t) return {};
       const patch: Partial<SessionData> = {
-        turns: { ...s.turns, [t.id]: { ...t, status: "complete", documentId: e.documentId } },
+        turns: write.put(s.turns, t.id, { ...t, status: "complete", documentId: e.documentId }),
       };
       if (e.documentId) {
-        patch.documents = {
-          ...s.documents,
+        patch.documents = write.put(s.documents, e.documentId,
           // Keep a hydrated doc (with the user's edits) when SSE replays this event, but restore
           // its turn linkage — persisted docs don't carry it.
-          [e.documentId]: s.documents[e.documentId]
+          s.documents[e.documentId]
             ? { ...s.documents[e.documentId], turnId: t.id }
             : newDoc(e.documentId, "response", e.markdown, {
               parentDocumentId: e.parentDocumentId,
               version: e.version,
               turnId: t.id,
             }),
-        };
+        );
         patch.activeDocumentId = e.documentId;
       }
       return patch;
@@ -370,7 +381,7 @@ function reduce(s: SessionData, e: HarnessEvent): Partial<SessionData> {
       return { costUsd: s.costUsd + (e.costUsd || 0), numTurns: s.numTurns + (e.numTurns || 0) };
 
     case "error":
-      return { items: [...s.items, { kind: "error", id: `err-${e.seq}`, message: e.message }] };
+      return { items: write.append(s.items, { kind: "error", id: `err-${e.seq}`, message: e.message }) };
   }
 }
 
@@ -379,9 +390,10 @@ export const useSession = create<SessionStore>()((set, get) => ({
 
   hydrate: ({ meta, events, documents }) => {
     let s: SessionData = { ...initial, sessionId: meta.id, meta, status: meta.status };
+    const write = batchWriter();
     for (const e of events) {
-      if (e.seq <= s.lastSeq) continue;
-      s = { ...s, ...reduce(s, e), lastSeq: e.seq };
+      if (e.sessionId !== s.sessionId || e.seq <= s.lastSeq) continue;
+      s = { ...s, ...reduce(s, e, write), lastSeq: e.seq };
     }
     // Overlay persisted editor state (edits, comment marks, comments) on event-derived docs.
     const docs = { ...s.documents };
@@ -401,9 +413,10 @@ export const useSession = create<SessionStore>()((set, get) => ({
   applyEvents: (events) => {
     const previous = get();
     let next = previous;
+    const write = batchWriter();
     for (const e of events) {
       if (e.sessionId !== next.sessionId || e.seq <= next.lastSeq) continue;
-      next = { ...next, ...reduce(next, e), lastSeq: e.seq };
+      next = { ...next, ...reduce(next, e, write), lastSeq: e.seq };
       if (next.meta && Number.isFinite(e.ts)) next.meta = { ...next.meta, updatedAt: new Date(e.ts).toISOString() };
     }
     if (next !== previous) set(next);
