@@ -12,7 +12,8 @@ test('credential storage uses encryption, private permissions and replacement', 
   assert.equal(readKey(file, storage), undefined);
   saveKey(file, 'first-secret', storage);
   assert.notEqual(readFileSync(file, 'utf8'), 'first-secret');
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  // Windows has no POSIX modes; the file is protected by the user profile's ACL and DPAPI there.
+  if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
   saveKey(file, 'new-secret', storage);
   assert.equal(readKey(file, storage), 'new-secret');
   assert.throws(() => saveKey(file, 'lost', { isEncryptionAvailable: () => false }), /Secure credential storage/);

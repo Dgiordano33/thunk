@@ -19,7 +19,7 @@ function assertSelfContained(file, what) {
     let libraries;
     try { libraries = execFileSync("ldd", [file], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }
     catch { return; } // "not a dynamic executable": statically linked.
-    const core = /^\s*(linux-vdso|linux-gate|\/lib\d*\/ld-linux|ld-linux|libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|libatomic)\b/;
+    const core = /^\s*(linux-vdso|linux-gate|\/lib\d*\/ld-linux|ld-linux|libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|libatomic)(?![\w+])/;
     assert.ok(libraries.split("\n").every((line) => !line.trim() || core.test(line)), what);
   }
   // Windows executables resolve their DLLs from the system or beside themselves; nothing to check.
