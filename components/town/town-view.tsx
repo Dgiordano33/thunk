@@ -5,7 +5,7 @@ import { projectSectionPath } from "@/lib/routes";
 import { StudioSprite } from "./sprites";
 
 import { motion, useReducedMotion } from "motion/react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { memo } from "react";
 import { relativeTime } from "@/components/session/labels";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";

@@ -8,7 +8,7 @@ export const IntentLink = forwardRef<HTMLAnchorElement, ComponentProps<typeof Li
   { onMouseEnter, onFocus, onTouchStart, prefetch, ...props }, ref,
 ) {
   const [intent, setIntent] = useState(false);
-  return <Link {...props} ref={ref} prefetch={prefetch ?? (intent ? true : null)}
+  return <Link {...props} ref={ref} prefetch={prefetch ?? (intent ? true : false)}
     onMouseEnter={event => { setIntent(true); onMouseEnter?.(event); }}
     onFocus={event => { setIntent(true); onFocus?.(event); }}
     onTouchStart={event => { setIntent(true); onTouchStart?.(event); }} />;

@@ -5,7 +5,6 @@ import { listSessions } from "@/lib/agent";
 import { getWorkspaceContextBySlugs } from "@/lib/projects";
 import { workspacePath } from "@/lib/routes";
 import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
-import { worktreeStatus } from "@/lib/projects/git";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +15,6 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
   if (!ctx) notFound();
   const id = ctx.workspace.id;
   const base = workspacePath(ctx.project, ctx.workspace);
-  // Stream Git decoration independently: slow repositories must not block the chat.
-  const gitStatus = Promise.all(ctx.workspace.repos.map((r) => worktreeStatus(r.cwd))).then(statuses => ({
-    dirty: statuses.reduce((n, status) => n + (status?.dirty ?? 0), 0),
-    branch: statuses[ctx.workspace.repos.findIndex((r) => r.cwd === ctx.workspace.cwd)]?.branch ?? ctx.workspace.branch,
-  })).catch(() => ({ dirty: 0, branch: ctx.workspace.branch }));
   const sessions = await listSessions({ workspaceId: id, limit: 50 });
 
   const ordered = [...sessions].reverse();
@@ -36,7 +30,6 @@ export default async function WorkspaceLayout({ params, children }: LayoutProps<
           workspace={ctx.workspace}
           base={base}
           sessions={ordered}
-          gitStatus={gitStatus}
         />
       }
     >

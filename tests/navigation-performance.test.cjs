@@ -19,9 +19,8 @@ function load(file, mocks) {
   return mod.exports;
 }
 
-test('workspace content is returned while Git status is still pending', { timeout: 1000 }, async () => {
-  let finishGit;
-  const git = new Promise(resolve => { finishGit = resolve; });
+test('workspace route does not start Git work or serialize a pending Git promise', { timeout: 1000 }, async () => {
+  let gitCalls = 0;
   const { default: Layout } = load('app/(shell)/[project]/[workspace]/layout.tsx', {
     'next/navigation': { notFound() { throw Error('not found'); } },
     '@/components/workspace/workspace-shell': { WorkspaceShell: 'shell' },
@@ -30,20 +29,21 @@ test('workspace content is returned while Git status is still pending', { timeou
     '@/lib/projects': { getWorkspaceContextBySlugs: async () => ({ project: { id: 'project' }, workspace: { id: 'workspace', cwd: '/repo', branch: 'main', repos: [{ cwd: '/repo' }] } }) },
     '@/lib/routes': { workspacePath: () => '/project/workspace' },
     '@/lib/projects/repo-targets': { workspaceRepoTargets: () => [{}] },
-    '@/lib/projects/git': { worktreeStatus: () => git },
+    '@/lib/projects/git': { worktreeStatus: () => { gitCalls++; throw Error("Git must not run during navigation"); } },
   });
   const result = await Layout({ params: Promise.resolve({ project: 'project', workspace: 'workspace' }), children: 'Conversation' });
   assert.equal(result.props.children, 'Conversation');
   assert.equal(result.props.sessions[0].id, 'session');
-  finishGit({ branch: 'feature', dirty: 7 });
-  assert.deepEqual(await result.props.tabs.props.gitStatus, { branch: 'feature', dirty: 7 });
+  assert.equal(gitCalls, 0);
+  assert.equal(result.props.tabs.props.gitStatus, undefined);
 });
 
 for (const switching of [false, true]) test(`stream cleanup ${switching ? 'discards events after switching sessions' : 'flushes events for the same session'}`, () => {
   const effects = [];
   const applied = [];
+  const connections = [];
   let stream;
-  const state = { sessionId: 'first', meta: { live: true }, applyEvents: events => applied.push(...events) };
+  const state = { sessionId: 'first', meta: { live: true }, applyEvents: events => applied.push(...events), setConnection: c => connections.push(c), setMeta: () => {} };
   const useSession = selector => selector(state);
   useSession.getState = () => state;
   const noop = () => null;
@@ -67,6 +67,8 @@ for (const switching of [false, true]) test(`stream cleanup ${switching ? 'disca
     const event = { type: 'test-event' };
     stream.onEvent(event);
     if (switching) state.sessionId = 'second';
+    stream.onState("not_live");
+    assert.deepEqual(connections, switching ? [] : ["not_live"]);
     cleanup();
     assert.deepEqual(applied, switching ? [] : [event]);
   } finally {

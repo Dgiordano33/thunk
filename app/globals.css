@@ -743,6 +743,6 @@
    Until then they are visually hidden but still in the tab order (display:none would drop them from it). */
 @media (min-width: 768px) {
   .sidebar-row:not(:hover, :focus-within, :has([data-state="open"], :disabled)) .sidebar-row-actions {
-    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    opacity: 0; pointer-events: none;
   }
 }

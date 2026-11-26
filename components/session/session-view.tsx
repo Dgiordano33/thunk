@@ -54,6 +54,7 @@ export function SessionView({
         if (frame === undefined) frame = requestAnimationFrame(flush);
       },
       onState: (c) => {
+        if (useSession.getState().sessionId !== meta.id) return;
         store.setConnection(c);
         if (c === "not_live") store.setMeta({ live: false });
       },

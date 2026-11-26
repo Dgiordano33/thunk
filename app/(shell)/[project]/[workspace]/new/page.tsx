@@ -22,8 +22,10 @@ export default async function NewChatPage({ params, searchParams }: PageProps<"/
   if (!ctx) notFound();
   const id = ctx.workspace.id;
   // Carry over the model and mode from the workspace's latest session.
-  const projectSessions = await listSessions({ projectId: ctx.project.id, limit: 1 });
-  const workspaceSessions = await listSessions({ workspaceId: id, limit: 10_000, includeHidden: true });
+  const [projectSessions, workspaceSessions] = await Promise.all([
+    listSessions({ projectId: ctx.project.id, limit: 1 }),
+    listSessions({ workspaceId: id, limit: 10_000, includeHidden: true }),
+  ]);
   const [latest] = workspaceSessions;
   // A chat started from a canvas card, or in a canvas workspace, shares that workspace; other automatic efforts start a new one.
   const standalone = ctx.workspace.visibility === "project" && typeof canvas !== "string" && !workspaceSessions.some(s => s.origin?.kind === "board");
