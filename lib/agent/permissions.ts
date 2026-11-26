@@ -1,4 +1,4 @@
-import { BOARD_TOOL_NAMES } from "@/lib/board/tools";
+import { BOARD_TOOL_NAMES, CANVAS_TOOL_NAMES, hasCanvasTools } from "@/lib/board/tools";
 import { CHIEF_TOOL_NAMES, TOP_CHIEF_DISALLOWED_TOOLS, asksChiefFirst, chiefWriteCommand, readOnlySession } from "@/lib/workers/prompt";
 import { TOP_CHIEF_TOOL_NAMES } from "@/lib/home/prompt";
 import "server-only";
@@ -23,7 +23,7 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
       return Promise.resolve({ behavior: "deny", message: live.meta.origin?.kind === "chief" ? "The chief coordinates work. Use delegate to edit code." : "Scouts are read-only. Report what should change instead." });
     if (live.meta.origin?.kind === "chief" && CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
-    if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
+    if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : hasCanvasTools(live) ? CANVAS_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
 
     const requestId = crypto.randomUUID();
