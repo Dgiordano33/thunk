@@ -24,7 +24,7 @@ import { listExternalSessions } from "@/lib/projects";
 import { loadDocuments } from "@/lib/db/repo/documents";
 import { loadEvents } from "@/lib/db/repo/messages";
 import { getProjectBySlug } from "@/lib/db/repo/projects";
-import { canvasPath, projectPath, workspacePath } from "@/lib/routes";
+import { canvasPath, newChatPath, projectPath, sessionPath, workspacePath } from "@/lib/routes";
 import { listCanvasesWithStatus } from "@/lib/board/canvases";
 import { getSessionRow, listSessionRows } from "@/lib/db/repo/sessions";
 import { listWorkspaces } from "@/lib/db/repo/workspaces";
@@ -164,7 +164,12 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       const ws = townWorkspaces.find((w) => w.id === workspaceId);
       const row = active.find((w) => w.id === workspaceId);
       if (!ws || !row) return [];
-      return [{ id: ws.id, href: workspacePath(project, row), label: ws.label, branch: ws.branch, hasGit: ws.hasGit, sessionCount: ws.sessionCount, overflow: planet.overflow[ws.id] ?? 0, lastActivityAt: ws.lastActivityAt, x, y }];
+      // The project already has session metadata: avoid a second route request just to redirect.
+      // Fall back to the workspace resolver when the project's bounded list omitted its sessions.
+      const latest = rows.find(s => s.workspaceId === ws.id && s.origin?.kind !== "board");
+      const href = latest ? sessionPath(project, row, latest.id)
+        : Number(row.sessionCount) === 0 ? newChatPath(project, row) : workspacePath(project, row);
+      return [{ id: ws.id, href, label: ws.label, branch: ws.branch, hasGit: ws.hasGit, sessionCount: ws.sessionCount, overflow: planet.overflow[ws.id] ?? 0, lastActivityAt: ws.lastActivityAt, x, y }];
     });
     const satellites: PlanetSatellite[] = fields.flatMap((f) => {
       const at = planet.satellites[f.id];
