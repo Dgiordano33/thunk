@@ -1,4 +1,4 @@
-import { copyFileSync, realpathSync, cpSync, mkdirSync, rmSync, chmodSync, existsSync, writeFileSync, readdirSync } from "node:fs";
+import { copyFileSync, realpathSync, lstatSync, cpSync, mkdirSync, rmSync, chmodSync, existsSync, writeFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -76,6 +76,20 @@ for (const entry of ["server.js", "package.json", "node_modules", ".next"]) {
     filter: (source) => !path.basename(source).startsWith(".env"),
   });
 }
+// Next links external packages into .next/node_modules. Those links are relative on macOS and Linux,
+// but Windows junctions are absolute and would point back into this build machine, so copy their targets.
+function materializeLinks(folder) {
+  for (const name of readdirSync(folder)) {
+    const file = path.join(folder, name);
+    const info = lstatSync(file);
+    if (info.isSymbolicLink()) {
+      const target = realpathSync(file);
+      rmSync(file, { recursive: true, force: true });
+      cpSync(target, file, { recursive: true, dereference: true });
+    } else if (info.isDirectory()) materializeLinks(file);
+  }
+}
+if (platform === "win32") materializeLinks(server);
 cpSync("public", path.join(server, "public"), { recursive: true });
 // lib/db/server.ts applies these at startup from <cwd>/db/migrations.
 cpSync("db/migrations", path.join(server, "db/migrations"), { recursive: true });
