@@ -16,6 +16,7 @@ export function CollapsiblePane({
   defaultOpen = true,
   storageKey,
   className,
+  controls,
   children,
 }: {
   title: string;
@@ -24,6 +25,8 @@ export function CollapsiblePane({
   storageKey?: string;
   /** Width and visibility classes for the open pane, e.g. `w-72`. */
   className?: string;
+  /** Extra buttons in the header, e.g. window controls. */
+  controls?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const desktop = useIsDesktop();
@@ -54,8 +57,10 @@ export function CollapsiblePane({
 
   return (
     <div className={cn("flex shrink-0 flex-col border-r", className)}>
-      <h2 className={cn(PANE_HEAD, "gap-2 pr-1.5")}>
+      {/* Doubles as the drag handle when the pane sits inside a floating window. */}
+      <h2 data-window-drag="" className={cn(PANE_HEAD, "gap-2 pr-1.5")}>
         <span className="min-w-0 flex-1 truncate">{title}</span>
+        {controls}
         <Hint label={`Hide ${title}`}>
           <Button className="hidden md:flex" size="icon-xs" variant="ghost" onClick={() => setOpen(false)} aria-label={`Hide ${title}`}>
             <PanelLeftCloseIcon />
