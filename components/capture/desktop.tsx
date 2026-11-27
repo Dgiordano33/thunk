@@ -9,7 +9,7 @@ export function DesktopCapture() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') bridge()?.hide(); };
     window.addEventListener('keydown', key);
-    const off = bridge()?.onShown?.(() => document.querySelector<HTMLInputElement>('input[aria-label="take a crack at"]')?.focus());
+    const off = bridge()?.onShown?.(() => document.querySelector<HTMLInputElement>('input[aria-label="Relay a thought"]')?.focus());
     return () => { window.removeEventListener('keydown', key); off?.(); };
   }, []);
   return <main className="p-5"><CaptureInput onSent={() => bridge()?.hide()} /></main>;

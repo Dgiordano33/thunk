@@ -46,7 +46,7 @@ export function NoteMetaBar({
   delegating?: boolean;
   /** Delegation can't run right now (an unresolved conflict, an unreadable file). */
   blocked?: boolean;
-  /** A top-level note: its items go to the top chief to route across projects. */
+  /** A top-level note: its items are relayed across projects, with a plan to approve. */
   topLevel?: boolean;
 }) {
   const desktop = useIsDesktop();
@@ -67,12 +67,12 @@ export function NoteMetaBar({
 
   const open = note.openTasks;
   const items = `${open} item${open === 1 ? "" : "s"}`;
-  const delegateLabel = topLevel ? (open ? `Route ${items}` : "Route") : open ? `Delegate ${items}` : "Delegate";
+  const delegateLabel = open ? `Relay ${items}` : "Relay";
   const delegateHint = !open
-    ? "Add unchecked - [ ] items to hand them to an agent"
+    ? "Add unchecked - [ ] items to relay them to agents"
     : topLevel
-      ? "The top chief proposes which project gets each item. You approve the plan in your Inbox."
-      : "The project chief splits each unchecked item into its own task.";
+      ? "Thunk proposes which project gets each item. You approve the plan in your Inbox."
+      : "The project's chief splits each unchecked item into its own task.";
 
   const housekeeping = (
     <>

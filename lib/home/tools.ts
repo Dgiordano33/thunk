@@ -29,7 +29,7 @@ export function topChiefTools(live: LiveSession): Tool[] {
     define("top_log", "Append to today's top-level work log: routing outcomes, the daily summary, decisions.", { entry: z.string().trim().min(1).max(20_000) }, async ({ entry }) => {
       const { ensureHomeProject } = await service();
       const { appendWorkLog } = await import("@/lib/workers/log");
-      return { path: (await appendWorkLog(await ensureHomeProject(), `[top chief] ${entry}`))?.path };
+      return { path: (await appendWorkLog(await ensureHomeProject(), `[relay] ${entry}`))?.path };
     }),
   ];
 }

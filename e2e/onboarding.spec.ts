@@ -8,9 +8,8 @@ test.beforeEach(async ({ page, context, baseURL }) => {
   await page.route('**/api/models', route => route.fulfill({ json: { models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet', provider: 'claude' }] } }));
 });
 async function settings(page: Page) {
-  const open = page.getByRole('button', { name: 'Open menu', exact: true });
-  if (await open.isVisible()) await open.click();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  // Settings is a page now; Help holds the replay buttons.
+  await page.goto('/settings/help');
 }
 
 test('intro skips once, replays, resets hints, and hands off to add project', async ({ page, context }) => {
@@ -34,6 +33,10 @@ test('intro skips once, replays, resets hints, and hands off to add project', as
   await page.getByRole('button', { name: 'Reset hints', exact: true }).click();
   await expect(intro).toBeVisible();
   await intro.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  const handoff = page.getByRole('dialog', { name: 'Write it down, relay it' });
+  await expect(handoff).toContainText('hands it to that project');
+  await expect(handoff).toContainText('Relay a note');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Your agents and setup');
   const add = page.getByRole('button', { name: 'Add your first project', exact: true });
@@ -71,6 +74,7 @@ test('existing install skips intro; checklist uses real project, workspace and n
   await expect(page.getByLabel('Getting started')).toBeHidden();
   await context.addCookies([{ name: 'thunk.onboarding', value: '', url: baseURL! }]);
   await page.goto('/projects');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
@@ -145,8 +149,31 @@ test('routine templates fill the form without creating a routine', async ({ page
 
 test('a completed checklist stays out of the way', async ({ page, context, baseURL }) => {
   await context.addCookies([{ name: 'thunk.onboarding', value: 'intro', url: baseURL! }]);
-  await page.route('**/api/onboarding/progress', route => route.fulfill({ json: { projects: 1, workspaces: 1, sessions: 1, notes: 1, tasksOrRoutines: 1 } }));
+  await page.route('**/api/onboarding/progress', route => route.fulfill({ json: { projects: 1, workspaces: 1, sessions: 1, notes: 1, tasksOrRoutines: 1, captures: 1, delegated: 1 } }));
   await page.goto('/projects');
   await settings(page);
   await expect(page.getByLabel('Getting started')).toBeHidden();
+});
+
+test('the Relay hints explain the handoff once', async ({ page, request, context, baseURL }) => {
+  await context.addCookies([{ name: 'thunk.onboarding', value: 'intro', url: baseURL! }]);
+  const created = await request.post('/api/projects', { data: { name: `Handoff ${Date.now()}`, repos: [] } });
+  const { project } = await created.json();
+  const { note } = await (await request.post(`/api/projects/${project.id}/notes`, { data: { title: 'Plan', markdown: '- [ ] First item' } })).json();
+  await page.goto('/projects');
+  await page.getByRole('button', { name: 'Relay a thought', exact: true }).first().click();
+  const relay = page.getByRole('dialog', { name: 'Relay a thought' });
+  await expect(relay).toContainText('which decides what it needs and starts the work');
+  await relay.getByRole('button', { name: 'Got it', exact: true }).click();
+  await expect(relay).not.toContainText('which decides what it needs');
+  await page.keyboard.press('Escape');
+  await page.goto(`/notes?scope=p:${project.id}&note=${note.id}`);
+  const hint = page.getByText('A note can be a brief.');
+  await expect(hint).toBeVisible();
+  await page.getByRole('button', { name: 'Got it', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: /^Relay 1 item/ })).toBeVisible();
+  await expect(hint).toBeHidden();
+  const progress = await (await request.get('/api/onboarding/progress')).json();
+  expect(progress).toMatchObject({ captures: expect.any(Number), delegated: expect.any(Number) });
 });

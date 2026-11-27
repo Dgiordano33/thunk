@@ -162,3 +162,15 @@ Archive reuses the existing Harvest dialog on the first eligible workspace, with
 Validation covers cookie parsing/reset, readiness mapping, intro Skip/Escape/replay, add-project handoff, existing installs, checklist progress/dismissal/completion, starter prompts, agent recovery, routine templates and archive preservation. Screenshots cover both looks/themes and the mobile drawer. Real agent turns and the packaged Electron app are not exercised by these checks.
 
 Checks passed: TypeScript, lint on changed files, 12 focused unit/UI tests, 25 Harvest/routine server tests, 11 Playwright tests, and a production build in isolated memory mode. The build reports two file-tracing warnings through the existing Codex import path.
+
+## Follow-up: explaining the handoff · 2026-11-26
+
+The first version explained where things live but not what makes Thunk different: what you write becomes delegated work. The handoff also had three verbs (Crack, Delegate, Route) and two kinds of chief, which was a lot to teach.
+
+- **One verb: Relay.** The capture bar is the Relay bar ("Relay a thought"), and a note's button reads Relay in project and top-level notebooks alike. The UI no longer names a top chief: for top-level notes, "Thunk proposes which project gets each item", and its plan is a Relay plan. The routing session, its tools and its prompts keep their internal names.
+- **One path: Relay → chief.** A relayed thought that matches a project now goes to that project's chief instead of straight to a worker (`relay_report` settles it; see `docs/capture.md`). Unmatched thoughts still run as a Home scout. The chief also gained tools to make notes, canvases and cards, workspaces, sessions and routines (`lib/workers/platform-tools.ts`), since it cannot edit files.
+- **Intro** has a fourth screen, "Write it down, relay it", between context and agents. It covers relaying a thought (with the user's own shortcut), relaying a note, what the chief is, and that nothing merges on its own. In the solar-system look it is drawn as a small star chart (`handoff-scene.tsx`): your writing is the star, the chief a planet, workers the satellites circling it, the Inbox a moon. Everything you relay travels to the chief. The game look keeps a plain four-step strip on desktop.
+- **Relay hint** (`relay`): one-time text under the Relay field. Sending a first thought also marks it seen.
+- **Note hint** (`relay-note`): one-time text above a note's body. Top-level notes get the cross-project wording, with routing tags.
+- **Chief panel**: until a project has a chief, the panel says what the chief does instead of one terse line.
+- **Checklist** gains "Relay a thought" (opens Relay) and "Relay a note". `GET /api/onboarding/progress` returns `captures` and `delegated` (tasks linked to a note).

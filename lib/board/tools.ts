@@ -15,21 +15,10 @@ const SOURCE_HELP = 'When the rows come from a query or script you ran, pass it 
 export const BOARD_TOOL_NAMES = ['canvas_read', 'canvas_add_card', 'canvas_add_image', 'canvas_add_chart', 'canvas_edit_chart', 'canvas_edit_card', 'canvas_reply', 'canvas_comment'];
 export const boardPrompt = `You collaborate on the project's Canvas, a spatial board. Use canvas_read to inspect it and canvas_add_card, canvas_edit_card, canvas_comment and canvas_reply to deliver work. Answer every pending thread. Preserve user edits. Use source_card_id to connect responses. Images are available by absolute path with Read. Final prose is only a short activity summary; put substantive content on cards. AskUserQuestion is available for blocking questions. A canvas_update with mode="focus" means the user selected that group of cards as their prompt: answer the group as a whole with one canvas_add_card placed below its last card, not by editing or commenting on each card. In a follow-up focus, cards marked seen="true" are earlier turns you already have; answer the new cards in that context. When a focus update carries an <instruction>, that is the user's question about the group: answer it under the prompt card named in the update. Cards with prompt=true are earlier instructions shown as chips; never edit them. Cards with kind="drawing" are freehand sketches; their rendered PNG is attached to the turn and available at the drawing path from canvas_read. Deliver anything that is not prose as its own separate canvas object, never embedded in a text card: a table goes in its own canvas_add_card containing only the markdown table; a chart or graph of data (a trend, a comparison, headline numbers) goes through canvas_add_chart, which takes the data itself as rows and renders it in the app's style with hover values and a table view, so never draw data as SVG; correct or extend a chart with canvas_edit_chart rather than adding another; when its rows came from a command you ran, register it as source_command so the user can refresh it. Users can edit chart rows by hand (the update carries a <user_data_edit> diff), pin data points (threads with an anchor naming the row's x value and series) and draw on charts (the rendered PNG is attached). A picture, diagram or other graphic that is not a plot of data goes through canvas_add_image (author it as SVG with explicit width, height and viewBox, or pass the path of a PNG/JPEG/WebP you produced). Cards with kind="chart" carry their data in the chart field of canvas_read. Put explanatory prose in a separate text card and chain the objects with source_card_id and placement="below" so they stack under the prompt in order.`;
 /**
- * `emit` is handed in by the caller instead of imported here: this module sits inside the session registry's import
- * cycle, and loading the registry from a tool call can re-enter it half-initialised after a dev hot reload.
+ * The canvas tools for one board directory. `publish` tells whoever has the canvas open about a saved card and returns
+ * the tool's text result. The canvas's own agent and the project chief both use these.
  */
-export function boardTools(live: LiveSession, emit: (live: LiveSession, body: HarnessEventBody) => void) {
-    if (live.meta.origin?.kind !== 'board')
-        return [];
-    const boardId = live.meta.origin.boardId ?? 'main';
-    const dir = projectBoardsDir(live.ctx.project.dataKey, boardId);
-    // The card is already saved by the time this runs, so a failed broadcast must not fail the tool: the agent would retry and add it again.
-    const publish = async (card: Card) => { try {
-        emit(live, { type: 'board_op', boardId, op: { card } });
-    }
-    catch (e) {
-        console.error('board_op broadcast failed', e);
-    } return JSON.stringify(card); };
+export function canvasToolset(dir: string, publish: (card: Card) => Promise<string>) {
     function tool<S extends z.ZodRawShape>(name: string, description: string, schema: S, run: (args: z.infer<z.ZodObject<S>>) => Promise<string>) {
         return { name, description, schema, handler: async (input: unknown) => { try {
                 return { content: [{ type: 'text' as const, text: await run(z.strictObject(schema).parse(input)) }] };
@@ -95,4 +84,21 @@ export function boardTools(live: LiveSession, emit: (live: LiveSession, body: Ha
             throw new Error('Thread not found'); t.replies.push({ id: crypto.randomUUID(), author: 'agent', body: a.body, sentAt: new Date().toISOString() }); if (a.resolve !== undefined)
             t.resolved = a.resolve; return publish(await saveCard(dir, c)); })),
     ];
+}
+
+/**
+ * `emit` is handed in by the caller instead of imported here: this module sits inside the session registry's import
+ * cycle, and loading the registry from a tool call can re-enter it half-initialised after a dev hot reload.
+ */
+export function boardTools(live: LiveSession, emit: (live: LiveSession, body: HarnessEventBody) => void) {
+    if (live.meta.origin?.kind !== 'board')
+        return [];
+    const boardId = live.meta.origin.boardId ?? 'main';
+    // The card is already saved by the time this runs, so a failed broadcast must not fail the tool: the agent would retry and add it again.
+    return canvasToolset(projectBoardsDir(live.ctx.project.dataKey, boardId), async (card) => { try {
+        emit(live, { type: 'board_op', boardId, op: { card } });
+    }
+    catch (e) {
+        console.error('board_op broadcast failed', e);
+    } return JSON.stringify(card); });
 }

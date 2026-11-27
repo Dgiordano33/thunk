@@ -40,7 +40,7 @@ export async function openTopChief(fresh = false) {
         if (live) return live;
       }
     }
-    return startWorkerSession({ workspaceId: workspace.id, title: "Top chief", permissionMode: "default", origin: { kind: "top_chief" } });
+    return startWorkerSession({ workspaceId: workspace.id, title: "Relay", permissionMode: "default", origin: { kind: "top_chief" } });
   });
 }
 
@@ -163,7 +163,7 @@ export async function proposeRoutePlan(topChiefId: string, input: RoutePlanInput
   const path = `/api/chief/routes/${plan.id}`;
   await notify({
     projectId: home.id, workspaceId: chief.meta.workspaceId, sessionId: topChiefId, kind: "delegation_plan", urgency: "action",
-    subjectKey: subject(plan.id), title: `Routing plan · ${plan.items.length} item${plan.items.length === 1 ? "" : "s"} across ${new Set(plan.items.map((i) => i.projectId)).size} project${new Set(plan.items.map((i) => i.projectId)).size === 1 ? "" : "s"}`,
+    subjectKey: subject(plan.id), title: `Relay plan · ${plan.items.length} item${plan.items.length === 1 ? "" : "s"} across ${new Set(plan.items.map((i) => i.projectId)).size} project${new Set(plan.items.map((i) => i.projectId)).size === 1 ? "" : "s"}`,
     detail: [plan.summary, "", ...plan.items.map((i, n) => `${n + 1}. ${names.get(i.projectId)}${i.workspaceId ? ` / ${targets.find((t) => t.projectId === i.projectId)?.workspaces.find((w) => w.id === i.workspaceId)?.name}` : ""}: ${i.title}\n   ${i.why}`)].join("\n"),
     href: sessionPath(chief.ctx.project, chief.ctx.workspace, topChiefId),
     actions: [
@@ -171,7 +171,7 @@ export async function proposeRoutePlan(topChiefId: string, input: RoutePlanInput
       { label: "Reject", method: "POST", path, body: { decision: "reject" } },
     ],
   });
-  await appendWorkLog(home, `[top chief] proposed routing: ${plan.items.map((i) => `${i.title} → ${names.get(i.projectId)}`).join(" · ")}`);
+  await appendWorkLog(home, `[relay] proposed routing: ${plan.items.map((i) => `${i.title} → ${names.get(i.projectId)}`).join(" · ")}`);
   return { planId: plan.id, status: "pending" as const, message: "Waiting for the person to approve in the inbox. You will get a <route_plan> message with the decision; do not route these items meanwhile." };
 }
 
@@ -206,7 +206,7 @@ export async function decideRoutePlan(planId: string, decision: "approve" | "rej
           const chief = await openChief(project.id);
           pushUserMessage(chief, `<routed_request id="${ref}" from="top chief">\n${item.title}\n\n${item.brief}${item.workspaceId ? `\n\nContinue in the existing workspace ${item.workspaceId} (delegate with workspaceId).` : ""}\n</routed_request>\nDelegate this as you would any request. When it is settled (accepted, blocked or failed), call route_report once with routeId "${ref}".`);
           if (item.line !== undefined) await markNote(home, plan.noteId ?? null, (md) => markLine(md, item.line!, ref, `${project.name}: routed`));
-          await appendWorkLog(project, `[top chief] routed: ${item.title} (r:${ref})`);
+          await appendWorkLog(project, `[relay] routed: ${item.title} (r:${ref})`);
           plan.refs.push(ref);
           results.push({ title: item.title, project: project.name, ref });
         } catch (err) { results.push({ title: item.title, project: project.name, error: (err as Error).message }); }

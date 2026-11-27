@@ -56,7 +56,7 @@ export function SessionsList({ sessions }: { sessions: SessionMeta[] }) {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1">
                   {s.origin?.kind === "chief" && session.title?.toLowerCase() !== "chief" && <span className="text-muted-foreground text-[10px]">Chief</span>}
-                  {s.origin?.kind === "top_chief" && session.title?.toLowerCase() !== "top chief" && <span className="text-muted-foreground text-[10px]">Top chief</span>}
+                  {s.origin?.kind === "top_chief" && !["relay", "top chief"].includes(session.title?.toLowerCase() ?? "") && <span className="text-muted-foreground text-[10px]">Relay</span>}
                   {s.origin?.kind === "worker" && session.title?.toLowerCase() !== "worker" && <span className="text-muted-foreground text-[10px]">Worker</span>}
                   {s.origin?.kind === "routine" && (
                     <Hint label={`Started by the routine ${s.origin.routineName}`}>

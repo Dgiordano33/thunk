@@ -20,6 +20,7 @@ import { NoteMetaBar } from "./note-meta-bar";
 import { useAddToCanvas } from "@/components/board/add-to-canvas";
 import { usePaths } from "@/components/layout/paths-context";
 import { confirm } from "@/components/confirm";
+import { OnboardingHint } from "@/components/onboarding/hint";
 
 const SAVE_MS = 800;
 /** The store's default title. The editor shows it as the placeholder, so a new note's title starts empty. */
@@ -46,7 +47,7 @@ export function NoteEditor({
   scope: NoteScope;
   noteId: string;
   onDeleted?: () => void;
-  /** A top-level note: its button routes checklist items across projects through the top chief. */
+  /** A top-level note: its checklist items are relayed across projects, with a plan to approve. */
   topLevel?: boolean;
 }) {
   const [note, setNote] = useState<Note | null>(null);
@@ -290,13 +291,12 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
     await flush();
     if (dirty.current) return;
     const open = extractTasks(editorRef.current ? docToMarkdown(editorRef.current) : note.markdown).filter((t) => !t.done);
-    const who = topLevel ? "the top chief" : "the project chief";
     const ok = await confirm({
-      title: `${topLevel ? "Route" : "Delegate"} ${open.length} item${open.length === 1 ? "" : "s"} to ${who}?`,
+      title: `Relay ${open.length} item${open.length === 1 ? "" : "s"}?`,
       description: (
         <>
           <span className="block">
-            {topLevel ? "It proposes which project gets each item; nothing starts until you approve its plan in the Inbox." : "It splits each item into its own task. You'll go to its session."}
+            {topLevel ? "Thunk proposes which project gets each item; nothing starts until you approve the plan in the Inbox." : "The project's chief splits each item into its own task. You'll go to its session."}
           </span>
           <span className="mt-2 block max-h-40 overflow-y-auto">
             {open.slice(0, 12).map((t) => <span key={t.line} className="block truncate">• {t.text}</span>)}
@@ -304,17 +304,17 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
           </span>
         </>
       ),
-      action: topLevel ? "Route" : "Delegate",
+      action: "Relay",
     });
     if (!ok) return;
     setDelegating(true);
     try {
       const r = await api.delegateNote(scope, note.id);
-      // Top-level notes stay put: the top chief's routing plan arrives in the inbox.
-      if (r.top) toast.success(`Sent ${r.open} item${r.open === 1 ? "" : "s"} to the top chief`, { description: "Approve its routing plan in your Inbox. Lines are marked as they are routed and settled." });
+      // Top-level notes stay put: the relay plan arrives in the inbox.
+      if (r.top) toast.success(`Relayed ${r.open} item${r.open === 1 ? "" : "s"}`, { description: "Approve the relay plan in your Inbox. Lines are marked as they are routed and settled." });
       else { router.push(r.href); router.refresh(); }
     } catch (err) {
-      toast.error(`Couldn't ${topLevel ? "route" : "delegate"} this note`, { description: (err as Error).message });
+      toast.error("Couldn't relay this note", { description: (err as Error).message });
     } finally {
       setDelegating(false);
     }
@@ -341,6 +341,15 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
         blocked={Boolean(conflict) || broken}
         topLevel={topLevel}
       />
+      {!memory && (
+        <div className="px-4 empty:hidden">
+          <OnboardingHint name="relay-note">
+            {topLevel
+              ? <>Notes here belong to no project. Write the work as unchecked <code>- [ ]</code> items, then choose <strong>Relay</strong>: Thunk proposes which project gets each item, and nothing starts until you approve the plan in your Inbox. Add <code>#project</code> to a line to pin it.</>
+              : <>A note can be a brief. Write the work as unchecked <code>- [ ]</code> items, then choose <strong>Relay</strong>: the project&apos;s chief turns each item into a task and starts a worker for it in its own worktree. Reports come back to your Inbox.</>}
+          </OnboardingHint>
+        </div>
+      )}
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs">
           <span className="flex-1">This note changed on disk while you were editing (an agent may have updated it).</span>

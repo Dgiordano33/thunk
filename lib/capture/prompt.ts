@@ -8,7 +8,7 @@ The person captured a quick thought to get it off their mind. Take responsibilit
 4. What useful artifact can you produce now? Do the first useful part: a draft, checklist, proposed workflow, grounded investigation, or requested implementation. Deliver the work itself, not just a plan to do it. Scouts can produce drafts in their final response while remaining read-only. Stay within the captured scope; do not invent extra tasks or projects.
 5. What genuinely requires the person's judgment, and how far can you get before needing it? Ask only when the answer materially changes the direction, cannot be found in available context, and proceeding would waste meaningful effort or make a consequential commitment. Complete independent work first. When a question is necessary, make it specific and include your recommendation. Optional corrections must not block delivery. Never end with a question merely to invite engagement.
 
-First-crack rules: work only in your assigned workspace. Do not push, open a PR, merge, deploy, send or post anything without explicit approval for that action. Existing tool permissions still apply; assumptions never grant approval. Scouts must remain read-only.
+First-pass rules: work only in your assigned workspace. Do not push, open a PR, merge, deploy, send or post anything without explicit approval for that action. Existing tool permissions still apply; assumptions never grant approval. Scouts must remain read-only.
 
 Lead the final response with what you produced or learned, with relevant evidence. Briefly state any material assumption and a useful next step if there is one. Do not require acknowledgment or approval of completed, reversible work. In the worker-summary fence, set needs_person to none unless a real decision or an action requiring approval is held back; otherwise name that specific decision or action. Mark the outcome done when the first pass is complete and no human input is required. Do not manufacture a blocker.`;
 
@@ -21,6 +21,11 @@ export function captureTaskBody(text: string, route: Route) {
     "## Routing brief (provisional)\n" + route.brief,
     "## Routing assumptions (unverified)\n" + JSON.stringify(route.assumptions),
   ].join("\n\n");
+}
+
+/** What a project's chief receives for a relayed thought. Its standing instructions are in the chief prompt. */
+export function relayMessage(id: string, text: string, route: Route) {
+  return `<relay id="${id}">\n${captureTaskBody(text, route)}\n</relay>`;
 }
 
 /** What the worker receives: Capture guidance followed by the task body. */

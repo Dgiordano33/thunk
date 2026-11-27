@@ -37,7 +37,7 @@ export function SessionHeader({ onResume }: { onResume: () => Promise<void> }) {
     <header className="flex min-h-11 md:h-10 shrink-0 items-center gap-3 border-b px-3">
       <h1 className="min-w-0 truncate pixel text-base leading-tight max-md:hidden">{meta.title || "Untitled session"}</h1>
       {meta.origin?.kind === "chief" && meta.title?.toLowerCase() !== "chief" && <Badge variant="outline">Chief</Badge>}
-      {meta.origin?.kind === "top_chief" && meta.title?.toLowerCase() !== "top chief" && <Badge variant="outline">Top chief</Badge>}
+      {meta.origin?.kind === "top_chief" && !["relay", "top chief"].includes(meta.title?.toLowerCase() ?? "") && <Badge variant="outline">Relay</Badge>}
       {meta.origin?.kind === "worker" && meta.title?.toLowerCase() !== "worker" && <Badge variant="outline">Worker</Badge>}
       {meta.origin?.kind === "routine" && <RoutineBadge meta={meta} origin={meta.origin} />}
       <Badge variant="outline" className="h-5 shrink-0 gap-1.5 text-[11px]" role="status" aria-live="polite">

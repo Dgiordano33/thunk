@@ -1,5 +1,5 @@
 export const ONBOARDING_COOKIE = "thunk.onboarding";
-export const HINT_KEYS = ["intro", "map-legend", "workspace-repos", "first-document", "harvest", "checklist-dismissed"] as const;
+export const HINT_KEYS = ["intro", "map-legend", "workspace-repos", "first-document", "harvest", "relay", "relay-note", "checklist-dismissed"] as const;
 export type HintKey = typeof HINT_KEYS[number];
 export function parseOnboarding(value?: string | null): HintKey[] {
   return [...new Set((value ?? "").split(",").filter((key): key is HintKey => HINT_KEYS.includes(key as HintKey)))];

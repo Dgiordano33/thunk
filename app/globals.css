@@ -616,6 +616,17 @@
 .satellite.is-attention { background: var(--status-attention); box-shadow: 0 0 0 3px var(--status-attention-soft), 0 0 8px var(--status-attention-soft); }
 .satellite.is-error { background: var(--status-error); box-shadow: 0 0 0 3px var(--status-error-soft); }
 .sat-loop { stroke: var(--orbit); }
+/* Intro handoff scene: workers circle the chief, and what you relay streaks to the chief. Each mark's inline
+   offset-distance is where it rests when motion is off. */
+.sp-handoff .hf-sat { offset-path: path("M102,82a78,25 0 1,0 156,0a78,25 0 1,0 -156,0Z"); offset-rotate: 0deg; animation: hf-orbit 22s linear infinite; }
+.sp-handoff .hf-comet { offset-path: path("M62,60Q108,30 160,66"); offset-rotate: auto; animation: hf-comet 5s var(--ease-space) infinite; }
+.sp-handoff .hf-twinkle { transform-box: fill-box; transform-origin: center; animation: hf-twinkle 3.6s ease-in-out infinite; }
+@keyframes hf-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@keyframes hf-comet { 0% { offset-distance: 0%; opacity: 0; } 12% { opacity: 1; } 62% { offset-distance: 100%; opacity: 1; } 72%, 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes hf-twinkle { 50% { opacity: 0.25; scale: 0.7; } }
+@media (prefers-reduced-motion: reduce) {
+  .sp-handoff .hf-sat, .sp-handoff .hf-comet, .sp-handoff .hf-twinkle { animation: none; }
+}
 
 
 /* ── Chrome: HUD panels and the section dock are flat glass with a ruled edge, to sit with the line art. */
