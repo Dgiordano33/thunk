@@ -1,5 +1,5 @@
 import { EllipsisIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { projectPath, projectSectionPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 

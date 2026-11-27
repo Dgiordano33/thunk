@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { create } from "zustand";
+import { subscribeAppEvents } from "@/lib/client/app-events";
 import { api } from "@/lib/client/api";
 import { scopeKey, type NoteEvent, type NoteMeta, type NoteScope } from "@/lib/notes/types";
 
@@ -14,6 +15,8 @@ export const useNotesFeed = create<{
   noteRev: Record<string, number>;
   /** Any change anywhere, for global counts. */
   rev: number;
+  /** Invalidates every scope and open note after a connection gap. */
+  resetRev: number;
   apply: (e: NoteEvent) => void;
   /** Local writes bump immediately so other views refresh without waiting on the watcher. */
   touch: (scope: NoteScope) => void;
@@ -21,6 +24,7 @@ export const useNotesFeed = create<{
   scopeRev: {},
   noteRev: {},
   rev: 0,
+  resetRev: 0,
   apply: (e) => {
     const k = scopeKey(e.scope);
     set((s) => ({
@@ -35,30 +39,25 @@ export const useNotesFeed = create<{
   },
 }));
 
-let source: EventSource | null = null;
+let unsubscribe: (() => void) | null = null;
 let refs = 0;
 
-/** Keep one EventSource open while any notes view is mounted. */
+/** Subscribe once per tab; the transport shares its connection across tabs. */
 export function useNotesEvents() {
   useEffect(() => {
     refs++;
-    if (!source) {
-      source = new EventSource("/api/notes/events");
-      source.onmessage = (m) => {
-        try {
-          useNotesFeed.getState().apply(JSON.parse(m.data) as NoteEvent);
-        } catch (err) {
-          console.error("[thunk] bad note event", err);
-        }
-      };
+    if (!unsubscribe) {
+      // Views fetch on mount, so only a reconnect (a later open) can have missed changes.
+      let opened = false;
+      unsubscribe = subscribeAppEvents("notes", {
+        onEvent: (event) => useNotesFeed.getState().apply(event),
+        onOpen: () => {
+          if (!opened) { opened = true; return; }
+          useNotesFeed.setState((s) => ({ rev: s.rev + 1, resetRev: s.resetRev + 1 }));
+        },
+      });
     }
-    return () => {
-      refs--;
-      if (refs === 0) {
-        source?.close();
-        source = null;
-      }
-    };
+    return () => { if (--refs === 0) { unsubscribe?.(); unsubscribe = null; } };
   }, []);
 }
 
@@ -70,7 +69,7 @@ const scopeSnapshots = new Map<string, ScopeSnapshot>();
 export function useScopeNotes(scope: NoteScope | null) {
   useNotesEvents();
   const key = scope ? scopeKey(scope) : "";
-  const rev = useNotesFeed((s) => scope?.kind === "workspaces" ? s.rev : s.scopeRev[key] ?? 0);
+  const rev = useNotesFeed((s) => scope?.kind === "workspaces" ? s.rev : s.resetRev + (s.scopeRev[key] ?? 0));
   const [state, setState] = useState<ScopeSnapshot | null>(() => scopeSnapshots.get(key) ?? null);
   const [reloads, setReloads] = useState(0);
 

@@ -82,6 +82,7 @@ test('notebook metadata survives remount, refreshes in the background, and stays
   let response = { notes: [{ id: 'old' }], dir: '/notes' };
   let requests = 0;
   const { useScopeNotes } = load('lib/store/notes-store.ts', {
+    '@/lib/client/app-events': { subscribeAppEvents: () => () => {} },
     react: { useCallback: fn => fn, useEffect: fn => effects.push(fn), useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}] },
     zustand: { create: init => {
       const state = init(() => {});

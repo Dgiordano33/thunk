@@ -1,4 +1,5 @@
 "use client";
+import { subscribeAppEvents } from "@/lib/client/app-events";
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { Capture } from '@/lib/capture/types';
@@ -19,10 +20,8 @@ export function useCaptures() {
     } catch (e) { setError((e as Error).message); }
   }, []);
   useEffect(() => {
-    const events = new EventSource('/api/captures/events');
-    events.onopen = () => void refresh();
-    events.onmessage = () => void refresh();
-    return () => events.close();
+    const unsubscribe = subscribeAppEvents("captures", { onOpen: () => void refresh(), onEvent: () => void refresh() });
+    return () => unsubscribe();
   }, [refresh]);
   const act = useCallback(async function act(id: string, action: string, text?: string): Promise<boolean> {
     try {

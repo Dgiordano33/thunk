@@ -65,17 +65,16 @@ test("send menu offers live sessions in scope while the owner label still resolv
   assert.match(html, /Finished owner/);
 });
 
-test("SSE is shared, refreshes on reconnect, and closes only after the last consumer", (t) => {
+test("SSE is shared, refreshes on reconnect, and closes only after the last consumer", () => {
   const cleanups = [];
   const sources = [];
   let store;
-  const previous = global.EventSource;
-  global.EventSource = class {
-    constructor(url) { this.url = url; this.closed = false; sources.push(this); }
-    close() { this.closed = true; }
-  };
-  t.after(() => { global.EventSource = previous; });
   const hooks = load("use-tasks.ts", {
+    "@/lib/client/app-events": { subscribeAppEvents: (topic, handlers) => {
+      const source = { topic, ...handlers, closed: false };
+      sources.push(source);
+      return () => { source.closed = true; };
+    } },
     react: { useEffect: (effect) => cleanups.push(effect()), useState: () => { throw Error("Unexpected state hook"); } },
     zustand: { create: (initialize) => {
       const useStore = () => store;
@@ -87,8 +86,8 @@ test("SSE is shared, refreshes on reconnect, and closes only after the last cons
   });
   hooks.useTasksEvents(); hooks.useTasksEvents();
   assert.equal(sources.length, 1);
-  assert.equal(sources[0].url, "/api/tasks/events");
-  sources[0].onmessage({ data: JSON.stringify({ projectId: "p1" }) }); sources[0].onopen();
+  assert.equal(sources[0].topic, "tasks");
+  sources[0].onEvent({ projectId: "p1" }); sources[0].onOpen();
   assert.equal(store.rev, 2);
   // Only project p1 refetches for its event; a reconnect refetches everyone.
   assert.deepEqual(store.projects, { p1: 1 });

@@ -55,6 +55,8 @@ The solar-system canvas was active. Chromium's renderer accumulated about 2.98 /
 
 ## Remaining work, ranked
 
+This was the ranking after the long-chat changes. The subsequent [multi-tab, prefetch, and idle-rendering follow-up](performance-2026-11-26-followup.md) addresses the first three items and records their remaining limits.
+
 1. **Share or multiplex passive SSE feeds across tabs.** Each tab opens notifications, tasks, and notes EventSources before any session stream. Three tabs reproduced a five-second reload timeout on the unchanged baseline; closing the other tabs let navigation finish in 307 ms. Concurrent synthetic agents persisted correctly, but all three tabs did not acquire their session streams. Browser connection-slot pressure is the likely cause. Transport changes need separate reconnect, leader-lifetime, and per-session replay coverage.
 2. **Remove remaining settings-page speculative work.** The project-navigation trace includes settings-route prefetches for all 12 projects, producing 21–26 route requests during the measured interaction. Inspect `ProjectDetailsLink` and its map/mobile callers. This work was outside the two implemented changes; existing intent-based links remain intact.
 3. **Reduce solar-system idle rendering and entrance cost.** The measured map remains busy even with no agent activity. Profile GPU/compositor work on the actual packaged app before changing its visual cadence; verify native hide/occlusion behavior explicitly.

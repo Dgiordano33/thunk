@@ -184,9 +184,11 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
   );
 
   // Someone else (an agent, another tab) changed the file.
-  const rev = useNotesFeed((s) => (s.noteRev[`${scopeKey(scope)}/${initial.id}`] ?? 0) + (s.noteRev[`${scopeKey(scope)}/*`] ?? 0));
+  const rev = useNotesFeed((s) => s.resetRev + (s.noteRev[`${scopeKey(scope)}/${initial.id}`] ?? 0) + (s.noteRev[`${scopeKey(scope)}/*`] ?? 0));
+  // The editor mounts with a fresh note; refetch only when the revision moves after that.
+  const mountRev = useRef(rev);
   useEffect(() => {
-    if (!rev) return;
+    if (rev === mountRev.current) return;
     let cancelled = false;
     api
       .getNote(scope.kind, scope.id, initial.id)

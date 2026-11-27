@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { create } from "zustand";
+import { subscribeAppEvents } from "@/lib/client/app-events";
 import { api } from "@/lib/client/api";
 import type { Notification, NotificationCounts, NotificationEvent, NotificationKind } from "@/lib/notifications/types";
 
@@ -88,27 +89,27 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 function scheduleRefresh() {
   refreshTimer ??= setTimeout(() => { refreshTimer = null; void refreshNotifications(); }, 100);
 }
-let source: EventSource | null = null;
+let unsubscribe: (() => void) | null = null;
 let refs = 0;
 export function useNotificationsEvents() {
   useEffect(() => {
     refs++;
-    if (!source) {
+    if (!unsubscribe) {
       void loadPreferences();
-      source = new EventSource("/api/notifications/events");
-      // Keep the list on reconnect: the refresh merges fresh rows over it instead of flashing skeletons and losing scroll.
-      source.onopen = () => { void refreshNotifications(); };
-      source.onerror = () => useNotifications.setState({ error: "Inbox connection lost. Reconnecting…" });
-      source.onmessage = (message) => {
-        try {
-          const event = JSON.parse(message.data) as NotificationEvent;
+      unsubscribe = subscribeAppEvents("notifications", {
+        // Merge a fresh snapshot after reconnect without losing scroll or older rows.
+        onOpen: scheduleRefresh,
+        onError: () => useNotifications.setState({ error: "Inbox connection lost. Reconnecting…" }),
+        onEvent: (event) => {
           apply(event);
           if (event.kind === "opened") void desktopAlert(event.notification);
           scheduleRefresh();
-        } catch (err) { console.error("[thunk] bad notification event", err); }
-      };
-      void refreshNotifications();
+        },
+      });
+      // The Inbox still loads if the live connection is unavailable. Coalesce
+      // its initial snapshot with onOpen when the connection opens promptly.
+      scheduleRefresh();
     }
-    return () => { if (--refs === 0) { source?.close(); source = null; if (refreshTimer) clearTimeout(refreshTimer); refreshTimer = null; } };
+    return () => { if (--refs === 0) { unsubscribe?.(); unsubscribe = null; if (refreshTimer) clearTimeout(refreshTimer); refreshTimer = null; } };
   }, []);
 }

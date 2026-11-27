@@ -19,6 +19,7 @@ const ORBIT_DOT_GAP = 6.5;
 const POLE_ELEVATION = 0.33;
 /** How far (map px) floating planets bob, up and down. */
 const FLOAT_AMP = 3;
+const AMBIENT_FRAME_MS = 1000 / 30;
 
 /** Entrance timeline (ms). */
 const T = { sun: 600, orbitStart: 150, orbitStep: 80, orbitDur: 700, bodyStart: 300, bodyStep: 40, bodyDur: 500 };
@@ -82,10 +83,14 @@ export class SpaceRenderer {
   private theme: Theme = 1;
   private reduced: boolean;
   private raf = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private last = 0;
+  private ambientAt = 0;
   private activeUntil = 0;
   private hover = new Map<string, number>();
   private bobbed = new Map<string, number>();
+  private bodyData: SceneBody[] | null = null;
+  private bodies: SceneBody[] = [];
   private t0: number | null = null;
   private ready = false;
   private disposed = false;
@@ -197,35 +202,64 @@ export class SpaceRenderer {
   /** Schedule a frame. With reduced motion this draws once; otherwise it (re)starts the loop. */
   invalidate() {
     if (this.disposed || this.raf || document.hidden) return;
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
     this.raf = requestAnimationFrame(this.tick);
   }
 
   private stop() {
     if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
     this.raf = 0;
+  }
+
+  private ambient() {
+    // Sleep through unused frames instead of polling every display refresh.
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.invalidate();
+    }, Math.max(0, Math.ceil(this.ambientAt - performance.now())));
   }
 
   private tick = (now: number) => {
     this.raf = 0;
-    if (this.disposed || this.gl.isContextLost()) return;
-    const busy = now < this.activeUntil || this.entranceRunning(now) || this.hoverMoving();
+    if (this.disposed || document.hidden || this.gl.isContextLost()) return;
+    if (this.bodyData !== this.store.data.bodies) {
+      this.bodyData = this.store.data.bodies;
+      this.bodies = [...this.bodyData].sort((a, b) => a.y - b.y);
+      const ids = new Set(this.bodies.map((b) => b.id));
+      // A removed hovered body must not leave the renderer permanently "busy".
+      for (const id of this.hover.keys()) if (!ids.has(id)) this.hover.delete(id);
+      for (const id of this.bobbed.keys()) if (!ids.has(id)) this.bobbed.delete(id);
+    }
+    const busy = (!this.reduced && now < this.activeUntil) || this.entranceRunning(now) || this.hoverMoving();
+    // RAF's timestamp can predate a timer wakeup by a display frame. Use the
+    // same wall clock for pacing and the timer, and RAF time for animation only.
+    const clock = performance.now();
     // Idle ambient motion runs at 30fps; panning, hovering and the entrance run at full rate.
-    if (!busy && !this.reduced && now - this.last < 32) {
-      this.raf = requestAnimationFrame(this.tick);
+    if (!busy && !this.reduced && clock < this.ambientAt) {
+      this.ambient();
       return;
     }
-    const dt = this.last ? Math.min(100, now - this.last) : 16;
-    this.last = now;
+    const dt = this.last ? Math.min(100, clock - this.last) : 16;
+    this.last = clock;
     this.draw(now, dt);
+    // Keep a cadence instead of adding timer/vsync lateness to every interval.
+    // After a long pause, start fresh rather than trying to catch up old frames.
+    this.ambientAt = busy || clock - this.ambientAt > AMBIENT_FRAME_MS
+      ? clock + AMBIENT_FRAME_MS : this.ambientAt + AMBIENT_FRAME_MS;
     if (!this.ready) {
       this.ready = true;
       this.hooks.onReady();
     }
-    if (!this.reduced || busy || this.hoverMoving()) this.raf = requestAnimationFrame(this.tick);
+    if (busy || this.hoverMoving()) this.raf = requestAnimationFrame(this.tick);
+    else if (!this.reduced) this.ambient();
   };
 
   private entranceRunning(now: number) {
     if (this.t0 === null) return true;
+    if (this.reduced) return now - this.t0 < 150;
     const n = this.store.data.bodies.length;
     return now - this.t0 < T.bodyStart + n * T.bodyStep + T.bodyDur + 50;
   }
@@ -233,7 +267,7 @@ export class SpaceRenderer {
   private hoverMoving() {
     const target = this.store.hover;
     for (const [id, v] of this.hover) if (Math.abs((id === target ? 1 : 0) - v) > 0.01) return true;
-    return target !== null && !this.hover.has(target);
+    return target !== null && !this.hover.has(target) && this.bodies.some((b) => b.id === target);
   }
 
   private quadAt(p: Program, cx: number, cy: number, hx: number, hy: number) {
@@ -340,8 +374,7 @@ export class SpaceRenderer {
     gl.useProgram(p.p);
     this.skyUniforms(p);
     gl.uniform1f(p.u("u_theme"), theme);
-    const bodies = [...data.bodies].sort((a, b) => a.y - b.y);
-    for (const b of bodies) {
+    for (const b of this.bodies) {
       const lift = this.float(b, time);
       this.drawBody(p, b, view, time, step(T.bodyStart + b.order * T.bodyStep, T.bodyDur), lift);
     }
