@@ -3,6 +3,7 @@ import { db } from '../server';
 import { insertSql, updateSql, run } from '../sql';
 import { emitCapture } from '@/lib/capture/events';
 import type { Capture } from '@/lib/capture/types';
+import { lastReport } from '@/lib/capture/thread';
 const g = globalThis as typeof globalThis & { __captures?: Map<string, Capture> };
 const mem = g.__captures ??= new Map<string, Capture>();
 export async function listCaptures(all = false): Promise<Capture[]> {
@@ -27,5 +28,5 @@ export async function captureTask(taskId: string, patch: Partial<Capture>) {
 export async function notifyReady(row: Capture) {
  if (!row.project_id) return;
  const {notify}=await import('@/lib/notifications/service');
- await notify({kind:'capture_ready',urgency:'action',projectId:row.project_id,workspaceId:row.workspace_id,sessionId:row.session_id,subjectKey:`capture:${row.id}`,title:row.title || row.text,detail:row.summary,href:'/inbox'});
+ await notify({kind:'capture_ready',urgency:'action',projectId:row.project_id,workspaceId:row.workspace_id,sessionId:row.session_id,subjectKey:`capture:${row.id}`,title:row.title || row.text,detail:lastReport(row.summary),href:'/inbox'});
 }

@@ -45,6 +45,7 @@ const api=require('../app/api/captures/route.ts');
 const actionApi=require('../app/api/captures/[id]/[action]/route.ts');
 const retryApi=require('../app/api/captures/[id]/retry/route.ts');
 const {chipLabel}=require('../lib/capture/chip.ts');
+const {parseThread,appendTurn,lastReport}=require('../lib/capture/thread.ts');
 // Left installed: the service loads workers, archive and notifications lazily with import().
 
 const result=(projectId=null)=>JSON.stringify({projectId,mode:'worktree',title:'Try it',brief:'Build it',assumptions:['A guess']});
@@ -108,9 +109,15 @@ test('the chief settles a relay with relay_report, and decisions go back to the 
  assert.match(calls.at(-1)[2],/<relay_decision id="c" action="go_ahead">\nGo ahead with this step only: Open a PR/);
  assert.equal((await get()).status,'working');
  await service.reportRelay('p','c','blocked','Needs credentials');
- r=await get();assert.equal(r.summary,'Blocked: Needs credentials');assert.equal(r.next_step,null);
+ r=await get();assert.equal(r.next_step,null);
+ // Replying is a chat turn: the chief gets the message, and the card keeps the whole exchange.
  await service.actOnCapture('c','redirect','Try the staging keys');
- assert.match(calls.at(-1)[2],/action="redirect">\nTry the staging keys/);
+ assert.match(calls.at(-1)[2],/action="reply">\nTry the staging keys/);
+ assert.equal((await get()).status,'working');
+ await service.reportRelay('p','c','done','Staging keys worked');
+ r=await get();
+ assert.deepEqual(parseThread(r.summary),[{who:'chief',text:'Drafted the plan'},{who:'you',text:'Go ahead with this step only: Open a PR'},{who:'chief',text:'Blocked: Needs credentials'},{who:'you',text:'Try the staging keys'},{who:'chief',text:'Staging keys worked'}]);
+ assert.equal(notified.at(-1).detail,'Staging keys worked');
  await service.actOnCapture('c','discard');
  assert.match(calls.at(-1)[2],/action="discard"/);
  assert.equal(calls.filter(c=>c[0]==='stop'||c[0]==='archive').length,0);
@@ -144,4 +151,13 @@ test('a relay the chief dropped becomes a failed thought, and a late report stil
  globalThis.__captures.set('k',row({id:'k',status:'working',project_id:'p',task_id:'t1',session_id:'s1',updated_at:old}));assert.equal(await service.sweepRelays(),0);
  await service.reportRelay('p','c','done','Late, but here');
  r=await get();assert.equal(r.status,'ready');assert.equal(r.error,null);
+});
+
+test('a thread parses back into turns and tolerates a plain summary', () => {
+ assert.deepEqual(parseThread(null),[]);
+ assert.deepEqual(parseThread('Just a report'),[{who:'chief',text:'Just a report'}]);
+ const thread=appendTurn(appendTurn(appendTurn(null,'chief','First'),'you','Why?'),'chief','Because.\n\nTwo paragraphs.');
+ assert.deepEqual(parseThread(thread),[{who:'chief',text:'First'},{who:'you',text:'Why?'},{who:'chief',text:'Because.\n\nTwo paragraphs.'}]);
+ assert.equal(lastReport(thread),'Because.\n\nTwo paragraphs.');
+ assert.equal(lastReport(appendTurn(null,'you','Only me')),null);
 });

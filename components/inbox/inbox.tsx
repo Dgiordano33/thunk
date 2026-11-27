@@ -341,10 +341,14 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
     const tab = active ? 0 : -1;
     const lead = row.title || row.text;
     const go = (action: string, text?: string) => { armAdvance(n); void captures.act(row.id, action, text); };
+    // A thought a chief handled comes back as that chief talking to you: no Relay vocabulary on the card.
+    const chief = !row.task_id && Boolean(row.project_id && row.session_id);
+    const kind = chief ? "Chief" : NOTIFICATION_LABELS[n.kind];
+    const focusReply = (e: React.MouseEvent<HTMLElement>) => e.currentTarget.closest("article")?.querySelector<HTMLInputElement>("[data-redirect]")?.focus();
     return (
-      <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className="bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5">
+      <article key={n.id} {...rowProps(n, `${kind}: ${lead}`)} className="bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5">
         <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="text-foreground/80 font-medium">{NOTIFICATION_LABELS[n.kind]}</span>
+          <span className="text-foreground/80 font-medium">{kind}</span>
           <span aria-hidden="true" className="text-muted-foreground/50">/</span>
           <span className="truncate">{project?.name || "Home"}{row.mode === "scout" ? " · scout" : ""}</span>
           <time className="ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
@@ -353,11 +357,12 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
         <ThoughtReview row={row} tab={tab} onRedirect={(text) => go("redirect", text)} />
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {row.next_step && <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("continue")}>{`Go ahead: ${row.next_step}`}</Button></Hint>}
-          <Hint label="Redirect" keys="2"><Button data-action="2" tabIndex={tab} variant="outline" className={RING} onClick={(e) => e.currentTarget.closest("article")?.querySelector<HTMLInputElement>("[data-redirect]")?.focus()}>Redirect…</Button></Hint>
-          <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant="outline" className={RING} onClick={() => go("discard")}>Discard</Button></Hint>
-          <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => go("keep")}>Keep</Button>
+          {chief && !row.next_step && <Hint label="Done" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("keep")}>Done</Button></Hint>}
+          <Hint label="Reply" keys="2"><Button data-action="2" tabIndex={tab} variant="outline" className={RING} onClick={focusReply}>Reply</Button></Hint>
+          <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant={chief ? "ghost" : "outline"} className={RING} onClick={() => go("discard")}>Discard</Button></Hint>
+          {(!chief || row.next_step) && <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => go("keep")}>{chief ? "Done" : "Keep"}</Button>}
           {contextButton(n, active, lead, true)}
-          {row.session_id && row.workspace_id && <Button asChild tabIndex={tab} variant="ghost" className={RING}><Link data-open="" href={`/w/${row.workspace_id}/s/${row.session_id}`}>Open session<ArrowUpRightIcon aria-hidden="true" /></Link></Button>}
+          {row.session_id && row.workspace_id && <Button asChild tabIndex={tab} variant="ghost" className={RING}><Link data-open="" href={`/w/${row.workspace_id}/s/${row.session_id}`}>{chief ? "Open the chief" : "Open session"}<ArrowUpRightIcon aria-hidden="true" /></Link></Button>}
         </div>
         {contextPanel(n, lead)}
       </article>

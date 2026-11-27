@@ -75,6 +75,13 @@ test("a ready thought is a Decision in time order; thoughts under way stay in th
   assert.doesNotMatch(completed, /Go ahead/);
   assert.match(completed, />Keep</);
   assert.match(completed, /Found the flaky test/);
+  // A thought a chief handled comes back as a conversation with that chief, with no Relay vocabulary.
+  captureRows = [thought("ready1", "ready", { task_id: null, mode: null, next_step: null, summary: "Found the flaky test\n\n[[you]]\nWhich one?\n\n[[chief]]\nThe login spec." })];
+  const chat = renderInbox({ items: [ready], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
+  assert.match(chat, /aria-label="Chief: Look into ready1"/);
+  assert.match(chat, /Conversation with the chief/); assert.match(chat, /Which one\?/); assert.match(chat, /The login spec\./);
+  assert.match(chat, /placeholder="Reply to the chief…"/); assert.match(chat, /data-action="1"[^>]*>Done</); assert.match(chat, />Open the chief</);
+  assert.doesNotMatch(chat, /Redirect|Keep<|Relay|\[\[you\]\]/);
   captureRows = [];
   const card = html.indexOf('aria-label="Thought ready: Look into ready1"');
   assert.ok(card > 0, "the ready thought renders as a row in the feed");
