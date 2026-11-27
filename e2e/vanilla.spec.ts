@@ -14,17 +14,37 @@ test('Vanilla replaces Game world, persists, and keeps project tools and Solar r
   await expect(page.getByRole('radio', { name: /^Solar system/ })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByRole('radio', { name: /^Game world/ })).toHaveCount(0);
   await page.getByRole('radio', { name: /^Vanilla/ }).click();
-  await expect(page.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
+  await expect(page.locator('#sidebar').getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
   await page.getByRole('radio', { name: 'Light', exact: true }).click();
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/look-vanilla/);
   await expect(page.getByRole('radio', { name: /^Vanilla/ })).toHaveAttribute('aria-checked', 'true');
-  await page.getByRole('link', { name: 'All projects', exact: true }).click();
+  await page.locator('#sidebar').getByRole('link', { name: 'Projects', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search projects' }).fill(project.name);
   await page.getByRole('main').getByRole('link', { name: new RegExp(project.name) }).click();
   await expect(page.getByRole('heading', { name: project.name, exact: true })).toBeVisible();
-  const sections = page.getByRole('navigation', { name: 'Project sections' });
-  for (const [label, route] of [['Notes', 'notes'], ['Tasks', 'tasks'], ['Routines', 'routines'], ['Vault', 'vault'], ['Overview & settings', 'settings']]) {
+  // Inside a project the sidebar swaps to that project's Inbox, Notes and Vault, then each workspace with its sessions.
+  const seeded = await request.post('/api/e2e/session', { data: { workspaceId: workspace.id, title: 'Tidy the sidebar', events: [] } });
+  expect(seeded.ok()).toBe(true);
+  const sidebar = page.locator('#sidebar');
+  await expect(sidebar.getByRole('link', { name: 'Projects', exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('list', { name: project.name, exact: true }).getByRole('link')).toHaveText([/^Inbox/, /^Tasks/, /^Notes/, /^Vault/, /^Routines/, /^Settings/]);
+  await expect(sidebar.getByRole('link', { name: 'Interface refresh', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('list', { name: 'Interface refresh sessions' }).getByRole('link', { name: 'Tidy the sidebar' })).toBeVisible();
+  mkdirSync('.context/vanilla', { recursive: true });
+  await page.screenshot({ path: '.context/vanilla/sidebar-project.png' });
+  await sidebar.getByRole('link', { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/inbox\\?projectId=${project.projectId}$`));
+  await expect(sidebar.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
+  await sidebar.getByRole('link', { name: 'All projects', exact: true }).click();
+  await expect(sidebar.getByRole('list', { name: 'General' }).getByRole('link')).toHaveText([/^Projects/, /^Inbox/, /^Notes/, /^Vault/]);
+  await page.screenshot({ path: '.context/vanilla/sidebar-general.png' });
+  await page.getByRole('main').getByRole('link', { name: new RegExp(project.name) }).click();
+  // The sidebar is the only project navigation: no tab strip on the page.
+  await expect(page.getByRole('navigation', { name: 'Project sections' })).toHaveCount(0);
+  const sections = sidebar.getByRole('list', { name: project.name, exact: true });
+  for (const [label, route] of [['Notes', 'notes'], ['Tasks', 'tasks'], ['Routines', 'routines'], ['Vault', 'vault'], ['Settings', 'settings']]) {
     await sections.getByRole('link', { name: new RegExp(`^${label}`) }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/${route}$`));
     await expect(sections.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveAttribute('aria-current', 'page');
@@ -34,16 +54,16 @@ test('Vanilla replaces Game world, persists, and keeps project tools and Solar r
     expect(box.width).toBeGreaterThan(700);
     expect(box.height).toBeGreaterThan(350);
   }
-  await sections.getByRole('link', { name: /^Workspaces/ }).click();
+  await sidebar.locator(`a[href="/${project.slug}"]`).click();
   await expect(page).toHaveURL(`/${project.slug}`);
   await expect(page.getByRole('heading', { name: 'Recent sessions', exact: true })).toBeVisible();
   mkdirSync('.context/vanilla', { recursive: true });
   await page.screenshot({ path: '.context/vanilla/project-light.png' });
   await page.getByRole('main').getByRole('link', { name: /Interface refresh.*Project files/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/${project.slug}/${workspace.slug}/new$`));
+  await expect(page).toHaveURL(new RegExp(`/${project.slug}/${workspace.slug}(/|$)`));
   await expect(page.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
   await page.goto(`/${project.slug}`);
-  await sections.getByRole('link', { name: /^Canvas/ }).click();
+  await sidebar.getByRole('link', { name: 'Canvas', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${project.slug}/canvas$`));
   await expect(page.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
   for (const route of ['inbox', 'notes', 'routines', 'vault']) {
@@ -53,14 +73,14 @@ test('Vanilla replaces Game world, persists, and keeps project tools and Solar r
   }
   await page.goto('/settings/appearance');
   await page.getByRole('radio', { name: 'Dark', exact: true }).click();
-  await page.getByRole('link', { name: 'All projects', exact: true }).click();
+  await page.locator('#sidebar').getByRole('link', { name: 'Projects', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Search projects' })).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/dark/);
   await page.screenshot({ path: '.context/vanilla/projects-dark.png' });
   await page.goto('/settings/appearance');
   await page.getByRole('radio', { name: /^Solar system/ }).click();
   await expect(page.locator('html')).toHaveClass(/look-space/);
-  await expect(page.getByRole('link', { name: 'All projects', exact: true })).toHaveCount(0);
+  await expect(page.locator('#sidebar').getByRole('link', { name: 'Projects', exact: true })).toHaveCount(0);
   await page.goto(`/${project.slug}`);
   await expect(page.locator('.space')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Project sections' })).toBeVisible();

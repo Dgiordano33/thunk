@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderIcon, GitBranchIcon, InboxIcon } from "lucide-react";
+import { InboxIcon } from "lucide-react";
 import { TriageSettings } from "./triage-settings";
 import { Hint } from "@/components/hint";
 import { PixelIcon } from "@/components/world/pixel-icon";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const count = (n: number) => <span className="text-muted-foreground ml-auto shrink-0 text-[11px] tabular-nums">{n}</span>;
 
-/** Left pane of the Library: "All notes", the top-level notebook, then each project with its workspaces nested. */
+/** Left pane of the Library: "All notes", the top-level notebook, then each project with its repo notebooks nested. Workspace links show on the note itself. */
 export function LibraryFolders({
   folders,
   selected,
@@ -58,25 +58,6 @@ export function LibraryFolders({
               <span className="min-w-0 truncate font-medium">{f.project.name}</span>
               {count(f.notes.length)}
             </button>
-            {f.workspaces.map(({ workspace, notes }) => {
-              const wScope: NoteScope = { kind: "workspaces", id: workspace.id };
-              const local = workspace.slug === "main";
-              const Icon = local ? FolderIcon : GitBranchIcon;
-              return (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  className={cn(row(active === scopeKey(wScope)), "pl-7")}
-                  onClick={() => onSelect(wScope)}
-                  aria-current={active === scopeKey(wScope) ? "true" : undefined}
-                >
-                  <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                  <span className="min-w-0 truncate">{workspace.name}</span>
-                  <span className="text-muted-foreground text-[10px]">linked</span>
-                  {count(notes.length)}
-                </button>
-              );
-            })}
             {f.repos.map(({ notebook, notes }) => {
               const scope: NoteScope = { kind: "repos", id: notebook.id };
               return <button key={notebook.id} type="button" className={cn(row(active === scopeKey(scope)), "pl-7")} onClick={() => onSelect(scope)} aria-current={active === scopeKey(scope) ? "true" : undefined}>

@@ -194,8 +194,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   }
 
   return <ResponsiveView mobile={mobile}><VanillaProject
-    project={project} workspaces={active} sessions={townSessions} selected={selected.building}
-    counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines.length, vault: vaultItems.length, canvas: canvases.length }}
+    project={project} workspaces={active} sessions={townSessions}
     panel={panel}
   >
     {harvestOffers}

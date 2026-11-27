@@ -92,7 +92,7 @@ for (const look of ['space', 'vanilla']) for (const theme of ['light', 'dark']) 
     if (look === 'space') await expect(page.getByRole('complementary', { name: 'Map legend' })).toBeVisible();
     else {
       await expect(page.getByRole('complementary', { name: 'Map legend' })).toHaveCount(0);
-      await expect(page.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
+      await expect(page.locator('#sidebar').getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
     }
   });
 }
