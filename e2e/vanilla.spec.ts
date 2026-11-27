@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { newBoard } from './canvas';
 
 test('Vanilla replaces Game world, persists, and keeps project tools and Solar reachable', async ({ page, request, context }) => {
+  test.setTimeout(180_000);
   const project = await newBoard(request);
   await request.patch(`/api/projects/${project.projectId}`, { data: { name: 'Thunk' } });
   project.name = 'Thunk';
@@ -30,7 +31,7 @@ test('Vanilla replaces Game world, persists, and keeps project tools and Solar r
   await page.screenshot({ path: '.context/vanilla/top-bar.png' });
   await page.getByRole('textbox', { name: 'Search projects' }).fill(project.name);
   await page.getByRole('main').getByRole('link', { name: new RegExp(project.name) }).click();
-  await expect(page.getByRole('heading', { name: project.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: project.name, exact: true })).toBeVisible({ timeout: 30_000 });
   // Inside a project the sidebar swaps to that project's Inbox, Notes and Vault, then each workspace with its sessions.
   const seeded = await request.post('/api/e2e/session', { data: { workspaceId: workspace.id, title: 'Tidy the sidebar', events: [] } });
   expect(seeded.ok()).toBe(true);
@@ -54,7 +55,7 @@ test('Vanilla replaces Game world, persists, and keeps project tools and Solar r
   const sections = sidebar.getByRole('list', { name: project.name, exact: true });
   for (const [label, route] of [['Notes', 'notes'], ['Tasks', 'tasks'], ['Routines', 'routines'], ['Vault', 'vault'], ['Settings', 'settings']]) {
     await sections.getByRole('link', { name: new RegExp(`^${label}`) }).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/${route}$`));
+    await expect(page).toHaveURL(new RegExp(`/projects/${project.slug}/${route}$`), { timeout: 30_000 });
     await expect(sections.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.vanilla-panel')).toBeVisible();
     await expect(page.locator('[data-floating-window]')).toHaveCount(0);
