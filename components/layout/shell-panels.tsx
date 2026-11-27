@@ -5,6 +5,7 @@ import { MobileNav } from "@/components/mobile/drawer";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 
+import { useLook } from "@/components/look-context";
 import { usePanelLayoutStorage, ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 /** Width of the collapsed sidebar: an icon rail. */
@@ -19,7 +20,9 @@ const SidebarState = createContext<{ collapsed: boolean; toggle: () => void }>({
 /** Whether the desktop sidebar is collapsed to its rail, and a toggle (also bound to ⌘\). Always expanded on a phone. */
 export const useSidebarState = () => useContext(SidebarState);
 
-export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; children: React.ReactNode }) {
+/** `topBar` spans the window above the sidebar and the page; only desktop Vanilla shows it. */
+export function ShellPanels({ sidebar, topBar, children }: { sidebar: React.ReactNode; topBar?: React.ReactNode; children: React.ReactNode }) {
+  const { look } = useLook();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "thunk-sidebar-layout", panelIds: ['sidebar', 'content'], storage: usePanelLayoutStorage() });
   const desktop = useIsDesktop();
   useVisualViewportHeight(!desktop);
@@ -50,7 +53,9 @@ export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; c
   if (!desktop) return <MobileNav.Provider value={sidebar}><div className="bg-background flex h-[var(--vvh,100dvh)] flex-col pt-safe"><div className="min-h-0 flex-1">{children}</div></div></MobileNav.Provider>;
   return (
     <SidebarState.Provider value={state}>
-      <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="moonlit sky-surface bg-background h-dvh">
+      <div className="flex h-dvh flex-col">
+      {look === "vanilla" && topBar}
+      <ResizablePanelGroup defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} orientation="horizontal" className="moonlit sky-surface bg-background min-h-0 flex-1">
         <ResizablePanel
           id="sidebar"
           panelRef={panelRef}
@@ -72,6 +77,7 @@ export function ShellPanels({ sidebar, children }: { sidebar: React.ReactNode; c
           <div className="h-full overflow-y-auto">{children}</div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
     </SidebarState.Provider>
   );
 }

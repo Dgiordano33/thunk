@@ -3,7 +3,7 @@ import { getLook } from "@/lib/look.server";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ShellPanels } from "@/components/layout/shell-panels";
 import { ResponsiveView } from "@/components/mobile/viewport";
-import { HudTitle } from "@/components/world/hud-title";
+import { VanillaBreadcrumbs, VanillaTopBar } from "@/components/vanilla/top-bar";
 import { PanelLayoutCookies } from "@/components/ui/resizable";
 import { panelCookies } from "@/lib/panel-layout";
 import { loadSidebarCanvases, loadSidebarProjects } from "@/components/layout/sidebar-tree";
@@ -40,9 +40,9 @@ export default async function WorldLayout({ children }: LayoutProps<"/">) {
   return <PanelLayoutCookies value={panelCookies(jar.getAll())}>
     <PathsProvider projects={pathTree(projects)}>
       <ResponsiveView mobile={mapLayout}>
-        <ShellPanels sidebar={<AppSidebar projects={projects} canvases={canvases} />}>
+        <ShellPanels topBar={<VanillaTopBar projects={projects} />} sidebar={<AppSidebar projects={projects} canvases={canvases} />}>
           <div className="flex h-full min-h-0 flex-col bg-background">
-            <header className="flex h-12 shrink-0 items-center border-b px-6"><HudTitle projects={projects} noteCount={noteCount} heading={false} /></header>
+            <VanillaBreadcrumbs projects={projects} noteCount={noteCount} />
             <div className="vanilla-content relative min-h-0 flex-1 overflow-auto">{children}</div>
           </div>
         </ShellPanels>

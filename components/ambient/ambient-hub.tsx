@@ -33,8 +33,8 @@ function runHref(run: RoutineRunActivity, paths: ReturnType<typeof pathsFor>) {
   return run.sessionId && run.workspaceId ? paths.session(run.workspaceId, run.sessionId) : projectSectionPath(paths.project(run.projectId), "workshop", { routine: run.routineId });
 }
 
-/** Activity polling and ⌘K search, shown as a compact Search button: in the world map's HUD, or the sidebar's logo row. */
-export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" | "rail" }) {
+/** Activity polling and ⌘K search, shown as a compact Search button (the world map's HUD, the sidebar's logo row) or as a field in Vanilla's top bar. */
+export function AmbientHub({ projects, variant = "sidebar" }: { projects: SidebarProject[]; variant?: "sidebar" | "hud" | "rail" | "bar" }) {
   const router = useRouter();
   useNotificationsEvents();
   const mac = useIsMac();
@@ -138,6 +138,16 @@ export function AmbientHub({ projects, variant = "sidebar" }: { projects: Sideba
       <Hint label="Search" keys={keys} side="right">
         <Button variant="ghost" size="icon" className="text-muted-foreground size-9" onClick={() => setSearchOpen(true)} aria-label={`Search (${keys})`}><SearchIcon /></Button>
       </Hint>
+      {searchDialog}
+    </>
+  );
+  if (variant === "bar") return (
+    <>
+      <button type="button" onClick={() => setSearchOpen(true)} aria-label={`Search (${keys})`} className="bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:ring-sidebar-ring flex h-8 w-full min-w-0 items-center gap-2 rounded-md border px-2.5 text-left text-sm transition-colors outline-none focus-visible:ring-2">
+        <SearchIcon className="size-4 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">Search sessions, documents, projects…</span>
+        <Kbd>{keys}</Kbd>
+      </button>
       {searchDialog}
     </>
   );
