@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { create } from "zustand";
+import { subscribeAppEvents } from "@/lib/client/app-events";
 import { api } from "@/lib/client/api";
-import type { TaskCounts, TaskEvent, TaskTree } from "@/lib/tasks/types";
+import type { TaskCounts, TaskTree } from "@/lib/tasks/types";
 
 // `rev` moves on every change, `all` on refreshes with no project, `projects` per project.
 const useTasksFeed = create<{ rev: number; all: number; projects: Record<string, number>; touch: (projectId?: string) => void }>((set) => ({
@@ -17,21 +18,18 @@ const useTasksFeed = create<{ rev: number; all: number; projects: Record<string,
   })),
 }));
 export const refreshTasks = () => useTasksFeed.getState().touch();
-let source: EventSource | null = null;
+let unsubscribe: (() => void) | null = null;
 let refs = 0;
 
 export function useTasksEvents() {
   useEffect(() => {
     refs++;
-    if (!source) {
-      source = new EventSource("/api/tasks/events");
-      source.onmessage = (e) => useTasksFeed.getState().touch((JSON.parse(e.data) as TaskEvent).projectId);
+    unsubscribe ??= subscribeAppEvents("tasks", {
+      onEvent: (event) => useTasksFeed.getState().touch(event.projectId),
       // Reconnects may have missed writes while the connection was down.
-      source.onopen = refreshTasks;
-    }
-    return () => {
-      if (--refs === 0) { source?.close(); source = null; }
-    };
+      onOpen: refreshTasks,
+    });
+    return () => { if (--refs === 0) { unsubscribe?.(); unsubscribe = null; } };
   }, []);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 import { BellIcon, BlocksIcon, BotIcon, CalendarClockIcon, ChartNoAxesColumnIcon, ChevronRightIcon, KeyboardIcon, LifeBuoyIcon, MonitorIcon, ServerIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { useIsDesktop } from "@/components/mobile/viewport";
