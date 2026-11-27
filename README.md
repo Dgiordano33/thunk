@@ -79,7 +79,7 @@ This reads the source in one read-only snapshot and replaces the local embedded 
 - **Project** = a git repo (its toplevel, even when added from a worktree) or a plain folder. Owns `CLAUDE.md` / `.claude/` config and a **project memory** file at `~/.thunk/projects/<slug>/memory/MEMORY.md`, injected into every session's system prompt and editable by agents and from the project page.
 - **Workspace** = a task inside a project. Either works in place (the `main` workspace every project gets) or in its own **git worktree** at `<repo>/.claude/worktrees/<slug>` on a new branch (default `thunk/<slug>`, from `origin/<default>`). Has a **workspace memory** directory (`~/.thunk/projects/<slug>/workspaces/<slug>/memory/`) for its shared task log. Claude auto-memory uses project memory. Archive closes its live sessions; deletion preserves memory and notes in the project granary. Harvest promotes selected knowledge and notes to the project.
 - **Session** = one chat in a workspace. Runs with `cwd` = workspace dir and, in a worktree, `projectConfigRoot` = the main checkout so config comes from the trusted tree.
-- **Canvas** = a board in a project, stored on disk under `~/.thunk/projects/<slug>/boards/<boardId>/` (`board.json` plus one file per card). Every project has a `main` canvas and can have more. Each canvas has its own agent session, started in the main workspace on the canvas's model (`board.json` `model`, else `DEFAULT_MODEL`), and hidden from session lists. Canvases are listed in the sidebar under their project with their agent's status. Other sessions in the project (chats, workers, scouts, and so Capture's first crack and delegated notes) can build canvases too: they get `canvas_list`, `canvas_create` and `canvas_*` card tools that name a `canvas_id`, and an open canvas shows their cards live (`/api/projects/[id]/board/events?board=<id>`).
+- **Canvas** = a board in a project, stored on disk under `~/.thunk/projects/<slug>/boards/<boardId>/` (`board.json` plus one file per card). Every project has a `main` canvas and can have more. Each canvas has its own agent session, started in the main workspace on the canvas's model (`board.json` `model`, else `DEFAULT_MODEL`), and hidden from session lists. Canvases are listed in the sidebar under their project with their agent's status. Other sessions in the project (chats, chiefs, workers and scouts, so anything you relay) can build canvases too: they get `canvas_list`, `canvas_create` and `canvas_*` card tools that name a `canvas_id`, and an open canvas shows their cards live (`/api/projects/[id]/board/events?board=<id>`).
 
 - **Notes** = a notebook per project (`~/.thunk/projects/<slug>/notes/<id>.md`) and per workspace (`…/workspaces/<slug>/notes/<id>.md`). Each note is markdown with frontmatter (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). MEMORY.md shows up as the pinned first note of each scope. Every session gets both notes dirs as readable/writable directories and a `# Thunk notes` block in its system prompt: an index of notes plus the full text of `inject: true` notes (capped at 24k chars). Checklists remain editable in notes; the legacy `actionable` flag is still read for importing old checklist items into Tasks. A file watcher streams changes (including agent edits) to the UI over SSE.
 
@@ -179,13 +179,24 @@ Pick the map's look in **Settings → Look**; it is stored in the `thunk.look` c
 
 Open the project overview (the planet, or the Town center in the game look) → **Open the chief** to resume the project's coordinating session in `main`; **New chief** starts fresh using the same workspace memory. The chief delegates each task to a worker in a new Git worktree or an existing project workspace (`workspaceId`), with at most four active workers. Existing workspaces allow one active worker at a time and cannot be combined with `repoIds`, scout mode or races. Worker setup completes before its session starts. Workers retain their branches and workspaces for review; nothing merges automatically.
 
-Use **Delegate** on a saved note to ask the chief to split its unchecked checklist items into tasks. Each worker receives the note text (up to the existing 24k-character budget), its path, and the linked task. The task send menu also offers **New worktree**, which runs a worker without a chief. Delegation requires Git repositories; plain folders are excluded from default worker selection.
+Use **Relay** on a saved project note to ask the chief to split its unchecked checklist items into tasks. Each worker receives the note text (up to the existing 24k-character budget), its path, and the linked task. The task send menu also offers **New worktree**, which runs a worker without a chief. Delegation requires Git repositories; plain folders are excluded from default worker selection.
 
 Reports appear in the inbox and are pushed to the originating chief in 20-second batches. Questions and permission prompts still go to you. The daily project **Work log** records lifecycle milestones and decisions; `chief_log` lets the chief record outcomes and update its workspace plan without file-edit tools. The chief accepts successful task completion; workers without a chief complete their tasks directly.
 
 Report outboxes live under the project's `config/worker-reports` directory. On restart, live sessions regain watchers, persisted results are reported, and interrupted workers are marked blocked for inspection and continuation. Memory-only sessions and tasks still disappear on restart. Delivery is retryable; a crash between dispatching a message and persisting its receipt can repeat a report.
 
 Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write commands in permission checks. This is not an OS security boundary; shell patterns are incomplete and permission bypass can weaken them. Codex chiefs follow the coordination rule through their prompt. Workers time out after 60 minutes and keep their worktree.
+
+#### What the chief can make
+
+A chief cannot edit files, so it has its own tools for leaving things in the project. They act only inside its project and never ask for permission:
+
+- **Notes.** `notes_create` and `notes_update` write project notes (plans, briefs, decision records), with tags, pin, session context and workspace links.
+- **Canvases.** Like every project session, the chief has the canvas tools: `canvas_list`, `canvas_create` and the `canvas_*` card tools for text, images and charts. An open canvas shows its cards as they are added.
+- **Workspaces and sessions.** `workspaces_list` and `workspaces_create` manage the workspaces you see in the sidebar. `sessions_start` opens a session in a visible workspace with a first prompt. It is a worker: it has a task and reports back to the chief.
+- **Routines.** `routines_create` schedules a recurring agent session. The chief is told to use it only when you asked for something recurring.
+
+Tasks, the work log and workers were already covered (`tasks_*`, `chief_log`, `delegate`). Thoughts sent from the Relay bar reach the chief as a `<relay>` message; see `docs/capture.md`.
 
 #### Running a team
 
@@ -199,15 +210,15 @@ Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write
 
 Queue, stats, races, plans and the current integration live in the project's `config/workers/state.json`, so they survive restarts even in memory-only mode.
 
-### The top chief: notes above projects
+### Relay across projects: top-level notes
 
-The Library's **Top level** notebook holds notes that belong to no single project. **Route** on one of them sends its open checklist items to the top chief, which proposes where each item goes. The proposal appears in the inbox as a **Routing plan** with Approve and Reject. Approving hands each item to that project's chief as a `<routed_request>`, and the project chief delegates it as usual. When the work settles, the project chief calls `route_report` and the result flows back up.
+The Library's **Top level** notebook holds notes that belong to no single project. **Relay** on one of them sends its open checklist items to an internal routing session, which proposes where each item goes. The proposal appears in the inbox as a **Relay plan** with Approve and Reject. Approving hands each item to that project's chief as a `<routed_request>`, and the project chief delegates it as usual. When the work settles, the project chief calls `route_report` and the result flows back up.
 
-- **Routing tags.** `#project` or `#project/workspace` on a line pins that item to a project or workspace. A `## Project` heading pins the items under it. A tag beats a heading, and a heading that names no project ends the scope. The top chief must route pinned items where they are pinned. For anything ambiguous it asks you, then saves your answer as a rule in **Routing memory**.
+- **Routing tags.** `#project` or `#project/workspace` on a line pins that item to a project or workspace. A `## Project` heading pins the items under it. A tag beats a heading, and a heading that names no project ends the scope. It must route pinned items where they are pinned. For anything ambiguous it asks you, then saves your answer as a rule in **Routing memory**.
 - **Write-back.** Routed lines get a mark such as `→ Thunk: routed (r:1a2b3c4d)`. The mark becomes `done`, `blocked` or `failed` when the project reports, and `done` ticks the box. Marked lines are never routed twice.
-- **Daily triage.** The calendar button beside **Top level** schedules triage (weekdays at 08:30 by default, off until you turn it on), or runs it now. Triage sends every unrouted item to the top chief, asks for one routing plan per note, and has it write the day's summary to the top-level **Work log**. It skips the model turn when nothing is new.
+- **Daily triage.** The calendar button beside **Top level** schedules triage (weekdays at 08:30 by default, off until you turn it on), or runs it now. Triage sends every unrouted item to the routing session, asks for one routing plan per note, and has it write the day's summary to the top-level **Work log**. It skips the model turn when nothing is new.
 
-The top chief lives in an internal Home project (`~/.thunk/projects/__home/`). That project is left out of every project list, map and picker. Its routing plans and routes live in `config/routing/state.json`. Claude top chiefs cannot use Edit, Write, NotebookEdit or Bash; Codex top chiefs follow the rule through their prompt. Routing plans reuse the `delegation_plan` notification kind, so no migration is needed.
+The routing session (the code calls it the top chief; the UI badges it Relay) lives in an internal Home project (`~/.thunk/projects/__home/`). That project is left out of every project list, map and picker. Its routing plans and routes live in `config/routing/state.json`. Claude routing sessions cannot use Edit, Write, NotebookEdit or Bash; Codex top chiefs follow the rule through their prompt. Routing plans reuse the `delegation_plan` notification kind, so no migration is needed.
 
 ### Project notes and workspace links
 

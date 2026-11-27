@@ -49,7 +49,7 @@ export function originLabel(origin: SessionOrigin | null | undefined, taskTitle?
     case "routine": return `Routine · ${origin.routineName}`;
     case "worker": return taskTitle ? `Worker on “${taskTitle}”` : origin.scout ? "Scout worker" : "Worker";
     case "chief": return "Project chief";
-    case "top_chief": return "Top chief";
+    case "top_chief": return "Relay";
     case "board": return "Canvas";
     default: return null;
   }

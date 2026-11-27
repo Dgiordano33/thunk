@@ -12,6 +12,8 @@ import { Kbd } from '@/components/ui/kbd';
 import { Hint } from '@/components/hint';
 import { PenLineIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { OnboardingHint } from '@/components/onboarding/hint';
+import { useOnboarding } from '@/components/onboarding/provider';
 
 export const openCapture = () => window.dispatchEvent(new Event('thunk:capture'));
 
@@ -21,19 +23,19 @@ export function CaptureTrigger({ variant = 'hud', className }: { variant?: 'hud'
   const mac = useIsMac();
   const hint = shortcut && mac !== null ? shortcutLabel(shortcut, mac) : '';
   if (variant === 'rail') return (
-    <Hint label="take a crack at" keys={hint || undefined} side="right">
-      <button type="button" aria-label="take a crack at" onClick={openCapture}
+    <Hint label="Relay a thought" keys={hint || undefined} side="right">
+      <button type="button" aria-label="Relay a thought" onClick={openCapture}
         className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent flex size-9 items-center justify-center rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
         <PenLineIcon className="size-4" aria-hidden="true" />
       </button>
     </Hint>
   );
   return (
-    <button type="button" aria-label="take a crack at" onClick={openCapture}
+    <button type="button" aria-label="Relay a thought" onClick={openCapture}
       className={cn('text-muted-foreground hover:text-foreground flex items-center gap-2 text-left text-sm transition-colors',
         variant === 'hud' ? 'h-8 w-full rounded-md px-2.5' : 'bg-background h-9 w-full rounded-md border px-2 hover:bg-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', className)}>
       <PenLineIcon className="size-4 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate">take a crack at…</span>
+      <span className="min-w-0 flex-1 truncate">Relay a thought…</span>
       {hint && <Kbd>{hint}</Kbd>}
     </button>
   );
@@ -74,6 +76,7 @@ export function CaptureBar() {
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const shortcut = useUi((s) => s.captureShortcut);
+  const { markSeen } = useOnboarding();
   useEffect(() => {
     // Capture phase, so the shortcut wins over page handlers such as ⌘K search.
     const key = (e: KeyboardEvent) => { if (!e.repeat && matches(e, shortcut) && !(e.target as HTMLElement | null)?.closest?.('[data-shortcut-recorder]')) { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); } };
@@ -85,7 +88,7 @@ export function CaptureBar() {
   const done = useCallback(() => setSent(null), []);
   if (pathname === '/capture') return null;
   return <>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>take a crack at</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); }} /></DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Relay a thought</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); markSeen('relay'); }} /><OnboardingHint name="relay">Type a thought and press Enter. Thunk picks the project and hands it to that project&apos;s chief, which decides what it needs and starts the work. The result waits in your Inbox to keep, redirect or discard. Add <code>#project</code> to choose the project yourself.</OnboardingHint></DialogContent></Dialog>
     {sent && <SentChip key={sent} id={sent} onDone={done} />}
   </>;
 }

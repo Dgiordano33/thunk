@@ -35,7 +35,7 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
   };
   const usd = (n: number) => `$${n.toFixed(2)}`;
   return <div className="flex flex-col gap-3 text-xs">
-    <p className="text-muted-foreground">{team?.summary || "Delegate project work to agents in their own worktrees."}</p>
+    <p className="text-muted-foreground">{team?.summary || (team && !team.chief ? "The chief coordinates this project. Tell it what you want, or choose Relay on a note, and it splits the work into tasks, starts a worker for each in its own worktree, and reports back. It does not edit code, and nothing merges without you." : "Delegate project work to agents in their own worktrees.")}</p>
     {team && <CardStats
       className="mt-0"
       rows={[

@@ -8,9 +8,11 @@ import { projectNoteDirs, workspaceNoteDirs, repoDirsFor } from "@/lib/notes/res
 import { listLiveSessions } from "@/lib/agent/session-registry";
 import { hasDatabase } from "@/lib/db/server";
 import { isHomeProject } from "@/lib/home/constants";
+import { listCaptures } from "@/lib/db/repo/captures";
 export const dynamic = "force-dynamic";
 export const GET = handle(async () => {
   const [all, workspaces, tasks, routines] = await Promise.all([listProjects({ includeHome: true }), listAllWorkspaces(), listTasks(), listRoutineRows()]);
+  const captures = await listCaptures(true);
   const projects = all.filter((p) => !isHomeProject(p));
   const ids = new Set(projects.map((p) => p.id));
   const dirs = (await Promise.all(all.map(async (p) => [projectNoteDirs(p), ...await repoDirsFor(p), ...workspaces.filter((w) => w.projectId === p.id).map((w) => workspaceNoteDirs(p, w))]))).flat();
@@ -21,5 +23,8 @@ export const GET = handle(async () => {
     sessions: hasDatabase() ? projects.reduce((n, p) => n + p.sessionCount, 0) : listLiveSessions().filter((s) => ids.has(s.meta.projectId ?? "")).length,
     notes,
     tasksOrRoutines: tasks.length + routines.length,
+    captures: captures.length,
+    // A task linked to a note came from Delegate (or a chief working from that note).
+    delegated: tasks.filter((t) => t.noteId).length,
   });
 });

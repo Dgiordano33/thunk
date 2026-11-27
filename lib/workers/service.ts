@@ -52,6 +52,13 @@ export async function openChief(projectId: string, fresh = false) {
   });
 }
 
+/** Send a message to the project's chief, resuming or starting it. Returns where it lives. */
+export async function messageChief(projectId: string, content: string) {
+  const chief = await openChief(projectId);
+  pushUserMessage(chief, content);
+  return { sessionId: chief.id, workspaceId: chief.meta.workspaceId };
+}
+
 const ACTIVE_STATES = ["starting", "running", "awaiting"];
 const activeWorkers = (projectId: string) => listLiveSessions().filter((s) => s.meta.projectId === projectId && s.meta.origin?.kind === "worker" && ACTIVE_STATES.includes(s.meta.status)).length;
 const shortId = () => crypto.randomUUID().slice(0, 8);

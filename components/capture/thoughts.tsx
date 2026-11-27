@@ -47,7 +47,7 @@ export function ThoughtReview({ row, tab, onRedirect }: { row: Capture; tab: num
     {row.next_step && <p><span className="text-muted-foreground text-xs">Next </span>{row.next_step}</p>}
     <p className="text-muted-foreground font-mono text-[11px]">${Number(row.cost_usd).toFixed(4)} · {minutes(row)} min since capture{row.diff_stat ? ` · ${JSON.stringify(row.diff_stat)}` : ''}</p>
     <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const text = String(new FormData(e.currentTarget).get('text') ?? ''); onRedirect(text); }}>
-      <input name="text" data-redirect="" tabIndex={tab} aria-label="Redirect thought" placeholder="Redirect this worker… (#project moves it)" required className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm" />
+      <input name="text" data-redirect="" tabIndex={tab} aria-label="Redirect thought" placeholder="Redirect… (#project moves it)" required className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm" />
       <button tabIndex={tab} className="rounded border px-2 text-sm">Redirect</button>
     </form>
   </div>;

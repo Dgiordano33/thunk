@@ -10,17 +10,19 @@ const resolve=Module._resolveFilename;
 Module._resolveFilename=function(r,...args){if(r.startsWith('@/')){const base=path.join(__dirname,'..',r.slice(2));r=[base+'.ts',base+'.tsx'].find(fs.existsSync)||base;}return resolve.call(this,r,...args);};
 
 // Fakes for everything a capture touches outside its own table. `calls` records what the service asked for.
-let calls, tasks, queue, delegateResult, notified, resolved, routingResult;
-const reset=()=>{routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
+let calls, tasks, queue, delegateResult, notified, resolved, routingResult, live;
+const reset=()=>{live=[];routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
 reset();
 const workers={
  delegate:async(projectId,chief,input)=>{calls.push(['delegate',projectId,input]);if(delegateResult instanceof Error)throw delegateResult;return delegateResult;},
  messageWorker:async(...a)=>{calls.push(['message',...a]);},
  stopWorker:async(...a)=>{calls.push(['stop',...a]);},
+ messageChief:async(projectId,content)=>{calls.push(['chief',projectId,content]);return {sessionId:'chief-'+projectId,workspaceId:'main-'+projectId};},
 };
 const load=Module._load;
 Module._load=function(r,p,m){
  if(r==='server-only')return {};
+ if(r==='@/lib/agent')return {getSession:(id)=>live.find(s=>s.id===id),listLiveSessions:()=>live};
  if(r==='../server')return {db:()=>null};
  if(r==='@/lib/notifications/service')return {notify:async(n)=>{notified.push(n);},resolveBySubject:async(k)=>{resolved.push(k);}};
  if(r==='@/lib/notifications/brief')return {runWithClaude:async()=>{if(routingResult)return routingResult;throw Error('No real model in tests');}};
@@ -60,7 +62,7 @@ test('invalid model output retries once',async()=>{delete process.env.NEXT_PUBLI
 test('worker lifecycle updates linked captures and excludes closed records',async()=>{await repo.saveCapture(row({task_id:'task',status:'queued'}),true);await repo.captureTask('task',{status:'working',session_id:'s'});assert.equal((await repo.listCaptures())[0].status,'working');await repo.captureTask('task',{status:'ready',summary:'Done'});assert.equal((await repo.listCaptures())[0].summary,'Done');await repo.captureTask('task',{status:'kept'});assert.equal((await repo.listCaptures()).length,0);assert.equal((await repo.listCaptures(true)).length,1);});
 test('reaching ready raises one capture_ready notification',async()=>{await repo.saveCapture(row({task_id:'task',status:'working',project_id:'p'}),true);await repo.captureTask('task',{status:'ready',summary:'Done'});await repo.captureTask('task',{status:'ready',summary:'Done again'});assert.equal(notified.length,1);assert.equal(notified[0].kind,'capture_ready');assert.equal(notified[0].subjectKey,'capture:c');});
 
-test('dispatch creates a task and delegates with first-crack rules',async()=>{await repo.saveCapture(row(),true);await service.dispatchCapture('c');const [, projectId,input]=calls.find(c=>c[0]==='delegate');assert.equal(projectId,'home');assert.equal(input.mode,'scout');assert.equal(input.taskId,'t1');assert.match(input.brief,/Do not push/);const r=await get();assert.equal(r.task_id,'t1');assert.equal(r.project_id,'home');});
+test('dispatch creates a task and delegates with first-pass rules',async()=>{await repo.saveCapture(row(),true);await service.dispatchCapture('c');const [, projectId,input]=calls.find(c=>c[0]==='delegate');assert.equal(projectId,'home');assert.equal(input.mode,'scout');assert.equal(input.taskId,'t1');assert.match(input.brief,/Do not push/);const r=await get();assert.equal(r.task_id,'t1');assert.equal(r.project_id,'home');});
 test('a queued delegate leaves the capture queued',async()=>{delegateResult={taskId:'t1',queued:true};await repo.saveCapture(row(),true);await service.dispatchCapture('c');assert.equal((await get()).status,'queued');});
 test('a failed dispatch marks the capture failed with the reason',async()=>{delegateResult=new Error('No repo');await repo.saveCapture(row(),true);await service.dispatchCapture('c');const r=await get();assert.equal(r.status,'failed');assert.equal(r.error,'No repo');});
 test('restart: routing captures already linked to a running task are not dispatched twice',async()=>{tasks.set('t1',{id:'t1',status:'in_progress',sessionId:'s1',workspaceId:'w1'});await repo.saveCapture(row({task_id:'t1',project_id:'p'}),true);await service.recoverCaptures();await settle();assert.equal(calls.filter(c=>c[0]==='delegate').length,0);const r=await get();assert.equal(r.status,'working');assert.equal(r.session_id,'s1');});
@@ -73,27 +75,46 @@ test('continue sends the held-back step to the worker',async()=>{await repo.save
 test('continue is refused before the capture is ready',async()=>{await repo.saveCapture(row({status:'working',project_id:'p',task_id:'t1',session_id:'s1'}),true);const r=await actionApi.POST(post({}),params({id:'c',action:'continue'}));assert.equal(r.status,400);assert.equal(calls.filter(c=>c[0]==='message').length,0);});
 test('discard stops the worker, archives a worktree and restore brings it back',async()=>{tasks.set('t1',{id:'t1',sessionId:'s1'});await repo.saveCapture(row({status:'ready',project_id:'p',task_id:'t1',session_id:'s1',workspace_id:'w1',mode:'worktree',summary:'Did it'}),true);assert.equal((await actionApi.POST(post({}),params({id:'c',action:'discard'}))).status,200);assert.equal((await get()).status,'discarded');assert.ok(calls.some(c=>c[0]==='stop'));assert.ok(calls.some(c=>c[0]==='archive'&&c[1]==='w1'));assert.equal((await actionApi.POST(post({}),params({id:'c',action:'restore'}))).status,200);assert.equal((await get()).status,'ready');assert.ok(calls.some(c=>c[0]==='workspace'&&c[1]==='w1'));assert.equal(notified.at(-1).subjectKey,'capture:c','undo puts the thought back in the feed');});
 test('discard never archives a shared scout workspace',async()=>{tasks.set('t1',{id:'t1',sessionId:'s1'});await repo.saveCapture(row({status:'ready',project_id:'p',task_id:'t1',session_id:'s1',workspace_id:'main',mode:'scout'}),true);await actionApi.POST(post({}),params({id:'c',action:'discard'}));assert.equal(calls.filter(c=>c[0]==='archive').length,0);});
-test('a redirect naming another project re-routes there',async()=>{await repo.saveCapture(row({status:'ready',project_id:'p',task_id:'t1',session_id:'s1',workspace_id:'w1',mode:'worktree'}),true);await actionApi.POST(post({text:'Do this in #other'}),params({id:'c',action:'redirect'}));await settle();assert.ok(calls.some(c=>c[0]==='stop'));const d=calls.find(c=>c[0]==='delegate');assert.equal(d[1],'q');assert.match((await get()).text,/Redirect: Do this in #other/);});
-test('retry only accepts failed captures and known projects',async()=>{await repo.saveCapture(row({status:'working'}),true);assert.equal((await retryApi.POST(post({}),params({id:'c'}))).status,400);await repo.saveCapture(row({status:'failed'}));assert.equal((await retryApi.POST(post({projectId:'nope'}),params({id:'c'}))).status,400);assert.equal((await retryApi.POST(post({projectId:'p'}),params({id:'c'}))).status,202);await settle();assert.equal(calls.find(c=>c[0]==='delegate')[1],'p');});
+test('a redirect naming another project re-routes there',async()=>{await repo.saveCapture(row({status:'ready',project_id:'p',task_id:'t1',session_id:'s1',workspace_id:'w1',mode:'worktree'}),true);await actionApi.POST(post({text:'Do this in #other'}),params({id:'c',action:'redirect'}));await settle();assert.ok(calls.some(c=>c[0]==='stop'));const d=calls.find(c=>c[0]==='chief');assert.equal(d[1],'q');assert.equal((await get()).session_id,'chief-q');assert.match((await get()).text,/Redirect: Do this in #other/);});
+test('retry only accepts failed captures and known projects',async()=>{await repo.saveCapture(row({status:'working'}),true);assert.equal((await retryApi.POST(post({}),params({id:'c'}))).status,400);await repo.saveCapture(row({status:'failed'}));assert.equal((await retryApi.POST(post({projectId:'nope'}),params({id:'c'}))).status,400);assert.equal((await retryApi.POST(post({projectId:'p'}),params({id:'c'}))).status,202);await settle();assert.equal(calls.find(c=>c[0]==='chief')[1],'p');});
 
 test('the sent chip follows the capture to its worker',()=>{const names={p:'Project'};assert.equal(chipLabel(row(),names),'Routing…');assert.equal(chipLabel(row({status:'queued',project_id:'p'}),names),'Queued in Project');assert.equal(chipLabel(row({status:'working',project_id:'p'}),names),'Working in Project');assert.equal(chipLabel(row({status:'working',project_id:'x'}),names),'Working in Home');assert.match(chipLabel(row({status:'failed'}),names),/Inbox/);assert.equal(chipLabel(undefined,names),null);});
 
 
-test('dispatch preserves original wording and routing assumptions in the task and worker handoff', async () => {
+test('a thought that matches a project goes to its chief with the original wording and assumptions', async () => {
  delete process.env.NEXT_PUBLIC_THUNK_E2E;
  routingResult=result('p');
  const original='Onboarding was confusing again.\nNeed something before next week, not a full rebuild.';
  await repo.saveCapture(row({text:original}),true);
  await service.dispatchCapture('c');
- const input=calls.find(c=>c[0]==='delegate')[2];
- assert.ok(input.brief.includes(original));
- assert.ok(input.brief.includes('Build it'));
- assert.ok(input.brief.includes('A guess'));
- const body=tasks.get(input.taskId).body;
- assert.ok(body.includes(original) && body.includes('Build it') && body.includes('A guess'));
- assert.doesNotMatch(body,/Capture: take a useful first pass/);
- assert.ok(input.brief.endsWith(body));
- assert.deepEqual((await get()).assumptions,['A guess']);
+ assert.equal(calls.filter(c=>c[0]==='delegate').length,0);
+ const [, projectId, message]=calls.find(c=>c[0]==='chief');
+ assert.equal(projectId,'p');
+ assert.match(message,/^<relay id="c">/);
+ assert.ok(message.includes(original) && message.includes('Build it') && message.includes('A guess'));
+ const r=await get();
+ assert.equal(r.status,'working');assert.equal(r.task_id,null);assert.equal(r.session_id,'chief-p');assert.equal(r.workspace_id,'main-p');
+ assert.deepEqual(r.assumptions,['A guess']);
+});
+
+test('the chief settles a relay with relay_report, and decisions go back to the chief', async () => {
+ await repo.saveCapture(row({status:'working',project_id:'p',session_id:'chief-p',workspace_id:'main-p'}),true);
+ await assert.rejects(service.reportRelay('q','c','done','Wrong project'),/No relay/);
+ await service.reportRelay('p','c','done','Drafted the plan','Open a PR');
+ let r=await get();
+ assert.equal(r.status,'ready');assert.equal(r.summary,'Drafted the plan');assert.equal(r.next_step,'Open a PR');
+ assert.equal(notified.at(-1).subjectKey,'capture:c');
+ assert.equal((await actionApi.POST(post({}),params({id:'c',action:'continue'}))).status,200);
+ assert.match(calls.at(-1)[2],/<relay_decision id="c" action="go_ahead">\nGo ahead with this step only: Open a PR/);
+ assert.equal((await get()).status,'working');
+ await service.reportRelay('p','c','blocked','Needs credentials');
+ r=await get();assert.equal(r.summary,'Blocked: Needs credentials');assert.equal(r.next_step,null);
+ await service.actOnCapture('c','redirect','Try the staging keys');
+ assert.match(calls.at(-1)[2],/action="redirect">\nTry the staging keys/);
+ await service.actOnCapture('c','discard');
+ assert.match(calls.at(-1)[2],/action="discard"/);
+ assert.equal(calls.filter(c=>c[0]==='stop'||c[0]==='archive').length,0);
+ assert.equal((await get()).status,'discarded');
 });
 
 test('a completed capture without a next step cannot trigger unspecified work', async () => {
@@ -105,4 +126,22 @@ test('a completed capture without a next step cannot trigger unspecified work', 
  assert.deepEqual(resolved,[]);
  await service.actOnCapture('c','keep');
  assert.equal((await get()).status,'kept');
+});
+
+test('a relay the chief dropped becomes a failed thought, and a late report still settles it', async () => {
+ const old=new Date(Date.now()-10*60_000).toISOString();
+ const stale=()=>{globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p',workspace_id:'main-p',updated_at:old}));};
+ const session=(id,status,origin)=>({id,meta:{status,projectId:'p',origin}});
+ // Not yet: the chief is mid-turn, a worker it started is running, or work is queued.
+ stale();live=[session('chief-p','running',{kind:'chief'})];assert.equal(await service.sweepRelays(),0);
+ live=[session('chief-p','idle',{kind:'chief'}),session('w','running',{kind:'worker'})];assert.equal(await service.sweepRelays(),0);
+ live=[session('chief-p','idle',{kind:'chief'})];queue=[{taskId:'t9'}];assert.equal(await service.sweepRelays(),0);
+ // Recent relays are left alone even when everything is idle.
+ queue=[];globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p'}));assert.equal(await service.sweepRelays(),0);
+ stale();assert.equal(await service.sweepRelays(),1);
+ let r=await get();assert.equal(r.status,'failed');assert.match(r.error,/without reporting back/);
+ // Worker-backed thoughts are never swept: the worker lifecycle settles them.
+ globalThis.__captures.set('k',row({id:'k',status:'working',project_id:'p',task_id:'t1',session_id:'s1',updated_at:old}));assert.equal(await service.sweepRelays(),0);
+ await service.reportRelay('p','c','done','Late, but here');
+ r=await get();assert.equal(r.status,'ready');assert.equal(r.error,null);
 });

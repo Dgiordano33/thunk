@@ -66,7 +66,7 @@ export async function runTriage(reason: "scheduled" | "manual") {
   else {
     const top = await openTopChief();
     pushUserMessage(top, `<triage reason="${reason}" date="${new Date().toISOString().slice(0, 10)}">\n${open} unrouted item${open === 1 ? "" : "s"} in ${requests.length} note${requests.length === 1 ? "" : "s"}; ${settled} routed request${settled === 1 ? "" : "s"} settled since the last triage.\n\n${requests.map((r) => r!.message).join("\n\n")}\n</triage>\nPropose one route_plan per note for the items you can place; ask the person about the rest. Then call routes_status and write today's summary with top_log: what was routed, what settled, what is waiting on the person.`);
-    result = `Sent ${open} item${open === 1 ? "" : "s"} to the top chief`;
+    result = `Relayed ${open} item${open === 1 ? "" : "s"}`;
   }
   await updateTriage((t) => ({ ...t, lastRunAt: new Date().toISOString(), lastResult: result }));
   return { result, open, settled };

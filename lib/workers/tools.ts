@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import type { LiveSession } from "@/lib/agent";
 import { DelegateObject, DelegationPlanObject } from "./schema";
+import { platformTools } from "./platform-tools";
 
 export function chiefTools(live: LiveSession) {
   if (live.meta.origin?.kind !== "chief") return [];
@@ -34,11 +35,15 @@ export function chiefTools(live: LiveSession) {
       await (await import("./questions")).escalateQuestion(questionId, recommendation, "The chief asked for your decision.", projectId);
       return { escalated: true };
     }),
+    define("relay_report", "Settle a <relay>, once per pass, when its first pass is ready or blocked. The summary is what the person reads in their Inbox; nextStep names one specific step held back for their approval, and is omitted otherwise.",
+      { relayId: z.uuid(), status: z.enum(["done", "blocked"]), summary: z.string().trim().min(1).max(8000), nextStep: z.string().trim().max(500).optional() },
+      async ({ relayId, status, summary, nextStep }) => (await import("@/lib/capture/service")).reportRelay(projectId, relayId, status, summary, nextStep)),
     define("chief_log", "Append outcomes or decisions to today's work log. Optionally replace workspace memory with the current plan.", { entry: z.string().trim().min(1).max(20_000), plan: z.string().max(24_000).optional() }, async ({ entry, plan }) => {
       const { appendWorkLog, saveChiefPlan } = await import("./log");
       if (plan !== undefined) await saveChiefPlan(live.ctx.project, live.ctx.workspace.slug, plan);
       const note = await appendWorkLog(live.ctx.project, `[chief] outcome: ${entry}`);
       return { path: note?.path };
     }),
+    ...platformTools(live, define),
   ];
 }

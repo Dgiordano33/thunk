@@ -141,7 +141,7 @@ export function boardTools(live: LiveSession, emit: (live: LiveSession, body: Ha
 export const hasCanvasTools = (live: Pick<LiveSession, 'meta'>) => live.meta.origin?.kind !== 'board' && live.meta.origin?.kind !== 'top_chief';
 
 /**
- * Canvas tools for any other session in the project: workers (including Capture's first crack), scouts, chiefs and
+ * Canvas tools for any other session in the project: workers (including a relayed thought's first pass), scouts, chiefs and
  * chats. They create canvases and write to one named by `canvas_id`; an open board picks the change up live.
  */
 export function canvasTools(live: Pick<LiveSession, 'meta' | 'ctx'>) {

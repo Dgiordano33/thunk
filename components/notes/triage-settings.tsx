@@ -37,7 +37,7 @@ export function TriageSettings() {
   );
 }
 
-/** When the top chief reads the top-level notes on its own and writes the day's summary. Also in Settings → Automation. */
+/** When Relay reads the top-level notes on its own and writes the day's summary. Also in Settings → Automation. */
 export function TriageForm({ onChange }: { onChange?: (triage: Triage) => void }) {
   const [triage, setTriage] = useState<Triage | null>(null);
   const [form, setForm] = useState({ enabled: false, time: "08:30", weekdays: true });
@@ -66,7 +66,7 @@ export function TriageForm({ onChange }: { onChange?: (triage: Triage) => void }
     <div className="space-y-3 text-xs">
       <div>
         <p className="text-sm font-medium">Daily triage</p>
-        <p className="text-muted-foreground mt-1 leading-relaxed">The top chief reads your top-level notes, proposes where unrouted items go (you approve in the Inbox) and writes the day&apos;s summary to the work log.</p>
+        <p className="text-muted-foreground mt-1 leading-relaxed">Thunk reads your top-level notes, proposes where each unrelayed item goes (you approve in the Inbox) and writes the day&apos;s summary to the work log.</p>
       </div>
       <label className="flex items-center gap-2">
         <Checkbox checked={form.enabled} disabled={busy || !triage} onCheckedChange={(v) => void save({ ...form, enabled: v === true })} />
