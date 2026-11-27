@@ -25,3 +25,22 @@ for (const route of ['notes', 'inbox', 'vault']) {
     await expect(page).toHaveURL(/\/projects$/);
   });
 }
+
+
+test('Vanilla keeps mobile lists and persists the look when returning to settings', async ({ page, context, request }) => {
+  await context.addCookies([{ name: 'thunk.look', value: 'vanilla', url: process.env.THUNK_E2E_URL! }]);
+  const project = await newBoard(request);
+  await page.goto(`/${project.slug}`);
+  await expect(page.getByRole('main').getByRole('heading', { name: project.name, exact: true })).toBeVisible();
+  await page.getByRole('main').getByRole('link', { name: /^Notes/ }).click();
+  await expect(page).toHaveURL(`/projects/${project.slug}/notes`);
+  await page.getByRole('link', { name: /^Back to Canvas/ }).click();
+  await expect(page).toHaveURL(`/${project.slug}`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto('/settings/appearance');
+  await expect(page.getByRole('radio', { name: /^Vanilla/ })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('radio', { name: 'Light', exact: true }).click();
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await page.reload();
+  await expect(page.locator('html')).toHaveClass(/look-vanilla/);
+});

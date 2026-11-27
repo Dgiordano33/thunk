@@ -6,24 +6,17 @@ import { PlanetView, type PlanetMoon, type PlanetSatellite, type PlanetSection }
 import { SystemMap } from "@/components/space/system-map";
 import { TownPanel } from "@/components/town/town-panel";
 import { MockTheme } from "@/components/world/mock-theme";
-import { WorldMap } from "@/components/world/world-map";
 import type { ProjectSummary } from "@/lib/projects/types";
-import { cityHue, cityLevel, cityMood, type CityActivity, type WorldCity } from "@/lib/world/cities";
+import { cityLevel, type CityActivity } from "@/lib/world/cities";
 import { layoutPlanet, spendStep } from "@/lib/world/planet";
 import { getPlanetPositions } from "@/lib/world/positions.server";
-import { generateTerrain, placeCities, territory } from "@/lib/world/terrain";
 import "./mock-themes.css";
 
 export const dynamic = "force-dynamic";
 
-// Palette explorations: obsidian/vellum (mono), moonlit (KH1 cover night), dusk (violet twilight),
-// and solar / solar-light, the solar-system re-theme. Solar takes `?planet=<project>` and `?ws=<workspace>`,
+// Solar palette explorations take `?planet=<project>` and `?ws=<workspace>`,
 // and `?gallery` for every body type × palette.
 const VARIANTS = {
-  obsidian: { dark: true },
-  vellum: { dark: false },
-  moonlit: { dark: true },
-  dusk: { dark: true },
   solar: { dark: true },
   "solar-light": { dark: false },
 } as const;
@@ -78,21 +71,7 @@ export default async function MockWorld({ params, searchParams }: PageProps<"/mo
     );
   }
 
-  const tiles = generateTerrain();
-  const placed = placeCities(PROJECTS, tiles);
-  const cities: WorldCity[] = PROJECTS.flatMap((project) => {
-    const cell = placed.get(project.id);
-    if (!cell) return [];
-    const level = cityLevel(project);
-    return [{ project, ...cell, level, mood: cityMood(project), hue: cityHue(project.id), territory: territory(cell, level, tiles) }];
-  });
-
-  return (
-    <DesktopOnly>
-      <MockTheme variant={variant} dark={dark} look="world" />
-      <WorldMap tiles={tiles} cities={cities} />
-    </DesktopOnly>
-  );
+  notFound();
 }
 
 // A busy project: six workspaces, sessions at every spend step, one waiting on you, one failed, two running.

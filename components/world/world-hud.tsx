@@ -12,7 +12,6 @@ import { projectSlugFromPath, isProjectPath, PROJECTS_PATH } from "@/lib/routes"
 import { CivPanel } from "./civ-panel";
 import { CivToolbar } from "./civ-toolbar";
 import { HudTitle } from "./hud-title";
-import { useLook } from "@/components/look-context";
 import { worldBreadcrumbs } from "./navigation";
 
 /** Chrome over the world map: title, actions, and the bottom-left command menu. */
@@ -20,7 +19,7 @@ export function WorldHud({ projects, noteCount, routineCount, vaultCount, notifi
   const desktop = useIsDesktop();
   const pathname = usePathname();
   const home = pathname === PROJECTS_PATH;
-  const crumbs = worldBreadcrumbs(pathname, projects, useLook().look === "world");
+  const crumbs = worldBreadcrumbs(pathname, projects, false);
   const parent = crumbs.at(-2);
   const project = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
   return (

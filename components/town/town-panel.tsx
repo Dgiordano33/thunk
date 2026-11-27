@@ -1,6 +1,7 @@
 "use client";
 
 import { FloatingWindow, WindowControls } from "@/components/world/floating-window";
+import { useLook } from "@/components/look-context";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { XIcon } from "lucide-react";
 import { IntentLink as Link } from "@/components/navigation/intent-link";
@@ -35,7 +36,9 @@ export function TownPanel({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const desktop = useIsDesktop();
+  const isDesktop = useIsDesktop();
+  const { look } = useLook();
+  const desktop = isDesktop && look !== "vanilla";
 
   useEffect(() => {
     if (!escapable) return;

@@ -15,7 +15,7 @@ const label = { fontFamily: "var(--font-geist-mono), ui-monospace, monospace", f
  */
 export function HandoffScene() {
   return (
-    <figure className="sp-handoff world:hidden">
+    <figure className="sp-handoff world:hidden vanilla:hidden">
       <div className="overflow-hidden rounded-lg border" style={{ background: "linear-gradient(var(--sky-top), var(--sky-bot))" }}>
         <svg viewBox="0 0 360 150" className="block w-full" role="img" aria-label="A thought or note leaves you, the chief splits it between workers, and their reports land in your Inbox.">
           {SPARKLES.map(([x, y, s, o]) => <path key={`${x}-${y}`} d={sparklePath(s, 0.14)} transform={`translate(${x} ${y})`} fill="var(--star-core)" opacity={o} className="hf-twinkle" style={{ animationDelay: `${-(x % 7) * 0.6}s` }} />)}

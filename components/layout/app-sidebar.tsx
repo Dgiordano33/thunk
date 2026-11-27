@@ -1,4 +1,6 @@
 "use client";
+import { useLook } from "@/components/look-context";
+import { ArchiveIcon, LayoutGridIcon, RepeatIcon } from "lucide-react";
 import { Checklist } from "@/components/onboarding/checklist";
 
 import { projectSectionPath } from "@/lib/routes";
@@ -61,6 +63,23 @@ function AttentionCount({ count }: { count: number }) {
   return <span className="rounded-sm bg-[var(--status-attention-soft)] px-1 font-mono text-[11px] leading-[18px] font-medium text-[var(--status-attention-ink)] tabular-nums">! {count}</span>;
 }
 
+const VANILLA_LINKS = [
+  { href: PROJECTS_PATH, label: "All projects", Icon: LayoutGridIcon },
+  { href: "/routines", label: "Routines", Icon: RepeatIcon },
+  { href: "/vault", label: "Vault", Icon: ArchiveIcon },
+];
+
+function VanillaLinks({ rail = false }: { rail?: boolean }) {
+  const { look } = useLook();
+  const pathname = usePathname();
+  if (look !== "vanilla") return null;
+  return <>{VANILLA_LINKS.map(({ href, label, Icon }) => {
+    const active = pathname === href;
+    const link = <Link href={href} aria-label={label} aria-current={active ? "page" : undefined} className={cn("text-muted-foreground hover:text-foreground hover:bg-sidebar-accent flex items-center rounded-md", FOCUS, active && WORLD_SELECTION, rail ? "size-9 justify-center" : "gap-2 px-2 py-1.5 text-[13px] font-medium")}><Icon className="size-4 shrink-0" />{!rail && label}</Link>;
+    return rail ? <Hint key={href} label={label} side="right">{link}</Hint> : <li key={href}>{link}</li>;
+  })}</>;
+}
+
 export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const notificationCounts = useNotifications((s) => s.counts.byProject);
   const attentionTotal = useNotifications((s) => s.counts.action);
@@ -108,6 +127,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
         <Hint label="Library" side="right">
           <Link href="/notes" aria-label="Library" className={railItem(section === "notes")}><PixelIcon name="scroll" className="size-4" /></Link>
         </Hint>
+        <VanillaLinks rail />
         <div className="flex-1" />
         <Hint label="Settings" keys="⌘," side="right">
           <Link href={SETTINGS_PATH} aria-label="Settings" className={railItem(section === "settings")}><SettingsIcon className="size-4" /></Link>
@@ -154,6 +174,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
             {counts && <span className={cn(COUNT, "ml-auto")} aria-label={`${totalNotes} notes`}>{totalNotes}</span>}
           </Link>
         </li>
+        <VanillaLinks />
       </ul>
 
       <SidebarActivity projects={projects} />

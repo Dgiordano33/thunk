@@ -37,8 +37,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** The project overview: chief, stats, notes, external and archived workspaces, settings. Independent of any workspace. */
-export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeCount, archived, externalSessions, workspaces, closeHref }: {
-  project: Project; level: CityLevel; allFarmCount: number; totalSpend: number; activeCount: number;
+export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeCount, archived, externalSessions, workspaces, closeHref, showSize = true }: {
+  showSize?: boolean; project: Project; level: CityLevel; allFarmCount: number; totalSpend: number; activeCount: number;
   archived: WorkspaceSummary[]; externalSessions: ExternalSession[]; workspaces: WorkspaceSummary[]; closeHref: string;
 }) {
   const tabs: PanelTab[] = [
@@ -59,7 +59,7 @@ export function ProjectPanel({ project, level, allFarmCount, totalSpend, activeC
           <CardStats
             className="mt-0"
             rows={[
-              ["Size", `${level} of 5`],
+              ...(showSize ? [["Size", `${level} of 5`] as [string, string]] : []),
               ["Workspaces", activeCount],
               ["Sessions", allFarmCount],
               ["Total spend", usd(totalSpend)],

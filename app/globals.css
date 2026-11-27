@@ -5,8 +5,9 @@
 @source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *, :root.look-world:has(.world, .moonlit) *));
-/* The two looks (Settings → Look): `space:` is the solar-system look (default), `world:` the strategy-game look. */
-@custom-variant space (&:is(:root:not(.look-world) *));
+/* Solar remains the default; Vanilla is the neutral application look. `world:` is retained for legacy styles only. */
+@custom-variant space (&:is(.look-space *));
+@custom-variant vanilla (&:is(.look-vanilla *));
 @custom-variant world (&:is(.look-world *));
 
 @theme inline {
@@ -756,4 +757,37 @@
   .sidebar-row:not(:hover, :focus-within, :has([data-state="open"], :disabled)) .sidebar-row-actions {
     opacity: 0; pointer-events: none;
   }
+}
+
+
+/* Vanilla uses the neutral application palette and ordinary document flow.
+   Shared panels keep their content; only Solar opts into the sky and floating windows. */
+:root.look-vanilla {
+  --w-bronze: var(--muted-foreground);
+  --w-bronze-light: var(--border);
+  --w-bronze-dark: var(--border);
+  --w-parchment: var(--muted);
+  --w-parchment-ink: var(--foreground);
+  --w-sea: var(--background);
+  --sp-accent: var(--foreground);
+  --sp-meta: var(--muted-foreground);
+  --sp-rule: var(--border);
+}
+.look-vanilla .civ-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+.look-vanilla .civ-panel > .civ-panel-body { height: 100%; min-height: 0; border-radius: inherit; }
+.look-vanilla .pixel.uppercase { font-family: var(--font-sans); font-weight: 500; letter-spacing: 0.04em; }
+.look-vanilla .status-badge { font-family: var(--font-sans); letter-spacing: 0; text-transform: none; font-size: 11px; }
+.look-vanilla .is-parchment:not(.civ-panel) { background: var(--muted); }
+@media (min-width: 768px) {
+  .look-vanilla .vanilla-content > .vanilla-panel { padding: 24px; }
+  .look-vanilla .vanilla-panel > .civ-panel { width: 100%; max-width: none; min-height: 0; height: 100%; }
+  .look-vanilla .vanilla-panel > .civ-panel.is-parchment { height: auto; max-width: 440px; margin: auto; }
+  .look-vanilla .settings-frame { position: relative; inset: auto !important; height: 100%; padding: 24px; }
+  .look-vanilla .settings-frame > .civ-panel { max-width: none; }
 }

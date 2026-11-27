@@ -3,7 +3,7 @@ import { listProjects } from "@/lib/db/repo/projects";
 import { initialOnboarding, ONBOARDING_COOKIE } from "@/lib/onboarding";
 import { isMobileRequest } from "@/components/mobile/viewport.server";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Pixelify_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { DevTools } from "@/components/dev-tools";
 import "./globals.css";
@@ -13,8 +13,6 @@ import { getLook } from "@/lib/look.server";
 
 const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-// Only used by the game look (Settings → Look), on its map and HUD.
-const pixel = Pixelify_Sans({ variable: "--font-pixel", subsets: ["latin"] });
 
 export const viewport: Viewport = { viewportFit: "cover", interactiveWidget: "resizes-content" };
 
@@ -29,7 +27,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const onboarding = initialOnboarding((await cookies()).get(ONBOARDING_COOKIE)?.value, projects.length > 0);
   const initialDesktop = !(await isMobileRequest());
   return (
-    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} ${lookClass(look)} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${lookClass(look)} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="h-full" suppressHydrationWarning>
         <Providers onboarding={onboarding} hasProjects={projects.length > 0} look={look} initialDesktop={initialDesktop}>{children}</Providers>

@@ -47,17 +47,6 @@ function SpacePreview() {
   );
 }
 
-function WorldPreview() {
-  const tiles = ["sssssggggggsssss", "ssssggggmmgggsss", "sssgggggmmggggss", "ssgggfffgggggggs", "ssggfffggggcggss", "sssgggggggggssss", "sssssggggsssssss", "ssssssssssssssss", "ssssssssssssssss"];
-  const fill: Record<string, string> = { s: "#2b5f86", g: "#5f9a4a", m: "#8c8f99", f: "#3f7a3a", c: "#c9a14a" };
-  return (
-    <svg viewBox="0 0 160 90" className="size-full" preserveAspectRatio="xMidYMid slice" shapeRendering="crispEdges">
-      {tiles.flatMap((row, y) => [...row].map((t, x) => <rect key={`${x},${y}`} x={x * 10} y={y * 10} width="10" height="10" fill={fill[t]} />))}
-      <rect x="110" y="40" width="10" height="10" fill="#e6d3a0" stroke="#5a3d1a" strokeWidth="1" />
-    </svg>
-  );
-}
-
 export function AppearanceSettings() {
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
@@ -67,7 +56,7 @@ export function AppearanceSettings() {
       <section className="space-y-3">
         <div>
           <h3 className="text-sm font-medium">Theme</h3>
-          <p className="text-muted-foreground text-xs">{look === "world" ? "Applies everywhere except the game world map, which is always dark." : "Light, dark, or follow your system."}</p>
+          <p className="text-muted-foreground text-xs">Light, dark, or follow your system.</p>
         </div>
         <ChoiceCards<Theme>
           label="Theme"
@@ -84,7 +73,7 @@ export function AppearanceSettings() {
       <section className="space-y-3">
         <div>
           <h3 className="text-sm font-medium">Look</h3>
-          <p className="text-muted-foreground text-xs">How the projects map is drawn.</p>
+          <p className="text-muted-foreground text-xs">Choose how you navigate and view your work.</p>
         </div>
         <ChoiceCards<Look>
           label="Look"
@@ -93,7 +82,7 @@ export function AppearanceSettings() {
           className="max-w-xl grid-cols-2"
           options={[
             { value: "space", label: "Solar system", description: "Projects as planets in a quiet, light sky.", preview: <SpacePreview /> },
-            { value: "world", label: "Game world", description: "Projects as towns on a pixel-art map. Always dark.", preview: <WorldPreview /> },
+            { value: "vanilla", label: "Vanilla", description: "A clean sidebar, project lists, and focused workspaces.", preview: <Window {...LIGHT} /> },
           ]}
         />
       </section>

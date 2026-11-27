@@ -80,7 +80,7 @@ test('existing install skips intro; checklist uses real project, workspace and n
   await expect(page.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
 });
 
-for (const look of ['space', 'world']) for (const theme of ['light', 'dark']) {
+for (const look of ['space', 'vanilla']) for (const theme of ['light', 'dark']) {
   test(`intro and legend ${look} ${theme}`, async ({ page, context, baseURL }) => {
     await context.addCookies([{ name: 'thunk.look', value: look, url: baseURL! }]);
     await page.addInitScript(theme => localStorage.setItem('thunk.theme', theme), theme);
@@ -88,7 +88,11 @@ for (const look of ['space', 'world']) for (const theme of ['light', 'dark']) {
     await expect(page.getByRole('dialog', { name: 'How work is organised' })).toBeVisible();
     await page.screenshot({ animations: "disabled", path: path.resolve(`.context/onboarding-${look}-${theme}.png`) });
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
-    await expect(page.getByRole('complementary', { name: 'Map legend' })).toBeVisible();
+    if (look === 'space') await expect(page.getByRole('complementary', { name: 'Map legend' })).toBeVisible();
+    else {
+      await expect(page.getByRole('complementary', { name: 'Map legend' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'All projects', exact: true })).toBeVisible();
+    }
   });
 }
 
@@ -105,7 +109,8 @@ test('mobile intro uses a drawer without the diagram', async ({ page }) => {
 
 test('starter prompts fill without sending; unavailable agents disable the composer', async ({ page, request }) => {
   const created = await request.post('/api/projects', { data: { name: `Prompts ${Date.now()}`, repos: [] } });
-  const { project, workspace } = await created.json();
+  const { project } = await created.json();
+  const { workspace } = await (await request.post('/api/workspaces', { data: { projectId: project.id } })).json();
   await page.goto(`/${project.slug}/${workspace.slug}/new`);
   await page.getByRole('button', { name: 'Explain how this repo is organised', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Explain how this repo is organised');
@@ -119,18 +124,19 @@ test('starter prompts fill without sending; unavailable agents disable the compo
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeEnabled();
 });
 
-test('archive offers Harvest for workspace notes and can keep them in place', async ({ page, request }) => {
+test('archive keeps workspace notes and offers saving them to the project', async ({ page, request }) => {
   const created = await request.post('/api/projects', { data: { name: `Harvest intro ${Date.now()}`, repos: [] } });
   const { project } = await created.json();
   const { workspace } = await (await request.post('/api/workspaces', { data: { projectId: project.id } })).json();
   expect((await request.post(`/api/workspaces/${workspace.id}/notes`, { data: { title: 'Lesson', markdown: 'Keep this lesson.' } })).ok()).toBeTruthy();
   await page.goto(`/${project.slug}/${workspace.slug}/new`);
-  await page.getByRole('button', { name: `${workspace.name} options`, exact: true }).click();
+  const options = page.getByRole('button', { name: `${workspace.name} options`, exact: true });
+  // Sidebar actions are revealed by hover or keyboard focus.
+  await options.focus();
+  await options.click();
   await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
-  const harvest = page.getByRole('dialog', { name: `Harvest · ${workspace.name}` });
-  await expect(harvest).toContainText('Harvest keeps what this workspace learned');
-  await harvest.getByRole('button', { name: 'Archive without harvesting', exact: true }).click();
-  await expect(harvest).toBeHidden();
+  await expect(page.getByRole('status').filter({ hasText: `${workspace.name} archived.` })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save to project', exact: true })).toBeVisible();
   const notes = await request.get(`/api/workspaces/${workspace.id}/notes`);
   expect(await notes.text()).toContain('Lesson');
 });

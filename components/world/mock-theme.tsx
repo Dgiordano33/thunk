@@ -12,9 +12,9 @@ export function MockTheme({ variant, dark, look }: { variant: string; dark: bool
     const root = document.documentElement;
     const cls = `mock-${variant}`;
     const want = lookClass(look);
-    const other = lookClass(look === "space" ? "world" : "space");
+    const other = lookClass(look === "space" ? "vanilla" : "space");
     const hadDark = root.classList.contains("dark");
-    const hadLook = root.classList.contains(lookClass("world")) ? lookClass("world") : lookClass("space");
+    const hadLook = root.classList.contains(lookClass("vanilla")) ? lookClass("vanilla") : lookClass("space");
     const pin = () => {
       if (!root.classList.contains(cls)) root.classList.add(cls);
       if (!root.classList.contains(want)) root.classList.add(want);

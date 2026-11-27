@@ -52,7 +52,7 @@ Before finishing: typecheck, lint, and the test suites for the area you touched.
 
 ## UI
 
-Read `design.md` before UI work and `PRODUCT.md` for product intent. Two looks (solar system default, game world): style for `space` first, add `world:` variants, use the status tokens / `StatusBadge` rather than Tailwind palette colors, and use plain product terms outside the game map.
+Read `design.md` before UI work and `PRODUCT.md` for product intent. Two looks (Solar system default, Vanilla): use shared semantic tokens first, add `space:` / `vanilla:` variants for deliberate differences, use the status tokens / `StatusBadge` rather than Tailwind palette colors, and use plain product terms. Vanilla uses conventional lists and full-size panes; Solar keeps its maps and floating panels.
 
 ## Conventions
 

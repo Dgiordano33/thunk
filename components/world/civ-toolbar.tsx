@@ -10,14 +10,13 @@ import { useEffect } from "react";
 import { ArchiveIcon, InboxIcon, NotebookTextIcon, OrbitIcon, RepeatIcon, SettingsIcon, type LucideIcon } from "lucide-react";
 import { SETTINGS_PATH, settingsPath } from "@/components/settings/sections";
 import { useAgentStatus } from "@/components/onboarding/agent-status";
-import { useLook } from "@/components/look-context";
 import type { SidebarProject } from "@/components/layout/app-sidebar";
 import { useNotifications } from "@/lib/store/notifications-store";
 import { useUi } from "@/lib/store/ui-store";
 import { isProjectPath, PROJECTS_PATH } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { CivPanel } from "./civ-panel";
-import { PixelIcon, type PixelIconName } from "./pixel-icon";
+import { type PixelIconName } from "./pixel-icon";
 
 /** The "t" from the Thunk wordmark, for the menu orb. */
 function Mark({ className }: { className?: string }) {
@@ -40,14 +39,13 @@ function SettingsSlot({ render }: { render: (slot: { href: string; label: string
   return render({ href: agents && !ready.length ? settingsPath("agents") : SETTINGS_PATH, label: "Settings", icon: "gear", lucide: SettingsIcon, detail });
 }
 
-/** Main menu, bottom-left: a round button that opens into Projects, Inbox, Notes, Routines and the Vault. Game look: a bronze orb with pixel icons. */
+/** Main menu, bottom-left: a round button that opens into Projects, Inbox, Notes, Routines and the Vault. */
 export function CivToolbar({ projects, cityCount, noteCount, routineCount, vaultCount, notificationCount }: { projects: SidebarProject[]; cityCount: number; noteCount: number; routineCount: number; vaultCount: number; notificationCount: number }) {
   const desktop = useIsDesktop();
   const count = useNotifications((s) => s.loaded ? s.counts.action : notificationCount);
   const expanded = useUi((s) => s.hudExpanded);
   const setExpanded = useUi((s) => s.setHudExpanded);
   const pathname = usePathname();
-  const world = useLook().look === "world";
 
   useEffect(() => {
     try { useUi.setState({ hudExpanded: localStorage.getItem("thunk.hud.expanded") === "on" }); } catch { /* Storage is optional. */ }
@@ -87,15 +85,9 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
                       active ? "bg-muted world:bg-[color-mix(in_oklch,var(--w-bronze)_30%,transparent)] world:ring-1 world:ring-[var(--w-bronze)]" : "hover:bg-muted",
                     )}
                   >
-                    {world ? (
-                      <span className="flex size-10 shrink-0 items-center justify-center bg-[var(--w-sea)] shadow-[inset_2px_2px_0_#0006,inset_-1px_-1px_0_#fff2]">
-                        <PixelIcon name={slot.icon} className="size-7 transition-transform group-hover:scale-110" />
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground group-hover:text-foreground flex size-8 shrink-0 items-center justify-center">
-                        <slot.lucide className="size-4" />
-                      </span>
-                    )}
+                    <span className="text-muted-foreground group-hover:text-foreground flex size-8 shrink-0 items-center justify-center">
+                      <slot.lucide className="size-4" />
+                    </span>
                     <span className="pixel flex-1 text-sm world:text-base">{slot.label}</span>
                     <span className="pixel text-muted-foreground text-xs tabular-nums world:bg-foreground world:text-background world:px-1.5 world:text-[11px]">{slot.detail}</span>
                   </Link>
@@ -136,14 +128,11 @@ export function CivToolbar({ projects, cityCount, noteCount, routineCount, vault
         whileTap={{ scale: 0.94 }}
         className={cn(
           "focus-visible:ring-ring relative flex items-center justify-center rounded-full outline-none focus-visible:ring-2",
-          world ? "size-14 text-[var(--w-bronze-light)]" : "bg-popover text-foreground size-12 border shadow-lg backdrop-blur",
+          "bg-popover text-foreground size-12 border shadow-lg backdrop-blur",
         )}
-        style={world ? {
-          background: "radial-gradient(circle at 35% 30%, var(--w-bronze-light), var(--w-bronze) 45%, var(--w-bronze-dark))",
-          boxShadow: "inset 0 0 0 3px var(--w-bronze-dark), inset 0 0 0 5px var(--w-bronze-light), inset 0 -6px 10px #0006, 0 3px 0 #0005",
-        } : undefined}
+
       >
-        <span className={cn("flex size-9 items-center justify-center rounded-full", world && "bg-[var(--w-sea)] shadow-[inset_0_2px_4px_#000a]")}>
+        <span className="flex size-9 items-center justify-center rounded-full">
           <motion.span animate={{ scale: expanded ? 0.85 : 1 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
             <Mark className="h-6 w-auto" />
           </motion.span>
