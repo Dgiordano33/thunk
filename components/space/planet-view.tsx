@@ -10,7 +10,7 @@ import { needsPerson } from "@/lib/agent/types";
 import { deliveryCue } from "@/lib/projects/delivery-types";
 import { useAmbient } from "@/lib/store/ambient-store";
 import { cn } from "@/lib/utils";
-import { CORE_RADIUS, SATELLITE_RADIUS, SATELLITE_RINGS, type PlanetLayout, type SpendStep } from "@/lib/world/planet";
+import { CORE_LABEL_GAP, CORE_RADIUS, CORE_SATELLITE_RINGS, SATELLITE_RADIUS, SATELLITE_RINGS, type PlanetLayout, type SpendStep } from "@/lib/world/planet";
 import { bodyKind, moonKind } from "@/lib/world/bodies";
 import { TILT, planetPalette } from "@/lib/world/system";
 import { CardEyebrow, CardStats } from "./card";
@@ -81,7 +81,7 @@ export function PlanetView({
   /** This project's page; selection is added as query parameters. */
   baseHref: string;
   overviewHref: string;
-  layout: Pick<PlanetLayout, "w" | "h" | "core" | "orbits">;
+  layout: Pick<PlanetLayout, "w" | "h" | "core" | "orbits" | "coreOverflow">;
   moons: PlanetMoon[];
   satellites: PlanetSatellite[];
   sections: PlanetSection[];
@@ -112,7 +112,10 @@ export function PlanetView({
     const tones = satellites.filter((s) => s.workspaceId === wsId).map((s) => toneOf(s.id, s.closed));
     return tones.includes("attention") ? "attention" : tones.includes("error") ? "error" : tones.includes("running") ? "running" : null;
   };
-  const projectTone = moons.map((m) => moonTone(m.id));
+  // Sessions without a moon belong to the project's own workspaces and orbit the planet.
+  const moonIds = new Set(moons.map((m) => m.id));
+  const coreSatellites = satellites.filter((s) => !moonIds.has(s.workspaceId));
+  const projectTone = [...moons.map((m) => moonTone(m.id)), ...coreSatellites.map((s) => toneOf(s.id, s.closed))];
   const coreTone: Tone = projectTone.includes("attention") ? "attention" : projectTone.includes("error") ? "error" : null;
   // The core sits in the middle, so fitting the whole system on open also centres it.
   const { w, h, core } = layout;
@@ -157,8 +160,11 @@ export function PlanetView({
                   <ellipse key={`${m.id}-${r}`} className="sat-loop" cx={m.x} cy={m.y} rx={r} ry={r * TILT} fill="none" strokeOpacity={0.6} strokeDasharray="1.5 4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                 )),
               )}
+              {coreSatellites.length > 0 && CORE_SATELLITE_RINGS.map(({ r }) => (
+                <path key={`core-${r}`} className="sat-loop" d={coreArc(core.x, core.y, r)} fill="none" strokeOpacity={0.6} strokeDasharray="1.5 4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              ))}
             </svg>
-            <Core projectId={projectId} level={level} name={projectName} x={core.x} y={core.y} href={overviewHref} selected={!!selected.overview} tone={coreTone} />
+            <Core projectId={projectId} level={level} name={projectName} x={core.x} y={core.y} href={overviewHref} selected={!!selected.overview} tone={coreTone} overflow={layout.coreOverflow} />
             {moons.map((m, i) => {
               const delivery = deliveries.find((d) => d.workspaceId === m.id);
               const cue = cues ? cues[m.id] ?? null : m.hasGit === false ? null : deliveryCue(delivery?.status.pr ?? null);
@@ -168,7 +174,7 @@ export function PlanetView({
               <Satellite
                 key={s.id}
                 sat={s}
-                workspace={moons.find((m) => m.id === s.workspaceId)?.label ?? ""}
+                workspace={moons.find((m) => m.id === s.workspaceId)?.label ?? projectName}
                 href={link(`session=${s.id}`)}
                 selected={selected.session === s.id}
                 tone={toneOf(s.id, s.closed)}
@@ -186,7 +192,13 @@ export function PlanetView({
   );
 }
 
-function Core({ projectId, level, name, x, y, href, selected, tone }: { projectId: string; level: number; name: string; x: number; y: number; href: string; selected: boolean; tone: Tone }) {
+/** The planet's satellite loop, open at the front where the label hangs. */
+function coreArc(cx: number, cy: number, r: number) {
+  const at = (a: number) => `${(cx + Math.cos(a) * r).toFixed(2)} ${(cy + Math.sin(a) * r * TILT).toFixed(2)}`;
+  return `M ${at(Math.PI / 2 + CORE_LABEL_GAP)} A ${r} ${(r * TILT).toFixed(2)} 0 1 1 ${at(Math.PI / 2 - CORE_LABEL_GAP)}`;
+}
+
+function Core({ projectId, level, name, x, y, href, selected, tone, overflow }: { projectId: string; level: number; name: string; x: number; y: number; href: string; selected: boolean; tone: Tone; overflow: number }) {
   const r = CORE_RADIUS;
   const hover = useBodyHover(projectId);
   return (
@@ -210,7 +222,7 @@ function Core({ projectId, level, name, x, y, href, selected, tone }: { projectI
         <span className="sp-tick" aria-hidden="true" />
         <span className="sp-eyebrow">Project</span>
         <span className="sp-core-name">{name}</span>
-        {tone ? <StatusBadge tone={tone} className="mt-1" /> : <span className="sp-meta group-hover:text-foreground">Overview</span>}
+        {tone ? <StatusBadge tone={tone} className="mt-1" /> : <span className="sp-meta group-hover:text-foreground">Overview{overflow > 0 && <span className="tabular-nums"> · +{overflow}</span>}</span>}
       </span>
     </Link>
   );
