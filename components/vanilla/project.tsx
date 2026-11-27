@@ -10,33 +10,21 @@ import type { SessionMeta } from "@/lib/agent/types";
 import type { Project, WorkspaceSummary } from "@/lib/projects/types";
 import { workspaceActivity } from "@/lib/ambient/summary";
 import { useAmbient } from "@/lib/store/ambient-store";
-import { canvasPath, newChatPath, projectPath, projectSectionPath, sessionPath, workspacePath } from "@/lib/routes";
-import { cn } from "@/lib/utils";
+import { newChatPath, projectPath, sessionPath, workspacePath } from "@/lib/routes";
 
-export function VanillaProject({ project, workspaces, sessions, counts, selected, panel, children }: {
+export function VanillaProject({ project, workspaces, sessions, panel, children }: {
   project: Project; workspaces: WorkspaceSummary[]; sessions: SessionMeta[];
-  counts: Record<string, number | undefined>; selected?: string; panel: React.ReactNode; children?: React.ReactNode;
+  panel: React.ReactNode; children?: React.ReactNode;
 }) {
   const live = useAmbient(s => s.sessions);
   const base = projectPath(project);
   const recent = sessions.filter(s => s.origin?.kind !== "board").slice(0, 12);
-  const sections = [
-    { key: "workspaces", label: "Workspaces", href: base, count: workspaces.length },
-    ...([['library', 'Notes'], ['tasks', 'Tasks'], ['workshop', 'Routines'], ['vault', 'Vault']] as const).map(([key, label]) => ({ key, label, href: projectSectionPath(base, key), count: counts[key] })),
-    { key: "canvas", label: "Canvas", href: canvasPath(project), count: counts.canvas },
-    { key: "center", label: "Overview & settings", href: projectSectionPath(base, "center"), count: undefined },
-  ];
   return <div className="flex h-full min-h-0 flex-col">
-    <header className="shrink-0 px-6 pt-6 lg:px-8">
+    <header className="shrink-0 border-b px-6 pt-6 lg:px-8">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0"><h1 className="break-words text-2xl font-semibold tracking-tight">{project.name}</h1><p className="mt-1 text-sm text-muted-foreground">{project.repos.map(r => r.name).join(" · ") || "Project workspace"}</p></div>
         <div className="flex flex-wrap gap-2"><NewWorkspaceButton projectId={project.id} projectSlug={project.slug} projectName={project.name} repos={project.repos} /><Button asChild><Link href={newChatPath(project)}><PlusIcon />New chat</Link></Button></div>
       </div>
-      <nav aria-label="Project sections" className="flex gap-5 overflow-x-auto border-b">
-        {sections.map(s => <Link key={s.key} href={s.href} aria-current={(selected ?? "workspaces") === s.key ? "page" : undefined} className={cn("flex shrink-0 items-center gap-2 border-b-2 px-0.5 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", (selected ?? "workspaces") === s.key ? "border-foreground font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
-          {s.label}{s.count !== undefined && <span className="rounded bg-muted px-1.5 text-[11px] text-muted-foreground tabular-nums">{s.count}</span>}
-        </Link>)}
-      </nav>
     </header>
     {panel ? <div className="min-h-0 flex-1 p-6 lg:px-8">{panel}</div> : <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8">
       <section aria-label="Workspaces">

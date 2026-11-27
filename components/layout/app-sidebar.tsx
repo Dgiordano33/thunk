@@ -1,6 +1,5 @@
 "use client";
 import { useLook } from "@/components/look-context";
-import { ArchiveIcon, LayoutGridIcon, RepeatIcon } from "lucide-react";
 import { Checklist } from "@/components/onboarding/checklist";
 
 import { projectSectionPath } from "@/lib/routes";
@@ -10,7 +9,7 @@ import { WORLD_SELECTION } from "@/components/world/selection";
 import { BotIcon, ChevronRightIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, SettingsIcon, FolderGitIcon, FolderIcon, GitBranchIcon, HouseIcon, InboxIcon, PlusIcon } from "lucide-react";
 import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { AmbientHub, SidebarActivity } from "@/components/ambient/ambient-hub";
 import { CaptureTrigger } from "@/components/capture/capture-bar";
 import { api } from "@/lib/client/api";
@@ -31,6 +30,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { WorkspaceMenu } from "@/components/workspace/workspace-menu";
 import { canvasIdFromPath, SidebarCanvases } from "@/components/layout/sidebar-canvases";
 import { COUNT, FOCUS, ROW } from "@/components/layout/sidebar-row";
+import { useCollapsed } from "@/components/layout/sidebar-collapsed";
+import { VanillaSidebar } from "@/components/vanilla/sidebar";
 import type { CanvasSession } from "@/lib/board/types";
 import { gitRepos } from "@/lib/projects/repos";
 import type { ProjectSummary, WorkspaceSummary } from "@/lib/projects/types";
@@ -39,19 +40,6 @@ import { cn } from "@/lib/utils";
 
 export type SidebarProject = ProjectSummary & { defaultSessionCount?: number; workspaces: (WorkspaceSummary & { worker?: boolean })[] };
 
-const COLLAPSED_KEY = "thunk.sidebar.collapsed";
-/** Collapsed projects, remembered across reloads. Read through useSyncExternalStore so hydration agrees with the server. */
-const collapsedListeners = new Set<() => void>();
-const readCollapsed = () => { try { return localStorage.getItem(COLLAPSED_KEY) ?? "{}"; } catch { return "{}"; } };
-const subscribeCollapsed = (listener: () => void) => {
-  collapsedListeners.add(listener);
-  window.addEventListener("storage", listener);
-  return () => { collapsedListeners.delete(listener); window.removeEventListener("storage", listener); };
-};
-function setProjectCollapsed(current: Record<string, boolean>, id: string, collapse: boolean) {
-  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify({ ...current, [id]: collapse })); } catch { /* Storage is optional. */ }
-  collapsedListeners.forEach((listener) => listener());
-}
 const ACTIVITY_DOT: Record<string, string> = {
   Running: "bg-[var(--status-running)]",
   "Needs attention": "bg-[var(--status-attention-ink)]",
@@ -63,24 +51,13 @@ function AttentionCount({ count }: { count: number }) {
   return <span className="rounded-sm bg-[var(--status-attention-soft)] px-1 font-mono text-[11px] leading-[18px] font-medium text-[var(--status-attention-ink)] tabular-nums">! {count}</span>;
 }
 
-const VANILLA_LINKS = [
-  { href: PROJECTS_PATH, label: "All projects", Icon: LayoutGridIcon },
-  { href: "/routines", label: "Routines", Icon: RepeatIcon },
-  { href: "/vault", label: "Vault", Icon: ArchiveIcon },
-];
-
-function VanillaLinks({ rail = false }: { rail?: boolean }) {
+/** Solar keeps one tree of every project; Vanilla has a general level and a level inside a project. */
+export function AppSidebar(props: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const { look } = useLook();
-  const pathname = usePathname();
-  if (look !== "vanilla") return null;
-  return <>{VANILLA_LINKS.map(({ href, label, Icon }) => {
-    const active = pathname === href;
-    const link = <Link href={href} aria-label={label} aria-current={active ? "page" : undefined} className={cn("text-muted-foreground hover:text-foreground hover:bg-sidebar-accent flex items-center rounded-md", FOCUS, active && WORLD_SELECTION, rail ? "size-9 justify-center" : "gap-2 px-2 py-1.5 text-[13px] font-medium")}><Icon className="size-4 shrink-0" />{!rail && label}</Link>;
-    return rail ? <Hint key={href} label={label} side="right">{link}</Hint> : <li key={href}>{link}</li>;
-  })}</>;
+  return look === "vanilla" ? <VanillaSidebar {...props} /> : <ProjectTreeSidebar {...props} />;
 }
 
-export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
+function ProjectTreeSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const notificationCounts = useNotifications((s) => s.counts.byProject);
   const attentionTotal = useNotifications((s) => s.counts.action);
   const notificationsLoaded = useNotifications((s) => s.loaded);
@@ -94,9 +71,7 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
   const activeProject = isProjectPath(pathname) ? projects.find((p) => p.slug === projectSlugFromPath(pathname)) : undefined;
   const activeProjectId = activeProject && canvasIdFromPath(pathname, activeProject.slug) === null && (!workspaceSlug || !activeProject.workspaces.some(w => w.slug === workspaceSlug && w.visibility !== "project" && w.slug !== "main")) ? activeProject.id : undefined;
   const activeWorkspaceId = workspaceSlug ? activeProject?.workspaces.find((w) => w.slug === workspaceSlug)?.id : undefined;
-  const collapsedRaw = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => "{}");
-  const collapsed = useMemo<Record<string, boolean>>(() => { try { return JSON.parse(collapsedRaw); } catch { return {}; } }, [collapsedRaw]);
-  const toggle = (id: string, collapse: boolean) => setProjectCollapsed(collapsed, id, collapse);
+  const { collapsed, toggle } = useCollapsed();
   useNotesEvents();
   const rev = useNotesFeed((s) => s.rev);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
@@ -127,7 +102,6 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
         <Hint label="Library" side="right">
           <Link href="/notes" aria-label="Library" className={railItem(section === "notes")}><PixelIcon name="scroll" className="size-4" /></Link>
         </Hint>
-        <VanillaLinks rail />
         <div className="flex-1" />
         <Hint label="Settings" keys="⌘," side="right">
           <Link href={SETTINGS_PATH} aria-label="Settings" className={railItem(section === "settings")}><SettingsIcon className="size-4" /></Link>
@@ -174,7 +148,6 @@ export function AppSidebar({ projects, canvases = {} }: { projects: SidebarProje
             {counts && <span className={cn(COUNT, "ml-auto")} aria-label={`${totalNotes} notes`}>{totalNotes}</span>}
           </Link>
         </li>
-        <VanillaLinks />
       </ul>
 
       <SidebarActivity projects={projects} />
