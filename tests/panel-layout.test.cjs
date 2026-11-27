@@ -25,6 +25,7 @@ const resizable = load("../components/ui/resizable.tsx", { "@/lib/panel-layout":
 test("both panel layouts render on the server without a browser", () => {
   assert.equal(typeof window, "undefined");
   const { ShellPanels } = load("../components/layout/shell-panels.tsx", {
+    "@/components/look-context": { useLook: () => ({ look: "vanilla" }) },
     "@/components/ui/resizable": resizable,
     "@/components/mobile/viewport": load("../components/mobile/viewport.tsx"),
     "@/components/mobile/drawer": { MobileDrawer: () => null, MobileNav: React.createContext(null) },

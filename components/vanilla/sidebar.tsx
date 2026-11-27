@@ -12,6 +12,7 @@ import { SidebarCanvases } from "@/components/layout/sidebar-canvases";
 import { useCollapsed } from "@/components/layout/sidebar-collapsed";
 import { COUNT, FOCUS, ROW } from "@/components/layout/sidebar-row";
 import { Logo } from "@/components/logo";
+import { useIsDesktop } from "@/components/mobile/viewport";
 import { IntentLink as Link } from "@/components/navigation/intent-link";
 import { Checklist } from "@/components/onboarding/checklist";
 import { NewWorkspaceButton } from "@/components/project/new-workspace-button";
@@ -83,7 +84,7 @@ function NavList({ items, label }: { items: NavItem[]; label: string }) {
   </ul>;
 }
 
-/** Vanilla's sidebar: a general level (Projects, Inbox, Notes, Vault), and inside a project its own sections above each workspace's sessions. */
+/** Vanilla's sidebar: a general level (Projects, Inbox, Tasks, Notes, Vault, Routines), and inside a project its own sections above each workspace's sessions. On desktop the logo, Search and Relay live in the top bar; a phone keeps them here. */
 export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarProject[]; canvases?: Record<string, CanvasSession[]> }) {
   const pathname = usePathname();
   const search = useSearchParams();
@@ -100,6 +101,7 @@ export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarP
   const { collapsed, toggle } = useCollapsed();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const { collapsed: rail, toggle: toggleSidebar } = useSidebarState();
+  const desktop = useIsDesktop();
 
   const base = project ? projectPath(project) : "";
   const tasks = project ? taskCounts[project.id] : undefined;
@@ -114,17 +116,16 @@ export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarP
   ] : [
     { href: PROJECTS_PATH, label: "Projects", Icon: LayoutGridIcon, active: pathname === PROJECTS_PATH },
     { href: "/inbox", label: "Inbox", Icon: InboxIcon, active: section === "inbox", attention: attentionTotal },
+    { href: "/tasks", label: "Tasks", Icon: ListChecksIcon, active: section === "tasks", count: Object.values(taskCounts).reduce((total, tasks) => total + tasks.project + Object.values(tasks.byWorkspace).reduce((sum, n) => sum + n, 0), 0) || undefined },
     { href: "/notes", label: "Notes", Icon: NotebookTextIcon, active: section === "notes", count: noteCounts ? Object.values(noteCounts).reduce((a, b) => a + b, 0) : undefined },
     { href: "/vault", label: "Vault", Icon: ArchiveIcon, active: section === "vault" },
+    { href: "/routines", label: "Routines", Icon: RepeatIcon, active: section === "routines" },
   ];
 
   if (rail) {
     const railItem = (active: boolean) => cn("text-muted-foreground hover:text-foreground hover:bg-sidebar-accent relative flex size-9 items-center justify-center rounded-md transition-colors", FOCUS, active && WORLD_SELECTION);
     return (
       <nav aria-label="Sidebar" className="bg-sidebar text-sidebar-foreground flex h-full flex-col items-center gap-1 py-3">
-        <AmbientHub projects={projects} variant="rail" />
-        <CaptureTrigger variant="rail" />
-        <div className="bg-sidebar-border my-1 h-px w-6" />
         {project && <Hint label="All projects" side="right"><Link href={PROJECTS_PATH} aria-label="All projects" className={railItem(false)}><ChevronLeftIcon className="size-4" /></Link></Hint>}
         {items.map(({ href, label, Icon, active, attention }) => <Hint key={label} label={attention ? `${label} · ${attention} need attention` : label} side="right">
           <Link href={href} aria-label={attention ? `${label}, ${attention} need attention` : label} aria-current={active ? "page" : undefined} className={railItem(active)}>
@@ -133,7 +134,6 @@ export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarP
           </Link>
         </Hint>)}
         <div className="flex-1" />
-        <Hint label="Routines" side="right"><Link href="/routines" aria-label="Routines" className={railItem(section === "routines")}><RepeatIcon className="size-4" /></Link></Hint>
         <Hint label="Settings" keys="⌘," side="right"><Link href={SETTINGS_PATH} aria-label="Settings" className={railItem(section === "settings")}><SettingsIcon className="size-4" /></Link></Hint>
         <Hint label="Expand sidebar" keys={"⌘\\"} side="right"><button type="button" onClick={toggleSidebar} aria-label="Expand sidebar" className={railItem(false)}><PanelLeftOpenIcon className="size-4" /></button></Hint>
       </nav>
@@ -143,11 +143,13 @@ export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarP
   const ProjectIcon = project && gitRepos(project).length ? FolderGitIcon : FolderIcon;
   return (
     <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 pt-4 pr-2 pb-3 pl-4">
-        <Link href={PROJECTS_PATH} className={cn("flex items-center", FOCUS)}><span className="sr-only">Thunk</span><Logo className="h-7 w-auto" /></Link>
-        <AmbientHub projects={projects} />
-      </div>
-      <div className="px-2"><CaptureTrigger variant="sidebar" /></div>
+      {!desktop && <>
+        <div className="flex items-center justify-between gap-2 pt-4 pr-2 pb-3 pl-4">
+          <Link href={PROJECTS_PATH} className={cn("flex items-center", FOCUS)}><span className="sr-only">Thunk</span><Logo className="h-7 w-auto" /></Link>
+          <AmbientHub projects={projects} />
+        </div>
+        <div className="px-2"><CaptureTrigger variant="sidebar" /></div>
+      </>}
 
       {!project && <>
         <NavList items={items} label="General" />
@@ -222,7 +224,6 @@ export function VanillaSidebar({ projects, canvases = {} }: { projects: SidebarP
       <Checklist projects={projects} />
       <div className="flex items-center gap-1 border-t px-2 py-2">
         <Button asChild variant="ghost" size="sm" className="min-w-0 flex-1 justify-start text-xs"><Link href={SETTINGS_PATH}><SettingsIcon /> Settings</Link></Button>
-        <Hint label="Routines" side="top"><Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground"><Link href="/routines" aria-label="Routines"><RepeatIcon /></Link></Button></Hint>
         <Hint label="Collapse sidebar" keys={"⌘\\"} side="top"><Button variant="ghost" size="icon-sm" className="text-muted-foreground hidden md:inline-flex" onClick={toggleSidebar} aria-label="Collapse sidebar"><PanelLeftCloseIcon /></Button></Hint>
       </div>
     </div>

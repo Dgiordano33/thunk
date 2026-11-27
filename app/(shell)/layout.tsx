@@ -5,6 +5,7 @@ import { loadSidebarCanvases, loadSidebarProjects } from "@/components/layout/si
 import { PathsProvider } from "@/components/layout/paths-context";
 import { pathTree } from "@/components/layout/sidebar-tree-paths";
 import { PanelLayoutCookies } from "@/components/ui/resizable";
+import { VanillaTopBar } from "@/components/vanilla/top-bar";
 import { panelCookies } from "@/lib/panel-layout";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function ShellLayout({ children }: LayoutProps<"/">) {
   return (
     <PanelLayoutCookies value={panelCookies(jar.getAll())}>
       <PathsProvider projects={pathTree(tree)}>
-        <ShellPanels sidebar={<AppSidebar projects={tree} canvases={canvases} />}>{children}</ShellPanels>
+        <ShellPanels topBar={<VanillaTopBar projects={tree} />} sidebar={<AppSidebar projects={tree} canvases={canvases} />}>{children}</ShellPanels>
       </PathsProvider>
     </PanelLayoutCookies>
   );
