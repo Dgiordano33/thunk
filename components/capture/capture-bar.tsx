@@ -88,7 +88,7 @@ export function CaptureBar() {
   const done = useCallback(() => setSent(null), []);
   if (pathname === '/capture') return null;
   return <>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Relay a thought</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); markSeen('relay'); }} /><OnboardingHint name="relay">Type a thought and press Enter. Thunk picks the project and hands it to that project&apos;s chief, which decides what it needs and starts the work. The result waits in your Inbox to keep, redirect or discard. Add <code>#project</code> to choose the project yourself.</OnboardingHint></DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Relay a thought</DialogTitle><CaptureInput onSent={(row) => { setOpen(false); setSent(row.id); markSeen('relay'); }} /><OnboardingHint name="relay">Type a thought and press Enter. Thunk picks the project and hands it to that project&apos;s chief, which decides what it needs and starts the work. Its answer arrives in your Inbox, where you can reply to it or mark it done. Add <code>#project</code> to choose the project yourself.</OnboardingHint></DialogContent></Dialog>
     {sent && <SentChip key={sent} id={sent} onDone={done} />}
   </>;
 }
