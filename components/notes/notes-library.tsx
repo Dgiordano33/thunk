@@ -99,7 +99,7 @@ export function NotesLibrary() {
         <CollapsiblePane title="Notebooks" storageKey="thunk.notes.notebooksOpen" className="hidden w-60 md:flex" controls={<WindowControls />}>
           <LibraryFolders folders={error ? [] : folders} selected={scope} onSelect={(s) => navigate({ scope: s, note: null })} />
         </CollapsiblePane>
-        {!desktop && !noteParam && <div className="p-2"><Select value={scope ? scopeKey(scope) : "all"} onValueChange={value => navigate({ scope: parseScopeKey(value), note: null })}><SelectTrigger aria-label="Notebook" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All notes</SelectItem>{[...label].map(([key, name]) => <SelectItem key={key} value={key}>{name}</SelectItem>)}</SelectContent></Select></div>}
+        {!desktop && !noteParam && <div className="p-2"><Select value={scope ? scopeKey(scope) : "all"} onValueChange={value => navigate({ scope: parseScopeKey(value), note: null })}><SelectTrigger aria-label="Notebook" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All notes</SelectItem>{[...label].filter(([key]) => parseScopeKey(key)?.kind !== "workspaces").map(([key, name]) => <SelectItem key={key} value={key}>{name}</SelectItem>)}</SelectContent></Select></div>}
         {scope ? (
           <ScopeNotes
             key={scopeKey(scope)}
@@ -239,14 +239,6 @@ function NewNoteMenu({
                 {f.home && <span className="text-muted-foreground ml-auto text-[10px]">across projects</span>}
               </DropdownMenuItem>
               {f.repos.map(({ notebook }) => <DropdownMenuItem key={notebook.id} onSelect={() => onCreate({ kind: "repos", id: notebook.id })}>{notebook.label} · repo</DropdownMenuItem>)}
-              {f.workspaces.map(({ workspace }) => {
-                const wScope: NoteScope = { kind: "workspaces", id: workspace.id };
-                return (
-                  <DropdownMenuItem key={workspace.id} className="pl-5" onSelect={() => onCreate(wScope)}>
-                    <span className="truncate">{workspace.name}</span>
-                  </DropdownMenuItem>
-                );
-              })}
             </div>
           );
         })}

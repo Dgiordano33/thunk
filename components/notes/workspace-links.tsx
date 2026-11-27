@@ -20,9 +20,14 @@ export function WorkspaceLinks({ note, onChange, disabled }: { note: NoteMeta; o
   }, [note.scope.id]);
   const linked = note.workspaceIds ?? [];
   const choices = [...options, ...linked.filter((id) => !options.some((w) => w.id === id)).map((id) => ({ id, name: "Closed workspace" }))];
+  // Name the linked workspaces right on the note; fall back to a count until the names load.
+  const names = options.length || error ? linked.map((id) => choices.find((w) => w.id === id)!.name) : [`${linked.length} workspace${linked.length === 1 ? "" : "s"}`];
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button variant="outline" size="xs" disabled={disabled} aria-label="Link note to workspaces"><LinkIcon />{linked.length ? `${linked.length} workspace${linked.length === 1 ? "" : "s"}` : "Link workspace"}</Button>
+      <Button variant="outline" size="xs" className="max-w-64" disabled={disabled} aria-label={linked.length ? `Linked to ${names.join(", ")}. Change workspace links` : "Link note to workspaces"}>
+        <LinkIcon />
+        <span className="truncate">{linked.length ? names.join(", ") : "Link workspace"}</span>
+      </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start">
       <DropdownMenuLabel>Project note · optional workspace links</DropdownMenuLabel>
