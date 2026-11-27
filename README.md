@@ -2,7 +2,7 @@
 
 A personal Claude Code harness where assistant responses aren't chat bubbles: each turn's final prose becomes an editable document. Edit it directly, highlight spans to comment or ask questions, then **Send revisions**. Claude receives a unified diff, the quoted comment threads, and the full edited document, and replies with a revised version (v2, v3, …). Plans from plan mode use the same flow: edit or comment, then **Request changes** or **Approve**.
 
-Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
+Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. For how the pieces fit together, with diagrams, start with [How Thunk works](docs/how-thunk-works.md). Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
 
 ## Install
 
@@ -110,6 +110,8 @@ Tasks are stored in the database. Task events use an in-process SSE feed, like o
 Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/[id]/send`, `GET /api/tasks/tree?projectId=…`, `GET /api/tasks/counts`, `GET /api/tasks/events`, and `GET/POST /api/tasks/import-notes`. Run `npm run test:tasks` for task checks.
 
 ## How it works
+
+For the product-level picture (objects, Relay, the context loop), see [How Thunk works](docs/how-thunk-works.md). The code is laid out as follows.
 
 - `lib/routines/`: types, zod schema, cron helpers and prompt templating (client-safe), the scheduler (`scheduler.ts`, started from `instrumentation.ts`), runner, report, PR poller and event triggers.
 - `lib/notes/`: note frontmatter parsing (`frontmatter.ts`, client-safe), file store (`store.ts`), scope → dirs (`resolve.ts`), the system-prompt block (`prompt.ts`), and the `fs.watch` feed (`watch.ts`).
