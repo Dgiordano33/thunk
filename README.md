@@ -2,7 +2,7 @@
 
 A personal Claude Code harness where assistant responses aren't chat bubbles: each turn's final prose becomes an editable document. Edit it directly, highlight spans to comment or ask questions, then **Send revisions**. Claude receives a unified diff, the quoted comment threads, and the full edited document, and replies with a revised version (v2, v3, …). Plans from plan mode use the same flow: edit or comment, then **Request changes** or **Approve**.
 
-Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
+Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. For how the pieces fit together, with diagrams, start with [How Thunk works](docs/how-thunk-works.md). Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
 
 ## Install
 
@@ -111,6 +111,8 @@ Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/
 
 ## How it works
 
+For the product-level picture (objects, Relay, the context loop), see [How Thunk works](docs/how-thunk-works.md). The code is laid out as follows.
+
 - `lib/routines/`: types, zod schema, cron helpers and prompt templating (client-safe), the scheduler (`scheduler.ts`, started from `instrumentation.ts`), runner, report, PR poller and event triggers.
 - `lib/notes/`: note frontmatter parsing (`frontmatter.ts`, client-safe), file store (`store.ts`), scope → dirs (`resolve.ts`), the system-prompt block (`prompt.ts`), and the `fs.watch` feed (`watch.ts`).
 - `lib/projects/`: project detection (`git.ts`), worktree create/remove/status, memory file paths (`paths.ts`), and the project/workspace service (`index.ts`) incl. importing external SDK sessions via `listSessions({ dir, includeWorktrees })`.
@@ -172,8 +174,7 @@ Use the Tasks import banner to import unchecked items from repo boards into proj
 
 Repo notes are included in session indexes, note mentions, and the shared 24k-character injection budget. Agents in worktrees should edit their branch's copy; the Library reflects those edits after merge.
 
-Pick the app's look in **Settings → Appearance → Look**; it is stored in the `thunk.look` cookie. The default **Solar system** look shows every project as a planet around a star (bigger planets have more workspaces and sessions). Inside a project, the project is the planet in the middle (open it for the overview), active workspaces are moons and sessions are satellites that grow with spend; closed sessions are hollow. Notes, Tasks, Routines, Vault and Canvas sit in a bar along the bottom. It supports light and dark. The optional **Vanilla** look replaces Game world with a neutral application layout: a persistent desktop sidebar, a searchable project list with live status, and project pages with workspace lists, recent sessions, and tabs for Notes, Tasks, Routines, Vault, Canvas, and Overview & settings. Tools fill the content area rather than floating over a map. Both looks support light, dark, and system appearance and share the same features; archived workspaces remain accessible in the project overview. Saved Game world preferences automatically open Vanilla. Phones retain the compact list navigation in both looks.
-
+Pick the app's look in **Settings → Appearance → Look**; it is stored in the `thunk.look` cookie. The default **Solar system** look shows every project as a planet around a star (bigger planets have more workspaces and sessions). Inside a project, the project is the planet in the middle (open it for the overview), workspaces you create are moons and sessions are satellites that grow with spend; closed sessions are hollow. Sessions in the project's own workspaces (its home workspace and automatic ones, which the sidebar folds into the project row) orbit the planet itself. Notes, Tasks, Routines, Vault and Canvas sit in a bar along the bottom. It supports light and dark. The optional **Vanilla** look replaces Game world with a neutral application layout: a persistent desktop sidebar, a searchable project list with live status, and project pages with workspace lists, recent sessions, and tabs for Notes, Tasks, Routines, Vault, Canvas, and Overview & settings. Tools fill the content area rather than floating over a map. Both looks support light, dark, and system appearance and share the same features; archived workspaces remain accessible in the project overview. Saved Game world preferences automatically open Vanilla. Phones retain the compact list navigation in both looks.
 
 
 ### Project chiefs and workers

@@ -37,6 +37,7 @@ test('intro skips once, replays, resets hints, and hands off to add project', as
   const handoff = page.getByRole('dialog', { name: 'Write it down, relay it' });
   await expect(handoff).toContainText('hands it to that project');
   await expect(handoff).toContainText('Relay a note');
+  await expect(handoff).toContainText('Reply to keep going');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Your agents and setup');
   const add = page.getByRole('button', { name: 'Add your first project', exact: true });

@@ -173,4 +173,5 @@ The first version explained where things live but not what makes Thunk different
 - **Relay hint** (`relay`): one-time text under the Relay field. Sending a first thought also marks it seen.
 - **Note hint** (`relay-note`): one-time text above a note's body. Top-level notes get the cross-project wording, with routing tags.
 - **Chief panel**: until a project has a chief, the panel says what the chief does instead of one terse line.
+- **Inbox reply** (2026-11-26): the intro and the Relay hint now say the chief's answer arrives in the Inbox as a message you can reply to. The "Where context lives" screen also names Canvas, Vault and memory with Harvest. `docs/how-thunk-works.md` has the same story as three diagrams.
 - **Checklist** gains "Relay a thought" (opens Relay) and "Relay a note". `GET /api/onboarding/progress` returns `captures` and `delegated` (tasks linked to a note).

@@ -1,4 +1,5 @@
-// One project seen up close: the planet in the middle, each active workspace a moon, each session a satellite of its moon.
+// One project seen up close: the planet in the middle, each workspace you made a moon, each session a satellite of its moon.
+// The project's own workspaces (home and automatic ones, hidden from the sidebar) aren't moons: their sessions orbit the planet.
 // Pure; shared by server and client, runnable under `node --test`.
 import { TILT, round2 } from "./system.ts";
 
@@ -21,7 +22,12 @@ export const SATELLITE_RADIUS = [2.5, 3, 3.75, 4.5, 5.5] as const;
 /** Planet radius in the planet view. */
 export const CORE_RADIUS = 58;
 
-type WorkspaceInput = { id: string; slug: string; createdAt: string };
+/** Satellite slots around the planet, clear of its disk (r × TILT > CORE_RADIUS). The front arc is left open for the label. */
+export const CORE_SATELLITE_RINGS = [{ r: 118, slots: 9 }, { r: 146, slots: 11 }] as const;
+export const CORE_LABEL_GAP = 0.8;
+export const MAX_CORE_SATELLITES = CORE_SATELLITE_RINGS.reduce((n, s) => n + s.slots, 0);
+
+type WorkspaceInput = { id: string; slug: string; createdAt: string; visibility?: "project" | "workspace" };
 type SessionInput = { id: string; workspaceId: string; createdAt: string };
 export type Point = { x: number; y: number };
 
@@ -32,19 +38,23 @@ export type PlanetLayout = {
   core: Point;
   /** Orbit radius (before tilt) of every moon ring in use. */
   orbits: number[];
-  /** Main first, then oldest first. */
+  /** Oldest first. */
   moons: { workspaceId: string; ring: number; angle: number; x: number; y: number }[];
   satellites: Record<string, Point>;
+  /** Sessions per moon that didn't get a slot. */
   overflow: Record<string, number>;
+  /** Sessions of the project's own workspaces that didn't get a slot around the planet. */
+  coreOverflow: number;
 };
+
+/** Kept under the project rather than listed as a workspace: the home workspace and automatic ones. Matches the sidebar. */
+export const isProjectWorkspace = (w: { slug: string; visibility?: string }) => w.visibility === "project" || w.slug === "main";
 
 const MARGIN_X = 170;
 const MARGIN_Y = 150;
 
 export function layoutPlanet(workspaces: WorkspaceInput[], sessions: SessionInput[]): PlanetLayout {
-  const ordered = [...workspaces].sort(
-    (a, b) => Number(b.slug === "main") - Number(a.slug === "main") || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-  );
+  const ordered = workspaces.filter((w) => !isProjectWorkspace(w)).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   // Fixed slots per ring: moon n always lands in the same place while the moons before it remain.
   const slots: { ring: number; angle: number }[] = [];
   for (let ring = 0; slots.length < ordered.length; ring++) {
@@ -71,17 +81,27 @@ export function layoutPlanet(workspaces: WorkspaceInput[], sessions: SessionInpu
       return { x: Math.cos(a) * r, y: Math.sin(a) * r * TILT };
     }),
   );
+  // Around the planet: from just past the label, clockwise over the back to just before it.
+  const coreLoops = CORE_SATELLITE_RINGS.flatMap(({ r, slots: n }) =>
+    Array.from({ length: n }, (_, i) => {
+      const a = Math.PI / 2 + CORE_LABEL_GAP + ((i + 0.5) * (2 * Math.PI - 2 * CORE_LABEL_GAP)) / n;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r * TILT };
+    }),
+  );
   const satellites: Record<string, Point> = {};
   const overflow: Record<string, number> = {};
+  // The newest sessions are shown; oldest of those takes the first slot.
+  const place = (own: SessionInput[], at: Point, slots: Point[]) => {
+    const kept = [...own].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)).slice(0, slots.length).reverse();
+    kept.forEach((s, i) => (satellites[s.id] = { x: round2(at.x + slots[i].x), y: round2(at.y + slots[i].y) }));
+    return own.length - kept.length;
+  };
   for (const moon of moons) {
-    const own = sessions
-      .filter((s) => s.workspaceId === moon.workspaceId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
-    // The newest sessions are shown; oldest of those takes the first slot.
-    const kept = own.slice(0, MAX_SATELLITES).reverse();
-    if (own.length > kept.length) overflow[moon.workspaceId] = own.length - kept.length;
-    kept.forEach((s, i) => (satellites[s.id] = { x: round2(moon.x + loops[i].x), y: round2(moon.y + loops[i].y) }));
+    const extra = place(sessions.filter((s) => s.workspaceId === moon.workspaceId), moon, loops);
+    if (extra > 0) overflow[moon.workspaceId] = extra;
   }
+  const projectIds = new Set(workspaces.filter(isProjectWorkspace).map((w) => w.id));
+  const coreOverflow = place(sessions.filter((s) => projectIds.has(s.workspaceId)), core, coreLoops);
 
-  return { w, h, core, orbits: Array.from({ length: rings }, (_, i) => moonOrbitRadius(i)), moons, satellites, overflow };
+  return { w, h, core, orbits: Array.from({ length: rings }, (_, i) => moonOrbitRadius(i)), moons, satellites, overflow, coreOverflow };
 }
