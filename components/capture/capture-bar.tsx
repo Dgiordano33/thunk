@@ -1,4 +1,5 @@
 "use client";
+import { subscribeAppEvents } from "@/lib/client/app-events";
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { CaptureInput } from './capture-input';
@@ -62,11 +63,9 @@ function SentChip({ id, onDone }: { id: string; onDone: () => void }) {
         if (row && row.status !== 'routing' && !settle) settle = setTimeout(fade, SETTLED_MS);
       } catch { /* the next event retries */ }
     };
-    const events = new EventSource('/api/captures/events');
-    events.onopen = () => void refresh();
-    events.onmessage = () => void refresh();
+    const unsubscribe = subscribeAppEvents("captures", { onOpen: () => void refresh(), onEvent: () => void refresh() });
     const cap = setTimeout(fade, MAX_MS);
-    return () => { events.close(); clearTimeout(cap); clearTimeout(settle); };
+    return () => { unsubscribe(); clearTimeout(cap); clearTimeout(settle); };
   }, [id, onDone]);
   if (!label) return null;
   return <div role="status" aria-live="polite" className={`fixed top-[calc(4.5rem+env(safe-area-inset-top))] left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background px-3 py-1 text-xs shadow transition-opacity duration-500 ${fading ? 'opacity-0' : 'opacity-100'}`}>{label}</div>;

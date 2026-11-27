@@ -34,6 +34,15 @@ const TEXT_WIDTH = 900;
 
 const fail = (e: unknown) => useBoard.setState({ error: e instanceof Error ? e.message : String(e) });
 
+/** Shows a card another session saved, at its current revision; one since deleted or never saved stays hidden. */
+function pullCard(base: string, id: string) {
+    void boardRequest(base).then((s: Snapshot) => {
+        useBoard.setState({ board: s.board });
+        const saved = s.cards.find(c => c.id === id);
+        if (saved) useBoard.getState().merge(saved);
+    }).catch(fail);
+}
+
 /** Focus the editor for a just-created card once it has mounted. */
 function focusEditor(id: string, tries = 60) {
     const editor = getEditor(id);
@@ -147,6 +156,15 @@ export function BoardView({ projectId, slug, initial, boardId, sessions, model: 
         }
     };
     useEffect(() => { sendRef.current = send; });
+    // Workers, scouts and chats can write to this canvas too; their cards arrive here rather than on the agent's stream.
+    useEffect(() => {
+        const events = new EventSource(`/api/projects/${projectId}/board/events?board=${encodeURIComponent(boardId)}`);
+        events.onmessage = m => { try {
+            pullCard(base, (JSON.parse(m.data) as { cardId: string }).cardId);
+        }
+        catch { /* malformed event */ } };
+        return () => events.close();
+    }, [projectId, boardId, base]);
     useEffect(() => {
         if (!sessionId)
             return;
@@ -158,16 +176,9 @@ export function BoardView({ projectId, slug, initial, boardId, sessions, model: 
             connection = connectSession(sessionId, { getLastSeq: () => useSession.getState().lastSeq, onState: s => { if (s === 'not_live')
                     setBusy(false); }, onEvent: e => {
                     useSession.getState().applyEvent(e);
-                    if (e.type === 'board_op') {
-                        // The session replays every past op on connect, including cards since deleted or never saved;
-                        // only a card the board still has is shown, at its current revision.
-                        const id = e.op.card.id;
-                        void boardRequest(base).then((s: Snapshot) => {
-                            useBoard.setState({ board: s.board });
-                            const saved = s.cards.find(c => c.id === id);
-                            if (saved) useBoard.getState().merge(saved);
-                        }).catch(fail);
-                    }
+                    // The session replays every past op on connect, including cards since deleted or never saved.
+                    if (e.type === 'board_op')
+                        pullCard(base, e.op.card.id);
                     if (e.type === 'turn_complete')
                         setActivity(e.markdown);
                     if (e.type === 'error')

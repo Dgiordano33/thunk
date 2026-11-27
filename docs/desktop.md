@@ -91,6 +91,8 @@ Set `THUNK_RELEASE_REPO=owner/downloads` in the desktop configuration to use a d
 
 The workflow `.github/workflows/desktop-release.yml` builds on native runners (macOS Apple Silicon and Intel, Linux x64 and ARM64, Windows x64), smoke-tests each bundle, and creates a **draft** release with every archive and checksum. The Windows job downloads MinGit from the latest Git for Windows release and bundles it. It does not publish automatically.
 
+Pull requests that change `desktop/`, `scripts/` or the workflow run the same builds and smoke tests on every platform, without creating a release, so packaging problems show up before you tag.
+
 1. Merge the changes you want to distribute into your release branch (normally `main`).
 2. Set a fresh version in `desktop/package.json`, such as `0.1.1`, and commit it.
 3. Tag that commit and push the tag: `git tag v0.1.1` then `git push origin v0.1.1`. The tag must match the desktop version exactly.

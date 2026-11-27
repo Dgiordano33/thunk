@@ -5,9 +5,17 @@ const { tmpdir } = require("node:os");
 const path = require("node:path");
 const { startBackend, configuredRemote, externalUrl, toolPath, nodeBinary } = require("./runtime.cjs");
 
+const running = new WeakMap();
+
 function fixture(t, source) {
   const root = mkdtempSync(path.join(tmpdir(), "thunk-desktop-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stops = [];
+  // Stop backends before removing their folder: Windows cannot delete a running node.exe, and
+  // briefly keeps it locked after exit.
+  t.after(async () => {
+    for (const stop of stops) await stop();
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  });
   mkdirSync(path.join(root, "bin"));
   mkdirSync(path.join(root, "server"));
   // Windows symlinks need extra privileges, so copy the runtime there.
@@ -16,7 +24,16 @@ function fixture(t, source) {
   writeFileSync(path.join(root, "server/server.js"), source);
   const config = path.join(root, ".env");
   writeFileSync(config, "DESKTOP_TEST_SETTING=loaded\nHOSTNAME=0.0.0.0\nPORT=1\n");
-  return { root, config, log: "ignore", timeout: 3000 };
+  const options = { root, config, log: "ignore", timeout: 3000 };
+  running.set(options, stops);
+  return options;
+}
+
+/** Starts the fixture's backend and stops it when the test ends, before the fixture is removed. */
+async function start(options) {
+  const backend = await startBackend(options);
+  running.get(options).push(backend.stop);
+  return backend;
 }
 
 test("starts on loopback, loads external config, and stops its child", async (t) => {
@@ -24,8 +41,7 @@ test("starts on loopback, loads external config, and stops its child", async (t)
     require('node:http').createServer((req, res) => res.end(process.env.DESKTOP_TEST_SETTING))
       .listen(Number(process.env.PORT), process.env.HOSTNAME);
   `);
-  const backend = await startBackend(options);
-  t.after(() => backend.stop());
+  const backend = await start(options);
   assert.match(backend.url, /^http:\/\/127\.0\.0\.1:\d+$/);
   assert.equal(await (await fetch(backend.url)).text(), "loaded");
   await backend.stop();
@@ -41,8 +57,7 @@ test("THUNK_PORT in the config pins the backend port", async (t) => {
   const port = probe.address().port;
   await new Promise((resolve) => probe.close(resolve));
   writeFileSync(options.config, `THUNK_PORT=${port}\n`);
-  const backend = await startBackend(options);
-  t.after(() => backend.stop());
+  const backend = await start(options);
   assert.equal(backend.url, `http://127.0.0.1:${port}`);
   writeFileSync(options.config, "THUNK_PORT=nope\n");
   await assert.rejects(startBackend(options), /THUNK_PORT must be a port number/);

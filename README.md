@@ -1,26 +1,55 @@
 # Thunk
 
-For a standalone desktop app on macOS, Linux or Windows, see [Thunk desktop app](docs/desktop.md). Build with `npm run desktop:pack`, or create a shareable archive with `npm run desktop:release`. The desktop app includes a Connections window for agent setup; see the guide for publishing releases for every platform.
-
-To use Thunk from your phone or another computer over a private Tailscale network, see [Use Thunk from your phone](docs/remote.md). To run it around the clock on a Linux server, see [Run Thunk on a server](docs/server.md).
-
-Implemented features are documented in [docs/](docs/); unfinished proposals and projects live in [plans/](plans/).
-
 A personal Claude Code harness where assistant responses aren't chat bubbles: each turn's final prose becomes an editable document. Edit it directly, highlight spans to comment or ask questions, then **Send revisions**. Claude receives a unified diff, the quoted comment threads, and the full edited document, and replies with a revised version (v2, v3, …). Plans from plan mode use the same flow: edit or comment, then **Request changes** or **Approve**.
 
-## Setup
+Projects, workspaces (git worktrees), sessions, notes, tasks, routines, a vault and canvases hang off that. Implemented features are documented in [docs/](docs/); unfinished proposals live in [plans/](plans/).
+
+## Install
+
+There are two ways to run Thunk. Both keep your data in `~/.thunk` and need no database or account setup.
+
+### Desktop app
+
+No Node, npm or source checkout needed.
+
+1. Download the archive for your machine from the [latest release](https://github.com/Dgiordano33/thunk/releases/latest): `Apple-Silicon` or `Intel` for macOS, `Linux-x64` or `Linux-ARM64`, or `Windows-x64`.
+2. Unzip it. On macOS, move `Thunk.app` to Applications.
+3. Open it. The builds are not signed with a developer certificate, so the first launch needs your approval:
+   - **macOS:** open Thunk once, dismiss the warning, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/Thunk.app` before opening it.
+   - **Windows:** in the SmartScreen dialog, click **More info → Run anyway**.
+   - **Linux:** on Ubuntu 24.04 and later, see the sandbox step in [docs/desktop.md](docs/desktop.md#linux).
+4. In the Connections window that opens, connect Claude (an Anthropic API key, or your existing `claude` login is picked up automatically), and optionally GitHub and Codex.
+
+You need Git installed; Thunk tells you how if it is missing. To build the app yourself or publish releases, see [Thunk desktop app](docs/desktop.md).
+
+### From source
+
+You need:
+
+- **Node.js 22.16 or later** (24 recommended; `nvm use` picks it up from `.nvmrc`) and **Git**.
+- **Claude access:** a logged-in [Claude Code](https://claude.com/claude-code) CLI (`claude`), or an Anthropic API key.
+- **GitHub CLI** (`gh auth login`), optional: PR, check and deployment status need it.
 
 ```bash
+git clone https://github.com/Dgiordano33/thunk.git
+cd thunk
 npm install
 cp .env.local.example .env.local   # every setting is optional
-npm run dev
+npm run dev                        # http://127.0.0.1:4500
 ```
 
-- **Auth:** set `ANTHROPIC_API_KEY`, or leave it empty to use your local `claude` login.
+Open the URL, add a project (any git repo or folder), and start a session.
+
+- **Auth:** set `ANTHROPIC_API_KEY` in `.env.local`, or leave it empty to use your local `claude` login.
+- **Port:** `npm run dev` uses `$PORT`, else `$THUNK_PORT`, else `$CONDUCTOR_PORT`, else 4500.
 - **Database:** projects, workspaces, sessions, documents, comments, tasks, routines and notifications are stored in Postgres, so they survive restarts and sessions can be resumed (SDK `resume`). With no settings, Thunk runs an embedded Postgres (PGlite) in `~/.thunk/db`: nothing to install. To use your own Postgres (Supabase, Neon, RDS, a local server), set `DATABASE_URL`. See [Database](#database).
 - **Memory and notes files:** always on disk under `~/.thunk` (override with `THUNK_DATA_DIR`).
-- **Remote access:** set `THUNK_TRUSTED_HOSTS` and `THUNK_TRUSTED_USER` to reach Thunk through Tailscale Serve. See [docs/remote.md](docs/remote.md).
 - **Browser tests:** `npx playwright install chromium` once, then `npm run test:e2e`. They start their own dev server (port 4517, build dir `.next-e2e`) with in-memory projects and a temp data dir, so they run beside your dev server without touching your data.
+
+### Other ways to run it
+
+- **From your phone or another computer:** over a private Tailscale network. See [Use Thunk from your phone](docs/remote.md).
+- **Around the clock on a Linux server:** see [Run Thunk on a server](docs/server.md).
 
 ## Database
 
@@ -50,7 +79,7 @@ This reads the source in one read-only snapshot and replaces the local embedded 
 - **Project** = a git repo (its toplevel, even when added from a worktree) or a plain folder. Owns `CLAUDE.md` / `.claude/` config and a **project memory** file at `~/.thunk/projects/<slug>/memory/MEMORY.md`, injected into every session's system prompt and editable by agents and from the project page.
 - **Workspace** = a task inside a project. Either works in place (the `main` workspace every project gets) or in its own **git worktree** at `<repo>/.claude/worktrees/<slug>` on a new branch (default `thunk/<slug>`, from `origin/<default>`). Has a **workspace memory** directory (`~/.thunk/projects/<slug>/workspaces/<slug>/memory/`) for its shared task log. Claude auto-memory uses project memory. Archive closes its live sessions; deletion preserves memory and notes in the project granary. Harvest promotes selected knowledge and notes to the project.
 - **Session** = one chat in a workspace. Runs with `cwd` = workspace dir and, in a worktree, `projectConfigRoot` = the main checkout so config comes from the trusted tree.
-- **Canvas** = a board in a project, stored on disk under `~/.thunk/projects/<slug>/boards/<boardId>/` (`board.json` plus one file per card). Every project has a `main` canvas and can have more. Each canvas has its own agent session, started in the main workspace on the canvas's model (`board.json` `model`, else `DEFAULT_MODEL`), and hidden from session lists. Canvases are listed in the sidebar under their project with their agent's status.
+- **Canvas** = a board in a project, stored on disk under `~/.thunk/projects/<slug>/boards/<boardId>/` (`board.json` plus one file per card). Every project has a `main` canvas and can have more. Each canvas has its own agent session, started in the main workspace on the canvas's model (`board.json` `model`, else `DEFAULT_MODEL`), and hidden from session lists. Canvases are listed in the sidebar under their project with their agent's status. Other sessions in the project (chats, chiefs, workers and scouts, so anything you relay) can build canvases too: they get `canvas_list`, `canvas_create` and `canvas_*` card tools that name a `canvas_id`, and an open canvas shows their cards live (`/api/projects/[id]/board/events?board=<id>`).
 
 - **Notes** = a notebook per project (`~/.thunk/projects/<slug>/notes/<id>.md`) and per workspace (`…/workspaces/<slug>/notes/<id>.md`). Each note is markdown with frontmatter (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). MEMORY.md shows up as the pinned first note of each scope. Every session gets both notes dirs as readable/writable directories and a `# Thunk notes` block in its system prompt: an index of notes plus the full text of `inject: true` notes (capped at 24k chars). Checklists remain editable in notes; the legacy `actionable` flag is still read for importing old checklist items into Tasks. A file watcher streams changes (including agent edits) to the UI over SSE.
 
@@ -163,7 +192,7 @@ Claude chiefs disallow Edit, Write and NotebookEdit, and deny common shell-write
 A chief cannot edit files, so it has its own tools for leaving things in the project. They act only inside its project and never ask for permission:
 
 - **Notes.** `notes_create` and `notes_update` write project notes (plans, briefs, decision records), with tags, pin, session context and workspace links.
-- **Canvases.** `canvases_list` and `canvases_create` manage canvases, and the chief has every tool the canvas's own agent has, on any canvas in the project: `canvas_read`, `canvas_add_card`, `canvas_add_image` (inline SVG or an image file), `canvas_add_chart`, `canvas_edit_chart`, `canvas_edit_card`, `canvas_comment` and `canvas_reply`. A canvas whose agent session is live shows the change at once; otherwise it shows when the canvas is next opened.
+- **Canvases.** Like every project session, the chief has the canvas tools: `canvas_list`, `canvas_create` and the `canvas_*` card tools for text, images and charts. An open canvas shows its cards as they are added.
 - **Workspaces and sessions.** `workspaces_list` and `workspaces_create` manage the workspaces you see in the sidebar. `sessions_start` opens a session in a visible workspace with a first prompt. It is a worker: it has a task and reports back to the chief.
 - **Routines.** `routines_create` schedules a recurring agent session. The chief is told to use it only when you asked for something recurring.
 

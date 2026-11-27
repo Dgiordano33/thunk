@@ -1,32 +1,16 @@
 import "server-only";
 import { z } from "zod";
 import type { LiveSession } from "@/lib/agent";
-import { canvasToolset } from "@/lib/board/tools";
-import type { Card } from "@/lib/board/types";
 
 /**
- * What a chief can make in its project besides tasks and workers: notes, canvases and everything on them, workspaces,
- * sessions and routines. A chief cannot use Edit or Write, so these are how it leaves durable artifacts.
+ * What a chief can make in its project besides tasks and workers: notes, workspaces, sessions and routines.
+ * (Canvases come from the canvas tools every project session has: lib/board/tools.ts.) A chief cannot use Edit or Write, so these are how it leaves durable artifacts.
  * Each tool acts only inside the chief's own project. Names are listed in PLATFORM_TOOL_NAMES (./prompt) so they are auto-allowed.
  */
 
 type Define = <S extends z.ZodRawShape>(name: string, description: string, schema: S, run: (input: z.infer<z.ZodObject<S>>) => Promise<unknown>) => { name: string; description: string; schema: S; handler: (input: unknown) => Promise<{ content: { type: "text"; text: string }[]; isError: boolean }> };
 
 const flags = { tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(), pinned: z.boolean().optional(), inject: z.boolean().optional() };
-
-/** Shows a saved card on an open canvas, through that canvas's agent session when it is live. Never fails the tool. */
-async function publishCard(dir: string, boardId: string, card: Card) {
-  try {
-    const { readBoard } = await import("@/lib/board/store");
-    const { getSession, emit } = await import("@/lib/agent");
-    const agent = (await readBoard(dir)).agent;
-    const session = agent ? getSession(agent.sessionId) : undefined;
-    if (session) emit(session, { type: "board_op", boardId, op: { card } });
-  } catch (e) {
-    console.error("board_op broadcast failed", e);
-  }
-  return JSON.stringify(card);
-}
 
 export function platformTools(live: LiveSession, define: Define) {
   const project = live.ctx.project;
@@ -37,11 +21,6 @@ export function platformTools(live: LiveSession, define: Define) {
     if (!workspace || workspace.projectId !== project.id) throw new Error("No workspace with that id in this project; call workspaces_list");
     if (workspace.status === "archived") throw new Error("Workspace is archived");
     return workspace;
-  };
-  const boardDir = async (boardId: string) => {
-    const { listCanvases } = await import("@/lib/board/service");
-    if (!(await listCanvases(project.dataKey)).some((c) => c.id === boardId)) throw new Error("No canvas with that id; call canvases_list");
-    return (await import("@/lib/projects/paths")).projectBoardsDir(project.dataKey, boardId);
   };
   return [
     define("notes_create", "Create a project note (a plan, brief, decision record or reference) that the person and every agent in this project can read. Markdown body; unchecked - [ ] items can be relayed later. inject puts the whole note in every new session's system prompt, so use it sparingly. Returns the note id and file path.",
@@ -62,26 +41,6 @@ export function platformTools(live: LiveSession, define: Define) {
         if (!note) throw new Error("No project note with that id");
         return { noteId: note.id, path: note.path, title: note.title };
       }),
-    define("canvases_list", "List this project's canvases (boards). The main canvas has id \"main\".", {}, async () => {
-      const { listCanvases } = await import("@/lib/board/service");
-      return (await listCanvases(project.dataKey)).map(({ id, name }) => ({ boardId: id, name }));
-    }),
-    define("canvases_create", "Create a new, empty canvas in this project. Returns its boardId for canvases_add_card.", { name: z.string().trim().min(1).max(80) }, async ({ name }) => {
-      const { createCanvas } = await import("@/lib/board/service");
-      const canvas = await createCanvas(project.dataKey, name);
-      return { boardId: canvas.id, name: canvas.name };
-    }),
-    // Every tool the canvas's own agent has (text cards, images, charts, edits, comments), on any canvas in the project.
-    ...canvasToolset("", async () => "").map((spec) => define(spec.name, `${spec.description} Pass board_id for a canvas other than the main one (see canvases_list).`,
-      { ...(spec.schema as z.ZodRawShape), board_id: z.string().min(1).max(80).optional() },
-      async (input) => {
-        const { board_id: boardId = "main", ...args } = input as { board_id?: string } & Record<string, unknown>;
-        const dir = await boardDir(boardId);
-        const result = await canvasToolset(dir, (card) => publishCard(dir, boardId, card)).find((t) => t.name === spec.name)!.handler(args);
-        const text = result.content[0].text;
-        if ("isError" in result && result.isError) throw new Error(text);
-        try { return JSON.parse(text); } catch { return text; }
-      })),
     define("workspaces_list", "List this project's active workspaces: id, name, branch and whether it is an automatic effort workspace.", {}, async () => {
       const { listWorkspaces } = await import("@/lib/db/repo/workspaces");
       return (await listWorkspaces(project.id)).filter((w) => w.status !== "archived").map((w) => ({ workspaceId: w.id, name: w.name, slug: w.slug, branch: w.branch ?? null, visibility: w.visibility ?? "workspace" }));

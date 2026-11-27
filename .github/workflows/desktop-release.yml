@@ -2,6 +2,9 @@ name: Desktop release
 on:
   push:
     tags: ['v*']
+  # Build and smoke-test every platform when packaging changes, so a tag is not the first test.
+  pull_request:
+    paths: ['desktop/**', 'scripts/**', '.github/workflows/desktop-release.yml']
 permissions:
   contents: read
 jobs:
@@ -32,7 +35,7 @@ jobs:
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
-          node -e 'const assert = require("node:assert/strict"); assert.equal(process.arch, process.env.EXPECTED_ARCH); assert.equal(process.env.GITHUB_REF_NAME, "v" + require("./desktop/package.json").version)'
+          node -e 'const assert = require("node:assert/strict"); assert.equal(process.arch, process.env.EXPECTED_ARCH); if (process.env.GITHUB_REF_TYPE === "tag") assert.equal(process.env.GITHUB_REF_NAME, "v" + require("./desktop/package.json").version)'
       - run: npm ci
       - run: npm run test:desktop
       # Windows has no system Git, so bundle MinGit from the official Git for Windows release.
@@ -45,8 +48,13 @@ jobs:
           gh release download --repo git-for-windows/git --pattern 'MinGit-*-64-bit.zip' --dir mingit-zip
           zip=$(ls mingit-zip/MinGit-*-64-bit.zip | grep -v busybox | head -1)
           mkdir mingit && unzip -q "$zip" -d mingit
-          echo "THUNK_MINGIT_DIR=$PWD/mingit" >> "$GITHUB_ENV"
+          # A Windows path: Node would read Git Bash's /d/a/... as D:\d\a\...
+          echo "THUNK_MINGIT_DIR=$(cygpath -m "$PWD/mingit")" >> "$GITHUB_ENV"
       - run: npm run desktop:release
+        env:
+          # electron-builder skips signing on pull requests to protect certificates. The Mac build
+          # is ad-hoc signed with no secrets, and the archive step verifies that signature.
+          CSC_FOR_PULL_REQUEST: 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ runner.os }}-${{ matrix.arch }}
@@ -56,6 +64,7 @@ jobs:
             dist-desktop/*.sha256
           if-no-files-found: error
   release:
+    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     permissions:
