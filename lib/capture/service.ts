@@ -16,6 +16,7 @@ import { delegate, messageChief } from '@/lib/workers/service';
 import { routeCapture } from './router';
 import { captureBrief, captureTaskBody, relayMessage } from './prompt';
 import type { Capture } from './types';
+import { appendTurn } from './thread';
 export async function captureLimit() {
  try { const config = JSON.parse(await readFile(`${DATA_DIR}/config/capture.json`,'utf8')); return Number.isInteger(config.maxOpen) && config.maxOpen > 0 ? config.maxOpen : 8; } catch { return 8; }
 }
@@ -72,7 +73,8 @@ export async function reportRelay(projectId: string, id: string, status: 'done'|
  const row=(await listCaptures()).find(r=>r.id===id);
  if(!row || row.project_id!==projectId || row.task_id) throw new Error('No relay with that id was sent to this project');
  if(!['working','ready','failed'].includes(row.status)) throw new Error('That relay is not waiting on a report');
- const next=await saveCapture({...row,status:'ready',summary:status==='blocked'?`Blocked: ${summary}`:summary,next_step:nextStep?.trim()||null,error:null});
+ // A report after a reply continues the conversation instead of replacing it.
+ const next=await saveCapture({...row,status:'ready',summary:appendTurn(row.summary,'chief',status==='blocked'?`Blocked: ${summary}`:summary),next_step:nextStep?.trim()||null,error:null});
  await notifyReady(next);
  return {reported:true};
  });
@@ -156,9 +158,9 @@ export async function actOnCapture(id: string, action: string, text?: string) {
  }
  if(action==='continue' && !row.next_step?.trim()) throw new Error('No next step needs approval. Redirect the worker to request more work.');
  const content=action==='continue'? `Go ahead with this step only: ${row.next_step}` : text?.trim();
- if(!content)throw new Error('Enter a redirect');
+ if(!content)throw new Error('Enter a reply');
  await resolveBySubject(`capture:${id}`);
- await saveCapture({...row,status:'working',error:null});
- try {if(viaChief) await messageChief(row.project_id,decision(id,action==='continue'?'go_ahead':'redirect',content)); else await messageWorker(row.project_id,row.task_id!,content,row.session_id);}catch(e){await saveCapture(row);throw e;}
+ await saveCapture({...row,status:'working',error:null,...(viaChief?{summary:appendTurn(row.summary,'you',content),next_step:null}:{})});
+ try {if(viaChief) await messageChief(row.project_id,decision(id,action==='continue'?'go_ahead':'reply',content)); else await messageWorker(row.project_id,row.task_id!,content,row.session_id);}catch(e){await saveCapture(row);throw e;}
  });
 }

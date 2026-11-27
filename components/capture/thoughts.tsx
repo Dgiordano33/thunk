@@ -1,6 +1,7 @@
 "use client";
 import type { Capture } from '@/lib/capture/types';
 import type { Captures } from './use-captures';
+import { parseThread } from '@/lib/capture/thread';
 
 const STATE: Record<Capture['status'], string> = { routing: 'Routing', queued: 'Queued', working: 'Working', ready: 'Ready', kept: 'Kept', discarded: 'Discarded', failed: 'Couldn’t start' };
 const minutes = (row: Capture) => Math.max(0, Math.round((Date.parse(row.updated_at) - Date.parse(row.created_at)) / 60000));
@@ -38,17 +39,29 @@ function RetryForm({ row, projects, onRetry }: { row: Capture; projects: { id: s
   </form>;
 }
 
-/** The body of a ready thought's Decision card: You said, Assumed, Did, Next, and the redirect field. */
+const viaChief = (row: Capture) => !row.task_id && Boolean(row.project_id && row.session_id);
+
+/**
+ * The body of a ready thought's Decision card. A thought a chief handled reads as a conversation with that chief,
+ * with a reply field; a Home scout's shows what it assumed and did.
+ */
 export function ThoughtReview({ row, tab, onRedirect }: { row: Capture; tab: number; onRedirect: (text: string) => void }) {
+  const chief = viaChief(row);
+  const turns = chief ? parseThread(row.summary) : [];
   return <div className="mt-2 space-y-2 text-sm">
-    <p><span className="text-muted-foreground text-xs">You said </span>{row.text}</p>
-    {row.assumptions.length > 0 && <p><span className="text-muted-foreground text-xs">Assumed </span>{row.assumptions.join(' · ')}</p>}
-    {row.summary && <div><span className="text-muted-foreground text-xs">Did </span><span className="whitespace-pre-wrap">{row.summary}</span></div>}
-    {row.next_step && <p><span className="text-muted-foreground text-xs">Next </span>{row.next_step}</p>}
-    <p className="text-muted-foreground font-mono text-[11px]">${Number(row.cost_usd).toFixed(4)} · {minutes(row)} min since capture{row.diff_stat ? ` · ${JSON.stringify(row.diff_stat)}` : ''}</p>
+    {chief ? <ol aria-label="Conversation with the chief" className="space-y-2">
+      <li><span className="text-muted-foreground block text-xs">You</span><span className="whitespace-pre-wrap">{row.text}</span></li>
+      {turns.map((turn, i) => <li key={i} className={turn.who === 'chief' ? 'border-l-2 pl-3' : undefined}><span className="text-muted-foreground block text-xs">{turn.who === 'chief' ? 'Chief' : 'You'}</span><span className="whitespace-pre-wrap">{turn.text}</span></li>)}
+    </ol> : <>
+      <p><span className="text-muted-foreground text-xs">You said </span>{row.text}</p>
+      {row.assumptions.length > 0 && <p><span className="text-muted-foreground text-xs">Assumed </span>{row.assumptions.join(' · ')}</p>}
+      {row.summary && <div><span className="text-muted-foreground text-xs">Did </span><span className="whitespace-pre-wrap">{row.summary}</span></div>}
+    </>}
+    {row.next_step && <p><span className="text-muted-foreground text-xs">{chief ? 'Waiting on your go-ahead ' : 'Next '}</span>{row.next_step}</p>}
+    {!chief && <p className="text-muted-foreground font-mono text-[11px]">${Number(row.cost_usd).toFixed(4)} · {minutes(row)} min since capture{row.diff_stat ? ` · ${JSON.stringify(row.diff_stat)}` : ''}</p>}
     <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const text = String(new FormData(e.currentTarget).get('text') ?? ''); onRedirect(text); }}>
-      <input name="text" data-redirect="" tabIndex={tab} aria-label="Redirect thought" placeholder="Redirect… (#project moves it)" required className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm" />
-      <button tabIndex={tab} className="rounded border px-2 text-sm">Redirect</button>
+      <input name="text" data-redirect="" tabIndex={tab} aria-label={chief ? 'Reply to the chief' : 'Reply to the scout'} placeholder={chief ? 'Reply to the chief…' : 'Reply… (#project moves it)'} required className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm" />
+      <button tabIndex={tab} className="rounded border px-2 text-sm">Send</button>
     </form>
   </div>;
 }
