@@ -1,7 +1,7 @@
 "use client";
 import { Sphere } from "@/components/space/sphere";
 import { PLANET_PALETTES } from "@/lib/world/system";
-import { TownCenterSprite, FarmhouseSprite, FarmField } from "@/components/town/sprites";
+import { FolderIcon, GitBranchIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useLook } from "@/components/look-context";
@@ -16,21 +16,21 @@ import { Kbd } from "@/components/ui/kbd";
 import { label as shortcutLabel, useIsMac } from "@/lib/capture/shortcut";
 import { useUi } from "@/lib/store/ui-store";
 const LAST = 3;
-/** The game look's plain version of the handoff scene. */
+/** Vanilla's plain version of the handoff scene. */
 function Handoff() {
   const steps = [["You relay", "a thought or a note"], ["The chief splits it", "one task per item"], ["Workers build", "each in its own worktree"], ["You decide", "in the Inbox"]];
   return <ol aria-label="How work is handed off" className="grid grid-cols-4 gap-2 text-xs space:hidden">{steps.map(([title, detail], i) => <li key={title} className="rounded border p-2"><span className="text-muted-foreground block">{i + 1}</span><strong className="block">{title}</strong><span className="text-muted-foreground block">{detail}</span></li>)}</ol>;
 }
 export function MapMark({ level, closed = false }: { level: number; closed?: boolean }) {
   const { look } = useLook();
-  return <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center [&>svg]:max-h-10 [&>svg]:max-w-10">{look === "world" ? (level === 0 ? <TownCenterSprite /> : level === 1 ? <FarmhouseSprite hue={250} /> : <FarmField stage={2} hue={250} selected={false} fallow={closed} />) : level < 2 ? <Sphere r={level === 0 ? 15 : 10} palette={PLANET_PALETTES[level]} light={-0.8} bands={level === 0} /> : <span className={`satellite block size-3 rounded-full ${closed ? "is-closed" : "is-open"}`} />}</span>;
+  return <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center [&>svg]:max-h-10 [&>svg]:max-w-10">{look === "vanilla" ? (level === 0 ? <FolderIcon /> : level === 1 ? <GitBranchIcon /> : <MessageSquareIcon />) : level < 2 ? <Sphere r={level === 0 ? 15 : 10} palette={PLANET_PALETTES[level]} light={-0.8} bands={level === 0} /> : <span className={`satellite block size-3 rounded-full ${closed ? "is-closed" : "is-open"}`} />}</span>;
 }
 export function Hierarchy({ nested = false }: { nested?: boolean }) {
   const { look } = useLook();
-  const labels = look === "world" ? ["City", "Farm", "Field"] : ["Planet", "Moon", "Satellite"];
+  const labels = look === "space" ? ["Planet", "Moon", "Satellite"] : null;
   const rows = ["Project", "Workspace", "Session"];
-  const row = (i: number): React.ReactNode => <><div className="flex items-center gap-2"><MapMark level={i} /><span><strong>{rows[i]}</strong> · {labels[i]}</span></div>{nested && i < 2 && <div className="ml-5 rounded border p-2">{row(i + 1)}</div>}</>;
-  return nested ? <div className="rounded border p-2 text-sm" aria-label="Project, Workspace, Session hierarchy">{row(0)}</div> : <ol className="space-y-1 text-sm">{rows.map((term, i) => <li key={term} className="flex items-center gap-2"><MapMark level={i} /><span><strong>{term}</strong> · {labels[i]}</span></li>)}</ol>;
+  const row = (i: number): React.ReactNode => <><div className="flex items-center gap-2"><MapMark level={i} /><span><strong>{rows[i]}</strong>{labels && <> · {labels[i]}</>}</span></div>{nested && i < 2 && <div className="ml-5 rounded border p-2">{row(i + 1)}</div>}</>;
+  return nested ? <div className="rounded border p-2 text-sm" aria-label="Project, Workspace, Session hierarchy">{row(0)}</div> : <ol className="space-y-1 text-sm">{rows.map((term, i) => <li key={term} className="flex items-center gap-2"><MapMark level={i} /><span><strong>{term}</strong>{labels && <> · {labels[i]}</>}</span></li>)}</ol>;
 }
 export function Intro({ hasProjects }: { hasProjects: boolean }) {
   const onboarding = useOnboarding();

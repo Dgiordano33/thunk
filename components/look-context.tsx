@@ -6,7 +6,7 @@ import { storeLook, type Look } from "@/lib/look";
 
 const LookContext = createContext<{ look: Look; setLook: (look: Look) => void }>({ look: "space", setLook: () => {} });
 
-/** Holds the look the server rendered with; changing it saves the cookie and re-renders the server views (the maps). */
+/** Holds the look the server rendered with; changing it saves the cookie and re-renders the server layouts and project views. */
 export function LookProvider({ initial, children }: { initial: Look; children: React.ReactNode }) {
   const router = useRouter();
   const [look, setState] = useState(initial);

@@ -31,7 +31,7 @@ test('project sections link to their project before the map', async ({ page, req
   }
 });
 
-test('game look retains the world parent and long project names fit', async ({ page, request, context }) => {
+test('legacy game preference opens Vanilla and long project names fit', async ({ page, request, context }) => {
   await context.addCookies([{ name: 'thunk.look', value: 'world', url: process.env.THUNK_E2E_URL! }]);
   const project = await newBoard(request);
   const renamed = await request.patch(`/api/projects/${project.projectId}`, { data: { name: 'A very long project name that should fit beside the navigation actions' } });
@@ -39,9 +39,9 @@ test('game look retains the world parent and long project names fit', async ({ p
   await page.setViewportSize({ width: 800, height: 700 });
   await page.goto(`/projects/${project.slug}/notes`);
   const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
-  await expect(trail.getByRole('link', { name: 'World', exact: true })).toBeVisible();
+  await expect(trail.getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await trail.getByRole('link', { name: 'World', exact: true }).click();
+  await trail.getByRole('link', { name: 'Projects', exact: true }).click();
   await expect(page).toHaveURL(/\/projects$/);
 });
 

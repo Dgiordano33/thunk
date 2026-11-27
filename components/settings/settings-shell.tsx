@@ -48,7 +48,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
     );
 
   return (
-    <main className="absolute inset-x-4 top-20 z-10 flex justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
+    <main className="settings-frame absolute inset-x-4 top-20 z-10 flex justify-center" style={{ bottom: process.env.NODE_ENV === "development" ? "4.5rem" : "1rem" }}>
       <CivPanel className="w-full max-w-5xl" bodyClassName="flex h-full min-h-0">
         <nav aria-label="Settings" className="flex w-52 shrink-0 flex-col gap-0.5 border-r p-2">
           <p className="pixel text-muted-foreground px-2 pt-1 pb-2 text-[11px] tracking-widest uppercase">Settings</p>

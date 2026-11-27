@@ -1,26 +1,34 @@
 # Thunk design guide
 
-This guide captures the implemented homepage and town styling. Use it when extending the interface, including canvas and chat screens. The source files linked below are authoritative for exact values; guidance for new work is identified separately from existing behavior.
+This guide captures the implemented application styling. Use it when extending the interface, including canvas and chat screens. The source files linked below are authoritative for exact values; guidance for new work is identified separately from existing behavior.
 
 ## Visual direction
 
-Thunk presents coding work as a map you can move around. There are two looks, chosen in **Settings → Look** and stored in the `thunk.look` cookie (see [lib/look.ts](lib/look.ts)). The root layout puts `look-space` or `look-world` on `<html>`, and the server reads the cookie to decide which map to render.
+Two looks are chosen in **Settings → Appearance → Look** and stored in the `thunk.look` cookie ([lib/look.ts](lib/look.ts)). The root layout applies `look-space` or `look-vanilla` before paint. Solar system stays the default; saved `world` values migrate to Vanilla.
 
-- **Solar system** (default, `look-space`): a star chart in line art. Projects are planets around a star, workspaces are moons, sessions are satellites. Everything pictorial is an outline with a hatched shadow, on a twilight sky with four-point sparkles: glowing lines on indigo-to-violet in dark, ink on pale dawn paper in light. Ruled glass frames, Geist names with Geist Mono metadata, and planets drawn on a WebGL canvas. Light and dark get equal care.
-- **Game world** (`look-world`): a small strategy-game world. Projects are cities, each project a town with workspaces as farms and sessions as fields. Bronze frames, pixel lettering, stepped sprites and terrain. Always dark (the moonlit palette).
+- **Solar system** (`look-space`): the existing star chart, planets, moons, satellites, twilight surfaces, and floating panels. Preserve its appearance and map interactions.
+- **Vanilla** (`look-vanilla`): a quiet, conventional application. A persistent desktop sidebar provides projects, workspaces, canvases, Inbox, Library, Routines, Vault, and Settings. Projects use a searchable list with live status. Project pages show workspaces and recent sessions, with section tabs above full-size working panes. No map, game sprites, sky, ambient animation, or movable windows.
 
-Both looks share every panel, form and route. Game words (Town hall, Workshop, Farmhouse, crop stages) appear only on the game map; panels, menus and empty states use the plain product terms in both looks. Keep the map treatment in navigation, headings, map objects and status cues, and give dense working content room to breathe.
+Both looks use plain product terms and share routes, data, editors, and actions. Both support light, dark, and system appearance; phones keep their existing compact list navigation. Game world is retired. Remaining `world:` classes and terrain artwork are legacy implementation details, not a supported theme or a pattern for new work.
 
-In Tailwind, `space:` and `world:` variants target one look (defined in `app/globals.css`). Style for the solar-system look first and add `world:` classes for the game look, as [Button](components/ui/button.tsx) and the main menu do. CSS that belongs to one look is prefixed with `.look-space` or `.look-world`.
+Use semantic application tokens and shared controls first. `space:` and `vanilla:` variants are for deliberate differences. Vanilla uses Geist, restrained spacing, subtle borders, plain Lucide icons, and meaningful status colors. A functional canvas remains a canvas in either look.
+
+## Vanilla layout
+
+[VanillaProjects](components/vanilla/projects.tsx) and [VanillaProject](components/vanilla/project.tsx) replace the maps. The `(world)` route layout reuses `AppSidebar` and `ShellPanels` for desktop Vanilla, including saved sidebar sizes. A slim breadcrumb bar keeps direct visits navigable. Notes, Tasks, Routines, Vault, Canvas, and Overview & settings stay reachable through the project tabs.
+
+`FloatingWindow` renders a normal full-size pane in desktop Vanilla with no drag, resize, or maximize controls. `CivPanel` becomes an opaque card with an 8px radius and a 1px border. Existing project panels keep their content and close actions. Editors own their scroll within the available height. Keep long names truncated in lists and wrapped in page headings, preserve keyboard focus, and avoid page-level horizontal overflow.
+
+Vanilla uses the neutral `:root` / `.dark` application palette. Legacy bronze and parchment variables are mapped to neutral tokens for shared selection states; do not add new uses of them. Empty states use a plain section icon and a clear next action. Shared status tokens continue to carry Running, Needs you, and Error, with text as well as color.
 
 ## Color and themes
 
 Colors live in [app/globals.css](app/globals.css). Three families work together:
 
-- **Application tokens:** `background`, `foreground`, `card`, `popover`, `muted`, `border`, `input`, `ring`, `primary`, and `destructive`. Use their Tailwind classes for content, forms, and interactive states. `:root` holds the white palette and `.dark` the near-black one, both cool neutrals (hue ~255, very low chroma). The game look overrides them with the moonlit palette on its screens.
+- **Application tokens:** `background`, `foreground`, `card`, `popover`, `muted`, `border`, `input`, `ring`, `primary`, and `destructive`. Use their Tailwind classes for content, forms, and interactive states. `:root` holds the white palette and `.dark` the near-black one, both cool neutrals (hue ~255, very low chroma). Vanilla uses these neutral values; Solar overrides them with its twilight palette.
 - **Space tokens:** `--sky-top` / `--sky-bot` (the sky gradient), `--void` (the middle of the sky, for label halos and flat fills), `--orbit` (orbit dots, fallback art), `--star-core` (the star's ink), `--sp-meta` (mono metadata), `--sp-rule` (panel edges), `--ease-space` (the one UI easing curve), and status colors `--status-running`, `--status-attention`, `--status-error`, `--status-ok` (each with a `-soft` tint). Amber and red also have an `-ink`: `--status-attention-ink` for amber text (the fill is too light for text on white) and `--status-error-ink` for text on a red fill. The canvas reads the sky, star and orbit colours from `SKY` in [lib/world/bodies.ts](lib/world/bodies.ts); keep it in step with the CSS tokens. Use the status tokens, through `StatusBadge` or the `.satellite` / `.status-*` classes, rather than Tailwind palette colors.
 - **Contrast on white:** small status text needs 4.5:1. Tailwind's amber, emerald, sky and green 600 shades fall short on white, so light-mode text uses the 700 shade (`text-emerald-700 dark:text-emerald-400`).
-- **World tokens:** `--w-*` properties for terrain, bronze framing, parchment, roads, and soil, used by the game look. In the solar-system look the bronze and parchment tokens are remapped to neutrals, so older screens that reference them still read as plain selected and hover states; don't use them in new work.
+- **Legacy tokens:** `--w-*` variables are retained for older shared controls and mapped to each look's selection colors. Use application and status tokens in new work.
 
 Solar-system values:
 
@@ -36,27 +44,6 @@ Solar-system values:
 | `--star-core` | `0.62 0.15 70` | `0.93 0.11 95` |
 | `--ring` | `0.5 0.14 245` | `0.78 0.11 235` |
 
-Representative game-world values:
-
-| Token | Light | Dark | Role |
-| --- | --- | --- | --- |
-| `--w-sea` | `0.4 0.09 248` | `0.24 0.06 258` | Full-screen map background |
-| `--w-ocean` | `0.47 0.1 245` | `0.32 0.07 255` | Deep water |
-| `--w-grass` | `0.66 0.15 135` | `0.48 0.11 140` | Grassland |
-| `--w-plains` | `0.76 0.12 100` | `0.58 0.09 95` | Open land |
-| `--w-forest` | `0.52 0.12 145` | `0.38 0.09 150` | Forest floor |
-| `--w-road` | `0.7 0.07 70` | `0.5 0.05 70` | Town roads |
-| `--w-soil` | `0.48 0.07 55` | `0.36 0.05 55` | Farm soil |
-| `--w-bronze` | `0.62 0.1 70` | `0.55 0.08 70` | Frame midtone |
-| `--w-bronze-light` | `0.82 0.1 85` | `0.72 0.09 85` | Frame highlight |
-| `--w-bronze-dark` | `0.42 0.08 60` | `0.32 0.06 60` | Frame edge and shadow |
-| `--w-parchment` | `0.95 0.035 85` | `0.26 0.02 70` | Warm informational surface |
-| `--w-parchment-ink` | `0.28 0.04 60` | `0.92 0.03 85` | Text on parchment |
-
-Terrain also has alternate fills and detail colors for waves, trees, hills, rock, snow, and cliffs. Reuse the existing pairs for variation. Shared sprite materials such as wood, stone, straw, and gold are defined in [pixel-parts.tsx](components/world/pixel-parts.tsx); some artwork colors are fixed rather than theme tokens.
-
-World variables are defined on `:root` and overridden by `.dark`, so portalled hover cards and popovers inherit them. Do not move them exclusively under `.world`. The theme supports light, dark, and system preferences; [lib/theme.ts](lib/theme.ts) applies the choice before paint.
-
 ## Typography
 
 Fonts are loaded in [app/layout.tsx](app/layout.tsx).
@@ -65,9 +52,8 @@ Fonts are loaded in [app/layout.tsx](app/layout.tsx).
 | --- | --- | --- |
 | Geist | `font-sans` / default | Body text, forms, chat, document prose |
 | Geist Mono | `font-mono` | Code, paths, technical values |
-| Pixelify Sans | `.pixel`, game look only | Map labels, HUD navigation, panel headings, short badges |
 
-In the game look the `.pixel` class sets Pixelify Sans, `image-rendering: pixelated` and `shape-rendering: crispEdges`. In the solar-system look it does nothing, so headings marked `.pixel` render in Geist. Apply it selectively; long-form content should retain the normal text face.
+The legacy `.pixel` class renders normal Geist text in both supported looks. Pixelify Sans is no longer loaded.
 
 Existing sizes establish this hierarchy:
 
@@ -81,31 +67,11 @@ Use `tabular-nums` for counts and comparable numeric values. Truncate names and 
 
 ## Surfaces and controls
 
-### Panel frame
+### Panel frame and controls
 
-[CivPanel](components/world/civ-panel.tsx) is the shared frame for HUD groups, legends, hover cards, empty states, and project panels. Its look comes from CSS:
+[CivPanel](components/world/civ-panel.tsx) is the shared surface. Solar uses ruled glass with a 14px radius, blur and a small shadow; Vanilla uses an opaque card, 8px radius and subtle border. `parchment` is retained for existing empty-state callers. `className` controls the outer frame and `bodyClassName` controls content layout.
 
-- **Solar system:** ruled glass: a 1px `--sp-rule` edge, 14px radius, `popover` at 90% with `blur(20px) saturate(140%)` and a small shadow. The map's control column has hairlines between buttons. `parchment` looks the same as the default.
-- **Game world:** the bronze frame below.
-
-- A 3px bronze gradient frame runs from highlight through midtone to dark edge.
-- Corners have 6px notches; the inner body has corresponding smaller notches.
-- A hard downward shadow and fine inset edges give the frame depth.
-- The default body uses `popover` and `popover-foreground`.
-- The `parchment` prop switches the body to the warm parchment and ink tokens.
-- `className` controls the outer frame; `bodyClassName` controls inner layout and spacing.
-
-Use the default body for working controls and longer content. In the game look, explanatory hover cards and empty states use parchment; preserve the notched silhouette instead of adding rounded card chrome around it. In the solar-system look they are the same ruled glass, and empty states carry an `EmptyMark` (see Screens outside the map).
-
-Portalled map cards remove the underlying primitive's surface with `rounded-none bg-transparent p-0 shadow-none ring-0`, then render a `CivPanel` inside. City cards are 288px wide; town cards are 256px wide, with 12px inner padding.
-
-### Buttons and icons
-
-Map controls use the shared `CONTROL_BUTTON` from [IsoViewport](components/world/iso-viewport.tsx): a 32px square, 16px icon, muted hover background, and visible 2px focus ring. The town panel close control follows the same treatment.
-
-Use [Button](components/ui/button.tsx) for ordinary form actions. It already supplies variants, sizing, disabled styling, and focus states. Its default height is 32px. In the solar-system look the default variant is a plain `primary` ink button with medium corners; its `world:` classes give the game look's bronze-on-soil plate.
-
-[PixelIcon](components/world/pixel-icon.tsx) supplies castle, scroll, and hourglass artwork in the game look and the matching Lucide line icon in the solar-system look; CSS picks one, so it works in server components. Lucide icons handle functional controls such as zoom, back, information, and close. The main menu button is a deliberate circular exception with the dotted Thunk mark: a 48px glass circle in the solar-system look, a 56px bronze orb in the game look. The Thunk logo and mark stay the same in both looks.
+Use [Button](components/ui/button.tsx) for form actions and Lucide icons for controls. [PixelIcon](components/world/pixel-icon.tsx) retains its historical name but now returns a plain line icon. Solar's circular main-menu button remains on map routes; Vanilla uses the sidebar.
 
 ### Which component library
 
@@ -120,7 +86,7 @@ Use [`Hint`](components/hint.tsx) (a tooltip, with an optional key) for icon but
 
 ## Solar-system map
 
-[SystemMap](components/space/system-map.tsx) and [PlanetView](components/space/planet-view.tsx) draw the default look; the layout maths is pure and tested in [lib/world/system.ts](lib/world/system.ts), [lib/world/planet.ts](lib/world/planet.ts) and [lib/world/bodies.ts](lib/world/bodies.ts). Both reuse `IsoViewport` for pan, zoom, keys and click-versus-drag, opting into its `underlay`, `onView` and `smooth` props (the game look doesn't use them).
+[SystemMap](components/space/system-map.tsx) and [PlanetView](components/space/planet-view.tsx) draw the default look; the layout maths is pure and tested in [lib/world/system.ts](lib/world/system.ts), [lib/world/planet.ts](lib/world/planet.ts) and [lib/world/bodies.ts](lib/world/bodies.ts). Both reuse `IsoViewport` for pan, zoom, keys and click-versus-drag, opting into its `underlay`, `onView` and `smooth` props.
 
 - **All projects:** a star in the middle and one planet per project, floating free: no orbit lines, and each planet bobs gently (3px, 5–9s, off under reduced motion). New projects start at a spot from `placePlanets` (oldest first, angle from the id, labels clear of each other via `LABEL_BOX`), so a planet never moves when another is added. Drag a planet, or focus it and press Alt + arrow keys, to move it; the offset from the star is saved in the `thunk.planets` cookie ([lib/world/positions.ts](lib/world/positions.ts)) so the server renders the same layout. Drops are clamped inside the map and away from the star, so the map never resizes under you. “Reset planet layout” appears in the control column once anything has moved. Planet size follows the city level (workspaces × 2 + sessions, thresholds 2, 6, 14, 30), radius 12, 17, 23, 30, 38. Colour is one of eight mostly cool palettes chosen by id. Light comes from the star, and follows a planet while it is dragged.
 - **One project:** the core is the same planet as on the home map (its level and seed) at r=58; it opens the overview. Active workspaces are rock or ice moons on rings of 4, 8, 12, with `main` first; each shows its branch and PR mark. Up to 12 newest sessions per moon are satellites on two dotted loops; the rest are counted as `+N`. Satellites grow with spend (thresholds $0.01, $0.5, $2, $5); closed sessions are hollow. A fixed key light falls from the upper left, so every night side faces lower right. Notes, Tasks, Routines, Vault and Canvas are a ruled glass section bar at the bottom centre, counts in mono.
@@ -181,9 +147,9 @@ The solar-system look carries past the map to every screen: the workspace shell,
 - **Sky:** map routes and the `(world)` screens sit on `.world`, which paints the sky with its stars. The workspace shell (`ShellPanels`) and the canvas page add `.sky-surface`, the same gradient without stars. The canvas lives in the workspace shell, so it keeps the sidebar; its wrapper fills the content pane with `overflow-hidden`, so the board owns its scroll and gestures and the pane never scrolls under it. The sidebar is translucent so the sky shows through; dense content (console, editors, documents) stays on solid surfaces.
 - **Accent:** `--sp-accent` (periwinkle) marks selection. The old `--w-bronze` and `--w-parchment` tokens point at it in this look, so `WORLD_SELECTION`, pressed toggles and the Inbox and Library rails read as accent tints.
 - **Eyebrows:** `.pixel` eyebrows set in caps (`.pixel.uppercase`) render as 10px Geist Mono caps with 0.1em tracking, like the map's metadata. Headings keep Geist.
-- **Empty states:** [`EmptyMark`](components/space/orbit-mark.tsx) shows the section's line icon on a small line-art planet in a dotted orbit, with two sparkles; the game look keeps its pixel icon. Parchment cards that aren't panels lose their fill in this look, so the mark and text sit straight on the panel.
+- **Empty states:** [`EmptyMark`](components/space/orbit-mark.tsx) shows the section's line icon on a small line-art planet in a dotted orbit, with two sparkles; Vanilla uses the plain icon. Parchment cards that aren't panels lose their fill in this look, so the mark and text sit straight on the panel.
 - **404:** [app/not-found.tsx](app/not-found.tsx) uses the same empty-state frame.
-- **Words:** empty states and panels use plain product terms in both looks ("No routines yet", "Your Vault is empty", "Back to your projects"); game words stay on the game map.
+- **Words:** empty states and panels use plain product terms in both looks ("No routines yet", "Your Vault is empty", "Back to your projects").
 - **Sidebar** ([app-sidebar.tsx](components/layout/app-sidebar.tsx)): the logo row carries Search (`⌘K`); the Relay bar is the one field below it; then Inbox and Library rows, routine runs, and the project tree. The Inbox row shows the open action count as the attention mark; per-project marks link to the filtered Inbox, so the sidebar never previews notifications itself. Every row keeps one resting number on a shared right edge: attention (`! N`, `--status-attention-ink` on `--status-attention-soft`, mono) or open tasks on projects, session count on workspaces, item count on Inbox and Library. Row actions (notes, tasks, new workspace, workspace menu) join beside that number on hover or keyboard focus through `.sidebar-row` / `.sidebar-row-actions`, which hide them visually without leaving the tab order. Selection (`WORLD_SELECTION`) wraps the whole row, count included. Workspace icons name the kind only (house for Local, branch for a worktree); a worker session adds a small bot mark after the name. Each project's canvases ([sidebar-canvases.tsx](components/layout/sidebar-canvases.tsx)) follow its workspaces as the same rows (`components/layout/sidebar-row.ts`) with no heading: the shapes icon names the kind, and each canvas row reveals a new-canvas button the same way. An open canvas selects its own row, not the project's. Collapsed projects persist in `localStorage`. On desktop the whole sidebar collapses to a 52px icon rail (Search, Crack, Inbox with its count, Library, Settings, Expand) from the button beside Settings, ⌘\\, or dragging the handle past its minimum; the rail persists with the panel layout, and expanding returns to the last width ([shell-panels.tsx](components/layout/shell-panels.tsx), `useSidebarState`).
 
 ## Homepage composition
@@ -193,23 +159,21 @@ The [world layout](app/(world)/layout.tsx) fills `h-dvh`, clips overflow, and pl
 | Layer | Placement and spacing |
 | --- | --- |
 | Map | Full viewport; panned and zoomed as one stage |
-| Title | Top-left bronze frame; 16px outer inset; 12px horizontal and 8px vertical body padding |
-| Actions | Top-right bronze frame; compact group with 4px padding |
+| Title | Top-left glass frame; 16px outer inset; 12px horizontal and 8px vertical body padding |
+| Actions | Top-right glass frame; compact group with 4px padding |
 | Main menu | Bottom-left; 16px inset; expandable menu above the orb |
-| Zoom and legend | Bottom-right; vertical bronze-framed control column |
+| Zoom and legend | Bottom-right; vertical glass-framed control column |
 | Empty state | Centered parchment panel (glass in the solar-system look), `max-w-sm`, 24px padding |
 
 The HUD and map controls use `z-20`; the command menu and town panels use `z-30`. World objects use their own depth order inside the map stage. Overlay containers allow pointer events through empty space and enable them on actual controls. Keep future overlays from blocking map interaction outside their bounds.
 
-Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a bronze-tinted background and bronze outline; Notes shows its note count; Routines shows how many are enabled. Any future unavailable section should carry an explicit “Soon” label.
+Bottom controls use `bottom-18` during development to clear development tooling and `bottom-4` otherwise. Menu links are 224px wide, with 40px icon wells. The active section has a muted background; Notes shows its note count; Routines shows how many are enabled. Any future unavailable section should carry an explicit “Soon” label.
 
-## Game look: town styling
+## Shared project panels
 
-[TownView](components/town/town-view.tsx) reuses the homepage terrain, viewport, framed cards, and label treatment. The Town center represents the project, farmhouses represent workspaces, and fields represent sessions and their spend-based crop stage. The library opens the project's notebook; the workshop opens the project's routines (standing orders) and shows the amber `!` when a routine run waits on approval; the vault opens the project's uploads, lights its lamps while Claude is reading, and shows the amber `!` when an upload failed.
+Solar opens details beside its map. Vanilla displays the same panel within its project page, below the section navigation. Project and workspace preview URLs stay valid in both looks.
 
-Inside a project, the HUD replaces the homepage title with a back link (“Projects”, or “World” in the game look) and the project name. Selecting an object opens a panel through a query parameter, retaining the surrounding map context and camera position.
-
-[TownPanel](components/town/town-panel.tsx) defines the detail surface both looks share:
+[TownPanel](components/town/town-panel.tsx) defines the detail content both looks share. The following floating dimensions apply only to Solar; Vanilla fills the available content pane:
 
 - Top offset: 80px. Right inset: 16px.
 - Default width: `min(460px, calc(100vw - 2rem))`.
@@ -229,7 +193,7 @@ Notes follow Apple Notes' shape: notebooks → list → editor. The `/notes` Lib
 
 - Pane headers use small `.pixel` uppercase eyebrows. Note titles and bodies stay in Geist: the title is a 24px bold input, the body uses `.doc-prose` (including `- [ ]` checklists).
 - List rows match `SessionsList`: `bg-background rounded-lg border`, a 13px title, an 11px time and excerpt line, and lucide badges for pinned, injected (brain), memory (lock) and open tasks (`tabular-nums`).
-- Selected notebooks reuse the toolbar's active treatment (bronze tint and outline in the game look, the accent in the solar-system look). The empty editor state shows the `quill` mark: parchment and pixel art in the game look, `EmptyMark` in the solar-system look.
+- Selected notebooks reuse the toolbar's active treatment (neutral tint in Vanilla, the accent in Solar). The empty editor state shows the `quill` mark: a plain icon in Vanilla, an orbit mark in Solar.
 - Flags (Pin, Inject into sessions, Actionable) are pressed-state toggle chips; the note's file path sits below them in 10px mono, like the old memory editor.
 - Saving is automatic (800ms) with a footer status. An agent edit while the note is dirty shows an amber banner with "Load their version" / "Keep mine" instead of overwriting.
 
@@ -239,11 +203,11 @@ Routines reuse the existing surfaces rather than adding new ones. The town Works
 
 - Forms and tables use `components/ui/*`; trigger and flag toggles are the same pressed-state chips as note flags. `.pixel` stays on headings and eyebrows.
 - Run status badges use the session header's palette: amber pulse for running, amber for “Needs you”, emerald for succeeded, red for failed, muted for cancelled and skipped.
-- Sessions started by a routine show a “Routine · <name>” badge in the session header, the hourglass pixel icon in session lists, and “· Routine” in the field panel eyebrow.
+- Sessions started by a routine show a “Routine · <name>” badge in the session header, the repeat icon in session lists, and “· Routine” in the field panel eyebrow.
 
 ## Inbox
 
-The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses the toolbar’s bronze selection treatment and attention counts (`--status-attention-ink` on `--status-attention-soft`, mono); below the large-screen breakpoint it becomes a project picker in the header. Project and kind filters live in the URL (`?projectId=`, `?kind=`); the kind picker lists only kinds present, with open counts.
+The Inbox is a full-height `CivPanel` under the HUD. A narrow project rail uses the current look’s selection treatment and attention counts (`--status-attention-ink` on `--status-attention-soft`, mono); below the large-screen breakpoint it becomes a project picker in the header. Project and kind filters live in the URL (`?projectId=`, `?kind=`); the kind picker lists only kinds present, with open counts.
 
 The list has three sections, in this order ([model.ts](components/inbox/model.ts) decides which):
 
@@ -262,7 +226,7 @@ Delivery rows lead with the PR title and carry the PR number as mono metadata, n
 - **Dismissal:** every dismissal shows an Undo toast. The header menu dismisses what’s in the current project and kind view and says how many; when that includes decisions it asks first, and offers “Dismiss follow-ups only”.
 - **Keyboard:** shortcuts work only while the list has focus. Rows use a roving tab stop (one per list; a row’s own controls are tabbable only when it’s active). `j`/`k` or arrows move, `x` or Space selects, `e` dismisses the row or the selection, `o` or Enter opens, `1`–`4` pick a decision's inline options, `c` toggles quick context, `r` opens it with the cursor in the reply box, Esc clears the selection. After a dismissal, focus lands on the row that took its place; a polite live region announces the result.
 - **Controls:** 32px buttons and icon buttons, full-strength `ring` focus rings, distinct accessible names (“Dismiss “Fix flaky test””), tooltips via `Hint`. Nothing is hover-only.
-- **States:** empty views use the bell mark (parchment in the game look, `EmptyMark` in the solar-system look) and one clear next step. Loading skeletons stop on failure, which shows a retry state. A reconnect keeps the list in place and merges fresh rows over it.
+- **States:** empty views use the bell mark (a plain icon in Vanilla, an orbit mark in Solar) and one clear next step. Loading skeletons stop on failure, which shows a retry state. A reconnect keeps the list in place and merges fresh rows over it.
 
 ## Vault
 
@@ -271,43 +235,19 @@ The Vault reuses the Notes shapes. The town Vault is a `wide` `TownPanel` titled
 - Item rows match note rows: a lucide kind icon, a 13px title, an 11px “time · size · file name” line, and either an idea count (lightbulb, `tabular-nums`) or a status badge.
 - Status badges use the routine palette: muted for queued, amber pulse for “Reading”, emerald for ready, red for failed.
 - The detail title is a 20px bold auto-growing field; the summary renders as `.doc-prose` markdown; tags are secondary badges. Ideas are bordered cards with an outline kind badge (bronze idea, sky insight, violet question, emerald action) and **→ Note** / **→ Task** buttons that turn into ghost links once used.
-- The empty detail state shows the `chest` mark: the only parchment surface in the game look, `EmptyMark` in the solar-system look.
-
-## Game look: map artwork and states
-
-The isometric tile is 64×32px. Use `toIso`, `mapSize`, and the grid types in [terrain.ts](lib/world/terrain.ts) for placement. Sprite ground lines align to tile centers; labels hang beneath the artwork. Cities use a 32×28 source grid rendered at 2×. Town buildings use larger source grids at the same 2× scale.
-
-Build sprites from crisp SVG shapes and the shared materials in `pixel-parts.tsx`. Keep stepped roofs, stone foundations, timber details, small banners, and restrained ground shadows consistent with [town sprites](components/town/sprites.tsx). Project and workspace hues identify ownership through roofs, banners, and badges.
-
-Map labels combine a colored badge with white text on a black/65 nameplate, a thin dark ring, and a hard 2px shadow. Focus adds a visible white ring. Hover lifts city artwork by 2px over 150ms.
-
-Status uses more than color:
-
-| State | Existing visual cue |
-| --- | --- |
-| Running city session | Chimney smoke; green in activity styling |
-| Needs attention | Amber `!` badge |
-| Session error | Red `!` badge |
-| Dormant city | Desaturated, dimmed sprite and `zzz` |
-| Unavailable section | Fog texture, parchment explanation, explicit placeholder copy |
-
-The map legend explains population and activity cues; the town legend explains crop stages. Keep the legends aligned with the actual meaning of the artwork.
+- The empty detail state shows the `chest` mark: a plain icon in Vanilla, an orbit mark in Solar.
 
 ## Motion and access
 
-Existing motion includes a spring-open command menu, small orb hover/press scaling, smoke, attention badges, and a 3.2-second wave opacity cycle. Camera movement is direct manipulation through the shared viewport. It supports drag, wheel zoom, arrow-key pan, plus/minus zoom, and `0` to fit. A drag must not activate the object beneath its release point.
-
-New motion should stay brief and functional, with a static reduced-motion alternative. Waves and city smoke already respect reduced motion; toolbar and city attention animations do not explicitly do so, so do not assume that coverage is complete.
-
-Use real links and buttons, accessible names for icon-only controls, visible keyboard focus, and textual status labels. Decorative SVGs remain `aria-hidden`. Keep long descriptions readable without pixel typography. Existing narrow-screen width caps are a starting point; verify HUD overlap and panel access on small viewports when extending these layouts.
+Solar's map motion remains as described above. Vanilla has no decorative motion; transitions should explain state changes. Use real links and buttons, accessible names for icon controls, visible keyboard focus, and textual status labels. Respect reduced motion and verify long names, empty states, narrow screens, and overflow.
 
 ## Canvas and chat guidance
 
-For new canvas and chat work, carry the world identity through headings and surrounding navigation while using semantic application surfaces for editable content. Reuse existing form and editor components and use `TownPanel` when content belongs in the town overlay.
+For new canvas and chat work, use semantic application surfaces for editable content in both looks. Reuse existing form and editor components and use `TownPanel` when content belongs in the town overlay.
 
 The current `.doc-prose` style in `app/globals.css` provides the document baseline: 15px body text, 1.7 line height, 0.75em block spacing, restrained heading tracking, underlined links, muted code surfaces, and bordered tables. Code blocks use 13px monospace with horizontal scrolling. Comment anchors have distinct default, active, resolved, and dark-theme styles; preserve these states.
 
-Avoid introducing a second palette, a replacement frame, or pixel-styled body text for new editor screens. Keep bronze and parchment as meaningful accents around the work.
+Avoid introducing a second palette, a replacement frame, or pixel-styled body text for new editor screens. Use the current look’s neutral or twilight tokens around the work.
 
 ### Canvas board interactions
 
@@ -325,14 +265,14 @@ A card is placed by `left: var(--hold-x, <x>)` / `top: var(--hold-y, <y>)`: whil
 ## Checks when extending the design
 
 - Reuse `CivPanel`, `TownPanel`, `IsoViewport`, `Sphere`, `StatusBadge`, `PixelIcon`, and existing UI primitives where their roles match.
-- Verify both looks, and the solar-system look in both light and dark, including portalled surfaces.
-- Anything new on the map needs a version in each look; anything off the map uses plain terms.
+- Verify both looks in light and dark, including portalled surfaces.
+- New map actions must also be reachable from Vanilla lists or panels; use plain terms throughout.
 - Check keyboard focus, Escape behavior, reduced motion, and map click-versus-drag behavior when touched.
 - Check long names, empty states, small viewports, and content overflow.
 - Keep unavailable features explicitly labeled and use current legends and status meanings.
 - Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing application code, as required by `AGENTS.md`.
 
-In the game look, the workspace shell opts into the moonlit palette through `.moonlit`; in the solar-system look it sits on the sky (`.sky-surface`) with the twilight surfaces, in light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
+In Vanilla, the workspace shell uses neutral surfaces; in Solar it sits on the sky (`.sky-surface`) with twilight surfaces, in light and dark. Chat, documents, and code retain Geist and monospace on normal surfaces.
 
 ### Thoughts
 

@@ -5,14 +5,14 @@ import { sparklePath } from "./sphere";
 
 /**
  * The empty-state mark in the solar-system look: the section's line icon on a small line-art planet with a hatched
- * night side, circled by a dotted orbit, with two sparkles. Hidden in the game look.
+ * night side, circled by a dotted orbit, with two sparkles. Hidden in Vanilla.
  */
 export function OrbitMark({ name, className }: { name: PixelIconName; className?: string }) {
   const id = useId().replace(/:/g, "");
   const Icon = PLAIN_ICONS[name];
   const orbit = "M6,40a42,13 0 1,0 84,0a42,13 0 1,0 -84,0";
   return (
-    <span aria-hidden="true" className={cn("sp-orbit-mark relative block h-[72px] w-24 world:hidden", className)}>
+    <span aria-hidden="true" className={cn("sp-orbit-mark relative block h-[72px] w-24 world:hidden vanilla:hidden", className)}>
       <svg viewBox="0 0 96 72" className="absolute inset-0 size-full overflow-visible" fill="none">
         <defs>
           <clipPath id={`${id}-front`}>
@@ -43,7 +43,7 @@ export function OrbitMark({ name, className }: { name: PixelIconName; className?
   );
 }
 
-/** An empty state's mark in either look: the orbit mark in the solar-system look, the pixel icon in the game look. */
+/** An empty state's mark in either look: the orbit mark in the solar-system look, a plain section icon in Vanilla. */
 export function EmptyMark({ name, className, pixelClassName }: { name: PixelIconName; className?: string; pixelClassName?: string }) {
   return (
     <>

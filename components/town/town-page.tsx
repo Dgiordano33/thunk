@@ -1,8 +1,8 @@
+import { VanillaProject } from "@/components/vanilla/project";
 import { MapLegend } from "@/components/onboarding/map-legend";
 import { ProjectHome } from "@/components/mobile/project-home";
 import { MobileSessionRedirect } from "@/components/mobile/session-redirect";
 import { ResponsiveView } from "@/components/mobile/viewport";
-import { isMobileRequest } from "@/components/mobile/viewport.server";
 import { ArchivedHarvestOffer } from "@/components/workspace/harvest-dialog";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -14,8 +14,7 @@ import { VaultPanel } from "@/components/vault/vault-panel";
 import { WindowContextDrop } from "@/components/vault/add-context";
 import { vaultDirOf } from "@/lib/vault/dir";
 import { listItems } from "@/lib/vault/store";
-import { isBusy } from "@/lib/vault/types";
-import { TownView, type TownField, type TownSelection, type TownFarmhouse } from "@/components/town/town-view";
+import { type TownField, type TownSelection, type TownFarmhouse } from "@/components/town/town-view";
 import { workspaceLabel } from "@/components/session/labels";
 import { listSessions, liveMeta } from "@/lib/agent";
 import type { HarnessEvent, SessionMeta } from "@/lib/agent/types";
@@ -29,7 +28,7 @@ import { listCanvasesWithStatus } from "@/lib/board/canvases";
 import { getSessionRow, listSessionRows } from "@/lib/db/repo/sessions";
 import { listWorkspaces } from "@/lib/db/repo/workspaces";
 import { cityHue, cityLevel } from "@/lib/world/cities";
-import { cropStage, layoutTown } from "@/lib/world/town";
+import { cropStage } from "@/lib/world/town";
 import { PlanetView, type PlanetMoon, type PlanetSatellite, type PlanetSection } from "@/components/space/planet-view";
 import { getLook } from "@/lib/look.server";
 import { projectNoteDirs } from "@/lib/notes/resolve";
@@ -43,7 +42,7 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : u
 const BUILDINGS = ["center", "library", "workshop", "tasks", "vault"] as const;
 
 // A project up close. Solar-system look: the project is a planet, workspaces are moons, sessions their satellites.
-// Game look: workspaces are farms, sessions are the fields around them.
+// Vanilla uses the same data and panels in a conventional project page.
 // Section routes supply the building; query parameters retain workspace/session previews.
 export async function TownPage({ params, searchParams }: PageProps<"/[project]">) {
   const { project: slug } = await params;
@@ -69,11 +68,8 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
   const activeIds = new Set(active.map((w) => w.id));
   const townSessions = sessions.filter((s) => activeIds.has(s.workspaceId));
   const cost = new Map(rows.map((r) => [r.id, r.totalCostUsd]));
-  const layout = layoutTown(id, active, townSessions);
 
-  const townWorkspaces: TownFarmhouse[] = layout.farmhouses.flatMap(({ workspaceId, cell }) => {
-    const w = active.find((x) => x.id === workspaceId);
-    if (!w) return [];
+  const townWorkspaces: TownFarmhouse[] = active.flatMap((w) => {
     return [{
       id: w.id,
       label: workspaceLabel(w),
@@ -82,15 +78,13 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
       hue: cityHue(w.id),
       lastActivityAt: [...rows.filter(r => r.workspaceId === w.id).map(r => r.updatedAt), w.updatedAt].sort().at(-1)!,
       sessionCount: townSessions.filter((s) => s.workspaceId === w.id).length,
-      overflow: layout.overflow[w.id] ?? 0,
-      ...cell,
+      overflow: 0,
+      col: 0, row: 0,
     }];
   });
   const fields: TownField[] = townSessions.map((s) => {
-    // Overflow fields remain reachable in the panel; only placed fields are sent to the map.
-    const cell = layout.fields[s.id] ?? layout.center;
     const costUsd = cost.get(s.id) ?? 0;
-    return { id: s.id, workspaceId: s.workspaceId, title: s.title ?? null, model: s.model, createdAt: s.createdAt, costUsd, stage: cropStage(costUsd), fallow: s.status === "closed" || s.status === "error", ...cell };
+    return { id: s.id, workspaceId: s.workspaceId, title: s.title ?? null, model: s.model, createdAt: s.createdAt, costUsd, stage: cropStage(costUsd), fallow: s.status === "closed" || s.status === "error", col: 0, row: 0 };
   });
 
   const selected: TownSelection = {
@@ -125,7 +119,7 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     if (workspace) panel = <FarmPanel project={project} workspace={workspace} fields={fields.filter((f) => f.workspaceId === workspace.id).sort((a, b) => Number(a.fallow) - Number(b.fallow) || b.createdAt.localeCompare(a.createdAt))} closeHref={closeHref} />;
   } else if (selected.building === "center") {
     const externalSessions = await listExternalSessions(project, { exclude: sessions.map((s) => s.sdkSessionId) }).catch(() => []);
-    panel = <ProjectPanel project={project} level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })} allFarmCount={townSessions.length} totalSpend={rows.reduce((n, r) => n + r.totalCostUsd, 0)} activeCount={active.length} archived={archived} externalSessions={externalSessions} workspaces={workspaces} closeHref={closeHref} />;
+    panel = <ProjectPanel showSize={look === "space"} project={project} level={cityLevel({ workspaceCount: workspaces.length, sessionCount: sessions.length })} allFarmCount={townSessions.length} totalSpend={rows.reduce((n, r) => n + r.totalCostUsd, 0)} activeCount={active.length} archived={archived} externalSessions={externalSessions} workspaces={workspaces} closeHref={closeHref} />;
   } else if (selected.building === "library") {
     panel = (
       <Suspense>
@@ -146,15 +140,11 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
 
   const harvestOffers = archived.filter((w) => w.id === one(query.harvest)).map((w) => <ArchivedHarvestOffer key={w.id} workspaceId={w.id} label={workspaceLabel(w)} />);
 
-  // The space look's dock and the mobile project home show these counts; skip them for the game look on desktop.
-  const needCounts = look === "space" || (await isMobileRequest());
-  const [noteCount, taskCounts, routines] = needCounts
-    ? await Promise.all([
-        countNotes([projectNoteDirs(project)]).catch(() => undefined),
-        countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
-        listEnabledRoutines({ projectId: id }).catch(() => []),
-      ])
-    : [undefined, {} as Awaited<ReturnType<typeof countOpenTasks>>, undefined];
+  const [noteCount, taskCounts, routines] = await Promise.all([
+    countNotes([projectNoteDirs(project)]).catch(() => undefined),
+    countOpenTasks().catch(() => ({}) as Awaited<ReturnType<typeof countOpenTasks>>),
+    listEnabledRoutines({ projectId: id }).catch(() => []),
+  ]);
   const tasks = taskCounts[id];
   const mobile = mobileSessionHref ? <MobileSessionRedirect href={mobileSessionHref} /> : panel ?? <ProjectHome project={project} workspaces={townWorkspaces} closeHref={closeHref} counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines?.length, vault: vaultItems.length }} />;
 
@@ -203,27 +193,12 @@ export async function TownPage({ params, searchParams }: PageProps<"/[project]">
     );
   }
 
-  return (
-    <ResponsiveView mobile={mobile}><TownView
-      projectId={id}
-      townHref={closeHref}
-      projectName={project.name}
-      grid={layout.grid}
-      tiles={layout.tiles}
-      farms={townWorkspaces}
-      fields={fields.filter(f => layout.fields[f.id])}
-      center={layout.center}
-      townHall={layout.townHall}
-      studio={layout.studio}
-      library={layout.library}
-      workshop={layout.workshop}
-      vault={{ ...layout.vault, busy: vaultItems.some(isBusy), failed: vaultItems.some((i) => i.status === "failed") }}
-      canvas={{ href: canvasPath(project), count: canvases.length, attention: canvasesWaiting }}
-      selected={selected}
-    >
-      {panel}
-      {harvestOffers}
-      {panel === null && <WindowContextDrop target={{ projectId: id }} projectName={project.name} />}
-    <MapLegend /></TownView></ResponsiveView>
-  );
+  return <ResponsiveView mobile={mobile}><VanillaProject
+    project={project} workspaces={active} sessions={townSessions} selected={selected.building}
+    counts={{ library: noteCount, tasks: tasks ? tasks.project + Object.values(tasks.byWorkspace).reduce((a, b) => a + b, 0) : 0, workshop: routines.length, vault: vaultItems.length, canvas: canvases.length }}
+    panel={panel}
+  >
+    {harvestOffers}
+    {panel === null && <WindowContextDrop target={{ projectId: id }} projectName={project.name} />}
+  </VanillaProject></ResponsiveView>;
 }

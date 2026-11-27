@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** The bronze frame every HUD surface on the world map sits in. `parchment` swaps the body for an old-map paper look. */
+/** Shared surface: ruled glass in Solar, an opaque bordered card in Vanilla. `parchment` marks an empty state. */
 export function CivPanel({
   className,
   bodyClassName,

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { Maximize2Icon, Minimize2Icon, RotateCcwIcon } from "lucide-react";
+import { useLook } from "@/components/look-context";
 import { useIsDesktop } from "@/components/mobile/viewport";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +11,9 @@ const Controls = createContext<React.ReactNode>(null);
 export function WindowControls() { return useContext(Controls); }
 /** Marks a window's own header as its drag handle (double-click maximizes; arrow keys move, Shift+arrows resize). */
 export function useWindowHandle() {
-  const desktop = useIsDesktop();
+  const isDesktop = useIsDesktop();
+  const vanilla = useLook().look === "vanilla";
+  const desktop = isDesktop && !vanilla;
   return { "data-window-drag": "", tabIndex: desktop ? 0 : undefined, title: desktop ? "Drag to move · double-click to maximize" : undefined } as const;
 }
 const handles = {
@@ -27,7 +30,9 @@ export function FloatingWindow({ children, className, style, as: Tag = "main", d
   /** Small cards with no header: drag from any non-interactive spot. */
   dragAnywhere?: boolean;
 }) {
-  const desktop = useIsDesktop();
+  const isDesktop = useIsDesktop();
+  const vanilla = useLook().look === "vanilla";
+  const desktop = isDesktop && !vanilla;
   const ref = useRef<HTMLElement>(null);
   const gesture = useRef<{ id: number; x: number; y: number; rect: Rect; edge: string; capture: HTMLElement } | null>(null);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -93,6 +98,7 @@ export function FloatingWindow({ children, className, style, as: Tag = "main", d
   const geometry: CSSProperties = !desktop ? {} : maximized
     ? { left: 8, top: 80, right: 8, bottom: 16, width: "auto", height: "auto" }
     : rect ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height, right: "auto", bottom: "auto" } : {};
+  if (vanilla && isDesktop) return <Controls.Provider value={null}><Tag className="vanilla-panel flex h-full min-h-0 w-full flex-col">{children}</Tag></Controls.Provider>;
   return <Controls.Provider value={controls}><Tag ref={ref} data-floating-window="" data-window-drag={desktop && dragAnywhere ? "" : undefined} data-maximized={maximized} data-window-sized={desktop && (!!rect || maximized)} className={cn(className, "floating-window", moving && "select-none")} style={{ ...style, ...geometry, ...(active ? { zIndex: 31 } : {}) }}
     onPointerDownCapture={() => setActive(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setActive(false); }}
     onPointerDown={event => { const target = event.target as HTMLElement; if (target.closest("[data-window-drag]") && !target.closest(interactive)) begin(event); }}
