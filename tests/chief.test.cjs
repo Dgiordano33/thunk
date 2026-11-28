@@ -414,6 +414,7 @@ test("delegation reuses existing workspaces, validates targets and serializes co
 // ---- Orchestration: queue, scouts, races, stats, plans, overlaps, integration, cleanup ----
 const { execFileSync } = require("node:child_process");
 const workersState = load("@/lib/workers/state");
+const workerRows = load("@/lib/db/repo/worker-state");
 const sh = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 async function stopAll() {
   for (const live of sessions.values()) if (live.meta.origin?.kind === "worker" && ["running", "awaiting", "starting"].includes(live.meta.status)) agent.closeSession(live.id);
@@ -440,7 +441,7 @@ test("queued delegation revalidates existing workspace ownership, activity and a
   tasks.get(blocker.taskId).status = "done";
   assert.deepEqual(await service.drainQueue(project.id), []);
   assert.equal(tasks.get(archived.taskId).status, "blocked");
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, blocker.taskId, "Cleanup");
 });
 
@@ -462,7 +463,7 @@ test("dependsOn queues a task until its dependency is accepted; a cancelled depe
   assert.deepEqual(await service.drainQueue(project.id), []);
   assert.equal(tasks.get(ui.taskId).status, "blocked");
   assert.match(chief.events.at(-1).content, /<worker_queue task="[^"]+" status="blocked">[\s\S]*UI/);
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, schema.taskId, "Done with test");
 });
 
@@ -472,7 +473,7 @@ test("stopping a queued task removes it from the queue", async () => {
   const waiting = await service.delegate(project.id, null, { title: "Waiting", dependsOn: [blocker.taskId] });
   await service.stopWorker(project.id, waiting.taskId, "Not needed");
   assert.equal(tasks.get(waiting.taskId).status, "cancelled");
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, blocker.taskId, "Cleanup");
 });
 
@@ -542,7 +543,7 @@ test("stats count each finish once, including after recovery", async () => {
   finishWith(live, "First pass", 0.25);
   await until(async () => await reports.savedReport(project, live.id));
   await service.recoverWorkers();
-  const stats = (await workersState.readWorkerState(project)).stats[worker.taskId];
+  const stats = await workerRows.getTaskStats(worker.taskId);
   assert.equal(stats.rounds, 1);
   assert.equal(stats.costUsd, 0.25);
   assert.equal(stats.outcome, "done");
@@ -572,7 +573,7 @@ test("a delegation plan waits for the person; approval delegates in order with d
   const [copy, email] = decided.results;
   assert.equal(copy.queued, false);
   assert.equal(email.queued, true);
-  assert.deepEqual((await workersState.readWorkerState(project)).queue.find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
+  assert.deepEqual((await workerRows.listQueue(project.id)).find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
   const stored = await load("@/lib/db/repo/delegation-plans").getDelegationPlan(proposed.planId);
   assert.equal(stored.status, "approved");
   assert.deepEqual(stored.tasks.map((t) => [t.key, t.taskId, t.dependsOn]), [["copy", copy.taskId, undefined], ["email", email.taskId, ["copy"]]]);
@@ -689,8 +690,10 @@ test("resuming a relay reuses its completed and running tasks instead of creatin
   tasks.get(first.taskId).status="done";
   const completed=await service.delegate(project.id,chief.id,{relayId,taskId:first.taskId});
   assert.equal(completed.reused,true);assert.equal(completed.status,"done");assert.equal(tasks.size,count);
-  const state=await load("@/lib/workers/state").readWorkerState(project);
-  assert.equal(state.relayTasks[relayId]["unique recovery work"],first.taskId);
+  const ledger=load("@/lib/db/repo/worker-state");
+  assert.equal(await ledger.relayTaskId(relayId,"unique recovery work"),first.taskId);
+  assert.equal(await ledger.relayTaskId(relayId,`id:${first.taskId}`),first.taskId);
+  assert.deepEqual(await ledger.relayTaskIds(relayId),[first.taskId]);
 });
 
 test("the worker cap follows the limits setting without a restart", async () => {

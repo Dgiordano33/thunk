@@ -29,10 +29,13 @@ const { testDb } = require("./helpers/test-db.cjs");
 const { importStateFiles } = require("../lib/db/import-files.ts");
 const plans = require("../lib/db/repo/delegation-plans.ts");
 const integrations = require("../lib/db/repo/integrations.ts");
+const workerState = require("../lib/db/repo/worker-state.ts");
 
 const id = () => crypto.randomUUID();
 const configDir = (key) => path.join(tmp, "projects", key, "config");
 const write = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(value)); };
+// Postgres prints timestamps as `…+00:00`; compare instants, not spellings.
+const instants = (value) => JSON.parse(JSON.stringify(value), (_k, v) => typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? Date.parse(v) : v);
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 
 async function withDb(t) {
@@ -72,16 +75,57 @@ test("plans and the current integration move from workers/state.json into Postgr
   assert.equal(integration.workspaceId, workspaceId);
   assert.equal(integration.merged, null, "imported integrations have no stored result");
   assert.deepEqual((await integrations.currentIntegrations(projectId)).map((i) => i.workspaceId), [workspaceId]);
-  const left = read(file);
-  assert.equal(left.plans, undefined);
-  assert.equal(left.integrations, undefined);
-  assert.equal(left.queue.length, 1, "the rest of the file is untouched");
+  assert.equal(fs.existsSync(file), false);
+  assert.ok(fs.existsSync(`${file}.imported`), "the file is renamed once imported");
 
-  // A second start finds nothing new; a re-imported copy of the same plan is skipped.
-  write(file, { ...left, plans: { [planId]: { ...plan, status: "pending" } } });
+  // An old copy restored next to it imports again without duplicating anything.
+  write(file, { ...read(`${file}.imported`), plans: { [planId]: { ...plan, status: "pending" } } });
   await importStateFiles();
   assert.equal((await plans.getDelegationPlan(planId)).status, "approved");
   assert.equal((await current.query("select count(*)::int as n from integrations"))[0].n, 1);
+});
+
+test("the queue, races, task stats and relay ledger move from workers/state.json into Postgres", async (t) => {
+  const projectId = await withDb(t);
+  const [first, second, dep, raceTask, raceId, s1, s2, relayId, chiefId] = Array.from({ length: 9 }, id);
+  const file = path.join(configDir("app"), "workers", "state.json");
+  const stats = { taskId: raceTask, title: "Race", models: ["a", "b"], mode: "worktree", startedAt: "2026-11-20T08:00:00.000Z", finishedAt: "2026-11-20T08:30:00.000Z", durationMs: 1_800_000, costUsd: 0.5, rounds: 1, outcome: "done", counted: [`${s1}:7`] };
+  const fixture = {
+    queue: [
+      { taskId: second, chiefSessionId: chiefId, input: { title: "Second", race: ["a", "b"] }, dependsOn: [dep], queuedAt: "2026-11-20T10:00:00.000Z" },
+      { taskId: first, chiefSessionId: null, input: { title: "First", relayId }, dependsOn: [], queuedAt: "2026-11-20T09:00:00.000Z" },
+    ],
+    races: { [raceId]: { id: raceId, taskId: raceTask, entries: [{ sessionId: s1, workspaceId: id(), model: "a" }, { sessionId: s2, workspaceId: id(), model: "b" }], winner: s2, createdAt: "2026-11-20T08:00:00.000Z" } },
+    stats: { [raceTask]: stats },
+    relayTasks: { [relayId]: { [`id:${first}`]: first, "first": first } },
+  };
+  write(file, fixture);
+  await importStateFiles();
+
+  const queue = await workerState.listQueue(projectId);
+  assert.deepEqual(queue.map((q) => q.taskId), [second, first], "the file's order is kept");
+  assert.deepEqual(instants(queue[0]), instants(fixture.queue[0]));
+  assert.equal(await workerState.isQueued(first), true);
+  assert.deepEqual(instants(await workerState.getRace(raceId)), instants(fixture.races[raceId]));
+  assert.equal((await workerState.findRace(raceTask, s1)).id, raceId);
+  assert.equal(await workerState.setRaceWinner(raceId, s1), false, "an imported winner stays");
+  assert.deepEqual(instants(await workerState.getTaskStats(raceTask)), instants(stats));
+  assert.equal(await workerState.relayTaskId(relayId, "first"), first);
+  assert.deepEqual(await workerState.relayTaskIds(relayId), [first]);
+  assert.equal(fs.existsSync(file), false);
+
+  // The counted key stops a recovered report from being counted twice.
+  assert.equal((await workerState.countTaskFinish(raceTask, `${s1}:7`, { costUsd: 1, ownsTask: true, outcome: "done" })).rounds, 1);
+  const counted = await workerState.countTaskFinish(raceTask, `${s2}:9`, { costUsd: 0.25, ownsTask: true, outcome: "blocked" });
+  assert.deepEqual([counted.rounds, counted.costUsd, counted.outcome], [2, 0.75, "blocked"]);
+
+  write(file, fixture);
+  await importStateFiles();
+  assert.equal((await workerState.listQueue(projectId)).length, 2, "importing again adds nothing");
+  assert.equal((await workerState.getTaskStats(raceTask)).rounds, 2, "nor overwrites newer rows");
+  assert.equal(await workerState.enqueueDelegation(projectId, { taskId: id(), chiefSessionId: null, input: {}, dependsOn: [], queuedAt: new Date().toISOString() }), 3);
+  assert.equal(await workerState.dequeueDelegation(first), true);
+  assert.equal(await workerState.dequeueDelegation(first), false, "only one caller dequeues a task");
 });
 
 test("no state file is fine, and memory-only mode leaves files alone", async (t) => {
@@ -93,7 +137,7 @@ test("no state file is fine, and memory-only mode leaves files alone", async (t)
   const file = path.join(configDir("app"), "workers", "state.json");
   write(file, { plans: { [id()]: {} } });
   await importStateFiles();
-  assert.ok(read(file).plans);
+  assert.ok(read(file).plans, "memory-only mode does not touch the file");
   current = db;
 });
 

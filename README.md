@@ -214,7 +214,7 @@ Tasks, the work log and workers were already covered (`tasks_*`, `chief_log`, `d
 - **Delegation plans.** For a request that needs several workers, the chief proposes the split with `delegate_plan`. It appears in the inbox as a **Chief plan** with Approve and Reject. Approving delegates the tasks in order, mapping plan keys to task IDs for dependencies. Either decision goes back to the chief.
 - **Cleanup.** Every 10 minutes Thunk archives worker workspaces that are finished: the task is done and its branch is merged (squash merges count), the task ended with nothing on the branch, or the worker lost a race. Archiving keeps the worktree and branch. Workspaces with an active session, that a person also used, or explicitly selected with `workspaceId` are left alone.
 
-Delegation plans and every trial merge (what merged, what conflicted, the test result and each branch head) live in Postgres (`delegation_plans`, `integrations`). Queue, stats and races live in the project's `config/workers/state.json`, so they survive restarts even in memory-only mode. On startup Thunk imports plans and integrations left in that file by older versions.
+Delegation plans and every trial merge (what merged, what conflicted, the test result and each branch head) live in Postgres (`delegation_plans`, `integrations`). The queue, races, per-task stats and each relayed request's tasks live there too (`worker_queue`, `worker_races`, `task_stats`, `relay_tasks`), so they can be joined to tasks and sessions; in memory-only mode they last until the server stops. Older versions kept all of this in the project's `config/workers/state.json`: on startup Thunk imports that file in one transaction and renames it to `state.json.imported`.
 
 ### Limits
 

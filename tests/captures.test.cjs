@@ -33,7 +33,8 @@ Module._load=function(r,p,m){
  if(r==='@/lib/tasks/service')return {patchTask:async(id,patch)=>{calls.push(['patchTask',id,patch]);},createTask:async(input)=>{const t={id:'t1',...input};tasks.set(t.id,t);return t;}};
  if(r==='@/lib/db/repo/tasks')return {getTask:async(id)=>tasks.get(id)??null,updateTask:async(id,patch)=>{calls.push(['updateTask',id,patch]);}};
  if(r==='@/lib/db/repo/projects')return {getProject:async(id)=>({id})};
- if(r==='@/lib/workers/state')return {readWorkerState:async()=>({queue,relayTasks,plans,races:{}})};
+ if(r==='@/lib/db/repo/worker-state')return {isQueued:async(id)=>queue.some(q=>q.taskId===id),listQueue:async()=>queue,relayTaskIds:async(id)=>[...new Set(Object.values(relayTasks[id]??{}))],racesForTask:async()=>[]};
+ if(r==='@/lib/db/repo/delegation-plans')return {hasPendingPlanForRelay:async(id)=>Object.values(plans).some(p=>p.relayId===id&&p.status==='pending')};
  if(r==='@/lib/workers/report-up')return {savedReports:async(_project,id)=>reports[id]??[]};
  if(r==='@/lib/workers/service')return workers;
  if(r==='@/lib/projects/archive')return {archiveWorkspace:async(id)=>{calls.push(['archive',id]);}};

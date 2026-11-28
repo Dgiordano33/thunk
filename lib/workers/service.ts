@@ -22,7 +22,8 @@ import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedRep
 
 import { workersPerProject } from "@/lib/setup/limits";
 import { DelegateSchema, type DelegateInput } from "./schema";
-import { readWorkerState, summarizeStats, updateWorkerState, type RaceEntry } from "./state";
+import { summarizeStats, type RaceEntry } from "./state";
+import { countTaskFinish, dequeueDelegation, enqueueDelegation, findRace, getRace, getTaskStats, insertRace, isQueued, listQueue, listTaskStats, relayTaskId, rememberRelayTask, setRaceWinner, startTaskStats } from "@/lib/db/repo/worker-state";
 import { workerOverlaps } from "./conflicts";
 import { sessionPath } from "@/lib/routes";
 import type { Project } from "@/lib/projects/types";
@@ -92,7 +93,6 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
       if (chief?.meta.projectId !== projectId || chief.meta.origin?.kind !== "chief") throw new Error("Only this project's chief can delegate");
     }
     if (args.repoIds?.some((id) => !project.repos.some((r) => r.id === id))) throw new Error("Repository does not belong to project");
-    const state = await readWorkerState(project);
     if (args.relayId) {
       const request = (await listCaptures(true)).find((r) => r.id === args.relayId && r.project_id === projectId);
       if (!request) throw new Error("Relay request not found in this project");
@@ -100,26 +100,22 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     const taskKey = args.title?.trim().toLocaleLowerCase() ?? (args.noteId ? `note:${args.noteId}` : undefined);
     const rememberTask = async (task: Task) => {
       if (!args.relayId) return;
-      const relayId = args.relayId;
-      await updateWorkerState(project, (s) => {
-        const ledger = s.relayTasks[relayId] ??= {};
-        ledger[`id:${task.id}`] = task.id;
-        ledger[taskKey ?? task.title.trim().toLocaleLowerCase()] ??= task.id;
-      });
+      await rememberRelayTask(projectId, args.relayId, task.id, taskKey ?? task.title.trim().toLocaleLowerCase());
     };
-    const previousId = args.relayId && taskKey ? state.relayTasks[args.relayId]?.[taskKey] : undefined;
+    const previousId = args.relayId && taskKey ? await relayTaskId(args.relayId, taskKey) ?? undefined : undefined;
     // Recovery reuses the original ledger. A repeated delegate cannot launch another copy of an existing worker.
     const requestedId = args.taskId ?? previousId;
     let task = requestedId ? await getTask(requestedId) : null;
     if (requestedId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
-    if (task && args.relayId && (task.sessionId || task.status === "done" || state.queue.some((q) => q.taskId === task!.id))) {
+    const queuedAlready = task ? await isQueued(task.id) : false;
+    if (task && args.relayId && (task.sessionId || task.status === "done" || queuedAlready)) {
       await rememberTask(task);
       return { taskId: task.id, sessionId: task.sessionId, workspaceId: task.workspaceId, reused: true as const, status: task.status, message: "Existing task preserved. Inspect its report; use workers_message only for unfinished work." };
     }
     if (task?.status === "done") throw new Error("This task is already completed; create a new task only for new work");
     const owner = task?.sessionId && getSession(task.sessionId);
     if (owner && owner.id !== chiefSessionId && ACTIVE_STATES.includes(owner.meta.status)) throw new Error("Task already has an active session");
-    if (task && state.queue.some((q) => q.taskId === task!.id)) throw new Error("Task is already queued");
+    if (task && queuedAlready) throw new Error("Task is already queued");
     if (args.workspaceId) await workerTarget(projectId, args.workspaceId);
     else if ((args.mode ?? "worktree") === "worktree") selectRepos(project, args.repoIds);
     const dependsOn = [...new Set(args.dependsOn ?? [])];
@@ -134,10 +130,10 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     const cap = workersPerProject(), free = cap - activeWorkers(projectId);
     if (deps.waiting.length || free < need) {
       const queued = task;
-      await updateWorkerState(project, (s) => { s.queue.push({ taskId: queued.id, chiefSessionId, input: { ...args, taskId: queued.id, ...(noteId ? { noteId } : {}) }, dependsOn, queuedAt: new Date().toISOString() }); });
+      const position = await enqueueDelegation(projectId, { taskId: queued.id, chiefSessionId, input: { ...args, taskId: queued.id, ...(noteId ? { noteId } : {}) }, dependsOn, queuedAt: new Date().toISOString() });
       const reason = deps.waiting.length ? `waiting for ${deps.waiting.join(", ")}` : `${cap - free} of ${cap} workers busy`;
       await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id}) · ${reason}`);
-      return { taskId: task.id, queued: true as const, reason, position: state.queue.length + 1 };
+      return { taskId: task.id, queued: true as const, reason, position };
     }
     await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id})`);
     return launch(project, task, args, chiefSessionId, note);
@@ -181,12 +177,8 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     const [first] = started;
     await captureTask(task.id, {status:'working', session_id:first.id, workspace_id:first.meta.workspaceId});
     await patchTask(task.id, { ...(target ? { workspaceId: target.id } : {}), sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
-    await updateWorkerState(project, (s) => {
-      const now = new Date().toISOString();
-      const stats = s.stats[task.id] ??= { taskId: task.id, title: task.title, models: [], mode: scout ? "scout" : "worktree", startedAt: now, finishedAt: null, durationMs: 0, costUsd: 0, rounds: 0, outcome: null, counted: [] };
-      for (const e of entries) if (!stats.models.includes(e.model)) stats.models.push(e.model);
-      if (raceId) s.races[raceId] = { id: raceId, taskId: task.id, entries, winner: null, createdAt: now };
-    });
+    await startTaskStats(projectId, { taskId: task.id, title: task.title, mode: scout ? "scout" : "worktree" }, entries.map((e) => e.model));
+    if (raceId) await insertRace(projectId, { id: raceId, taskId: task.id, entries, winner: null, createdAt: new Date().toISOString() });
     const brief = [`Task: ${task.title}\nTask ID: ${task.id}`, args.brief ?? task.body, note?.brief].filter(Boolean).join("\n\n");
     for (const live of started) {
       attachWorker(live);
@@ -228,8 +220,8 @@ export async function drainQueue(projectId: string) {
   if (!project) return [];
   return withFileLock(`delegate:${projectId}`, async () => {
     const startedIds: string[] = [];
-    for (const item of (await readWorkerState(project)).queue) {
-      const dequeue = () => updateWorkerState(project, (s) => { s.queue = s.queue.filter((q) => q.taskId !== item.taskId); });
+    for (const item of await listQueue(projectId)) {
+      const dequeue = () => dequeueDelegation(item.taskId);
       const task = await getTask(item.taskId);
       if (!task || ["done", "cancelled"].includes(task.status)) { await dequeue(); continue; }
       const deps = await dependencyState(projectId, item.dependsOn);
@@ -243,7 +235,8 @@ export async function drainQueue(projectId: string) {
       if (deps.waiting.length) continue;
       // Keep order among ready tasks: stop at the first that does not fit.
       if (workersPerProject() - activeWorkers(projectId) < (item.input.race?.length ?? 1)) break;
-      await dequeue();
+      // Another server may have started it meanwhile; only the one that dequeues it launches it.
+      if (!await dequeue()) continue;
       const chiefId = item.chiefSessionId ? await currentChiefId(item.chiefSessionId) : null;
       try {
         const note = item.input.noteId ? await noteBrief(project, item.input.noteId).catch(() => null) : null;
@@ -260,8 +253,7 @@ export async function drainQueue(projectId: string) {
 
 export async function workersStatus(projectId: string, withDiff = false) {
   const [tasks, sessions] = await Promise.all([listTasks({ projectId }), listSessions({ projectId, limit: 10_000 })]);
-  const project = await getProject(projectId);
-  const state = project ? await readWorkerState(project) : null;
+  const queue = await listQueue(projectId);
   const rows = await Promise.all(tasks.filter((t) => t.sessionId).map(async (task) => {
     const session = sessions.find((s) => s.id === task.sessionId);
     if (session?.origin?.kind !== "worker") return null;
@@ -269,11 +261,12 @@ export async function workersStatus(projectId: string, withDiff = false) {
     const ctx = live?.ctx ?? await getWorkspaceContext(session.workspaceId);
     const report = ctx ? await savedReport(ctx.project, session.id) : null;
     const scout = Boolean(session.origin.scout);
-    const race = session.origin.raceId ? state?.races[session.origin.raceId] : undefined;
+    const race = session.origin.raceId ? await getRace(session.origin.raceId) : null;
+    const stats = await getTaskStats(task.id);
     return { task, sessionId: session.id, workspaceId: session.workspaceId, mode: scout ? "scout" as const : "worktree" as const,
       state: session.live ? session.status : "closed", waitingOn: session.live ? session.waitingOn ?? null : null, pendingPrompts: live?.pending.size ?? 0,
       branch: scout ? null : ctx?.workspace.branch ?? null, diffStat: withDiff && ctx && !scout ? (await collectReport({ ...ctx, markdown: "" })).diffStat : null,
-      lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null, stats: state?.stats[task.id] ? { ...state.stats[task.id], counted: undefined } : null,
+      lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null, stats: stats ? { ...stats, counted: undefined } : null,
       race: race ? { raceId: race.id, winner: race.winner, entries: await Promise.all(race.entries.map(async (e) => ({ ...e, finished: Boolean(ctx && await savedReport(ctx.project, e.sessionId)) }))) } : null,
       overlaps: [] as { taskId: string; title: string; paths: string[] }[] };
   })).then((r) => r.filter((row) => row !== null));
@@ -281,7 +274,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
     const overlaps = await workerOverlaps(rows.filter((r) => r.mode === "worktree" && !["done", "cancelled"].includes(r.task.status)).map((r) => ({ taskId: r.task.id, title: r.task.title, workspaceId: r.workspaceId })));
     for (const row of rows) row.overlaps = overlaps.get(row.task.id) ?? [];
   }
-  const queued = (state?.queue ?? []).map((q, i) => ({ taskId: q.taskId, title: tasks.find((t) => t.id === q.taskId)?.title ?? q.taskId, position: i + 1, dependsOn: q.dependsOn, queuedAt: q.queuedAt, race: q.input.race ?? null, mode: q.input.mode ?? "worktree" }));
+  const queued = queue.map((q, i) => ({ taskId: q.taskId, title: tasks.find((t) => t.id === q.taskId)?.title ?? q.taskId, position: i + 1, dependsOn: q.dependsOn, queuedAt: q.queuedAt, race: q.input.race ?? null, mode: q.input.mode ?? "worktree" }));
   return { workers: rows, queued };
 }
 
@@ -289,7 +282,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
 export async function workersHistory(projectId: string) {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
-  const stats = Object.values((await readWorkerState(project)).stats);
+  const stats = await listTaskStats(projectId);
   return { byModel: summarizeStats(stats), recent: stats.sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 20).map(({ counted, ...s }) => (void counted, s)) };
 }
 
@@ -297,11 +290,10 @@ export async function workersHistory(projectId: string) {
 export async function pickRaceWinner(projectId: string, taskId: string, sessionId: string) {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
-  const race = Object.values((await readWorkerState(project)).races).find((r) => r.taskId === taskId && r.entries.some((e) => e.sessionId === sessionId));
+  const race = await findRace(taskId, sessionId);
   if (!race) throw new Error("That session is not racing on this task");
-  if (race.winner) throw new Error("This race already has a winner");
+  if (race.winner || !await setRaceWinner(race.id, sessionId)) throw new Error("This race already has a winner");
   const winner = race.entries.find((e) => e.sessionId === sessionId)!;
-  await updateWorkerState(project, (s) => { s.races[race.id].winner = sessionId; });
   await patchTask(taskId, { sessionId, workspaceId: winner.workspaceId });
   const { archiveWorkspace } = await import("@/lib/projects/archive");
   for (const loser of race.entries.filter((e) => e.sessionId !== sessionId)) {
@@ -332,11 +324,7 @@ export async function messageWorker(projectId: string, taskId: string, content: 
 }
 export async function stopWorker(projectId: string, taskId: string, reason: string) {
   const project = await getProject(projectId);
-  const dequeued = project && await updateWorkerState(project, (s) => {
-    const before = s.queue.length;
-    s.queue = s.queue.filter((q) => q.taskId !== taskId);
-    return s.queue.length < before;
-  });
+  const dequeued = project && await dequeueDelegation(taskId);
   if (dequeued) {
     const task = await patchTask(taskId, { status: "cancelled" });
     await appendWorkLog(project, `[chief] cancelled (queued): ${task.title} · ${reason}`);
@@ -344,7 +332,7 @@ export async function stopWorker(projectId: string, taskId: string, reason: stri
     return;
   }
   const { task, session } = await ownedWorker(projectId, taskId);
-  const race = session.origin?.kind === "worker" && session.origin.raceId && project ? (await readWorkerState(project)).races[session.origin.raceId] : null;
+  const race = session.origin?.kind === "worker" && session.origin.raceId ? await getRace(session.origin.raceId) : null;
   await patchTask(task.id, { status: "cancelled" });
   for (const id of race && !race.winner ? race.entries.map((e) => e.sessionId) : [session.id]) closeSession(id);
   if (project) await appendWorkLog(project, `[chief] cancelled: ${task.title} · ${reason}`);
@@ -364,26 +352,12 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const needsPerson = /^needs_person:[ \t]*(.*)$/im.exec(result.markdown)?.[1]?.trim().replace(/^(none|false|no|n\/a)\.?$/i, "");
     const status = result.status === "cancelled" ? "cancelled" : result.status === "failed" || report.outcome === "failed" ? "failed" : report.outcome === "blocked" || needsPerson ? "blocked" : "done";
     const task = await getTask(origin.taskId);
-    const state = await readWorkerState(ctx.project);
-    const race = origin.raceId ? state.races[origin.raceId] : undefined;
+    const race = origin.raceId ? await getRace(origin.raceId) : null;
     // Racers leave the task alone until one is picked; the winner then owns it like any worker.
     const ownsTask = !race || race.winner === meta.id;
     const newerTurn = getSession(meta.id)?.events.some((e) => e.seq > seq && (e.type === "user_message" || e.type === "message_dequeued"));
     if (ownsTask && !newerTurn && task?.sessionId === meta.id && task.status !== "cancelled") await patchTask(task.id, { status: status === "cancelled" ? "cancelled" : status === "done" ? (origin.chiefSessionId ? "in_progress" : "done") : "blocked" });
-    const stats = await updateWorkerState(ctx.project, (s) => {
-      const row = s.stats[origin.taskId];
-      if (!row) return null;
-      const key = `${meta.id}:${seq}`;
-      if (!row.counted.includes(key)) {
-        row.counted.push(key);
-        row.costUsd += result.costUsd || 0;
-        if (ownsTask) row.rounds += 1;
-        row.outcome = status;
-        row.finishedAt = new Date().toISOString();
-        row.durationMs = Date.parse(row.finishedAt) - Date.parse(row.startedAt);
-      }
-      return { ...row };
-    });
+    const stats = await countTaskFinish(origin.taskId, `${meta.id}:${seq}`, { costUsd: result.costUsd, ownsTask, outcome: status });
     const capture = ownsTask && !newerTurn && task?.status !== 'cancelled' ? await captureTask(origin.taskId, {status: status === 'done' || status === 'blocked' ? 'ready' : 'failed', summary:report.summary, diff_stat:report.diffStat, cost_usd:stats?.costUsd ?? result.costUsd ?? 0, next_step:needsPerson || null, error:result.error}) : null;
     const overlaps = origin.scout ? [] : (await workerOverlaps(await openWorkerWorkspaces(meta.projectId))).get(origin.taskId) ?? [];
     const lines = [

@@ -10,7 +10,8 @@ import { parseRoutingItems } from '@/lib/home/routing';
 import { ensureHomeProject, routeTargets, saveRoutingRule } from '@/lib/home/service';
 import { getTask, updateTask } from '@/lib/db/repo/tasks';
 import { getProject } from '@/lib/db/repo/projects';
-import { readWorkerState } from '@/lib/workers/state';
+import { isQueued, listQueue, racesForTask, relayTaskIds } from '@/lib/db/repo/worker-state';
+import { hasPendingPlanForRelay } from '@/lib/db/repo/delegation-plans';
 import { createTask } from '@/lib/tasks/service';
 import { delegate, messageChief } from '@/lib/workers/service';
 import { routeCapture } from './router';
@@ -42,7 +43,7 @@ export async function dispatchCapture(id: string, projectId?: string) {
  if(row.task_id && row.project_id) {
  const task=await getTask(row.task_id);const project=await getProject(row.project_id);
  if(task?.sessionId && row.status==='routing') {await saveCapture({...row,status:task.status==='in_progress'?'working':'failed',session_id:task.sessionId,workspace_id:task.workspaceId,error:task.status==='in_progress'?null:'Interrupted during dispatch; inspect the session before retrying.'});return;}
- if(project && (await readWorkerState(project)).queue.some(q=>q.taskId===row!.task_id)){await saveCapture({...row,status:'queued'});return;}
+ if(project && await isQueued(row.task_id)){await saveCapture({...row,status:'queued'});return;}
  }
  row=await saveCapture({...row,status:'routing',error:null});
  const route=await routeCapture(row.text,projectId);
@@ -96,11 +97,11 @@ const BUSY = ['starting','running','awaiting'];
 
 /** Inspect this request's saved tasks; unrelated workers cannot hide a stopped request. */
 async function relayLedger(row: Capture) {
- const project = row.project_id && await getProject(row.project_id);
- const state = project ? await readWorkerState(project) : null;
- const ids = [...new Set(Object.values(state?.relayTasks?.[row.id] ?? {}))];
+ const ids = row.project_id ? await relayTaskIds(row.id) : [];
  const tasks = (await Promise.all(ids.map(getTask))).filter(t => t !== null);
- return { project, state, tasks };
+ const project = row.project_id ? await getProject(row.project_id) : null;
+ const queued = row.project_id ? (await listQueue(row.project_id)).some(q=>q.input?.relayId===row.id) : false;
+ return { project, tasks, queued };
 }
 
 /** Resume the same request and task ledger. No routing or fresh delegation takes place here. Caller holds the capture lock. */
@@ -139,14 +140,14 @@ export async function sweepRelays(now = Date.now()) {
    const receipt=events.find(e=>e.type==='user_message' && e.messageId===row.message_id);
    const dequeued=events.find(e=>e.type==='message_dequeued' && e.messageId===row.message_id);
    const waiting=receipt?.type==='user_message' && receipt.queued && !dequeued;
-   const {project,state,tasks}=await relayLedger(row);
-   const sessionIds=[...new Set(tasks.flatMap(t=>[t.sessionId, ...Object.values(state?.races ?? {}).filter(r=>r.taskId===t.id).flatMap(r=>r.entries.map(e=>e.sessionId))]).filter((id): id is string => Boolean(id)))];
+   const {project,tasks,queued:workersQueued}=await relayLedger(row);
+   const races=(await Promise.all(tasks.map(t=>racesForTask(t.id)))).flat();
+   const sessionIds=[...new Set(tasks.flatMap(t=>[t.sessionId, ...races.filter(r=>r.taskId===t.id).flatMap(r=>r.entries.map(e=>e.sessionId))]).filter((id): id is string => Boolean(id)))];
    const workersBusy=sessionIds.some(id=>BUSY.includes(getSession(id)?.meta.status ?? ''));
-   const workersQueued=state?.queue.some(q=>q.input?.relayId===row.id);
    // A finished worker's report waits in a batch before it reaches the chief; it is still in flight.
    const {savedReports}=await import('@/lib/workers/report-up');
    const reportsPending=project ? (await Promise.all(sessionIds.map(id=>savedReports(project,id)))).some(rs=>rs.some(r=>!r.delivered)) : false;
-   const planPending=Object.values(state?.plans ?? {}).some(p=>p.relayId===row.id && p.status==='pending');
+   const planPending=await hasPendingPlanForRelay(row.id);
    const outstanding=Boolean(workersBusy || workersQueued || reportsPending || planPending);
    const terminal=!live || ['closed','error'].includes(live.meta.status);
    let error: string | null=null;

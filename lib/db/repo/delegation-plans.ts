@@ -66,6 +66,15 @@ export async function getDelegationPlan(planId: string): Promise<StoredPlan | nu
   return toPlan(row, await client.query<TaskRow>("select * from delegation_plan_tasks where plan_id = $1", [planId]));
 }
 
+/** Whether a plan made for this relay still waits for the person's decision. */
+export async function hasPendingPlanForRelay(relayId: string): Promise<boolean> {
+  const client = db();
+  if (!client) return [...mem.values()].some((p) => p.relayId === relayId && p.status === "pending");
+  if (!UUID.test(relayId)) return false;
+  const [row] = await client.query<{ n: number }>("select count(*)::int as n from delegation_plans where relay_id = $1 and status = 'pending'", [relayId]);
+  return (row?.n ?? 0) > 0;
+}
+
 /** Record the task a plan entry was delegated as, as soon as it starts. */
 export async function setPlanTask(planId: string, key: string, taskId: string) {
   const client = db();

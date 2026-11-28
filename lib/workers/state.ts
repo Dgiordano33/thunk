@@ -1,8 +1,3 @@
-import "server-only";
-import path from "node:path";
-import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
-import { projectConfigDir } from "@/lib/projects/paths";
-import type { Project } from "@/lib/projects/types";
 import type { DelegateInput, DelegationPlanInput, WorkerMode } from "./schema";
 
 /** A delegation waiting for a free slot or for the tasks it depends on. */
@@ -22,29 +17,8 @@ export type DelegationPlan = DelegationPlanInput & {
   id: string; chiefSessionId: string; status: PlanStatus; createdAt: string; decidedAt: string | null;
   note: string | null; taskIds: Record<string, string>;
 };
-/** Plans and integrations live in Postgres (`lib/db/repo/delegation-plans.ts`, `integrations.ts`). */
-export type WorkerState = { relayTasks: Record<string, Record<string, string>>; queue: QueuedDelegation[]; stats: Record<string, TaskStats>; races: Record<string, Race> };
-
-const empty = (): WorkerState => ({ relayTasks: {}, queue: [], stats: {}, races: {} });
-export const stateFile = (project: Pick<Project, "dataKey">) => path.join(projectConfigDir(project.dataKey), "workers", "state.json");
-
-export async function readWorkerState(project: Pick<Project, "dataKey">): Promise<WorkerState> {
-  const text = await readOptional(stateFile(project));
-  return text ? { ...empty(), ...JSON.parse(text) } : empty();
-}
-
-/** Read, change and write the project's worker state under one lock. The mutator's return value is passed through. */
-export async function updateWorkerState<T>(project: Pick<Project, "dataKey">, mutate: (state: WorkerState) => T | Promise<T>): Promise<T> {
-  const file = stateFile(project);
-  return withFileLock(file, async () => {
-    const previous = await readOptional(file);
-    const state: WorkerState = previous ? { ...empty(), ...JSON.parse(previous) } : empty();
-    const result = await mutate(state);
-    const next = JSON.stringify(state);
-    if (next !== previous) await replaceFile(file, next, previous);
-    return result;
-  });
-}
+// The queue, races, stats and relay ledger live in Postgres: lib/db/repo/worker-state.ts.
+// Plans and integrations: lib/db/repo/delegation-plans.ts and integrations.ts.
 
 /** Per-model history: how much a task costs and how often it is accepted after one round. */
 export function summarizeStats(stats: TaskStats[]) {
