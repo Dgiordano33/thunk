@@ -1,18 +1,27 @@
 import type { SessionOrigin } from "@/lib/agent/types";
 import { TOP_CHIEF_PROMPT } from "@/lib/home/prompt";
+import { readOnlyCommand } from "./read-only";
 
 /** What a chief can make in its project besides tasks and workers (lib/workers/platform-tools.ts). */
 export const PLATFORM_TOOL_NAMES = ["notes_create", "notes_update", "workspaces_list", "workspaces_create", "sessions_start", "routines_create"];
 export const CHIEF_TOOL_NAMES = ["delegate", "delegate_plan", "workers_status", "workers_message", "workers_stop", "workers_pick", "workers_integrate", "workers_history", "workers_answer", "workers_escalate", "chief_log", "route_report", "relay_report", ...PLATFORM_TOOL_NAMES];
 export const CHIEF_DISALLOWED_TOOLS = ["Edit", "Write", "NotebookEdit"];
-export function chiefWriteCommand(tool: string, input: Record<string, unknown>) {
-  return CHIEF_DISALLOWED_TOOLS.includes(tool) || (tool === "Bash" && /[>]|\b(?:tee|rm)\b|\bgit\s+(?:commit|push)\b/i.test(String(input.command ?? "")));
+/** Why a read-only session may not make this tool call, or null when it only reads. */
+export function readOnlyViolation(tool: string, input: Record<string, unknown>): string | null {
+  if (CHIEF_DISALLOWED_TOOLS.includes(tool)) return `${tool} writes files`;
+  if (tool !== "Bash") return null;
+  const result = readOnlyCommand(String(input.command ?? ""));
+  return result.ok ? null : result.reason;
 }
 /** The top chief only routes: no file tools and no shell at all. */
 export const TOP_CHIEF_DISALLOWED_TOOLS = [...CHIEF_DISALLOWED_TOOLS, "Bash"];
 /** Sessions that coordinate or research and must not write: the chiefs, and scout workers. */
 export function readOnlySession(origin?: SessionOrigin | null) {
   return origin?.kind === "chief" || origin?.kind === "top_chief" || (origin?.kind === "worker" && Boolean(origin.scout));
+}
+/** The denial a read-only session gets, ending with what to do instead. */
+export function readOnlyDenial(origin: SessionOrigin | null | undefined, reason: string) {
+  return origin?.kind === "chief" ? `Read-only session: ${reason}. The chief coordinates work; delegate this to a worker.` : `Read-only session: ${reason}. Scouts change nothing; report what should change, and delegate this to a worker.`;
 }
 export const disallowedToolsFor = (origin?: SessionOrigin | null) => origin?.kind === "top_chief" ? TOP_CHIEF_DISALLOWED_TOOLS : readOnlySession(origin) ? CHIEF_DISALLOWED_TOOLS : null;
 /** Workers started by a chief ask it first; permissions and plans still go to the person. */
@@ -22,7 +31,7 @@ export function asksChiefFirst(live: { meta: { origin?: SessionOrigin | null } }
 export function teamPrompt(origin?: SessionOrigin | null) {
   if (origin?.kind === "top_chief") return TOP_CHIEF_PROMPT;
   if (origin?.kind === "chief") return `# Project chief
-You coordinate this project. Do not edit code or use shell commands to write files. Use delegate for implementation, one worker per task. Supply workspaceId to continue in an existing project workspace, or omit it for a fresh worktree. Only one active worker may use an existing workspace; use workers_message for follow-ups. Do not combine workspaceId with repoIds, scout or race. Write self-contained briefs. delegate({ title, brief }) creates the task for you; tasks_create is not required first. repoIds is optional: omit it to use all project Git repositories. Never invent repository or workspace IDs. Use noteId when delegating a note; split unchecked checklist items into distinct tasks. When the request asks for a canvas, say so in the brief: workers and scouts have the canvas tools and build it themselves, so name the canvas to create or the existing canvas_id to add to.
+You coordinate this project. Do not edit code or use shell commands to write files: your shell runs read commands only (ls, cat, grep, rg, find, jq, git status|log|diff|show|blame, gh pr view|list|diff|checks), with no redirection or substitution. Use delegate for implementation, one worker per task. Supply workspaceId to continue in an existing project workspace, or omit it for a fresh worktree. Only one active worker may use an existing workspace; use workers_message for follow-ups. Do not combine workspaceId with repoIds, scout or race. Write self-contained briefs. delegate({ title, brief }) creates the task for you; tasks_create is not required first. repoIds is optional: omit it to use all project Git repositories. Never invent repository or workspace IDs. Use noteId when delegating a note; split unchecked checklist items into distinct tasks. When the request asks for a canvas, say so in the brief: workers and scouts have the canvas tools and build it themselves, so name the canvas to create or the existing canvas_id to add to.
 Before starting two or more workers for one request, propose the split with delegate_plan and wait for the <delegation_plan> decision, unless the person told you to go ahead or the request is a <relay>. Approved tasks are delegated for you.
 Four workers run at a time. Extra tasks and tasks with dependsOn are queued and start on their own when a slot frees or their dependencies are done (accepted with tasks_complete). Use dependsOn for ordered work instead of waiting yourself; never poll.
 Use mode "scout" for research, investigation or review that changes nothing: it runs read-only in its own environment and needs no Git repository.

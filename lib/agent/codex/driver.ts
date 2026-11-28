@@ -1,7 +1,7 @@
 import { chiefTools } from "@/lib/workers/tools";
 import { canvasPrompt, canvasTools, hasCanvasTools } from "@/lib/board/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
-import { teamPrompt } from "@/lib/workers/prompt";
+import { readOnlyDenial, readOnlySession, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
@@ -33,6 +33,7 @@ type Turn = { id: string; status: "completed" | "interrupted" | "failed" | "inPr
 type ApprovalPolicy = "untrusted" | "on-request" | "never";
 type SandboxPolicy =
   | { type: "dangerFullAccess" }
+  | { type: "readOnly"; networkAccess: boolean }
   | { type: "workspaceWrite"; writableRoots: string[]; networkAccess: boolean; excludeTmpdirEnvVar: boolean; excludeSlashTmp: boolean };
 
 /**
@@ -197,8 +198,11 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
   /** App-server request id → harness pending request id, to cancel cards the server resolves itself. */
   const rpcToRequest = new Map<RpcId, string>();
 
+  // Chiefs and scouts write only through Thunk's tools, which run in this server, so the sandbox can be read-only.
+  const readOnly = readOnlySession(live.meta.origin);
   const sandboxPolicy = (): SandboxPolicy =>
-    live.meta.permissionMode === "bypassPermissions"
+    readOnly ? { type: "readOnly", networkAccess: false }
+    : live.meta.permissionMode === "bypassPermissions"
       ? { type: "dangerFullAccess" }
       : { type: "workspaceWrite", writableRoots, networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false };
   const approvalPolicy = () => APPROVAL[live.meta.permissionMode] ?? "untrusted";
@@ -355,6 +359,12 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     r.behavior === "deny" ? "decline" : r.updatedPermissions?.length ? "acceptForSession" : "accept";
 
   async function handleRequest(method: string, p: Fields, id: RpcId): Promise<unknown> {
+    // Approval requests ask to go beyond the read-only sandbox; a read-only session never may, so nobody is asked.
+    if (readOnly && /^item\/(?:commandExecution|fileChange|permissions)\/requestApproval$/.test(method)) {
+      const note = readOnlyDenial(live.meta.origin, method.includes("fileChange") ? "file changes are not allowed" : "this needs write access");
+      if (activeTurnId && threadId) rpc.request("turn/steer", { threadId, expectedTurnId: activeTurnId, input: [textInput(note)] }).catch(() => {});
+      return method.includes("permissions") ? { permissions: {}, scope: "turn" } : { decision: "decline" };
+    }
     switch (method) {
       case "item/tool/call": {
         const taskTool = taskTools.find((t) => t.name === p.tool);
@@ -408,7 +418,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
       model: live.meta.model,
       cwd: live.meta.cwd,
       approvalPolicy: approvalPolicy(),
-      sandbox: live.meta.permissionMode === "bypassPermissions" ? "danger-full-access" : "workspace-write",
+      sandbox: readOnly ? "read-only" : live.meta.permissionMode === "bypassPermissions" ? "danger-full-access" : "workspace-write",
       developerInstructions,
       config: { mcp_servers: codexConnectors(connectors) },
     };

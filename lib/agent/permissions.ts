@@ -1,5 +1,5 @@
 import { BOARD_TOOL_NAMES, CANVAS_TOOL_NAMES, hasCanvasTools } from "@/lib/board/tools";
-import { CHIEF_TOOL_NAMES, TOP_CHIEF_DISALLOWED_TOOLS, asksChiefFirst, chiefWriteCommand, readOnlySession } from "@/lib/workers/prompt";
+import { CHIEF_TOOL_NAMES, TOP_CHIEF_DISALLOWED_TOOLS, asksChiefFirst, readOnlyDenial, readOnlySession, readOnlyViolation } from "@/lib/workers/prompt";
 import { TOP_CHIEF_TOOL_NAMES } from "@/lib/home/prompt";
 import "server-only";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
@@ -19,8 +19,8 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
       return Promise.resolve({ behavior: "deny", message: "The top chief routes work. Use route_plan; project chiefs do the work." });
     if (live.meta.origin?.kind === "top_chief" && TOP_CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
-    if (readOnlySession(live.meta.origin) && chiefWriteCommand(toolName, input))
-      return Promise.resolve({ behavior: "deny", message: live.meta.origin?.kind === "chief" ? "The chief coordinates work. Use delegate to edit code." : "Scouts are read-only. Report what should change instead." });
+    const violation = readOnlySession(live.meta.origin) ? readOnlyViolation(toolName, input) : null;
+    if (violation) return Promise.resolve({ behavior: "deny", message: readOnlyDenial(live.meta.origin, violation) });
     if (live.meta.origin?.kind === "chief" && CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
     if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : hasCanvasTools(live) ? CANVAS_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))

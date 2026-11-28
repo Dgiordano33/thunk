@@ -188,9 +188,10 @@ test("work log serializes concurrent appends, memory uses explicit replacement",
 
 test("chief tools are exclusive and writes are denied", () => {
   assert.deepEqual(prompt.CHIEF_DISALLOWED_TOOLS, ["Edit", "Write", "NotebookEdit"]);
-  for (const command of ["echo x > file", "tee file", "git commit -am x", "git push", "rm -rf folder"]) assert.equal(prompt.chiefWriteCommand("Bash", { command }), true);
-  assert.equal(prompt.chiefWriteCommand("Bash", { command: "git diff --stat" }), false);
-  assert.equal(prompt.chiefWriteCommand("Edit", {}), true);
+  for (const command of ["echo x > file", "tee file", "git commit -am x", "git push", "rm -rf folder", "git merge x", "gh pr merge 1", "sed -i s/a/b/ f", "mv a b", "cp a b", "echo $(touch x)"]) assert.ok(prompt.readOnlyViolation("Bash", { command }), command);
+  assert.equal(prompt.readOnlyViolation("Bash", { command: "git diff --stat" }), null);
+  assert.ok(prompt.readOnlyViolation("Edit", {}));
+  assert.match(prompt.readOnlyDenial({ kind: "chief" }, "git merge changes the repository"), /delegate this to a worker\.$/);
   const { chiefTools } = load("@/lib/workers/tools");
   assert.deepEqual(chiefTools({ meta: { origin: { kind: "worker" } } }), []);
   assert.match(prompt.teamPrompt({ kind: "chief" }), /split unchecked checklist/i);

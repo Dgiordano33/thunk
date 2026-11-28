@@ -2,7 +2,7 @@ import { boardTools, boardPrompt, canvasPrompt, canvasTools, hasCanvasTools } fr
 import { projectBoardsDir } from "@/lib/projects/paths";
 import { chiefTools } from "@/lib/workers/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
-import { disallowedToolsFor, teamPrompt } from "@/lib/workers/prompt";
+import { disallowedToolsFor, readOnlyDenial, readOnlySession, readOnlyViolation, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
@@ -152,6 +152,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "thunk/0.1.0" },
     resume,
     canUseTool: buildCanUseTool(live),
+    // canUseTool only sees calls nothing else approved; a user allow rule (e.g. Bash(git merge:*)) would skip it.
+    // A PreToolUse hook runs first for every call, so read-only sessions stay read-only whatever the settings say.
+    ...(readOnlySession(live.meta.origin) ? { hooks: { PreToolUse: [{ hooks: [async (input) => {
+      if (input.hook_event_name !== "PreToolUse") return {};
+      const violation = readOnlyViolation(input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>);
+      return violation ? { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "deny" as const, permissionDecisionReason: readOnlyDenial(live.meta.origin, violation) } } : {};
+    }] }] } } : {}),
     stderr: (data) => {
       live.stderrTail.push(data);
       if (live.stderrTail.length > 50) live.stderrTail.shift();
