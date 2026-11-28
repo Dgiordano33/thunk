@@ -4,6 +4,7 @@ import { chiefTools } from "@/lib/workers/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
 import { disallowedToolsFor, readOnlyDenial, readOnlySession, readOnlyViolation, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
+import { memoryTools } from "@/lib/memory/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
@@ -114,6 +115,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...[...routeReportTool(live), ...topChiefTools(live)].map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...memoryTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, origin: live.meta.origin }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],

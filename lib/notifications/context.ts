@@ -51,6 +51,7 @@ export function originLabel(origin: SessionOrigin | null | undefined, taskTitle?
     case "chief": return "Project chief";
     case "top_chief": return "Relay";
     case "board": return "Canvas";
+    case "memory": return "Memory proposal";
     default: return null;
   }
 }
@@ -76,6 +77,7 @@ const ACTION: Partial<Record<NotificationKind, string>> = {
   review_requested: "A pull request is waiting on your review.",
   ci_failed: "CI is failing on this pull request. This clears itself once checks pass.",
   ci_stuck: "Checks have been pending for 30 minutes.",
+  memory_proposal: "An agent proposed changes to project memory. Review each change, then apply or reject.",
 };
 
 export function needFor(n: Pick<Notification, "kind" | "urgency" | "status">, opts: { toolName?: string | null; pending?: boolean } = {}): string {

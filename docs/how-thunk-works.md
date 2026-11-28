@@ -119,7 +119,7 @@ flowchart TB
 
 - Project memory and notes marked **In session context** go into every new session's system prompt. Other notes are listed by path and read on demand. Agents can read Vault items and can write notes, memory and tasks.
 - An assistant's final prose becomes a **document** you edit or comment on and send back. Plans follow the same flow.
-- **Harvest** moves what a workspace learned into project memory before the workspace is archived or deleted.
+- **Harvest** moves what a workspace learned into project memory before the workspace is archived or deleted: as is, or as a proposal you review change by change (add, replace, remove, each with a reason and sources) before it is applied.
 
 ## Current limits
 

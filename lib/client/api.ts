@@ -123,6 +123,14 @@ export const api = {
     call<{ ok: true; retainedDirectory?: string }>(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
   getHarvest: (id: string) => call<import("@/lib/projects/harvest").HarvestData>(`/api/workspaces/${id}/harvest`),
   harvestWorkspace: (id: string, body: { memory: string | null; noteIds: string[] }) => post(`/api/workspaces/${id}/harvest`, body),
+  proposeHarvest: (id: string) => post<{ sessionId: string }>(`/api/workspaces/${id}/harvest/propose`, {}),
+  harvestProposalStatus: (id: string, sessionId: string) =>
+    call<{ proposal: import("@/lib/memory/types").MemoryProposal | null; state: "proposed" | "working" | "awaiting" | "stopped" }>(`/api/workspaces/${id}/harvest/propose?sessionId=${encodeURIComponent(sessionId)}`),
+  // Memory proposals: reviewable changes to project memory (lib/memory).
+  getMemoryProposal: (id: string) => call<import("@/lib/memory/service").MemoryReview>(`/api/memory-proposals/${id}`),
+  applyMemoryProposal: (id: string, body: { choices: import("@/lib/memory/types").MemoryItemChoice[]; memoryHash: string; document?: string }) =>
+    post<import("@/lib/memory/service").ApplyResult>(`/api/memory-proposals/${id}/apply`, body),
+  rejectMemoryProposal: (id: string) => post<{ proposal: import("@/lib/memory/types").MemoryProposal }>(`/api/memory-proposals/${id}/reject`, {}),
   workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),
   workspaceProcess: (id: string, body:
     | { action: "setup" | "run" | "shell" }

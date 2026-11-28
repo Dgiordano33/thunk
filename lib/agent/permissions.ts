@@ -6,6 +6,7 @@ import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sd
 import { emit, setState, type LiveSession, type PendingRequest } from "./session-registry";
 import { TASK_TOOL_NAMES } from "@/lib/tasks/tools";
 import { VAULT_TOOL_NAMES } from "@/lib/vault/tools";
+import { MEMORY_TOOL_NAMES } from "@/lib/memory/tools";
 import type { Question } from "./types";
 
 /**
@@ -23,7 +24,7 @@ export function buildCanUseTool(live: LiveSession): CanUseTool {
     if (violation) return Promise.resolve({ behavior: "deny", message: readOnlyDenial(live.meta.origin, violation) });
     if (live.meta.origin?.kind === "chief" && CHIEF_TOOL_NAMES.some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
-    if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : hasCanvasTools(live) ? CANVAS_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
+    if ([...(live.meta.origin?.kind === "board" ? BOARD_TOOL_NAMES : hasCanvasTools(live) ? CANVAS_TOOL_NAMES : []), ...TASK_TOOL_NAMES, ...VAULT_TOOL_NAMES, ...MEMORY_TOOL_NAMES, "notify"].some((name) => toolName === `mcp__thunk__${name}`))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
 
     const requestId = crypto.randomUUID();

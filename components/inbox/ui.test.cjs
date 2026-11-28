@@ -208,3 +208,11 @@ test("an answered conversation leads its group and keeps related updates reachab
  assert.match(html,/Chief · Answered/);assert.match(html,/Show 1 related update/);assert.match(html,/Close conversation/);
  assert.doesNotMatch(html,/Worker finished/);captureRows=[];
 });
+test("a memory proposal is a Decision card that leads to its review screen", () => {
+  const n = { ...base, id: "memory", subjectKey: "memory-proposal:p1", kind: "memory_proposal", urgency: "action", status: "open", title: "Harvest · 2 memory changes", detail: "Add 1 · Replace 1", href: "/inbox/memory/p1" };
+  assert.equal(model.sectionOf(n), "decision");
+  assert.equal(model.destination(n), "Review changes");
+  const html = renderInbox({ items: [n], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
+  assert.match(html, /Memory update/);
+  assert.match(html, /href="\/inbox\/memory\/p1"[^>]*>Review changes/);
+});

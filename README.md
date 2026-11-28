@@ -245,3 +245,16 @@ Notes belong to projects. Use **Link workspace** at the top of a note to link it
 Legacy workspace notes migrate into project storage on access, including notes belonging to archived workspaces. Migration preserves metadata, adds the original workspace link, updates task references, and uses stable IDs to avoid filename collisions. Old workspace note URLs continue to resolve while that workspace exists. Historical files already saved in the Granary stay there.
 
 Workspace agent memory/task logs remain separate runtime state. Harvest copies selected lessons into project memory; deleting a workspace preserves nonempty logs in the Granary. Ordinary notes no longer require Harvest.
+
+### Reviewable memory updates
+
+The Harvest dialog offers two ways to keep what a workspace learned:
+
+- **Add as is** appends the text you kept under a dated `## Harvested from <workspace> · <date>` heading, as before.
+- **Propose an update** starts a short read-only session in the workspace. It reads the workspace task log, project memory, the sources sidecar, and the workspace's finished tasks with their worker reports, then calls the `memory_propose` tool. The proposal appears in the dialog and as a **Memory update** Decision in the Inbox, so you can close the dialog and review it later.
+
+A proposal is a list of changes: **add** an entry, **replace** one, or **remove** one. Replace and remove name their `target`, the exact existing text. Each change shows its reason, its kind (**decision** or **workaround**) and its sources (task, session, note or workspace ids), with Accept, Edit and Reject. **Edit as document** opens the resulting MEMORY.md in the rich editor with added text highlighted, for edits the list can't express. **Apply** writes through the same expected-content check as the memory editor. If project memory changed since you opened the review, the changes are matched again by `target`: they apply if every accepted target is still there, and otherwise the ones that no longer match are flagged and nothing is written until you edit or reject them. A hand-edited document needs memory unchanged. Any session can call `memory_propose` (Claude through the `thunk` MCP server, Codex as a dynamic tool); a replace or remove whose target isn't in memory is refused, and nothing is written until you apply.
+
+MEMORY.md stays plain markdown, because Claude's auto-memory reads it directly. Sources and kind live in a sidecar, `~/.thunk/projects/<slug>/memory/sources.json`, keyed by a hash of each entry's text. A replace carries the old entry's sources forward; a remove drops them. Workarounds get a `reviewAfter` date, 90 days out unless the proposal sets one.
+
+Proposals are stored in `memory_proposals` and `memory_proposal_items`. API: `GET /api/memory-proposals/[id]`, `POST …/apply` (`{ choices, memoryHash, document? }`), `POST …/reject`, and `POST /api/workspaces/[id]/harvest/propose` (`GET …?sessionId=` reports progress). The review screen is `/inbox/memory/[id]`. Run `node --conditions=react-server --test tests/memory-proposals.test.cjs` and `node --test lib/memory/compose.test.mjs`.

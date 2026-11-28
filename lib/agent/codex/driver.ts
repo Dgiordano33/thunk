@@ -3,6 +3,7 @@ import { canvasPrompt, canvasTools, hasCanvasTools } from "@/lib/board/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
 import { readOnlyDenial, readOnlySession, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
+import { memoryTools } from "@/lib/memory/tools";
 import type { PromptImage } from "@/lib/prompts/schema";
 import "server-only";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
@@ -184,7 +185,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...canvasTools(live), ...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...canvasTools(live), ...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live), ...memoryTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, origin: live.meta.origin }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;

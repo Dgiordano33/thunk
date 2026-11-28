@@ -7,7 +7,9 @@ export type SessionOrigin =
   /** Routes top-level notes to project chiefs; lives in the internal Home project. */
   | { kind: "top_chief" }
   /** `scout`: read-only in the main checkout. `raceId`: one of several workers racing the same task on different models. */
-  | { kind: "worker"; chiefSessionId: string | null; taskId: string; relayId?: string; scout?: boolean; raceId?: string; existingWorkspace?: boolean };
+  | { kind: "worker"; chiefSessionId: string | null; taskId: string; relayId?: string; scout?: boolean; raceId?: string; existingWorkspace?: boolean }
+  /** A short read-only session over a workspace's memory, tasks and reports that ends in memory_propose (Harvest → Propose an update). */
+  | { kind: "memory"; purpose: "harvest" };
 // Shared between server and client. Keep free of server-only imports.
 
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;

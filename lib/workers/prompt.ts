@@ -16,12 +16,13 @@ export function readOnlyViolation(tool: string, input: Record<string, unknown>):
 }
 /** The top chief only routes: no file tools and no shell at all. */
 export const TOP_CHIEF_DISALLOWED_TOOLS = [...CHIEF_DISALLOWED_TOOLS, "Bash"];
-/** Sessions that coordinate or research and must not write: the chiefs, and scout workers. */
+/** Sessions that coordinate or research and must not write: the chiefs, scout workers, and memory proposal sessions. */
 export function readOnlySession(origin?: SessionOrigin | null) {
-  return origin?.kind === "chief" || origin?.kind === "top_chief" || (origin?.kind === "worker" && Boolean(origin.scout));
+  return origin?.kind === "chief" || origin?.kind === "top_chief" || origin?.kind === "memory" || (origin?.kind === "worker" && Boolean(origin.scout));
 }
 /** The denial a read-only session gets, ending with what to do instead. */
 export function readOnlyDenial(origin: SessionOrigin | null | undefined, reason: string) {
+  if (origin?.kind === "memory") return `Read-only session: ${reason}. Memory changes go through review; call memory_propose with the change instead.`;
   return origin?.kind === "chief" ? `Read-only session: ${reason}. The chief coordinates work; delegate this to a worker.` : `Read-only session: ${reason}. Scouts change nothing; report what should change, and delegate this to a worker.`;
 }
 export const disallowedToolsFor = (origin?: SessionOrigin | null) => origin?.kind === "top_chief" ? TOP_CHIEF_DISALLOWED_TOOLS : readOnlySession(origin) ? CHIEF_DISALLOWED_TOOLS : null;
