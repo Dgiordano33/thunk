@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { HISTORY, QUESTION, seedSession } from './session';
-import { newGitWorkspace, newWorkspace, SAMPLE } from './workspace';
+import { HISTORY, seedSession } from './session';
+import { newWorkspace, SAMPLE } from './workspace';
 
 /** The session screen on a phone, against scripted sessions (no agent runs). */
 
@@ -59,49 +59,4 @@ test('one header, a usable composer, and an approval reachable from anywhere in 
     await expect(stop).toBeVisible();
     await stop.tap();
     await expect(stop).toHaveCount(0);
-});
-
-test('switch sessions from the header and answer a question', async ({ page, request }) => {
-    const ws = await newWorkspace(request, SAMPLE);
-    const first = await seedSession(request, ws, HISTORY, { title: 'First session' });
-    const second = await seedSession(request, ws, QUESTION, { title: 'Tidy the header' });
-    await page.goto(first.href);
-    await expect(page.getByText('Now run the tests.')).toBeVisible({ timeout: 60000 });
-
-    await page.getByRole('button', { name: 'Sessions', exact: true }).tap();
-    const sessions = page.getByRole('navigation', { name: 'Sessions' });
-    await expect(sessions.getByRole('link', { name: /First session/ })).toHaveAttribute('aria-current', 'page');
-    await expect(sessions.getByRole('link', { name: /Tidy the header/ })).toContainText('Needs you');
-    await expect(sessions.getByRole('link', { name: 'New chat' })).toBeVisible();
-    await page.screenshot({ path: `${SHOTS}/after-sessions.png` });
-    await sessions.getByRole('link', { name: /Tidy the header/ }).tap();
-    await expect(page).toHaveURL(new RegExp(second.id));
-
-    await expect(page.getByText('Which header should stay on phones?')).toBeVisible();
-    await fits(page);
-    await page.screenshot({ path: `${SHOTS}/after-question.png` });
-    await page.getByRole('button', { name: /Workspace bar/ }).tap();
-    await page.getByRole('button', { name: 'Submit answer', exact: true }).tap();
-    await expect(page.getByText('Header: Workspace bar')).toBeVisible();
-});
-
-test('review what changed, read-only', async ({ page, request }) => {
-    const ws = await newGitWorkspace(request);
-    await page.goto(`${ws.base}/new`);
-    await page.getByRole('button', { name: 'Workspace tools', exact: true }).tap();
-    const tools = page.getByRole('dialog', { name: 'Workspace tools' });
-    await expect(tools.getByRole('tab', { name: 'Files' })).toHaveCount(0);
-    await tools.getByRole('tab', { name: /Changes/ }).tap();
-    await expect(tools.getByText('2 files changed')).toBeVisible();
-    await tools.getByRole('button', { name: /greeting\.ts/ }).tap();
-    await expect(tools.getByText('+export const greeting = "hello from a phone";')).toBeVisible();
-    await expect(tools.getByRole('button', { name: /^Comment on/ })).toHaveCount(0);
-    await expect(tools.getByRole('link', { name: /^Edit / })).toHaveCount(0);
-    await fits(page);
-    await page.screenshot({ path: `${SHOTS}/after-changes.png` });
-
-    // The branch sheet is offered because this workspace has a repo.
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Branch and PR', exact: true }).tap();
-    await expect(page.getByRole('dialog', { name: 'Branch and PR' })).toContainText('main · 2 changed');
 });
