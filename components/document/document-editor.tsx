@@ -1,5 +1,6 @@
 "use client";
 
+import { EditorControls } from '@/components/editor/editor-controls';
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef } from "react";
@@ -127,7 +128,7 @@ export function DocumentEditor({
       {editor && editable && (
         <CommentBubbleMenu editor={editor} onComment={(kind) => createComment(editor, documentId, kind)} />
       )}
-      <EditorContent editor={editor} />
+      {editor && editor.isEditable && <EditorControls editor={editor}/>}<EditorContent editor={editor} />
     </div>
   );
 }

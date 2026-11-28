@@ -38,6 +38,7 @@ function indexLine(n: Note) {
 export function notesPrompt(notes: SessionNotes) {
   const lines = [
     "# Thunk notes",
+    "Rich document blocks use fenced thunk-block-v1 JSON. Preserve their structure, attributes, IDs, and nested content when editing; keep JSON valid.",
     "Besides memory, notes belong to projects and can optionally link to workspaces. Each note is a markdown file with a small frontmatter block (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). Read and edit them with your file tools:",
     `- Project notes: \`${notes.projectDir}\``,
     `- Linked workspace notes use the same project directory.`,

@@ -1,18 +1,21 @@
 import type { AnyExtension } from "@tiptap/core";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskItem } from "@tiptap/extension-list";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TableKit } from "@tiptap/extension-table";
 import { Markdown } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
+import { RichBulletList, RichOrderedList, RichTaskList, RichBlockquote, RichMarkdown, RichParagraph, RichHeading, RichTable, BlockIds, Ink, RichBlock, Media, TableOfContents } from "./rich-blocks";
 import { CommentMark } from "./extensions/comment-mark";
 
 /** Schema-defining extensions. Shared by the editor and headless markdown normalization. */
 export function schemaExtensions(): AnyExtension[] {
   return [
-    StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
-    TableKit.configure({ table: { resizable: false } }),
+    StarterKit.configure({ bulletList: false, orderedList: false, blockquote: false, paragraph: false, heading: false, link: { openOnClick: false, autolink: true } }),
+    TableKit.configure({ table: false }),
+    RichTable.configure({ resizable: true }),
+    RichParagraph, RichHeading, RichMarkdown, BlockIds, Ink, RichBlock, Media, TableOfContents,
     // `- [ ]` checklists: notes surface unchecked items as tasks.
-    TaskList,
+    RichBulletList, RichOrderedList, RichTaskList, RichBlockquote,
     TaskItem.configure({ nested: true }),
     CommentMark,
   ];

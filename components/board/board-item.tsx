@@ -1,6 +1,6 @@
 'use client';
 import { memo, useEffect, useRef, useState } from 'react';
-import { Streamdown } from 'streamdown';
+import { RichPreview } from '@/components/editor/rich-preview';
 import { CornerDownRightIcon, EllipsisIcon, GripVerticalIcon, ListTodoIcon, MessageSquareTextIcon, NotebookPenIcon, RefreshCwIcon, TableIcon, MessageSquarePlusIcon, PencilIcon, MapPinIcon, Trash2Icon } from 'lucide-react';
 import { Composer } from '@/components/comments/composer';
 import { DiffView } from '@/components/document/diff-view';
@@ -17,7 +17,7 @@ import { BoardCard, BoardGrip, BoardWidthHandle } from './use-board-primitive';
 import { BoardButton, BoardMenu, BoardToggle, BoardToolbar, BoardToolbarButton, Confirm, Hint } from './board-ui';
 
 /** Accessible name for an item: the first line of its text, falling back to the stored title. */
-export const itemLabel = (c: Card) => c.kind === 'doc' ? c.markdown.split('\n').map(l => l.replace(/^[#>\-*\s\d.[\]x]+/, '').trim()).find(Boolean)?.slice(0, 80) || c.title || 'Text' : c.title || (c.kind === 'image' ? 'Image' : c.kind === 'chart' ? 'Chart' : 'Drawing');
+export const itemLabel = (c: Card) => c.kind === 'doc' && !c.markdown.includes('thunk-block-v1') ? c.markdown.split('\n').map(l => l.replace(/^[#>\-*\s\d.[\]x]+/, '').trim()).find(Boolean)?.slice(0, 80) || c.title || 'Text' : c.title || (c.kind === 'image' ? 'Image' : c.kind === 'chart' ? 'Chart' : 'Drawing');
 
 /** What a card can become elsewhere in the project: a task, a note, or the first prompt of a session. */
 export type CardAction = 'task' | 'note' | 'session';
@@ -138,7 +138,7 @@ export const BoardItem = memo(function BoardItem({ card: c, base, visible, selec
         ? <BoardDocEditor card={c} label={label} onChange={edit} onComment={(quote, id) => setThread({ quote, id })} onFocus={() => useBoard.getState().anchor(c.id)}
             onBlur={empty => setTimeout(() => { if (!document.hasFocus()) return; if (useBoard.getState().quiet === c.id) useBoard.setState({ quiet: null }); const now = latest(); if (empty && document.hasFocus() && !ref.current?.contains(document.activeElement) && now.sentAt === null && now.author === 'user' && !now.comments.length) onRemove(now); }, 0)}
             onMention={(quote, id) => { const current = latest(); edit({ comments: [...current.comments, { id, quote, body: quote, author: 'user', sentAt: null, resolved: false, replies: [] }] }); setTimeout(() => onMention({ cardId: c.id, targetId: id }), 0); }}/>
-        : <div className="doc-prose"><Streamdown>{c.markdown}</Streamdown></div>)}
+        : <div className="doc-prose"><RichPreview markdown={c.markdown}/></div>)}
 
       {c.kind === 'image' && <div className="relative">
         <span id={`image-help-${c.id}`} className="sr-only">Choose Pin or Draw, then click the image. Press Enter to pin the center.</span>
