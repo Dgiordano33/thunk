@@ -1,4 +1,5 @@
 import { deliveryNotifications } from "@/lib/notifications/delivery";
+import { recordDelivery } from "@/lib/evidence/service";
 import "server-only";
 import { advanceDeliveryHistory, readDeliveryHistory, writeDeliveryHistory, type DeliveryHistory, type DeliverySnapshot } from "./delivery-history";
 import { execFile } from "node:child_process";
@@ -119,6 +120,7 @@ async function projectDelivery(project: Project) {
       // Persist even an empty first baseline so its epoch survives restart.
       else if (!cached.history) await writeDeliveryHistory(project.dataKey, history);
       await deliveryNotifications(project.id, previous, history, snapshots).catch((err) => console.error("[thunk] delivery notification failed", err));
+      await recordDelivery(project.id, history.events.filter((e) => e.seq > previous.seq)).catch((err) => console.error("[thunk] delivery evidence failed", err));
       cached.history = history;
     }
     cached.branches = branches;

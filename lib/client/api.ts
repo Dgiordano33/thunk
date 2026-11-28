@@ -55,6 +55,9 @@ export const api = {
   getTriage: () => call<{ triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage"),
   saveTriage: (body: { enabled: boolean; cron: string; tz?: string | null }) => call<{ triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage", { method: "PUT", json: body }),
   runTriage: () => post<{ result: string; triage: import("@/lib/home/triage-types").TriageSettings }>("/api/chief/triage", {}),
+  getBackups: () => call<import("@/lib/backup/types").BackupStatus>("/api/settings/backup"),
+  saveBackups: (body: { enabled: boolean; time: string; tz?: string | null; keep: number; dir?: string | null }) => call<import("@/lib/backup/types").BackupStatus>("/api/settings/backup", { method: "PUT", json: body }),
+  backUpNow: () => post<import("@/lib/backup/types").BackupStatus & { backup: { name: string; size: number } }>("/api/settings/backup", {}),
   listNotifications: (query = "status=all&limit=500") => call<{ notifications: Notification[]; counts: NotificationCounts }>(`/api/notifications?${query}`),
   readNotifications: (ids: string[]) => post<{ notifications: Notification[] }>("/api/notifications/read", { ids }),
   dismissNotification: (id: string) => post<{ notifications: Notification[] }>(`/api/notifications/${id}/dismiss`, {}),
@@ -120,6 +123,19 @@ export const api = {
     call<{ ok: true; retainedDirectory?: string }>(`/api/workspaces/${id}?worktree=${opts.worktree ? 1 : 0}`, { method: "DELETE" }),
   getHarvest: (id: string) => call<import("@/lib/projects/harvest").HarvestData>(`/api/workspaces/${id}/harvest`),
   harvestWorkspace: (id: string, body: { memory: string | null; noteIds: string[] }) => post(`/api/workspaces/${id}/harvest`, body),
+  proposeHarvest: (id: string) => post<{ sessionId: string }>(`/api/workspaces/${id}/harvest/propose`, {}),
+  harvestProposalStatus: (id: string, sessionId: string) =>
+    call<{ proposal: import("@/lib/memory/types").MemoryProposal | null; state: "proposed" | "working" | "awaiting" | "stopped" }>(`/api/workspaces/${id}/harvest/propose?sessionId=${encodeURIComponent(sessionId)}`),
+  // Memory proposals: reviewable changes to project memory (lib/memory).
+  getMemoryProposal: (id: string) => call<import("@/lib/memory/service").MemoryReview>(`/api/memory-proposals/${id}`),
+  applyMemoryProposal: (id: string, body: { choices: import("@/lib/memory/types").MemoryItemChoice[]; memoryHash: string; document?: string }) =>
+    post<import("@/lib/memory/service").ApplyResult>(`/api/memory-proposals/${id}/apply`, body),
+  rejectMemoryProposal: (id: string) => post<{ proposal: import("@/lib/memory/types").MemoryProposal }>(`/api/memory-proposals/${id}/reject`, {}),
+  // Plan changes: a revised plan or note, and the chief's proposed task changes (lib/sources).
+  getPlanChange: (id: string) => call<import("@/lib/sources/service").PlanChangeReview>(`/api/plan-changes/${id}`),
+  applyPlanChange: (id: string, choices: import("@/lib/sources/types").PlanChangeChoice[]) =>
+    post<{ change: import("@/lib/sources/types").PlanChange }>(`/api/plan-changes/${id}/apply`, { choices }),
+  dismissPlanChange: (id: string) => post<{ change: import("@/lib/sources/types").PlanChange }>(`/api/plan-changes/${id}/dismiss`, {}),
   workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),
   workspaceProcess: (id: string, body:
     | { action: "setup" | "run" | "shell" }
@@ -141,6 +157,13 @@ export const api = {
     ),
   workspacePr: (id: string, repoId?: string) =>
     call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr${repoId ? `?repo=${encodeURIComponent(repoId)}` : ""}`),
+  /** Push the branch and open a PR. Only ever from a person's click. */
+  openPullRequest: (id: string, repoId?: string) => post<{ url: string; created: boolean; status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`, repoId ? { repoId } : {}),
+  /** Trial-merge the workspace's worker branch again and run the tests. */
+  integrateWorkspace: (id: string, taskId?: string) => post<{ result: unknown }>(`/api/workspaces/${id}/integrate`, taskId ? { taskId } : {}),
+  reviewSettings: (projectId: string) => call<{ settings: { testOnFinish: boolean } }>(`/api/projects/${projectId}/review-settings`),
+  saveReviewSettings: (projectId: string, body: { testOnFinish: boolean }) => call<{ settings: { testOnFinish: boolean } }>(`/api/projects/${projectId}/review-settings`, { method: "PUT", json: body }),
+  sessionReview: (id: string) => call<{ review: import("@/lib/review/types").ReviewState }>(`/api/sessions/${id}/review`),
   workspaceFileRoots: (id: string) => call<{ roots: FileRoot[] }>(`/api/workspaces/${id}/files`),
   workspaceDirectory: (id: string, root: string, dir: string) =>
     call<{ entries: FileEntry[] }>(`/api/workspaces/${id}/files?root=${encodeURIComponent(root)}&dir=${encodeURIComponent(dir)}`),
@@ -161,6 +184,18 @@ export const api = {
     return data as { conflict: false; version: string };
   },
   workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
+  sessionContext: (id: string) => call<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context`),
+  attachContext: (id: string, ref: { kind: "note"; scope: import("@/lib/notes/types").NoteScope; id: string } | { kind: "task" | "vault"; id: string }) =>
+    post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context`, ref),
+  contextItemAction: (id: string, itemId: string, action: "update" | "remove" | "keep") =>
+    post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context/${itemId}`, { action }),
+  listContextSets: (projectId: string) => call<{ sets: import("@/lib/context/types").ContextSet[] }>(`/api/projects/${projectId}/context-sets`),
+  createContextSet: (projectId: string, body: import("@/lib/context/schema").ContextSetInput) =>
+    post<{ set: import("@/lib/context/types").ContextSet }>(`/api/projects/${projectId}/context-sets`, body),
+  updateContextSet: (id: string, patch: import("@/lib/context/schema").ContextSetPatch) =>
+    call<{ set: import("@/lib/context/types").ContextSet }>(`/api/context-sets/${id}`, { method: "PATCH", json: patch }),
+  deleteContextSet: (id: string) => call<{ ok: true }>(`/api/context-sets/${id}`, { method: "DELETE" }),
+  noteSessions: (path: string) => call<{ sessions: { sessionId: string; title: string; itemId: string; changed: boolean }[] }>(`/api/context/note-sessions?path=${encodeURIComponent(path)}`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),
@@ -218,6 +253,7 @@ export const api = {
     images?: PromptImage[];
     resumeSdkSessionId?: string;
     title?: string;
+    contextSetId?: string;
   }) => post<{ id: string; workspaceId: string }>("/api/sessions", body),
   getSession: (id: string) => call<{ session: SessionMeta }>(`/api/sessions/${id}`),
   deleteSession: (id: string) => call(`/api/sessions/${id}`, { method: "DELETE" }),

@@ -3,8 +3,9 @@ import { env } from "@/lib/env";
 import { projectForDirectory, getWorkspaceContext, createWorkspace } from "@/lib/projects";
 import { loadEvents, maxSeq } from "@/lib/db/repo/messages";
 import { deleteSessionRow, getSessionRow, listSessionRows, type SessionRow } from "@/lib/db/repo/sessions";
+import { hasDatabase } from "@/lib/db/server";
 import "./persist";
-import { closeSession, createSession, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
+import { closeSession, createSession, evictIdleSessions, evictSession, getSession, isTerminated, listLiveSessions } from "./session-registry";
 import { restoreCheckouts } from "@/lib/projects/checkouts";
 import { deleteTranscripts, ensureTranscriptAt } from "./transcripts";
 import type { SessionOrigin } from "@/lib/agent/types";
@@ -105,6 +106,14 @@ export async function resumeSession(id: string) {
     events: await loadEvents(id),
     origin: row.origin,
   });
+}
+
+/**
+ * Free the memory of sessions that ended on their own and sat unwatched for 30 minutes. Opening one reads its
+ * history from the database and Resume rebuilds it there. Memory-only mode keeps them: the registry is their only copy.
+ */
+export function sweepIdleSessions(now = Date.now()): string[] {
+  return hasDatabase() ? evictIdleSessions(now) : [];
 }
 
 export function liveMeta(id: string): SessionMeta | null {

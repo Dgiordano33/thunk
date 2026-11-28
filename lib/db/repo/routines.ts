@@ -67,7 +67,11 @@ const RUN_COLUMNS =
 /** Rows from before migration 0013 (or hand-edited ones) may lack either list. */
 function toContext(raw: Json | undefined): RoutineContext {
   const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Partial<RoutineContext>;
-  return { notes: Array.isArray(c.notes) ? c.notes : [], taskIds: Array.isArray(c.taskIds) ? c.taskIds : [] };
+  return {
+    notes: Array.isArray(c.notes) ? c.notes : [], taskIds: Array.isArray(c.taskIds) ? c.taskIds : [],
+    ...(Array.isArray(c.vaultIds) && c.vaultIds.length ? { vaultIds: c.vaultIds } : {}),
+    ...(typeof c.setId === "string" ? { setId: c.setId } : {}),
+  };
 }
 
 function toRoutine(r: Row): Routine {

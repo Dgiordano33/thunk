@@ -12,52 +12,65 @@ import { prepareWorkspace } from "@/lib/projects/runtime";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { getProject } from "@/lib/db/repo/projects";
 import { countRunsSince, insertRun, isSkip, startOfToday, updateRoutine, updateRun } from "@/lib/db/repo/routines";
+import { routineRunsAtOnce } from "@/lib/setup/limits";
 import { renderRoutineContext } from "./context";
+import { recordContextItems } from "@/lib/context/record";
 import { keepRunOutputs, runTasks, type KeptNote } from "./outputs";
 import { renderPrompt } from "./prompt";
 import { collectReport, writeRunNote } from "./report";
 import { routinesState as state, type ActiveRun } from "./state";
-import { MAX_CONCURRENT_RUNS, routineSlug, type Routine, type RoutineRun, type RunStatus, type RunTrigger, type SessionOrigin } from "./types";
+import { routineSlug, type Routine, type RoutineRun, type RunStatus, type RunTrigger, type SessionOrigin } from "./types";
 
 type Payload = Record<string, unknown> | null;
+
+/** `busy`: the routine is already running or every slot is taken, so a later try can succeed. `limit`: today's cap is used up. */
+export type RejectReason = "busy" | "limit";
 
 export class RunRejected extends Error {
   constructor(
     message: string,
     public status: 409 | 429,
     public run: RoutineRun | null = null,
+    public reason: RejectReason = "busy",
   ) {
     super(message);
   }
 }
 
+/** A declined firing is written as a cancelled "Skipped: …" row so it shows in history. */
+export async function recordSkip(routine: Routine, trigger: RunTrigger, payload: Payload, message: string): Promise<RoutineRun> {
+  const reason = `Skipped: ${message}`;
+  const run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "cancelled", error: reason, finishedAt: new Date().toISOString() });
+  console.log(`[thunk] routine "${routine.name}" ${reason.toLowerCase()}`);
+  return run;
+}
+
 /**
- * Gate automatic triggers: one run per routine, the daily limit, and global concurrency.
- * A declined firing is written as a cancelled "Skipped: …" row so it shows in history.
+ * Gate in-process triggers (webhook, task and Run-script events): one run per routine, the daily limit and
+ * global concurrency, skipping straight away when declined. Cron and polled triggers go through the durable
+ * outbox in ./dispatch.ts instead, which waits for a free slot.
  */
 export async function fire(routine: Routine, trigger: RunTrigger, payload: Payload = null): Promise<RoutineRun> {
   try {
     return await startRun(routine, trigger, payload);
   } catch (err) {
     if (!(err instanceof RunRejected)) throw err;
-    const reason = `Skipped: ${err.message}`;
-    const run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "cancelled", error: reason, finishedAt: new Date().toISOString() });
-    console.log(`[thunk] routine "${routine.name}" ${reason.toLowerCase()}`);
-    return run;
+    return recordSkip(routine, trigger, payload, err.message);
   }
 }
 
 /** Reserve before awaiting so every trigger shares the same concurrency and daily limits. */
 export async function startRun(routine: Routine, trigger: RunTrigger, payload: Payload = null): Promise<RoutineRun> {
   if (state.active.has(routine.id)) throw new RunRejected("the previous run is still in progress", 409);
-  if (state.active.size >= MAX_CONCURRENT_RUNS)
-    throw new RunRejected(`${MAX_CONCURRENT_RUNS} routine runs already in progress`, 429);
+  const atOnce = routineRunsAtOnce();
+  if (state.active.size >= atOnce)
+    throw new RunRejected(`${atOnce} routine run${atOnce === 1 ? "" : "s"} already in progress`, 429);
   const slot: ActiveRun = { runId: "", routineId: routine.id, sessionId: null, cancel: () => {} };
   state.active.set(routine.id, slot);
   let run: RoutineRun;
   try {
     if (await countRunsSince(routine.id, startOfToday()) >= routine.maxRunsPerDay)
-      throw new RunRejected(`daily limit of ${routine.maxRunsPerDay} runs reached`, 429);
+      throw new RunRejected(`daily limit of ${routine.maxRunsPerDay} runs reached`, 429, null, "limit");
     run = await insertRun({ routineId: routine.id, triggerSource: trigger, triggerPayload: payload, status: "queued" });
   } catch (err) {
     state.active.delete(routine.id);
@@ -127,7 +140,9 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
       status: (status) => updateRun(run.id, { status }),
     }, () => cancelled);
     const context = await renderRoutineContext({ project, context: routine.context, trigger, payload });
-    const prompt = [renderPrompt(routine.prompt, trigger, payload), context].filter(Boolean).join("\n\n---\n\n");
+    const brief = renderPrompt(routine.prompt, trigger, payload);
+    const prompt = [brief, context.text].filter(Boolean).join("\n\n---\n\n");
+    void recordContextItems(live.id, "attached", [{ kind: "routine", refId: routine.id, title: routine.name, mode: "full", chars: brief.length, source: routine.prompt }, ...context.items]);
     await sendBrief(live, prompt);
   } catch (err) {
     if (live) closeSession(live.id);

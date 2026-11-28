@@ -1,12 +1,16 @@
 import { z } from "zod";
-import { TaskInputSchema } from "@/lib/tasks/schema";
+import { CriteriaSchema, TaskInputSchema } from "@/lib/tasks/schema";
+
+const Criteria = CriteriaSchema.optional().describe("Optional acceptance criteria: what done means, each { text, kind } with kind test, interaction, visual, source or other. Only for substantial work.");
 
 const Model = z.string().min(1).max(200);
+const SourceDocument = z.uuid().optional().describe("The document (one of your responses) this work implements, usually the plan you wrote. Omit to use your latest response. A revision of it later reaches the task.");
 export const WORKER_MODES = ["worktree", "scout"] as const;
 export type WorkerMode = (typeof WORKER_MODES)[number];
 
 /** The plain object, for MCP tool shapes. DelegateSchema adds the cross-field rules. */
 export const DelegateObject = z.object({
+  relayId: z.uuid().optional().describe("The relay request this task belongs to. Preserve it when resuming work."),
   taskId: z.uuid().optional(), title: TaskInputSchema.shape.title.optional(),
   brief: z.string().max(20_000).optional(), noteId: TaskInputSchema.shape.noteId,
   workspaceId: z.uuid().optional().describe("Existing project workspace UUID. Omit for a fresh worktree; cannot combine with repoIds, scout or race."),
@@ -16,6 +20,8 @@ export const DelegateObject = z.object({
   mode: z.enum(WORKER_MODES).optional().describe("worktree (default): edits code in its own worktree. scout: read-only in its own environment and returns a report; works without a Git repository."),
   dependsOn: z.array(z.uuid()).max(10).optional().describe("Task IDs that must be done (accepted) before this one starts. The task is queued until then."),
   race: z.array(Model).min(2).max(3).optional().describe("Run the same task on 2–3 models, each in its own worktree. Pick the winner with workers_pick."),
+  criteria: Criteria,
+  sourceDocumentId: SourceDocument,
 }).strict();
 export const DelegateSchema = DelegateObject.superRefine((d, ctx) => {
   if (d.workspaceId && d.repoIds) ctx.addIssue({ code: "custom", path: ["workspaceId"], message: "Choose workspaceId or repoIds, not both" });
@@ -32,11 +38,14 @@ export const PlanTaskObject = z.object({
   model: Model.optional(), mode: z.enum(WORKER_MODES).optional(),
   dependsOn: z.array(z.string().trim().min(1).max(40)).max(10).optional().describe("Keys of earlier tasks in this plan."),
   race: z.array(Model).min(2).max(3).optional(),
+  criteria: Criteria,
 }).strict();
 export const DelegationPlanObject = z.object({
+  relayId: z.uuid().optional(),
   summary: z.string().trim().min(1).max(4000),
   tasks: z.array(PlanTaskObject).min(1).max(12),
   noteId: TaskInputSchema.shape.noteId,
+  sourceDocumentId: SourceDocument,
 }).strict();
 export const DelegationPlanSchema = DelegationPlanObject.superRefine((plan, ctx) => {
   const keys = new Set<string>();

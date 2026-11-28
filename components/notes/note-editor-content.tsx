@@ -20,6 +20,7 @@ import { useNotesFeed } from "@/lib/store/notes-store";
 import { NoteMetaBar } from "./note-meta-bar";
 import { useAddToCanvas } from "@/components/board/add-to-canvas";
 import { usePaths } from "@/components/layout/paths-context";
+import { NoteSessions } from "./note-sessions";
 import { confirm } from "@/components/confirm";
 import { OnboardingHint } from "@/components/onboarding/hint";
 
@@ -360,6 +361,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
           <Button size="xs" variant="ghost" onClick={keepMine}>Keep mine</Button>
         </div>
       )}
+      {!memory && <NoteSessions path={note.path} version={note.updatedAt} />}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-10">
         {!memory && (
           <input

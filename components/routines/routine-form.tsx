@@ -14,6 +14,7 @@ import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
 import { cronError, nextRuns } from "@/lib/routines/cron";
 import { PROMPT_PLACEHOLDERS } from "@/lib/routines/prompt";
+import { ROUTINE_TEMPLATES } from "@/lib/routines/templates";
 import { DELIVERY_ROUTINE_EVENTS, EMPTY_ROUTINE_CONTEXT, EVENT_LABELS, ROUTINE_SCHEDULE_PRESETS, TASK_ROUTINE_EVENTS, type Routine, type RoutineContext, type RoutineEvent } from "@/lib/routines/types";
 import { ContextPicker } from "./context-picker";
 import { useAmbient } from "@/lib/store/ambient-store";
@@ -169,10 +170,7 @@ export function RoutineForm({
         void save();
       }}
     >
-      {!routine && <div className="flex flex-wrap gap-2" aria-label="Routine templates">{[
-        { name: "Daily PR summary", prompt: "Summarise open pull requests for this project and note anything that needs my attention. Do not change code.", schedule: "daily", needsRemote: true },
-        { name: "Weekly project review", prompt: "Review project notes and tasks. Summarise progress and suggest the next priorities without changing code.", schedule: "weekly", needsRemote: false },
-      ].map((template) => <Button key={template.name} type="button" size="sm" variant="outline" disabled={template.needsRemote && !hasRemote} onClick={() => { setName(template.name); setPrompt(template.prompt); setPreset(template.schedule); }}> {template.name}</Button>)}</div>}
+      {!routine && <div className="flex flex-wrap gap-2" aria-label="Routine templates">{ROUTINE_TEMPLATES.map((template) => <Button key={template.name} type="button" size="sm" variant="outline" disabled={template.needsRemote && !hasRemote} onClick={() => { setName(template.name); setPrompt(template.prompt); setPreset(template.schedule); setEnabled(template.enabled); }}> {template.name}</Button>)}</div>}
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Nightly dependency check" required />
       </Field>
@@ -202,7 +200,7 @@ export function RoutineForm({
         />
       </Field>
 
-      <Field label="Context" hint="Each run reads the current text of these notes and tasks into its brief, so edits you make between runs are picked up.">
+      <Field label="Context" hint="Each run reads the current text of these notes, tasks and Vault items, or of a saved context set, into its brief, so edits you make between runs are picked up.">
         <ContextPicker projectId={projectId} value={context} onChange={setContext} />
       </Field>
 

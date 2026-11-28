@@ -15,7 +15,11 @@ async function testDb() {
   const exec = (sql) => pg.exec(sql).then(() => {});
   const query = async (sql, params) => (await pg.query(sql, params)).rows;
   await migrate(exec, query, loadMigrations(path.join(__dirname, "../../db/migrations")));
-  return { kind: "pglite", query, exec, close: () => pg.close() };
+  const transaction = (fn) => pg.transaction((t) => {
+    const tx = { kind: "pglite", query: async (sql, params) => (await t.query(sql, params)).rows, transaction: (inner) => inner(tx) };
+    return fn(tx);
+  });
+  return { kind: "pglite", query, exec, transaction, close: () => pg.close() };
 }
 
 module.exports = { testDb };

@@ -12,7 +12,10 @@ const Module = require("node:module");
 require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(require("node:fs").readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, filename);
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
-  if (request.startsWith("@/")) request = path.join(__dirname, "..", `${request.slice(2)}.ts`);
+  if (request.startsWith("@/")) {
+    const base = path.join(__dirname, "..", request.slice(2));
+    request = require("node:fs").existsSync(`${base}.ts`) ? `${base}.ts` : path.join(base, "index.ts");
+  }
   return resolve.call(this, request, ...rest);
 };
 const load = Module._load;

@@ -3,12 +3,14 @@ import { ensureDeliveryPolling } from "@/lib/projects/delivery";
 import { getSession, isTerminated } from "@/lib/agent";
 import { archiveWorkspace } from "@/lib/projects/archive";
 import { projectEvents } from "@/lib/projects/events";
-import { getRoutine, listDueRoutines, listOpenRuns, updateRoutine, updateRun } from "@/lib/db/repo/routines";
+import { getRoutine, listDueRoutines, listOpenRuns, updateRun } from "@/lib/db/repo/routines";
+import { enqueueTriggers, triggerForRun } from "@/lib/db/repo/routine-triggers";
 import { computeNextRun } from "./cron";
 import { pollDeliveryRoutines } from "./delivery-poll";
+import { dispatchTriggers } from "./dispatch";
 import { pollPullRequests } from "./pr-poll";
 import { pollLinear } from "@/lib/integrations/linear/service";
-import { fire, isRunActive } from "./runner";
+import { isRunActive } from "./runner";
 import { routinesState as state } from "./state";
 import { subscribeTasks } from "@/lib/tasks/events";
 import { onRunFailed, onTaskEvent } from "./triggers";
@@ -21,22 +23,25 @@ const PR_POLL_EVERY = 4;
 const nextRunIso = (r: Pick<Routine, "scheduleCron" | "scheduleTz">, after: Date) =>
   computeNextRun(r.scheduleCron, r.scheduleTz, after)?.toISOString() ?? null;
 
-/** Fire due cron routines, advance their next run, and poll PRs now and then. */
+/** One cron firing per routine and slot, so a tick that runs twice (or a crash mid-tick) can't double it. */
+const cronKey = (routine: Routine) => `cron:${routine.id}:${routine.nextRunAt}`;
+
+/** Queue due cron routines and advance their next run, poll for events, then start whatever is due. */
 async function tick() {
   if (state.ticking) return;
   state.ticking = true;
   try {
     const now = new Date();
     for (const routine of await listDueRoutines(now)) {
-      // Advance first so a slow start (worktree setup) can't make the next tick fire it again.
-      await updateRoutine(routine.id, { nextRunAt: nextRunIso(routine, now) });
-      await fire(routine, "cron").catch((err) => console.error(`[thunk] routine "${routine.name}" failed to start`, err));
+      await enqueueTriggers(routine.id, [{ source: "cron", dedupeKey: cronKey(routine) }], { nextRunAt: nextRunIso(routine, now) })
+        .catch((err) => console.error(`[thunk] routine "${routine.name}" couldn't be queued`, err));
     }
-    await pollDeliveryRoutines();
+    await pollDeliveryRoutines().catch((err) => console.error("[thunk] delivery routine poll failed", err));
     if (++state.tickCount % PR_POLL_EVERY === 0) {
-      await pollPullRequests();
+      await pollPullRequests().catch((err) => console.error("[thunk] PR poll failed", err));
       await pollLinear();
     }
+    await dispatchTriggers();
   } catch (err) {
     console.error("[thunk] routines tick failed", err);
   } finally {
@@ -46,8 +51,9 @@ async function tick() {
 
 /**
  * After a restart: runs that were open belong to sessions that died with the old process, so mark them
- * interrupted and archive their per-run worktrees. Missed cron slots fire once when the routine asks to
- * catch up, under the same guardrails as any other firing; every schedule is recomputed from now.
+ * interrupted and archive their per-run worktrees. A routine that catches up retries an interrupted run once
+ * from its trigger, and queues one firing for missed cron slots; every schedule is recomputed from now.
+ * Pending triggers are left alone: the first tick's dispatcher starts them under the usual guardrails.
  */
 async function reconcile() {
   for (const run of await listOpenRuns()) {
@@ -55,18 +61,23 @@ async function reconcile() {
     const live = run.sessionId ? getSession(run.sessionId) : null;
     if (live && !isTerminated(live)) continue;
     await updateRun(run.id, { status: "failed", finishedAt: new Date().toISOString(), error: "Interrupted: Thunk server restarted" });
-    if (run.workspaceId && (await getRoutine(run.routineId))?.targetKind === "ephemeral")
+    const routine = await getRoutine(run.routineId);
+    if (run.workspaceId && routine?.targetKind === "ephemeral")
       await archiveWorkspace(run.workspaceId).catch((err) => console.error("[thunk] routine archive failed", err));
+    if (routine?.catchUp === "once") await retryInterrupted(run.id);
   }
   const now = new Date();
   for (const routine of await listDueRoutines(now)) {
-    await updateRoutine(routine.id, { nextRunAt: nextRunIso(routine, now) });
-    if (routine.catchUp === "once") {
-      await fire(routine, "cron", { catchUp: true, missedAt: routine.nextRunAt }).catch((err) =>
-        console.error(`[thunk] routine "${routine.name}" catch-up failed`, err),
-      );
-    }
+    const missed = routine.catchUp === "once" ? [{ source: "cron" as const, dedupeKey: cronKey(routine), payload: { catchUp: true, missedAt: routine.nextRunAt } }] : [];
+    await enqueueTriggers(routine.id, missed, { nextRunAt: nextRunIso(routine, now) });
   }
+}
+
+/** Queue an interrupted run's trigger again, once: a retry's own trigger is never retried. */
+async function retryInterrupted(runId: string) {
+  const trigger = await triggerForRun(runId);
+  if (!trigger || trigger.dedupeKey.startsWith("retry:")) return;
+  await enqueueTriggers(trigger.routineId, [{ source: trigger.source, dedupeKey: `retry:${trigger.id}`, payload: trigger.payload }]);
 }
 
 /** Start the routines scheduler once per server process. Safe to call from anywhere, any number of times. */

@@ -3,7 +3,7 @@
 import { ExternalLinkIcon, FolderIcon, GitBranchIcon, PlayIcon, SquareIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { relativeTime } from "@/components/session/labels";
-import { DELIVERY_EVENT_LABELS } from "@/lib/projects/delivery-types";
+import { DELIVERY_EVENT_LABELS, deliveryStage } from "@/lib/projects/delivery-types";
 import { Button } from "@/components/ui/button";
 import { PrButton } from "@/components/workspace/pr-button";
 import { api } from "@/lib/client/api";
@@ -51,6 +51,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
             {repo?.git.dirty && <span className="text-amber-700 dark:text-amber-400">Uncommitted changes</span>}
             {repo?.deployedPreviewUrl && <a href={repo.deployedPreviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline"><ExternalLinkIcon className="size-3" />Deployed preview</a>}
           </div>}
+          {status && <p className="text-muted-foreground mt-1.5" title={deliveryStage(status.pr).detail}>{deliveryStage(status.pr).label}</p>}
           {reason && <p role="status" className="text-muted-foreground mt-1">{reason}</p>}
           {local ? <button
             type="button"
@@ -63,6 +64,7 @@ export function WorkspaceRepos({ workspaceId, rows }: { workspaceId: string; row
         </li>;
       })}
     </ul>
+    <p className="text-muted-foreground">Work completed means the agent finished its task. Ready for review means an open, non-draft PR. Merged is confirmed by GitHub.</p>
     {delivery?.error && <p role="status" className="text-muted-foreground">{delivery.error}</p>}
     {Boolean(delivery?.activity?.length) && <div className="border-t pt-3">
       <h4 className="text-muted-foreground mb-2">Recent activity</h4>

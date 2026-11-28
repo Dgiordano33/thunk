@@ -151,6 +151,8 @@ Module._load = function (request, parent, isMain) {
 const repo = require("../lib/db/repo/routines.ts");
 const { routinesState } = require("../lib/routines/state.ts");
 const runner = require("../lib/routines/runner.ts");
+const triggers = require("../lib/db/repo/routine-triggers.ts");
+const { dispatchTriggers, BUSY_GIVE_UP_MS } = require("../lib/routines/dispatch.ts");
 const { ensureScheduler } = require("../lib/routines/scheduler.ts");
 const { resumeSession } = require("../lib/agent/index.ts");
 const webhook = require("../app/api/routines/[id]/webhook/route.ts");
@@ -177,12 +179,16 @@ test("a restart's catch-up obeys the concurrency cap and archives interrupted pe
 
   ensureScheduler();
   const runs = async () => (await Promise.all(routines.map((r) => repo.listRuns(r.id)))).flat();
-  await eventually(async () => (await runs()).length === 5 && (await runs()).filter((r) => r.status === "running").length === 3);
-  const skipped = (await runs()).filter((r) => r.status === "cancelled");
-  assert.equal(skipped.length, 2);
-  assert.match(skipped[0].error, /3 routine runs already in progress/);
+  await eventually(async () => (await runs()).filter((r) => r.status === "running").length === 3);
+  assert.equal((await runs()).length, 3);
+  // The two without a slot wait in the outbox instead of being skipped.
+  const waiting = (await Promise.all(routines.map((r) => triggers.listTriggers(r.id)))).flat().filter((t) => t.status === "pending");
+  assert.equal(waiting.length, 2);
+  assert.match(waiting[0].error, /3 routine runs already in progress/);
+  assert.ok(waiting.every((t) => t.payload.catchUp === true));
   assert.deepEqual(archived, ["ws-interrupted"]);
   routinesState.active.clear();
+  for (const t of waiting) await triggers.updateTrigger(t.id, { status: "skipped" });
 });
 
 test("a failed run on a fresh worktree archives it and keeps the worktree", async () => {
@@ -310,4 +316,188 @@ test("routine system prompt points filed work at the project and at attached con
   const text = prompt.routineSystemPrompt({ kind: "routine", routineId: "r", runId: "x", routineName: "Triage", trigger: "task_created" });
   assert.match(text, /project scope/);
   assert.match(text, /Context for this run/);
+});
+
+// Durable triggers (lib/routines/dispatch.ts): the outbox between a poller and startRun.
+const hang = () => new Promise(() => {});
+/** Take every run slot with runs that aren't real, as if other routines were busy. */
+const fillSlots = () => { for (let i = 0; i < 12; i++) routinesState.active.set(`busy-${i}`, { runId: `busy-${i}`, routineId: `busy-${i}`, sessionId: null, cancel() {} }); };
+const minutesFrom = (iso, minutes) => new Date(new Date(iso).getTime() + minutes * 60_000);
+
+async function triggerDb(t, { fail, failOn = /from routine_runs/ } = {}) {
+  const { testDb } = require("./helpers/test-db.cjs");
+  const real = await testDb();
+  t.after(() => { fakes.db = null; routinesState.active.clear(); return real.close(); });
+  // `fail` makes every routine_runs read throw, so startRun fails after the routine is loaded.
+  const db = { kind: real.kind, query: (sql, params) => (fail?.() && failOn.test(sql) ? Promise.reject(new Error("database is down")) : real.query(sql, params)) };
+  const [p] = await real.query("insert into projects (name, data_key, slug) values ('Town', 'town', 'town') returning id");
+  const [r] = await real.query("insert into routines (project_id, name, prompt, model, schedule_cron, schedule_tz, next_run_at) values ($1, 'Nightly', 'go', 'm', '0 9 * * *', 'UTC', now() - interval '1 minute') returning id, next_run_at", [p.id]);
+  fakes.db = db;
+  return { db: real, projectId: p.id, routineId: r.id, slot: r.next_run_at };
+}
+
+test("a crash between queuing a trigger and starting it loses nothing and doubles nothing", async (t) => {
+  routinesState.active.clear();
+  fakes.workspaceContext = hang;
+  const { db, routineId, slot } = await triggerDb(t);
+  const key = `cron:${routineId}:${slot}`;
+  // The tick queued the firing and moved the cursor in one statement, then the process died.
+  assert.equal(await triggers.enqueueTriggers(routineId, [{ source: "cron", dedupeKey: key }], { nextRunAt: "2030-01-01T09:00:00.000Z" }), 1);
+  const [routine] = await db.query("select next_run_at from routines where id = $1", [routineId]);
+  assert.equal(routine.next_run_at, "2030-01-01T09:00:00+00:00");
+  assert.equal((await db.query("select * from routine_runs")).length, 0);
+
+  // A replay of the same slot (the cursor write was lost, say) is a no-op.
+  assert.equal(await triggers.enqueueTriggers(routineId, [{ source: "cron", dedupeKey: key }], { nextRunAt: "2030-01-01T09:00:00.000Z" }), 0);
+
+  // After the restart the dispatcher finds it and starts it, once.
+  await dispatchTriggers();
+  await dispatchTriggers();
+  const runs = await db.query("select id, trigger_source from routine_runs");
+  assert.equal(runs.length, 1);
+  const [trigger] = await triggers.listTriggers(routineId);
+  assert.equal(trigger.status, "started");
+  assert.equal(trigger.runId, runs[0].id);
+  assert.equal(runs[0].trigger_source, "cron");
+});
+
+test("a duplicate poll queues each event once", async () => {
+  const routine = await newRoutine("dupe-poll");
+  const event = { source: "pr_opened", dedupeKey: `pr:${routine.id}:https://github.com/a/b/pull/1`, payload: { pr: { number: 1 } } };
+  assert.equal(await triggers.enqueueTriggers(routine.id, [event], { triggerState: { prSeenAt: "2026-11-01T00:00:00Z" } }), 1);
+  assert.equal(await triggers.enqueueTriggers(routine.id, [event, { ...event, dedupeKey: `${event.dedupeKey}2` }]), 1);
+  assert.equal((await triggers.listTriggers(routine.id)).length, 2);
+  assert.equal((await repo.getRoutine(routine.id)).triggerState.prSeenAt, "2026-11-01T00:00:00Z");
+  for (const t of await triggers.listTriggers(routine.id)) await triggers.updateTrigger(t.id, { status: "skipped" });
+});
+
+test("a trigger waits for a full slot to free, and is skipped after an hour of waiting", async () => {
+  routinesState.active.clear();
+  fakes.workspaceContext = hang;
+  const routine = await newRoutine("waits");
+  await triggers.enqueueTriggers(routine.id, [{ source: "cron", dedupeKey: `cron:${routine.id}:a` }]);
+  const [queued] = await triggers.listTriggers(routine.id);
+
+  fillSlots();
+  await dispatchTriggers(minutesFrom(queued.createdAt, 1));
+  let [trigger] = await triggers.listTriggers(routine.id);
+  assert.equal(trigger.status, "pending");
+  assert.match(trigger.error, /already in progress/);
+  assert.ok(trigger.nextAttemptAt > minutesFrom(queued.createdAt, 1).toISOString(), "backs off");
+  assert.equal(trigger.attempts, 0, "a busy slot isn't a failed attempt");
+  assert.deepEqual(await repo.listRuns(routine.id), [], "no Skipped row while it waits");
+
+  routinesState.active.clear();
+  await dispatchTriggers(minutesFrom(queued.createdAt, 10));
+  [trigger] = await triggers.listTriggers(routine.id);
+  assert.equal(trigger.status, "started");
+  const [run] = await repo.listRuns(routine.id);
+  assert.equal(trigger.runId, run.id);
+  assert.equal(run.status, "queued");
+
+  // The routine is still running: a second firing waits for it, then gives up after an hour.
+  await triggers.enqueueTriggers(routine.id, [{ source: "cron", dedupeKey: `cron:${routine.id}:b` }]);
+  const second = (await triggers.listTriggers(routine.id)).find((t) => t.status === "pending");
+  await dispatchTriggers(minutesFrom(second.createdAt, 30));
+  assert.equal((await triggers.listTriggers(routine.id)).find((t) => t.id === second.id).status, "pending");
+  await dispatchTriggers(new Date(new Date(second.createdAt).getTime() + BUSY_GIVE_UP_MS + 60_000));
+  const gaveUp = (await triggers.listTriggers(routine.id)).find((t) => t.id === second.id);
+  assert.equal(gaveUp.status, "skipped");
+  const skipRow = await repo.getRun(gaveUp.runId);
+  assert.ok(repo.isSkip(skipRow));
+  assert.match(skipRow.error, /previous run is still in progress for an hour/);
+  routinesState.active.clear();
+});
+
+test("the daily limit skips a trigger straight away, with the reason", async () => {
+  routinesState.active.clear();
+  const routine = await newRoutine("capped-trigger", { maxRunsPerDay: 1 });
+  await repo.insertRun({ routineId: routine.id, triggerSource: "manual", status: "succeeded" });
+  await triggers.enqueueTriggers(routine.id, [{ source: "cron", dedupeKey: `cron:${routine.id}:a` }]);
+  await dispatchTriggers();
+  const [trigger] = await triggers.listTriggers(routine.id);
+  assert.equal(trigger.status, "skipped");
+  assert.match(trigger.error, /daily limit of 1 runs reached/);
+  assert.ok(repo.isSkip(await repo.getRun(trigger.runId)));
+});
+
+test("a startRun that throws is retried three times, then fails with an Inbox card", async (t) => {
+  routinesState.active.clear();
+  let failing = true;
+  const { db, routineId } = await triggerDb(t, { fail: () => failing });
+  await triggers.enqueueTriggers(routineId, [{ source: "cron", dedupeKey: `cron:${routineId}:x` }]);
+  let [trigger] = await triggers.listTriggers(routineId);
+  let now = minutesFrom(trigger.createdAt, 1);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await dispatchTriggers(now);
+    [trigger] = await triggers.listTriggers(routineId);
+    assert.equal(trigger.status, "pending");
+    assert.equal(trigger.attempts, attempt);
+    assert.equal(trigger.error, "database is down");
+    assert.equal((await triggers.listDueTriggers(now)).length, 0, "waits before the next try");
+    now = minutesFrom(trigger.nextAttemptAt, 0.1);
+  }
+  await dispatchTriggers(now);
+  [trigger] = await triggers.listTriggers(routineId);
+  assert.equal(trigger.status, "failed");
+  assert.equal(trigger.attempts, 4);
+  assert.equal(routinesState.active.has(routineId), false, "the slot is released");
+  const cards = await db.query("select kind, title, detail from notifications where subject_key = $1", [`routine-trigger:${trigger.id}:failed`]);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].kind, "run_failed");
+  assert.match(cards[0].detail, /database is down/);
+  failing = false;
+});
+
+test("a run that started but couldn't be recorded on its trigger is not started again", async (t) => {
+  routinesState.active.clear();
+  fakes.workspaceContext = hang;
+  let failing = true;
+  const { db, routineId } = await triggerDb(t, { fail: () => failing, failOn: /update (public\.)?routine_triggers/ });
+  await triggers.enqueueTriggers(routineId, [{ source: "cron", dedupeKey: `cron:${routineId}:recorded` }]);
+  await dispatchTriggers();
+  assert.equal((await db.query("select * from routine_runs where routine_id = $1", [routineId])).length, 1);
+  failing = false;
+  routinesState.active.clear();
+  await dispatchTriggers();
+  const runs = await db.query("select id from routine_runs where routine_id = $1", [routineId]);
+  assert.equal(runs.length, 1, "the next tick only records the run");
+  const [trigger] = await triggers.listTriggers(routineId);
+  assert.deepEqual([trigger.status, trigger.runId, trigger.attempts], ["started", runs[0].id, 0]);
+});
+
+test("on restart an interrupted run is retried once from its trigger when the routine catches up", async () => {
+  routinesState.active.clear();
+  fakes.workspaceContext = hang;
+  const restart = async () => {
+    clearInterval(routinesState.timer);
+    routinesState.timer = null;
+    routinesState.booted = false;
+    routinesState.active.clear();
+    ensureScheduler();
+  };
+  const routine = await newRoutine("retried", { catchUp: "once" });
+  const other = await newRoutine("not-retried", { catchUp: "skip" });
+  for (const r of [routine, other]) {
+    await triggers.enqueueTriggers(r.id, [{ source: "pr_opened", dedupeKey: `pr:${r.id}:1`, payload: { pr: { number: 1 } } }]);
+    await dispatchTriggers();
+  }
+  // Earlier tests' runs would be interrupted (and retried) too; close them so this one gets a slot.
+  for (const run of await repo.listOpenRuns()) if (![routine.id, other.id].includes(run.routineId)) await repo.updateRun(run.id, { status: "cancelled" });
+  await restart();
+  await eventually(async () => (await triggers.listTriggers(routine.id)).some((t) => t.dedupeKey.startsWith("retry:") && t.status === "started"));
+  const retry = (await triggers.listTriggers(routine.id)).find((t) => t.dedupeKey.startsWith("retry:"));
+  assert.deepEqual(retry.payload, { pr: { number: 1 } });
+  assert.equal(retry.source, "pr_opened");
+  const runs = await repo.listRuns(routine.id);
+  assert.equal(runs.length, 2);
+  assert.match(runs.find((r) => r.id !== retry.runId).error, /Interrupted/);
+  assert.equal((await triggers.listTriggers(other.id)).length, 1, "no catch-up, no retry");
+
+  // The retry is interrupted too: it isn't retried again.
+  await restart();
+  await eventually(async () => (await repo.getRun(retry.runId)).status === "failed");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal((await triggers.listTriggers(routine.id)).length, 2);
+  routinesState.active.clear();
 });

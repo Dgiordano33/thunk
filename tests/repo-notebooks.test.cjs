@@ -91,8 +91,8 @@ test("declared notebooks, extra repo notebooks and session prompts use main chec
   const notes = await prompts.loadSessionNotes(loaded, { id: "workspace", slug: "feature", cwd: await fs.realpath(root), repos: [] });
   assert.equal(notes.repos.length, 2);
   assert.equal(notes.repos.filter((r) => r.extra).length, 1);
-  assert.match(prompts.notesPrompt(notes), /main checkout/);
-  assert.match(prompts.notesPrompt(notes), /Board/);
+  assert.match(prompts.notesPrompt(notes).text, /main checkout/);
+  assert.match(prompts.notesPrompt(notes).text, /Board/);
   const extraFolder = loaded.repoFolders.find((f) => f.repoId === repo.id);
   assert.equal((await resolution.dirsForScope({ kind: "repos", id: extraFolder.id })).scope.id, extraFolder.id);
   await repos.deleteProjectRepo(repo.id);

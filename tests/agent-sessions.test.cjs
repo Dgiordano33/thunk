@@ -20,6 +20,7 @@ function fixture() {
     "@/lib/env": {},
     "@/lib/projects": {},
     "@/lib/db/repo/messages": {},
+    "@/lib/db/server": {},
     "@/lib/db/repo/sessions": {
       listSessionRows: async () => { reads++; if (fail) throw new Error("offline"); return stored; },
     },
@@ -77,7 +78,7 @@ test("project and directory chats allocate isolated efforts; an explicit workspa
       },
       getWorkspaceContext: async id => workspaces.get(id),
     },
-    "@/lib/db/repo/messages": {}, "@/lib/db/repo/sessions": {}, "./persist": {},
+    "@/lib/db/repo/messages": {}, "@/lib/db/repo/sessions": {}, "@/lib/db/server": {}, "./persist": {},
     "./session-registry": { createSession: async input => input }, "./transcripts": {},
     "@/lib/projects/checkouts": { restoreCheckouts: async () => false },
     "./types": { providerOf: () => "claude", permissionModesFor: () => ["default"] },

@@ -231,3 +231,33 @@ export async function listDocumentsForSessions(sessionIds: string[]): Promise<Ar
     createdAt: d.created_at,
   }));
 }
+
+/** A document with the session that wrote it, or null. */
+export async function getDocument(id: string): Promise<{ id: string; sessionId: string; parentDocumentId: string | null; markdown: string } | null> {
+  const client = db();
+  if (!client) {
+    const m = memDocs.get(id);
+    return m ? { id, sessionId: m.sessionId, parentDocumentId: m.doc.parentDocumentId, markdown: m.doc.currentMarkdown } : null;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await client.query<{ id: string; session_id: string; parent_document_id: string | null; current_markdown: string }>(
+    "select id, session_id, parent_document_id, current_markdown from documents where id = $1", [id]);
+  return row ? { id: row.id, sessionId: row.session_id, parentDocumentId: row.parent_document_id, markdown: row.current_markdown } : null;
+}
+
+/** The document and every earlier version it revises, newest first: a revision of any of them revises the same plan. */
+export async function documentLineage(id: string): Promise<string[]> {
+  const client = db();
+  if (!client) {
+    const out: string[] = [];
+    for (let at: string | null = id; at && !out.includes(at) && out.length < 100; at = memDocs.get(at)?.doc.parentDocumentId ?? null) out.push(at);
+    return out;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return [id];
+  const rows = await client.query<{ id: string }>(
+    `with recursive chain(id, parent, depth) as (
+       select id, parent_document_id, 0 from documents where id = $1
+       union all select d.id, d.parent_document_id, c.depth + 1 from documents d join chain c on d.id = c.parent where c.depth < 100
+     ) select id from chain order by depth`, [id]);
+  return rows.length ? rows.map((r) => r.id) : [id];
+}

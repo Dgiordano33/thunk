@@ -28,8 +28,19 @@ export type WorkspaceDelivery = {
   error: string | null;
 };
 
+/** Delivery is independent of an agent finishing a task or closing an Inbox conversation. */
+export function deliveryStage(pr: PullRequestInfo | null): { label: string; detail: string } {
+  if (!pr) return { label: "Not submitted for review", detail: "Completed local work still needs a pull request before review and merge." };
+  if (pr.state === "MERGED") return { label: "Merged", detail: "GitHub confirms this pull request was merged." };
+  if (pr.state === "CLOSED") return { label: "Closed without merging", detail: "This pull request was closed, not merged." };
+  if (pr.isDraft) return { label: "Draft", detail: "This pull request is not ready for review yet." };
+  return { label: "Ready for review", detail: "The pull request is open for review. Checks and approval are separate; it has not merged." };
+}
+
 export function deliveryCue(pr: PullRequestInfo | null) {
   if (!pr) return null;
+  if (pr.state === "MERGED") return { label: "Merged", symbol: "✓", color: "#277443", kind: "merged" };
+  if (pr.state === "CLOSED") return { label: "Closed without merging", symbol: "–", color: "#737373", kind: "closed" };
   if (pr.mergeable === "CONFLICTING" || pr.mergeStateStatus === "DIRTY" || pr.checks.some((c) => c.state === "fail"))
     return { label: "Failing checks or conflicts", symbol: "×", color: "#b93434", kind: "fail" };
   if (pr.isDraft) return { label: "Draft PR", symbol: "–", color: "#737373", kind: "draft" };

@@ -64,6 +64,7 @@ function apply(event: NotificationEvent) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }));
 }
 async function desktopAlert(n: Notification) {
+  if (n.urgency === "info" && ["turn_finished", "worker_report", "run_succeeded", "agent_request"].includes(n.kind)) return;
   if (!("Notification" in window) || window.Notification.permission !== "granted") return;
   try {
     if (localStorage.getItem("thunk.notifications") !== "on") return;

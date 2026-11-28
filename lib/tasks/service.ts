@@ -11,7 +11,7 @@ import { listNotes, tasksOf, readNote, writeNote } from "@/lib/notes/store";
 import { repoTaskLink, parseRepoTaskLink } from "@/lib/notes/task-link";
 import { extractTasks } from "@/lib/notes/frontmatter";
 import { TaskInputSchema, TaskPatchSchema, type TaskInput, type TaskPatch } from "./schema";
-import type { NoteImportScope, Task, TaskTree } from "./types";
+import { normalizeCriteria, type CriterionKind, type NoteImportScope, type Task, type TaskTree } from "./types";
 
 export function taskId(id: string): string {
   if (!z.uuid().safeParse(id).success) throw new HttpError(400, "Invalid id");
@@ -51,7 +51,13 @@ export async function patchTask(id: string, input: TaskPatch): Promise<Task> {
   const workspaceId = patch.workspaceId === undefined ? task.workspaceId : patch.workspaceId;
   const sessionId = patch.sessionId === undefined ? task.sessionId : patch.sessionId;
   await validateScope(task.projectId, workspaceId, [sessionId]);
-  const { after, ...changes } = patch;
+  const { after, criteria, ...rest } = patch;
+  const changes: Parameters<typeof updateTask>[1] = rest;
+  if (criteria !== undefined) {
+    const next = criteria?.length ? normalizeCriteria(criteria) : null;
+    // Only a real change makes earlier evidence cover an older revision.
+    if (JSON.stringify(next) !== JSON.stringify(task.criteria ?? null)) Object.assign(changes, { criteria: next, criteriaVersion: (task.criteriaVersion ?? 0) + 1 });
+  }
   if (after) {
     const peers = (await listTasks({ projectId: task.projectId, workspaceId })).filter((t) => t.id !== id);
     const index = peers.findIndex((t) => t.id === after);
@@ -68,6 +74,13 @@ export async function patchTask(id: string, input: TaskPatch): Promise<Task> {
     catch (err) { console.error("[thunk] task board write-back", err); }
   }
   return result;
+}
+/**
+ * Replace a task's acceptance criteria and bump its criteria_version, so evidence gathered against the
+ * old list is marked as covering an older revision. The task UI and plan revisions call this.
+ */
+export async function reviseCriteria(id: string, criteria: { id?: string; text: string; kind?: CriterionKind }[] | null): Promise<Task> {
+  return patchTask(id, { criteria });
 }
 export async function taskTree(projectId: string): Promise<TaskTree> {
   const project = await getProject(taskId(projectId));

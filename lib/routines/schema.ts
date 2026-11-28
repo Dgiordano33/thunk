@@ -3,16 +3,10 @@ import { z } from "zod";
 import { PERMISSION_MODES } from "@/lib/agent/types";
 import { cronError, isValidTimezone } from "./cron";
 import { ROUTINE_EVENTS } from "./types";
+import { ContextSelectionSchema } from "@/lib/context/schema";
 
-const noteRef = z.object({
-  scope: z.object({ kind: z.enum(["projects", "workspaces", "repos"]), id: z.string().min(1).max(100) }).strict(),
-  id: z.string().min(1).max(100),
-}).strict();
-
-export const RoutineContextSchema = z.object({
-  notes: z.array(noteRef).max(20, "Attach at most 20 notes"),
-  taskIds: z.array(z.uuid()).max(50, "Attach at most 50 tasks"),
-}).strict();
+/** A routine keeps its own notes, tasks and Vault items, or points at a saved context set. */
+export const RoutineContextSchema = ContextSelectionSchema.extend({ setId: z.uuid().nullable().optional() }).strict();
 
 const fields = {
   name: z.string().trim().min(1, "Name is required").max(80),

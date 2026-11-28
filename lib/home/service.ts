@@ -1,9 +1,8 @@
 import "server-only";
-import path from "node:path";
 import { getSession, listSessions, pushUserMessage, resumeSession } from "@/lib/agent";
 import { ensureMainWorkspace } from "@/lib/projects";
 import { ensureMemory, readMemory } from "@/lib/projects/memory";
-import { projectConfigDir, projectMemoryFile } from "@/lib/projects/paths";
+import { projectMemoryFile } from "@/lib/projects/paths";
 import type { Project } from "@/lib/projects/types";
 import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
 import { projectNoteDirs } from "@/lib/notes/resolve";
@@ -18,6 +17,7 @@ import { appendWorkLog } from "@/lib/workers/log";
 import { HOME_DATA_KEY, HOME_NAME, HOME_SLUG } from "./constants";
 import { markLine, newRouteRef, openItems, parseRoutingItems, updateMark, type RouteTarget } from "./routing";
 import { RoutePlanSchema, type RoutePlanInput, type RouteStatus } from "./schema";
+import { decideRoutePlanRow, getRoutePlan, insertRoute, insertRoutePlan, listRoutePlans, listRoutes, settleRoute, type Route, type RoutePlan } from "@/lib/db/repo/routes";
 
 /** The internal Home project, created on first use. */
 export async function ensureHomeProject(): Promise<Project> {
@@ -53,33 +53,8 @@ async function currentTopChief() {
   return current ? getSession(current.id) ?? await resumeSession(current.id).catch(() => null) : null;
 }
 
-// ---------- state: one locked file in the Home project ----------
-
-export type Route = {
-  ref: string; planId: string; projectId: string; projectName: string; workspaceId: string | null;
-  title: string; brief: string; noteId: string | null; status: RouteStatus | "routed"; summary: string | null;
-  createdAt: string; updatedAt: string;
-};
-export type RoutePlan = RoutePlanInput & { id: string; status: "pending" | "approved" | "rejected"; createdAt: string; decidedAt: string | null; note: string | null; refs: string[] };
-type RoutingState = { plans: Record<string, RoutePlan>; routes: Record<string, Route> };
-const empty = (): RoutingState => ({ plans: {}, routes: {} });
-const stateFile = (home: Pick<Project, "dataKey">) => path.join(projectConfigDir(home.dataKey), "routing", "state.json");
-
-export async function readRoutingState(home: Pick<Project, "dataKey">): Promise<RoutingState> {
-  const text = await readOptional(stateFile(home));
-  return text ? { ...empty(), ...JSON.parse(text) } : empty();
-}
-async function updateRoutingState<T>(home: Pick<Project, "dataKey">, mutate: (s: RoutingState) => T): Promise<T> {
-  const file = stateFile(home);
-  return withFileLock(file, async () => {
-    const previous = await readOptional(file);
-    const state: RoutingState = previous ? { ...empty(), ...JSON.parse(previous) } : empty();
-    const result = mutate(state);
-    const next = JSON.stringify(state);
-    if (next !== previous) await replaceFile(file, next, previous);
-    return result;
-  });
-}
+// Routing plans and routes live in Postgres: lib/db/repo/routes.ts.
+export type { Route, RoutePlan } from "@/lib/db/repo/routes";
 
 // ---------- what the top chief can see ----------
 
@@ -93,8 +68,7 @@ export async function routeTargets(): Promise<RouteTarget[]> {
 /** Every project with enough to route by: repos, active workspaces, open task count and the start of its memory. */
 export async function projectsOverview() {
   const projects = await listProjects();
-  const home = await getProjectByKey(HOME_DATA_KEY);
-  const routes = home ? Object.values((await readRoutingState(home)).routes) : [];
+  const routes = await listRoutes();
   return Promise.all(projects.map(async (p) => {
     const [workspaces, tasks, memory] = await Promise.all([listWorkspaces(p.id), listTasks({ projectId: p.id }), readMemory(projectMemoryFile(p.dataKey))]);
     return {
@@ -158,7 +132,7 @@ export async function proposeRoutePlan(topChiefId: string, input: RoutePlanInput
     if (line.pinned && line.pinned.projectId !== item.projectId) throw new Error(`Line ${item.line} is pinned to ${line.pinned.project} by its ${line.pinned.via}; route it there or ask the person`);
   }
   const plan: RoutePlan = { ...args, id: crypto.randomUUID(), status: "pending", createdAt: new Date().toISOString(), decidedAt: null, note: null, refs: [] };
-  await updateRoutingState(home, (s) => { s.plans[plan.id] = plan; });
+  await insertRoutePlan(plan);
   const names = new Map(targets.map((t) => [t.projectId, t.name]));
   const path = `/api/chief/routes/${plan.id}`;
   await notify({
@@ -189,7 +163,7 @@ async function markNote(home: Project, noteId: string | null, edit: (markdown: s
 export async function decideRoutePlan(planId: string, decision: "approve" | "reject", note?: string | null) {
   const home = await ensureHomeProject();
   return withFileLock(`route-plan:${planId}`, async () => {
-    const plan = (await readRoutingState(home)).plans[planId];
+    const plan = await getRoutePlan(planId);
     if (!plan) throw new Error("Routing plan not found");
     if (plan.status !== "pending") throw new Error(`This plan was already ${plan.status}`);
     const results: { title: string; project: string; ref?: string; error?: string }[] = [];
@@ -202,7 +176,7 @@ export async function decideRoutePlan(planId: string, decision: "approve" | "rej
           const ref = newRouteRef();
           const now = new Date().toISOString();
           const route: Route = { ref, planId, projectId: project.id, projectName: project.name, workspaceId: item.workspaceId ?? null, title: item.title, brief: item.brief, noteId: plan.noteId ?? null, status: "routed", summary: null, createdAt: now, updatedAt: now };
-          await updateRoutingState(home, (s) => { s.routes[ref] = route; });
+          await insertRoute(route);
           const chief = await openChief(project.id);
           pushUserMessage(chief, `<routed_request id="${ref}" from="top chief">\n${item.title}\n\n${item.brief}${item.workspaceId ? `\n\nContinue in the existing workspace ${item.workspaceId} (delegate with workspaceId).` : ""}\n</routed_request>\nDelegate this as you would any request. When it is settled (accepted, blocked or failed), call route_report once with routeId "${ref}".`);
           if (item.line !== undefined) await markNote(home, plan.noteId ?? null, (md) => markLine(md, item.line!, ref, `${project.name}: routed`));
@@ -212,8 +186,9 @@ export async function decideRoutePlan(planId: string, decision: "approve" | "rej
         } catch (err) { results.push({ title: item.title, project: project.name, error: (err as Error).message }); }
       }
     }
-    const decided: RoutePlan = { ...plan, status: decision === "approve" ? "approved" : "rejected", decidedAt: new Date().toISOString(), note: note?.trim() || null };
-    await updateRoutingState(home, (s) => { s.plans[planId] = decided; });
+    const decided = await decideRoutePlanRow(planId, decision === "approve" ? "approved" : "rejected", note?.trim() || null);
+    // Another server decided it while this one was routing.
+    if (!decided) throw new Error("This plan was already decided");
     await resolveBySubject(subject(planId));
     await appendWorkLog(home, `[you] decision: routing plan ${decided.status}${decided.note ? ` · ${decided.note}` : ""}`);
     const top = await currentTopChief();
@@ -230,12 +205,7 @@ export async function decideRoutePlan(planId: string, decision: "approve" | "rej
 /** A project chief settles a routed request: the note line and the top chief hear about it. */
 export async function reportRoute(projectId: string, routeId: string, status: RouteStatus, summary: string) {
   const home = await ensureHomeProject();
-  const route = await updateRoutingState(home, (s) => {
-    const r = s.routes[routeId];
-    if (!r || r.projectId !== projectId) return null;
-    s.routes[routeId] = { ...r, status, summary, updatedAt: new Date().toISOString() };
-    return s.routes[routeId];
-  });
+  const route = await settleRoute(routeId, projectId, status, summary);
   if (!route) throw new Error("No request with that routeId was routed to this project");
   await markNote(home, route.noteId, (md) => updateMark(md, routeId, `${route.projectName}: ${status}`, status === "done" ? true : undefined));
   await appendWorkLog(home, `[${route.projectName}] ${status}: ${route.title} · ${summary.split("\n")[0].slice(0, 300)}`);
@@ -245,13 +215,12 @@ export async function reportRoute(projectId: string, routeId: string, status: Ro
 }
 
 export async function routesStatus() {
-  const home = await ensureHomeProject();
-  const state = await readRoutingState(home);
+  const routes = await listRoutes();
   const day = Date.now() - 7 * 86_400_000;
   return {
-    open: Object.values(state.routes).filter((r) => r.status === "routed"),
-    settledThisWeek: Object.values(state.routes).filter((r) => r.status !== "routed" && Date.parse(r.updatedAt) > day),
-    pendingPlans: Object.values(state.plans).filter((p) => p.status === "pending").map((p) => ({ planId: p.id, summary: p.summary, items: p.items.length })),
+    open: routes.filter((r) => r.status === "routed"),
+    settledThisWeek: routes.filter((r) => r.status !== "routed" && Date.parse(r.updatedAt) > day),
+    pendingPlans: (await listRoutePlans("pending")).map((p) => ({ planId: p.id, summary: p.summary, items: p.items.length })),
   };
 }
 

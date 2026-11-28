@@ -51,6 +51,7 @@ export function originLabel(origin: SessionOrigin | null | undefined, taskTitle?
     case "chief": return "Project chief";
     case "top_chief": return "Relay";
     case "board": return "Canvas";
+    case "memory": return "Memory proposal";
     default: return null;
   }
 }
@@ -59,7 +60,7 @@ const INFO: Partial<Record<NotificationKind, string>> = {
   turn_finished: "The agent finished its turn. Nothing is required; reply to keep it going.",
   turn_failed: "The turn failed. Reply to retry or redirect it.",
   session_error: "The session hit an error. Reply to retry, or open it to see what happened.",
-  worker_report: "A worker reported back. Nothing is required.",
+  worker_report: "A worker reported its result. Work completed does not mean reviewed or merged; inspect the report for blockers.",
   run_succeeded: "A routine run finished. Nothing is required.",
   run_failed: "A routine run failed. Open it to see the output.",
   script_failed: "A workspace script failed. Open the workspace to see its output.",
@@ -68,6 +69,7 @@ const INFO: Partial<Record<NotificationKind, string>> = {
 };
 const ACTION: Partial<Record<NotificationKind, string>> = {
   question: "Answer so the agent can continue.",
+  review_ready: "A worker finished with changes on its branch. Review the diff, the trial merge and the pull request; nothing has merged.",
   plan: "Review the plan, then approve it or reply with changes.",
   delegation_plan: "Review how the chief wants to split this work, then approve it or reply.",
   agent_request: "The agent asked for your help. Reply here or open the session.",
@@ -76,6 +78,8 @@ const ACTION: Partial<Record<NotificationKind, string>> = {
   review_requested: "A pull request is waiting on your review.",
   ci_failed: "CI is failing on this pull request. This clears itself once checks pass.",
   ci_stuck: "Checks have been pending for 30 minutes.",
+  memory_proposal: "An agent proposed changes to project memory. Review each change, then apply or reject.",
+  plan_changed: "A plan or note that tasks came from changed. Review the chief's proposed changes per task; nothing reaches a worker until you approve.",
 };
 
 export function needFor(n: Pick<Notification, "kind" | "urgency" | "status">, opts: { toolName?: string | null; pending?: boolean } = {}): string {
@@ -88,7 +92,7 @@ export function needFor(n: Pick<Notification, "kind" | "urgency" | "status">, op
 
 /** Whether a typed reply can reach an agent, and what it does there. `pending`: the request is still waiting in a live session. */
 export function replyFor(n: Pick<Notification, "kind" | "sessionId">, pending: boolean): NotificationContext["reply"] {
-  if (!n.sessionId) return null;
+  if (!n.sessionId || n.kind === "capture_ready") return null; // Relay has its own tracked reply composer.
   if (pending && n.kind === "question") return { mode: "answer", placeholder: "Answer in your own words…", send: "Send answer" };
   if (pending && n.kind === "permission") return { mode: "deny", placeholder: "Deny, and tell the agent what to do instead…", send: "Deny with note" };
   if (pending && n.kind === "plan") return { mode: "changes", placeholder: "Ask for changes to the plan…", send: "Request changes" };

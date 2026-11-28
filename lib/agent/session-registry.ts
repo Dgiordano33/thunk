@@ -68,9 +68,15 @@ export type LiveSession = {
   deltaTimer: ReturnType<typeof setTimeout> | null;
   stderrTail: string[];
   queuedMessages: { id: string; content: string; images: PromptImage[] }[];
+  /** Open browser streams; the sweep leaves a watched session alone. */
+  viewers?: number;
+  /** Last event or viewer disconnect (ms), for the idle sweep. */
+  lastActiveAt?: number;
 };
 
 const MAX_EVENTS = 20_000;
+/** A terminated session nobody has watched or touched for this long leaves memory; its history stays in the database. */
+export const SESSION_IDLE_MS = 30 * 60_000;
 const DELTA_COALESCE_MS = 30;
 
 type Registry = Map<string, LiveSession>;
@@ -195,7 +201,7 @@ async function runSession(live: LiveSession) {
     emit(live, { type: "error", message: tail ? `${message}\n${tail}` : message });
     setState(live, "error");
   } finally {
-    // Stays registered (history, status) until resumeSession replaces it.
+    // Stays registered (history, status) until resumeSession replaces it or the idle sweep drops it.
     releaseSession(live);
   }
 }
@@ -241,15 +247,45 @@ export function evictSession(live: LiveSession) {
 export function closeSession(id: string) {
   const live = registry.get(id);
   if (!live) return;
+  // An exited session already announced closed or error; re-announcing would overwrite an error with closed.
+  const announce = !isTerminated(live);
   releaseSession(live);
-  setState(live, "closed");
+  if (announce) setState(live, "closed");
   flushDelta(live);
   registry.delete(id);
 }
 
-export function subscribe(live: LiveSession, fn: (e: HarnessEvent) => void) {
+/** `viewer` marks a person's stream (SSE), as opposed to the server's own watchers (persistence, notifications). */
+export function subscribe(live: LiveSession, fn: (e: HarnessEvent) => void, opts: { viewer?: boolean } = {}) {
   live.subscribers.add(fn);
-  return () => live.subscribers.delete(fn);
+  if (opts.viewer) live.viewers = (live.viewers ?? 0) + 1;
+  let done = false;
+  return () => {
+    if (done) return false;
+    done = true;
+    if (opts.viewer) {
+      live.viewers = Math.max(0, (live.viewers ?? 1) - 1);
+      live.lastActiveAt = Date.now();
+    }
+    return live.subscribers.delete(fn);
+  };
+}
+
+/**
+ * Remove sessions whose runtime has exited, that nobody is streaming, and that have been idle for `idleMs`.
+ * Every reader falls back to the database (`loadEvents`, `getSessionRow`) and `resumeSession` rebuilds the
+ * entry from it, so this only frees memory. Callers must only run it when events are persisted.
+ */
+export function evictIdleSessions(now = Date.now(), idleMs = SESSION_IDLE_MS): string[] {
+  const evicted: string[] = [];
+  for (const live of [...registry.values()]) {
+    if (!isTerminated(live) || !live.driver.isClosed || (live.viewers ?? 0) > 0) continue;
+    const lastActive = live.lastActiveAt ?? live.events.at(-1)?.ts ?? 0;
+    if (now - lastActive < idleMs) continue;
+    closeSession(live.id);
+    evicted.push(live.id);
+  }
+  return evicted;
 }
 
 export function setState(live: LiveSession, state: SessionState, extra: { resumed?: boolean } = {}) {
@@ -310,6 +346,7 @@ function flushDelta(live: LiveSession) {
 function emitNow(live: LiveSession, body: HarnessEventBody) {
   const event = { ...body, seq: ++live.seq, sessionId: live.id, ts: Date.now() } as HarnessEvent;
   live.events.push(event);
+  live.lastActiveAt = event.ts;
   if (live.events.length > MAX_EVENTS) live.events.splice(0, live.events.length - MAX_EVENTS);
   for (const fn of live.subscribers) {
     try {
@@ -323,14 +360,15 @@ function emitNow(live: LiveSession, body: HarnessEventBody) {
 export function pushUserMessage(
   live: LiveSession,
   content: string,
-  opts: { kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number }; images?: PromptImage[]; expandedContent?: string } = {},
+  opts: { messageId?: string; kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number }; images?: PromptImage[]; expandedContent?: string } = {},
 ) {
   if (live.driver.isClosed) throw new Error("Session is closed");
   const queued = live.meta.status === "running" || live.meta.status === "awaiting";
   if (!live.meta.title && opts.kind !== "revision") {
     live.meta.title = content.replace(/\s+/g, " ").trim().slice(0, 80);
   }
-  const messageId = crypto.randomUUID();
+  const messageId = opts.messageId ?? crypto.randomUUID();
+  if (live.events.some((e) => e.type === "user_message" && e.messageId === messageId)) return messageId;
   emit(live, {
     type: "user_message",
     messageId,

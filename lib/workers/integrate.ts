@@ -12,7 +12,8 @@ import { processEnvironment } from "@/lib/projects/runtime";
 import { getProject } from "@/lib/db/repo/projects";
 import { appendWorkLog } from "./log";
 import { ownedWorker } from "./service";
-import { updateWorkerState } from "./state";
+import { recordIntegration, type HeadSha } from "@/lib/db/repo/integrations";
+import { recordIntegration as recordIntegrationEvidence } from "@/lib/evidence/service";
 
 const exec = promisify(execFile);
 export const INTEGRATION_TEST_MINUTES = 15;
@@ -53,11 +54,14 @@ export async function integrateWorkers(projectId: string, taskIds: string[], { r
   const ictx = { project, workspace };
   const targets = workspaceRepoTargets(ictx);
   const result: IntegrationResult = { workspaceId: workspace.id, branch: workspace.branch, merged: [], conflicts: [], tests: { command: null, reason: "Tests not requested" } };
+  const headShas: HeadSha[] = [];
   for (const { task, ctx } of workers) {
     for (const source of workspaceRepoTargets(ctx)) {
       const target = targets.find((t) => t.id === source.id);
       if (!target || !source.branch) continue;
       const uncommitted = Boolean(await tryGit(source.cwd, ["status", "--porcelain"]));
+      // What was merged, so a later reader can tell when the branch has moved on.
+      headShas.push({ taskId: task.id, repo: source.name, branch: source.branch, sha: await tryGit(source.cwd, ["rev-parse", "--verify", "--quiet", `refs/heads/${source.branch}`]) });
       try {
         await git(target.cwd, [...await identity(target.cwd), "merge", "--no-ff", "--no-edit", "-m", `Integrate ${task.title}`, "--", source.branch]);
         result.merged.push({ taskId: task.id, title: task.title, repo: source.name, branch: source.branch, uncommitted });
@@ -82,12 +86,12 @@ export async function integrateWorkers(projectId: string, taskIds: string[], { r
       result.tests = { command, exitCode: run.code, output: run.output.slice(-4000) };
     }
   }
-  const replaced = await updateWorkerState(project, (s) => {
-    const previous = s.integrations.filter((i) => i.workspaceId !== workspace.id);
-    s.integrations = [{ workspaceId: workspace.id, taskIds: workers.map((w) => w.task.id), createdAt: new Date().toISOString() }];
-    return previous;
+  const { replaced } = await recordIntegration({
+    projectId, workspaceId: workspace.id, branch: workspace.branch, taskIds: workers.map((w) => w.task.id),
+    merged: result.merged, conflicts: result.conflicts, tests: result.tests, headShas,
   });
   for (const old of replaced) await archiveWorkspace(old.workspaceId).catch(() => {});
+  await recordIntegrationEvidence(result, headShas).catch((err) => console.error("[thunk] integration evidence failed", err));
   const tests = "exitCode" in result.tests ? `tests exit ${result.tests.exitCode}` : result.tests.reason.toLowerCase();
   await appendWorkLog(project, `[chief] integration: ${result.merged.length} merged, ${result.conflicts.length} conflicting · ${tests} · /w/${workspace.id}`);
   return result;

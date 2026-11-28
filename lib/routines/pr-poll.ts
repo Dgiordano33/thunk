@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { gitRepos } from "@/lib/projects/repos";
 import { getProject } from "@/lib/db/repo/projects";
 import { listEnabledRoutines, updateRoutine } from "@/lib/db/repo/routines";
-import { fire } from "./runner";
+import { enqueueTriggers } from "@/lib/db/repo/routine-triggers";
 import type { Routine } from "./types";
 
 const exec = promisify(execFile);
@@ -22,7 +22,7 @@ async function openPrs(root: string): Promise<GhPr[]> {
 }
 
 /**
- * Fire `pr_opened` routines for PRs opened since the last poll. The first poll per routine only records a
+ * Queue `pr_opened` triggers for PRs opened since the last poll. The first poll per routine only records a
  * cursor. Thunk's own branches (`thunk/*`) are ignored so a routine that opens PRs can't trigger itself.
  */
 export async function pollPullRequests() {
@@ -57,14 +57,16 @@ export async function pollPullRequests() {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       if (!fresh.length) continue;
       for (const pr of fresh) seen.add(pr.url);
-      await updateRoutine(routine.id, {
-        triggerState: { ...st, prSeenAt: newest > st.prSeenAt ? newest : st.prSeenAt, prSeen: [...seen].slice(-SEEN_CAP) },
-      });
-      for (const pr of fresh) {
-        await fire(routine, "pr_opened", {
-          pr: { number: pr.number, url: pr.url, title: pr.title, author: pr.author?.login ?? null, branch: pr.headRefName },
-        }).catch((err) => console.error("[thunk] pr_opened routine failed to start", err));
-      }
+      // The triggers and the moved cursor are written together; the scheduler's dispatcher starts the runs.
+      await enqueueTriggers(
+        routine.id,
+        fresh.map((pr) => ({
+          source: "pr_opened" as const,
+          dedupeKey: `pr:${routine.id}:${pr.url}`,
+          payload: { pr: { number: pr.number, url: pr.url, title: pr.title, author: pr.author?.login ?? null, branch: pr.headRefName } },
+        })),
+        { triggerState: { ...st, prSeenAt: newest > st.prSeenAt ? newest : st.prSeenAt, prSeen: [...seen].slice(-SEEN_CAP) } },
+      );
     }
   }
 }

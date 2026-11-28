@@ -132,8 +132,8 @@ test("Claude uses project auto-memory; Codex still gets injected project memory"
   const options = await buildOptions(live, {});
   assert.equal(options.settings.autoMemoryDirectory, paths.projectMemoryDir(ctx.project.dataKey));
   assert.ok(options.additionalDirectories.includes(paths.workspaceMemoryDir(ctx.project.dataKey, ctx.workspace.slug)));
-  assert.doesNotMatch(hierarchyPrompt(live, "unique fact", "claude"), /unique fact/);
-  assert.match(hierarchyPrompt(live, "unique fact", "codex"), /unique fact/);
+  assert.doesNotMatch(hierarchyPrompt(live, "unique fact", "claude").text, /unique fact/);
+  assert.match(hierarchyPrompt(live, "unique fact", "codex").text, /unique fact/);
 });
 
 test("a header-only log needs no harvest because notes already belong to the project", async () => {
@@ -164,9 +164,9 @@ test("Claude gets project memory injected once it outgrows the auto-memory limit
   const ctx = await context("oversized");
   const live = { ctx, meta: { model: "claude-sonnet-4-6", permissionMode: "default" }, id: "test" };
   const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
-  assert.doesNotMatch(hierarchyPrompt(live, lines(200), "claude"), /line 199/);
-  assert.match(hierarchyPrompt(live, lines(201), "claude"), /line 200/);
-  assert.match(hierarchyPrompt(live, `tail fact ${"x".repeat(25_000)}`, "claude"), /tail fact/);
+  assert.doesNotMatch(hierarchyPrompt(live, lines(200), "claude").text, /line 199/);
+  assert.match(hierarchyPrompt(live, lines(201), "claude").text, /line 200/);
+  assert.match(hierarchyPrompt(live, `tail fact ${"x".repeat(25_000)}`, "claude").text, /tail fact/);
 });
 
 test("note routes reject cross-project links and create canonical notes from workspace views", async () => {

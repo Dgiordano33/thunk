@@ -81,7 +81,7 @@ flowchart LR
 
 - **Relay a thought:** type it into the Relay bar (or press its shortcut on any page). A router picks the project and hands the thought to that project's chief. `#project` in the text picks the project yourself.
 - **Relay a note:** on a project note, **Relay** sends its unchecked `- [ ]` items to that project's chief, which turns each into a task.
-- **What the chief does:** it either does the thing itself (a note, something on a canvas, tasks, a routine, an answer) or delegates to workers and scouts, who report back to it. A relay counts as your go-ahead, so it can start several workers without asking first. Four workers run at a time per project; extra tasks queue.
+- **What the chief does:** it either does the thing itself (a note, something on a canvas, tasks, a routine, an answer) or delegates to workers and scouts, who report back to it. A relay counts as your go-ahead, so it can start several workers without asking first. Four workers run at a time per project by default (Settings → Automation); extra tasks queue.
 - **Coming back to you:** the chief settles the relay with `relay_report`, and it arrives in your Inbox as a message from that chief. **Reply** sends the chief a message and the card returns when it answers, with the whole exchange on it. **Done** closes it, **Go ahead** approves one step the chief held back, and **Open the chief** goes to its session.
 - Nothing merges, pushes or deploys on its own.
 
@@ -119,7 +119,7 @@ flowchart TB
 
 - Project memory and notes marked **In session context** go into every new session's system prompt. Other notes are listed by path and read on demand. Agents can read Vault items and can write notes, memory and tasks.
 - An assistant's final prose becomes a **document** you edit or comment on and send back. Plans follow the same flow.
-- **Harvest** moves what a workspace learned into project memory before the workspace is archived or deleted.
+- **Harvest** moves what a workspace learned into project memory before the workspace is archived or deleted: as is, or as a proposal you review change by change (add, replace, remove, each with a reason and sources) before it is applied.
 
 ## Current limits
 

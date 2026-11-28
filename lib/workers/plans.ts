@@ -7,14 +7,16 @@ import { getProject } from "@/lib/db/repo/projects";
 import { appendWorkLog } from "./log";
 import { currentChiefId } from "./report-up";
 import { DelegationPlanSchema, type DelegationPlanInput } from "./schema";
-import { readWorkerState, updateWorkerState, type DelegationPlan } from "./state";
+import { decidePlanRow, getDelegationPlan, insertPlan, setPlanTask } from "@/lib/db/repo/delegation-plans";
+import type { DelegationPlan } from "./state";
 
 const subject = (planId: string) => `chief:plan:${planId}`;
 
 export function renderPlan(plan: Pick<DelegationPlan, "summary" | "tasks">) {
   return [plan.summary, "", ...plan.tasks.map((t, i) => {
     const how = [t.mode === "scout" ? "scout" : null, t.race ? `race ${t.race.join(" vs ")}` : t.model ?? null, t.dependsOn?.length ? `after ${t.dependsOn.join(", ")}` : null].filter(Boolean).join(" · ");
-    return `${i + 1}. [${t.key}] ${t.title}${how ? ` (${how})` : ""}\n   ${t.brief.split("\n")[0].slice(0, 300)}`;
+    const criteria = t.criteria?.length ? `\n   Done when:${t.criteria.map((c) => `\n   - ${c.text}${c.kind && c.kind !== "other" ? ` (${c.kind})` : ""}`).join("")}` : "";
+    return `${i + 1}. [${t.key}] ${t.title}${how ? ` (${how})` : ""}\n   ${t.brief.split("\n")[0].slice(0, 300)}${criteria}`;
   })].join("\n");
 }
 
@@ -26,11 +28,11 @@ export async function proposePlan(projectId: string, chiefSessionId: string, inp
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
   const plan: DelegationPlan = { ...args, id: crypto.randomUUID(), chiefSessionId, status: "pending", createdAt: new Date().toISOString(), decidedAt: null, note: null, taskIds: {} };
-  await updateWorkerState(project, (s) => { s.plans[plan.id] = plan; });
+  await insertPlan(projectId, plan);
   const path = `/api/projects/${projectId}/chief/plans/${plan.id}`;
   await notify({
     projectId, workspaceId: chief.meta.workspaceId, sessionId: chiefSessionId, kind: "delegation_plan", urgency: "action",
-    subjectKey: subject(plan.id), title: `Chief plan · ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}`,
+    requestKey: plan.relayId ? `capture:${plan.relayId}` : undefined, subjectKey: subject(plan.id), title: `Chief plan · ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}`,
     detail: renderPlan(plan), href: sessionPath(chief.ctx.project, chief.ctx.workspace, chiefSessionId),
     actions: [
       { label: "Approve", method: "POST", path, body: { decision: "approve" } },
@@ -49,8 +51,8 @@ export async function decidePlan(projectId: string, planId: string, decision: "a
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
   return withFileLock(`plan:${planId}`, async () => {
-    const plan = (await readWorkerState(project)).plans[planId];
-    if (!plan) throw new Error("Delegation plan not found");
+    const plan = await getDelegationPlan(planId);
+    if (!plan || plan.projectId !== projectId) throw new Error("Delegation plan not found");
     if (plan.status !== "pending") throw new Error(`This plan was already ${plan.status}`);
     const chiefId = await currentChiefId(plan.chiefSessionId);
     const results: { key: string; title: string; taskId?: string; queued?: boolean; error?: string }[] = [];
@@ -61,16 +63,18 @@ export async function decidePlan(projectId: string, planId: string, decision: "a
         if (missing.length) { results.push({ key: t.key, title: t.title, error: `Skipped: ${missing.join(", ")} did not start` }); continue; }
         try {
           const started = await delegate(projectId, chiefId && getSession(chiefId)?.meta.origin?.kind === "chief" ? chiefId : null, {
-            title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId,
+            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId, criteria: t.criteria, sourceDocumentId: plan.sourceDocumentId,
             dependsOn: t.dependsOn?.map((k) => plan.taskIds[k]),
           });
           plan.taskIds[t.key] = started.taskId;
+          await setPlanTask(planId, t.key, started.taskId);
           results.push({ key: t.key, title: t.title, taskId: started.taskId, queued: "queued" in started });
         } catch (err) { results.push({ key: t.key, title: t.title, error: (err as Error).message }); }
       }
     }
-    const decided = { ...plan, status: decision === "approve" ? "approved" as const : "rejected" as const, decidedAt: new Date().toISOString(), note: note?.trim() || null };
-    await updateWorkerState(project, (s) => { s.plans[planId] = decided; });
+    const decided = await decidePlanRow(planId, decision === "approve" ? "approved" : "rejected", note?.trim() || null);
+    // Another server decided it while this one was delegating.
+    if (!decided) throw new Error("This plan was already decided");
     await resolveBySubject(subject(planId));
     await appendWorkLog(project, `[you] decision: delegation plan ${decided.status}${decided.note ? ` · ${decided.note}` : ""}`);
     const chief = chiefId ? await resumeSession(chiefId).catch(() => null) : null;

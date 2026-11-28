@@ -36,6 +36,12 @@ export function connectSession(
         console.error("[thunk] bad event", err);
       }
     };
+    // The server replayed a stored session's history and has nothing live to follow.
+    es.addEventListener("not_live", () => {
+      es?.close();
+      es = null;
+      opts.onState("not_live");
+    });
     es.onerror = () => {
       if (stopped || !es) return;
       if (es.readyState !== EventSource.CLOSED) {

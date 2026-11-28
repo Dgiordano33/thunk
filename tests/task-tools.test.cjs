@@ -28,7 +28,7 @@ const mocks = {
     tasksForWorkspace: async () => ({ workspace: rows.filter((t) => t.workspaceId === workspaceId && t.projectId === projectId), project: rows.filter((t) => t.workspaceId === null && t.projectId === projectId) }),
   },
   "@anthropic-ai/claude-agent-sdk": { createSdkMcpServer: (v) => v, tool: (name, description, schema, handler) => ({ name, description, schema, handler }) },
-  "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", repos: [], workspaceDir: "/tmp" }), notesPrompt: () => "notes" },
+  "@/lib/notes/prompt": { loadSessionNotes: async () => ({ projectDir: "/tmp", repos: [], workspaceDir: "/tmp" }), notesPrompt: () => ({ text: "notes", items: [] }) },
   "@/lib/projects/connectors": { sessionConnectors: async () => ({ mcpServers: {} }), codexConnectors: () => ({}) },
   "@/lib/projects/memory": { readMemory: async () => "" },
   "@/lib/projects/paths": Object.fromEntries(["projectMemoryDir", "projectMemoryFile", "workspaceMemoryDir", "workspaceMemoryFile", "projectVaultDir", "projectInstructionsFile", "projectConfigDir", "sharedConfigDir"].map((k) => [k, () => "/tmp"])),
@@ -139,13 +139,13 @@ test("Claude autoallows local task and notification tools; similarly named tools
 test("both transports include workspace/project tasks and register validated tools", async () => {
   const options = await buildOptions(live(), {});
   assert.equal(options.mcpServers.thunk.alwaysLoad, true);
-  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), [...CANVAS_TOOL_NAMES, "notify", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
+  assert.deepEqual(options.mcpServers.thunk.tools.map((t) => t.name), [...CANVAS_TOOL_NAMES, "notify", "memory_propose", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
   assert.match(options.systemPrompt.append, /Workspace job/); assert.match(options.systemPrompt.append, /Project job/);
   assert.doesNotMatch(options.systemPrompt.append, /Secret job|Sibling job/);
   const driver = await createCodexDriver(live(), {}); await driver.run();
   assert.equal(requests[0].params.capabilities.experimentalApi, true);
   const start = requests.find((r) => r.method === "thread/start").params;
-  assert.deepEqual(start.dynamicTools.map((t) => t.name), [...CANVAS_TOOL_NAMES, "notify", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
+  assert.deepEqual(start.dynamicTools.map((t) => t.name), [...CANVAS_TOOL_NAMES, "notify", "memory_propose", ...TASK_TOOL_NAMES, "vault_list", "vault_read"]);
   assert.ok(start.dynamicTools.every((t) => t.type === "function" && t.inputSchema.additionalProperties === false));
   assert.match(start.developerInstructions, /Workspace job/); assert.match(start.developerInstructions, /Project job/);
   assert.doesNotMatch(start.developerInstructions, /Secret job|Sibling job/);
@@ -162,7 +162,7 @@ test("both transports include workspace/project tasks and register validated too
 
 test("prompt omits done tasks and directs agents to claim and complete work", () => {
   rows[0].status = "done";
-  const prompt = tasksPrompt(rows.slice(0, 2));
+  const prompt = tasksPrompt(rows.slice(0, 2)).text;
   assert.doesNotMatch(prompt, /Workspace job/); assert.match(prompt, /bbbbbbbb/);
   assert.match(prompt, /claim tasks you start/); assert.match(prompt, /tasks_complete/);
 });

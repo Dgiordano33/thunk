@@ -9,7 +9,7 @@ import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
 import { getTask } from "@/lib/db/repo/tasks";
 import { appendWorkLog } from "./log";
-import { readWorkerState } from "./state";
+import { getRace } from "@/lib/db/repo/worker-state";
 
 /**
  * Whether every branch in the workspace is merged into its default branch (or the remote copy of it)
@@ -55,7 +55,6 @@ export async function cleanupWorkerWorkspaces(projectId?: string) {
   for (const id of projectIds) {
     const project = await getProject(id);
     if (!project) continue;
-    const state = await readWorkerState(project);
     const sessions = await listSessions({ projectId: id, limit: 100_000 });
     const byWorkspace = new Map<string, typeof sessions>();
     for (const s of sessions) byWorkspace.set(s.workspaceId, [...(byWorkspace.get(s.workspaceId) ?? []), s]);
@@ -69,7 +68,7 @@ export async function cleanupWorkerWorkspaces(projectId?: string) {
       let reason: CleanupReason | null = null;
       for (const s of workers) {
         if (s.origin?.kind !== "worker") continue;
-        const race = s.origin.raceId ? state.races[s.origin.raceId] : undefined;
+        const race = s.origin.raceId ? await getRace(s.origin.raceId) : null;
         if (race?.winner && race.winner !== s.id) { reason = "race_lost"; break; }
         const task = await getTask(s.origin.taskId);
         if (task?.sessionId && task.sessionId !== s.id) continue;

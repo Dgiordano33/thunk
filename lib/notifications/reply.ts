@@ -14,6 +14,11 @@ import type { Notification } from "./types";
  * session, which is resumed first if it has stopped.
  */
 export async function replyToNotification(n: Notification, content: string): Promise<ReplyMode> {
+  if (n.kind === "capture_ready" && n.subjectKey.startsWith("capture:")) {
+    const { actOnCapture } = await import("@/lib/capture/service");
+    await actOnCapture(n.subjectKey.slice("capture:".length), "redirect", content);
+    return "message";
+  }
   if (!n.sessionId) throw new HttpError(409, "This notification has no session to reply to.");
   const current = getSession(n.sessionId);
   const requestId = requestIdOf(n);

@@ -2,8 +2,8 @@ import "server-only";
 import { deliveryHistories, workspaceDeliveries } from "@/lib/projects/delivery";
 import type { DeliveryHistory } from "@/lib/projects/delivery-history";
 import type { WorkspaceDelivery } from "@/lib/projects/delivery-types";
-import { listEnabledRoutines, updateRoutine } from "@/lib/db/repo/routines";
-import { fire } from "./runner";
+import { listEnabledRoutines } from "@/lib/db/repo/routines";
+import { enqueueTriggers } from "@/lib/db/repo/routine-triggers";
 import { DELIVERY_ROUTINE_EVENTS, type Routine } from "./types";
 
 /** Select only new, still-relevant events; a new subscription quietly establishes its cursor. */
@@ -34,13 +34,19 @@ export async function pollDeliveryRoutines() {
     if (!source) continue;
     const { cursor, events } = pendingDeliveryEvents(routine, source.history, workspaceDeliveries());
     if (JSON.stringify(cursor) === JSON.stringify(routine.triggerState.delivery)) continue;
-    // shortcut: consume before firing to avoid duplicate agent jobs after restart; add a durable outbox if guaranteed execution is needed.
-    await updateRoutine(routine.id, { triggerState: { ...routine.triggerState, delivery: cursor } });
-    for (const event of events) {
-      await fire(routine, event.type as (typeof DELIVERY_ROUTINE_EVENTS)[number], {
-        id: event.id, at: event.at, pr: { ...event.pr, branch: event.branch }, checks: event.checks,
-        previewUrl: event.previewUrl, workspace: { id: routine.targetWorkspaceId, branch: event.branch },
-      }).catch((err) => console.error("[thunk] delivery routine failed to start", err));
-    }
+    // The triggers and the moved cursor are written together (event ids are unique per history), so a crash
+    // neither loses an event nor fires it twice; the scheduler's dispatcher starts the runs.
+    await enqueueTriggers(
+      routine.id,
+      events.map((event) => ({
+        source: event.type as (typeof DELIVERY_ROUTINE_EVENTS)[number],
+        dedupeKey: `delivery:${routine.id}:${event.id}`,
+        payload: {
+          id: event.id, at: event.at, pr: { ...event.pr, branch: event.branch }, checks: event.checks,
+          previewUrl: event.previewUrl, workspace: { id: routine.targetWorkspaceId, branch: event.branch },
+        },
+      })),
+      { triggerState: { ...routine.triggerState, delivery: cursor } },
+    );
   }
 }

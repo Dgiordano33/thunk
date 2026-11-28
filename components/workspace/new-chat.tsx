@@ -6,7 +6,8 @@ import { EmptyMark } from "@/components/space/orbit-mark";
 
 import { AttachImagesButton, PromptComposer } from "@/components/chat/prompt-composer";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ContextSet } from "@/lib/context/types";
 import {
   PromptInputFooter,
   PromptInputSelect,
@@ -24,6 +25,8 @@ import { api } from "@/lib/client/api";
 import { useModels } from "@/lib/client/use-models";
 import { useWorkspaceBase } from "./route-context";
 
+const NO_SET = "none";
+
 /** A blank chat. The session is only created when the first message is sent. */
 export function NewChat({
   workspaceId,
@@ -34,6 +37,7 @@ export function NewChat({
   disabled,
   firstSession = false,
   initialPrompt,
+  contextProjectId,
 }: {
   workspaceId?: string;
   projectId?: string;
@@ -44,6 +48,8 @@ export function NewChat({
   firstSession?: boolean;
   /** Text the composer starts with, like a canvas card handed over to a new session. */
   initialPrompt?: string;
+  /** The project whose saved context sets can ride along with the first message. */
+  contextProjectId?: string;
 }) {
   const router = useRouter();
   const base = useWorkspaceBase();
@@ -58,6 +64,14 @@ export function NewChat({
   const mode = modes.includes(chosenMode as never) ? chosenMode : "default";
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sets, setSets] = useState<ContextSet[]>([]);
+  const [setId, setSetId] = useState(NO_SET);
+  useEffect(() => {
+    if (!contextProjectId) return;
+    let live = true;
+    api.listContextSets(contextProjectId).then((r) => live && setSets(r.sets)).catch(() => {});
+    return () => { live = false; };
+  }, [contextProjectId]);
 
   return (
     <div className="flex h-full flex-col">
@@ -87,7 +101,7 @@ export function NewChat({
             setError(null);
             setSubmitting(true);
             try {
-              const { id, workspaceId: createdWorkspaceId } = await api.createSession({ workspaceId, projectId, model, permissionMode: mode, prompt: text, images: files });
+              const { id, workspaceId: createdWorkspaceId } = await api.createSession({ workspaceId, projectId, model, permissionMode: mode, prompt: text, images: files, ...(setId !== NO_SET ? { contextSetId: setId } : {}) });
               router.push(projectId ? `/w/${createdWorkspaceId}/s/${id}` : `${base}/${id}`);
               router.refresh();
             } catch (err) {
@@ -113,6 +127,17 @@ export function NewChat({
                   ))}
                 </PromptInputSelectContent>
               </PromptInputSelect>
+              {sets.length > 0 && (
+                <PromptInputSelect value={setId} onValueChange={setSetId} disabled={disabled}>
+                  <PromptInputSelectTrigger aria-label="Context set" className="h-7 min-w-0 shrink text-xs max-md:gap-1 max-md:px-1.5 [&>[data-slot=select-value]]:!block [&>[data-slot=select-value]]:truncate">
+                    <PromptInputSelectValue />
+                  </PromptInputSelectTrigger>
+                  <PromptInputSelectContent>
+                    <PromptInputSelectItem value={NO_SET}>No context set</PromptInputSelectItem>
+                    {sets.map((s) => <PromptInputSelectItem key={s.id} value={s.id}>Set · {s.name}</PromptInputSelectItem>)}
+                  </PromptInputSelectContent>
+                </PromptInputSelect>
+              )}
               {error && <span className="text-destructive truncate text-xs">{error}</span>}
             </PromptInputTools>
             <PromptInputSubmit disabled={disabled || submitting || !!unavailable} status={submitting ? "submitted" : "ready"} />

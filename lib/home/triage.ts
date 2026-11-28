@@ -9,7 +9,8 @@ import { listNotes } from "@/lib/notes/store";
 import { getProjectByKey } from "@/lib/db/repo/projects";
 import { HOME_DATA_KEY } from "./constants";
 import { computeNextRun, cronError, isValidTimezone } from "@/lib/routines/cron";
-import { ensureHomeProject, openTopChief, readRoutingState, routeRequest } from "./service";
+import { ensureHomeProject, openTopChief, routeRequest } from "./service";
+import { listRoutes } from "@/lib/db/repo/routes";
 
 export const TriageInput = z.object({
   enabled: z.boolean(),
@@ -58,7 +59,7 @@ export async function runTriage(reason: "scheduled" | "manual") {
   const since = (await readTriage()).lastRunAt;
   const notes = (await listNotes(projectNoteDirs(home), { withMemory: false })).filter((n) => !n.id.startsWith("work-log-"));
   const requests = (await Promise.all(notes.map((n) => routeRequest(n.id, "triage").catch(() => null)))).filter((r) => r && r.open > 0);
-  const routes = Object.values((await readRoutingState(home)).routes);
+  const routes = await listRoutes();
   const settled = routes.filter((r) => r.status !== "routed" && (!since || r.updatedAt > since)).length;
   const open = requests.reduce((n, r) => n + r!.open, 0);
   let result: string;

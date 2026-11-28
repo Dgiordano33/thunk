@@ -4,6 +4,9 @@ export async function register() {
     if (process.send) process.on("message", (message) => { if (message === "thunk:shutdown") process.emit("SIGTERM"); });
     const { describeDatabase } = await import("./lib/db/server");
     console.log(`[thunk] database: ${describeDatabase()}`);
+    // Before anything reads orchestration state: older versions kept it in files.
+    const { importStateFiles } = await import("./lib/db/import-files");
+    await importStateFiles().catch((err) => console.error("[thunk] importing orchestration state failed", err));
     const { ensureNotificationProducers } = await import("./lib/notifications/producers");
     ensureNotificationProducers();
     const { ensureSlackNotifier } = await import("./lib/integrations/slack");
@@ -18,6 +21,8 @@ export async function register() {
     ensureScheduler();
     const { ensureTriageScheduler } = await import("./lib/home/triage");
     ensureTriageScheduler();
+    const { ensureBackupScheduler } = await import("./lib/backup/service");
+    ensureBackupScheduler();
     const { recoverVaultQueue } = await import("./lib/vault/service");
     void recoverVaultQueue().catch((err) => console.error("[thunk] vault recovery failed", err));
   }

@@ -2,8 +2,9 @@ import { boardTools, boardPrompt, canvasPrompt, canvasTools, hasCanvasTools } fr
 import { projectBoardsDir } from "@/lib/projects/paths";
 import { chiefTools } from "@/lib/workers/tools";
 import { routeReportTool, topChiefTools } from "@/lib/home/tools";
-import { disallowedToolsFor, teamPrompt } from "@/lib/workers/prompt";
+import { disallowedToolsFor, readOnlyDenial, readOnlySession, readOnlyViolation, teamPrompt } from "@/lib/workers/prompt";
 import { notificationTools } from "@/lib/notifications/tools";
+import { memoryTools } from "@/lib/memory/tools";
 import "server-only";
 import { mkdir } from "node:fs/promises";
 import { createSdkMcpServer, tool, type Options, type PermissionMode } from "@anthropic-ai/claude-agent-sdk";
@@ -26,6 +27,9 @@ import { vaultPrompt, vaultTools } from "@/lib/vault/tools";
 import type { VaultItem } from "@/lib/vault/types";
 import { buildCanUseTool } from "./permissions";
 import { emit, type LiveSession } from "./session-registry";
+import { contextKey, REASONS, type ContextItemDraft, type PromptPart } from "@/lib/context/types";
+import { recordContextItems, watchContextReads, type ContextDirs } from "@/lib/context/record";
+import { removedContextKeys } from "@/lib/db/repo/context-items";
 import type { AgentProvider } from "./types";
 
 export const DOCUMENT_PROMPT = `
@@ -52,7 +56,8 @@ export function hierarchyPrompt(
   tasks: Task[] = [],
   vault?: { items: VaultItem[]; dir: string },
   instructions = "",
-) {
+  { exclude }: { exclude?: Set<string> } = {},
+): PromptPart {
   const { project, workspace } = live.ctx;
   const pmFile = projectMemoryFile(project.dataKey);
   const wmDir = workspaceMemoryDir(project.dataKey, workspace.slug);
@@ -74,19 +79,58 @@ export function hierarchyPrompt(
     "",
     "When you learn something durable about the project, put it in project memory. When you make progress or decisions on this workspace's task, put it in workspace memory.",
   ];
-  if (instructions.trim()) lines.push("", "## Project instructions", instructions.slice(0, 24_000), ...(instructions.length > 24_000 ? ["[Project instructions truncated at 24,000 characters.]"] : []));
+  const items: ContextItemDraft[] = [];
+  const kept = (kind: ContextItemDraft["kind"], refId: string) => !exclude?.has(contextKey(kind, refId));
+  if (instructions.trim() && kept("instructions", "project")) {
+    lines.push("", "## Project instructions", instructions.slice(0, INSTRUCTIONS_LIMIT), ...(instructions.length > INSTRUCTIONS_LIMIT ? ["[Project instructions truncated at 24,000 characters.]"] : []));
+    const cut = instructions.length > INSTRUCTIONS_LIMIT;
+    items.push({ kind: "instructions", refId: "project", title: "Project instructions", path: projectInstructionsFile(project.dataKey), mode: cut ? "truncated" : "full", chars: Math.min(instructions.length, INSTRUCTIONS_LIMIT), reason: cut ? REASONS.overLimit(INSTRUCTIONS_LIMIT) : null, source: instructions });
+  }
   const memory = projectMemory.trim();
-  if (memory && (provider === "codex" || exceedsAutoMemory(memory))) lines.push("", "## Project memory (current contents)", memory);
-  if (notes) lines.push("", notesPrompt(notes));
-  lines.push("", tasksPrompt(tasks));
-  if (vault) lines.push("", vaultPrompt(vault.items, vault.dir));
-  return lines.join("\n");
+  if (memory && kept("memory", "project")) {
+    const injected = provider === "codex" || exceedsAutoMemory(memory);
+    if (injected) lines.push("", "## Project memory (current contents)", memory);
+    items.push({ kind: "memory", refId: "project", title: "Project memory", path: pmFile, mode: "full", chars: memory.length, reason: injected ? null : REASONS.autoMemory, source: projectMemory });
+  }
+  if (notes) {
+    const part = notesPrompt(notes, { exclude });
+    lines.push("", part.text);
+    items.push(...part.items);
+  }
+  const taskPart = tasksPrompt(tasks, { exclude });
+  lines.push("", taskPart.text);
+  items.push(...taskPart.items);
+  if (vault) {
+    const part = vaultPrompt(vault.items, vault.dir, { exclude });
+    lines.push("", part.text);
+    items.push(...part.items);
+  }
+  return { text: lines.join("\n"), items };
+}
+
+const INSTRUCTIONS_LIMIT = 24_000;
+
+/** vault_read results count as fetched context. */
+export const vaultReadRecorder = (sessionId: string) => (item: VaultItem, text: string) =>
+  void recordContextItems(sessionId, "fetched", [{ kind: "vault", refId: item.id, title: item.title, path: item.path ?? null, mode: "full", chars: text.length, source: item.summary ?? "" }]);
+
+/** Where a Read counts as fetching context: notes, memory and the Vault. */
+export function sessionContextDirs(live: LiveSession, notes: SessionNotes, vaultDir: string): ContextDirs {
+  const { project, workspace } = live.ctx;
+  return {
+    notes: [notes.projectDir, notes.workspaceDir, ...notes.repos.map((r) => r.dir)],
+    memory: [
+      { dir: projectMemoryDir(project.dataKey), refId: "project", title: "Project memory" },
+      { dir: workspaceMemoryDir(project.dataKey, workspace.slug), refId: "workspace", title: "Workspace memory" },
+    ],
+    vault: vaultDir,
+  };
 }
 
 export async function buildOptions(live: LiveSession, { resume }: { resume?: string }): Promise<Options> {
   const { project, workspace } = live.ctx;
   const vaultDir = vaultDirOf(project);
-  const [projectMemory, notes, tasks, vaultItems, instructions, connectors, agentSettings] = await Promise.all([
+  const [projectMemory, notes, tasks, vaultItems, instructions, connectors, agentSettings, removed] = await Promise.all([
     readMemory(projectMemoryFile(project.dataKey)),
     loadSessionNotes(project, workspace),
     tasksForWorkspace(workspace.id),
@@ -94,7 +138,11 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     readMemory(projectInstructionsFile(project.dataKey)),
     sessionConnectors(project.dataKey),
     readAgentSettings(),
+    removedContextKeys(live.id).catch(() => new Set<string>()),
   ]);
+  const prompt = hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions, { exclude: removed });
+  void recordContextItems(live.id, "prompt", prompt.items);
+  watchContextReads(live.id, sessionContextDirs(live, notes, vaultDir.dir));
   await mkdir(vaultDir.dir, { recursive: true }).catch(() => {});
   const anchor = anchorRepo(live.ctx);
   const isWorktree = Boolean(workspace.repos.find((r) => r.repoId === anchor?.id)?.worktreePath);
@@ -113,9 +161,10 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
         ...canvasTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...chiefTools(live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...[...routeReportTool(live), ...topChiefTools(live)].map((t) => tool(t.name, t.description, t.schema, t.handler)),
-        ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live).map((t) => tool(t.name, t.description, t.schema, t.handler)),
+        ...memoryTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, origin: live.meta.origin }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
         ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }).map((t) => tool(t.name, t.description, t.schema, t.handler)),
-        ...vaultTools({ projectId: project.id }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
+        ...vaultTools({ projectId: project.id, onRead: vaultReadRecorder(live.id) }).map((t) => tool(t.name, t.description, t.schema, t.handler, { annotations: { readOnlyHint: true } })),
       ],
     }) },
     ...(disallowedToolsFor(live.meta.origin) ? { disallowedTools: disallowedToolsFor(live.meta.origin)! } : {}),
@@ -143,7 +192,7 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
       append: [
         live.meta.origin?.kind === "board" ? boardPrompt : DOCUMENT_PROMPT,
         ...(hasCanvasTools(live) ? [canvasPrompt] : []),
-        hierarchyPrompt(live, projectMemory, "claude", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDir.dir }, instructions),
+        prompt.text,
         ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
         teamPrompt(live.meta.origin),
       ].join("\n\n"),
@@ -152,6 +201,13 @@ export async function buildOptions(live: LiveSession, { resume }: { resume?: str
     env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "thunk/0.1.0" },
     resume,
     canUseTool: buildCanUseTool(live),
+    // canUseTool only sees calls nothing else approved; a user allow rule (e.g. Bash(git merge:*)) would skip it.
+    // A PreToolUse hook runs first for every call, so read-only sessions stay read-only whatever the settings say.
+    ...(readOnlySession(live.meta.origin) ? { hooks: { PreToolUse: [{ hooks: [async (input) => {
+      if (input.hook_event_name !== "PreToolUse") return {};
+      const violation = readOnlyViolation(input.tool_name, (input.tool_input ?? {}) as Record<string, unknown>);
+      return violation ? { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "deny" as const, permissionDecisionReason: readOnlyDenial(live.meta.origin, violation) } } : {};
+    }] }] } } : {}),
     stderr: (data) => {
       live.stderrTail.push(data);
       if (live.stderrTail.length > 50) live.stderrTail.shift();

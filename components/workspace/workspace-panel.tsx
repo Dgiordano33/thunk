@@ -24,6 +24,7 @@ import { SessionsList } from "./sessions-list";
 import { WorkspaceTasks } from "./workspace-tasks";
 import { useTaskCounts } from "@/components/tasks/use-tasks";
 import { WorkspaceNotes } from "./workspace-notes";
+import { SessionContext } from "./session-context";
 import { useWorkspaceBase } from "./route-context";
 import { FileTree } from "./file-tree";
 import { filePagePath } from "@/lib/routes";
@@ -58,6 +59,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
 
   // Poll git while the tab is visible, and re-check whenever the open session settles.
   const status = useSession((s) => s.status);
+  const activeSession = useSession((s) => s.sessionId);
   const loadChanges = useCallback(
     () =>
       api
@@ -87,7 +89,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
   const tabValue = tab === "changes" ? "files" : tab;
 
   return (
-    <Tabs value={["sessions", "artifacts", "files", "tasks", "notes", "checkpoints"].includes(tabValue) ? tabValue : "sessions"} onValueChange={(value) => {
+    <Tabs value={["sessions", "artifacts", "files", "tasks", "notes", "context", "checkpoints"].includes(tabValue) ? tabValue : "sessions"} onValueChange={(value) => {
       // Reopening Files keeps whichever view (all or changed) was last picked.
       setTab(value === "files" && (filesView === "changed" || !desktop) ? "changes" : value);
     }} className="flex h-full flex-col gap-0">
@@ -101,6 +103,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
           </TabsTrigger>}
           <TabsTrigger className="pixel text-xs" value="tasks">Tasks {openCount > 0 && <span className="text-muted-foreground text-xs tabular-nums">{openCount}</span>}</TabsTrigger>
           <TabsTrigger className="pixel text-xs" value="notes">Notes</TabsTrigger>
+          {activeSession && <TabsTrigger className="pixel text-xs" value="context">Context</TabsTrigger>}
           {desktop && hasGit && <TabsTrigger className="pixel text-xs" value="checkpoints">Checkpoints</TabsTrigger>}
         </TabsList>
       </div>
@@ -153,6 +156,7 @@ function WorkspacePanelContent({ workspaceId, projectId, sessions, hasGit }: { w
       }
       {desktop && hasGit && <TabsContent value="checkpoints" className="min-h-0 flex-1 overflow-y-auto"><Checkpoints workspaceId={workspaceId} onRestore={loadChanges} /></TabsContent>}
       <TabsContent value="tasks" className="min-h-0 flex-1 overflow-y-auto"><WorkspaceTasks workspaceId={workspaceId} projectId={projectId} /></TabsContent>
+      {activeSession && <TabsContent value="context" className="min-h-0 flex-1 overflow-y-auto"><SessionContext /></TabsContent>}
       <TabsContent value="notes" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <WorkspaceNotes workspaceId={workspaceId} projectId={projectId} />

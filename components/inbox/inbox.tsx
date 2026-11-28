@@ -7,8 +7,8 @@ import { FloatingWindow, WindowControls, useWindowHandle } from "@/components/wo
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
-  ArrowUpRightIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
-  GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
+  ArrowUpRightIcon, BrainIcon, FilePenLineIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
+  GitCompareIcon, GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -32,7 +32,9 @@ import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/hint";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { QuickContext } from "./quick-context";
-import { describe, destination, dismissScope, FAILED_KINDS, isDismissable, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, sectionOf, type Group } from "./model";
+import { ReviewParts } from "./review-card";
+import { reportSummary } from "@/lib/review/types";
+import { describe, destination, dismissScope, FAILED_KINDS, isDismissable, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, requestKey, sectionOf, type Group } from "./model";
 
 /** Group rows past this many fold behind "Show N more" so one noisy PR can't push decisions off screen. */
 const GROUP_PREVIEW = 5;
@@ -42,8 +44,8 @@ const MAX_OPTIONS = 4;
 const RING = "focus-visible:ring-2 focus-visible:ring-ring";
 const ICONS: Partial<Record<NotificationKind, LucideIcon>> = {
   permission: ShieldQuestionIcon, question: MessageSquareIcon, agent_request: MessageSquareIcon, plan: ClipboardListIcon, delegation_plan: ClipboardListIcon,
-  worker_report: FileTextIcon, review_requested: GitPullRequestIcon, ci_stuck: HourglassIcon, session_stuck: HourglassIcon, deploy_ready: RocketIcon,
-  pr_merged: GitMergeIcon, run_needs_attention: CircleDotIcon,
+  worker_report: FileTextIcon, review_ready: GitCompareIcon, review_requested: GitPullRequestIcon, ci_stuck: HourglassIcon, session_stuck: HourglassIcon, deploy_ready: RocketIcon,
+  pr_merged: GitMergeIcon, run_needs_attention: CircleDotIcon, memory_proposal: BrainIcon, plan_changed: FilePenLineIcon,
 };
 const iconFor = (n: Notification) => ICONS[n.kind] ?? (FAILED_KINDS.includes(n.kind) ? CircleAlertIcon : CheckIcon);
 const ROW_SELECTOR = "[data-notification]";
@@ -99,22 +101,28 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const visible = scoped.filter((n) => kind === "all" || n.kind === kind);
   const decisions = visible.filter((n) => sectionOf(n) === "decision");
   // A ready thought is a Decision row, in time order with the rest; the Thoughts field above lists only the ones still under way.
-  const readyCapture = (n: Notification): Capture | undefined => n.kind === "capture_ready" ? captures.rows.find((r) => r.status === "ready" && `capture:${r.id}` === n.subjectKey) : undefined;
+  const readyCapture = (n: Notification): Capture | undefined => n.kind === "capture_ready" && n.status === "open" ? captures.rows.find((r) => r.status === "ready" && `capture:${r.id}` === n.subjectKey) : undefined;
   const inFeed = new Set(live.filter((n) => n.status === "open").map((n) => readyCapture(n)?.id).filter((id): id is string => !!id));
-  const followups = visible.filter((n) => sectionOf(n) === "followup");
-  const earlier = visible.filter((n) => sectionOf(n) === "earlier");
+  const decisionGroups = groupFollowups(decisions);
+  const decisionKeys = new Set(decisionGroups.map(g => g.key));
+  const followups = visible.filter((n) => sectionOf(n) === "followup" && !decisionKeys.has(requestKey(n)));
+  const attached = visible.filter((n) => sectionOf(n) !== "decision" && decisionKeys.has(requestKey(n)));
+  const followupKeys = new Set(followups.map(requestKey));
+  const followupUpdates = visible.filter(n => sectionOf(n) === "earlier" && followupKeys.has(requestKey(n)));
+  const earlier = visible.filter((n) => sectionOf(n) === "earlier" && !decisionKeys.has(requestKey(n)) && !followupKeys.has(requestKey(n)));
   const groups = groupFollowups(followups);
   const shownInGroup = (g: Group) => expanded.has(g.key) ? g.items : g.items.slice(0, GROUP_PREVIEW);
   const earlierFolds = foldBySession(earlier);
+  const relatedBlockers = attached.filter(n => sectionOf(n) === "followup");
   const shownEarlier = earlierFolds.flatMap((f) => folds.has(f.lead.id) ? [f.lead, ...f.rest] : [f.lead]);
-  const order = [...decisions, ...groups.flatMap(shownInGroup), ...shownEarlier].map((n) => n.id);
+  const order = [...decisionGroups.flatMap(g => [...g.items, ...relatedBlockers.filter(n => requestKey(n) === g.key), ...(expanded.has(g.key) ? attached.filter(n => sectionOf(n) === "earlier" && requestKey(n) === g.key) : [])]), ...groups.flatMap(g => [...shownInGroup(g), ...(expanded.has(g.key) ? followupUpdates.filter(n => requestKey(n) === g.key) : [])]), ...shownEarlier].map((n) => n.id);
   const focusId = activeId && order.includes(activeId) ? activeId : order[0] ?? null;
   const kinds = kindCounts(scoped);
   const scope = dismissScope(visible);
   const followupScope = dismissScope(followups);
   const selectedProject = projects.find((p) => p.id === projectId);
   const hasFilters = projectId !== "all" || kind !== "all";
-  const waiting = decisions.length + followups.length;
+  const waiting = decisions.length + followups.length + relatedBlockers.length;
 
   useEffect(() => {
     const ids = items.filter((n) => !n.readAt && !read.current.has(n.id)).slice(0, 500).map((n) => n.id);
@@ -334,19 +342,55 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
       </article>
     );
   };
+  /** Finished work with changes: what changed, the trial merge and the pull request, each with its next step. */
+  const reviewCard = (n: Notification) => {
+    const project = projects.find((p) => p.id === n.projectId);
+    const workspace = project?.workspaces.find((w) => w.id === n.workspaceId);
+    const { lead } = describe(n);
+    const active = n.id === focusId;
+    const tab = active ? 0 : -1;
+    return (
+      <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className={cn(
+        "bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5",
+        selected.has(n.id) && "bg-accent/40",
+      )}>
+        <div className="flex gap-3 sm:gap-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm bg-[var(--status-attention-soft)] text-[var(--status-attention-ink)]"><GitCompareIcon aria-hidden="true" className="size-4" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className="text-foreground/80 font-medium">{NOTIFICATION_LABELS[n.kind]}</span>
+              <span aria-hidden="true" className="text-muted-foreground/50">/</span>
+              <span className="truncate">{project?.name || "Top level"}{workspace ? ` · ${workspace.name}` : ""}</span>
+              <time className="ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
+            </div>
+            <h3 className="text-[15px] leading-relaxed font-medium break-words">{lead}</h3>
+            {n.sessionId && n.workspaceId && <ReviewParts sessionId={n.sessionId} workspaceId={n.workspaceId} summary={reportSummary(n.detail)} tab={tab} onChanged={() => void refreshNotifications()} />}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {n.sessionId && <Button data-reply tabIndex={tab} variant="ghost" className={RING} onClick={() => openReply(n.id)}><ReplyIcon aria-hidden="true" />Reply</Button>}
+              {contextButton(n, active, lead, true)}
+              <Button asChild tabIndex={tab} variant="ghost" className={RING}><OpenLink n={n} data-open="">{destination(n)}<ArrowUpRightIcon aria-hidden="true" /></OpenLink></Button>
+              <span className="ml-auto flex items-center gap-1">{selectBox(n, active, lead)}{dismissButton(n, active, lead)}</span>
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs">Work completed is not merged. Dismissing files the card; it doesn’t open a PR or merge anything.</p>
+            {contextPanel(n, lead)}
+          </div>
+        </div>
+      </article>
+    );
+  };
   /** A ready thought: what you said, what the worker assumed and did, and the one step it held back. */
   const thoughtCard = (n: Notification, row: Capture) => {
     const project = projects.find((p) => p.id === n.projectId);
     const active = n.id === focusId;
     const tab = active ? 0 : -1;
     const lead = row.title || row.text;
-    const go = (action: string, text?: string) => { armAdvance(n); void captures.act(row.id, action, text); };
+    const go = (action: string, text?: string) => { armAdvance(n); void captures.act(row.id, action, text).then(ok => { if (!ok) disarm(n); }); };
     // A thought a chief handled comes back as that chief talking to you: no Relay vocabulary on the card.
     const chief = !row.task_id && Boolean(row.project_id && row.session_id);
-    const kind = chief ? "Chief" : NOTIFICATION_LABELS[n.kind];
+    const kind = chief ? "Chief · Answered" : "Result ready";
     const focusReply = (e: React.MouseEvent<HTMLElement>) => e.currentTarget.closest("article")?.querySelector<HTMLInputElement>("[data-redirect]")?.focus();
     return (
-      <article key={n.id} {...rowProps(n, `${kind}: ${lead}`)} className="bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5">
+      <article key={n.id} {...rowProps(n, `${kind}: ${lead}`)} className={cn("bg-background relative min-w-0 rounded-sm border px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5", n.urgency === "action" && "border-l-2 border-l-[var(--status-attention)]")}>
         <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="text-foreground/80 font-medium">{kind}</span>
           <span aria-hidden="true" className="text-muted-foreground/50">/</span>
@@ -354,22 +398,25 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           <time className="ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
         </div>
         <h3 className="text-[15px] leading-relaxed font-medium break-words">{lead}</h3>
-        <ThoughtReview row={row} tab={tab} onRedirect={(text) => go("redirect", text)} />
+        <ThoughtReview row={row} tab={tab} pending={captures.pending.has(row.id)} onRedirect={(text) => go("redirect", text)} />
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {row.next_step && <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("continue")}>{`Go ahead: ${row.next_step}`}</Button></Hint>}
-          {chief && !row.next_step && <Hint label="Done" keys="1"><Button data-action="1" tabIndex={tab} className={RING} onClick={() => go("keep")}>Done</Button></Hint>}
+          {row.next_step && <Hint label="Go ahead" keys="1"><Button data-action="1" tabIndex={tab} className={RING} disabled={captures.pending.has(row.id)} onClick={() => go("continue")}>{`Go ahead: ${row.next_step}`}</Button></Hint>}
+          {chief && !row.next_step && <Hint label="Close conversation" keys="1"><Button data-action="1" tabIndex={tab} className={RING} disabled={captures.pending.has(row.id)} onClick={() => go("close")}>Close conversation</Button></Hint>}
           <Hint label="Reply" keys="2"><Button data-action="2" tabIndex={tab} variant="outline" className={RING} onClick={focusReply}>Reply</Button></Hint>
-          <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant={chief ? "ghost" : "outline"} className={RING} onClick={() => go("discard")}>Discard</Button></Hint>
-          {(!chief || row.next_step) && <Button tabIndex={tab} variant="ghost" className={RING} onClick={() => go("keep")}>{chief ? "Done" : "Keep"}</Button>}
+          <Hint label="Discard" keys="3"><Button data-action="3" tabIndex={tab} variant={chief ? "ghost" : "outline"} className={RING} disabled={captures.pending.has(row.id)} onClick={() => go("discard")}>Discard</Button></Hint>
+          {(!chief || row.next_step) && <Button tabIndex={tab} variant="ghost" className={RING} disabled={captures.pending.has(row.id)} onClick={() => go("close")}>Close conversation</Button>}
           {contextButton(n, active, lead, true)}
           {row.session_id && row.workspace_id && <Button asChild tabIndex={tab} variant="ghost" className={RING}><Link data-open="" href={`/w/${row.workspace_id}/s/${row.session_id}`}>{chief ? "Open the chief" : "Open session"}<ArrowUpRightIcon aria-hidden="true" /></Link></Button>}
         </div>
+        <p className="text-muted-foreground mt-2 text-xs">Closing files this conversation. It does not approve a next step, complete tasks, or merge changes.</p>
         {contextPanel(n, lead)}
       </article>
     );
   };
   /** A one-line row for follow-ups and history: lead text, mono metadata, one named link out. */
   const lineRow = (n: Notification, withProject: boolean, fold?: { count: number; open: boolean; nested?: boolean }) => {
+    const capture = readyCapture(n);
+    if (capture) return thoughtCard(n, capture);
     const { lead, detail } = describe(n);
     const active = n.id === focusId;
     const Icon = iconFor(n);
@@ -393,7 +440,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
           </details>}
         </div>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-[11px]">{meta(n, withProject)}</span>
-        {fold && fold.count > 0 && <Button size="sm" variant="ghost" tabIndex={active ? 0 : -1} aria-expanded={fold.open} aria-label={`${fold.open ? "Hide" : "Show"} ${plural(fold.count, "earlier update")} from this session`}
+        {fold && fold.count > 0 && <Button size="sm" variant="ghost" tabIndex={active ? 0 : -1} aria-expanded={fold.open} aria-label={`${fold.open ? "Hide" : "Show"} ${plural(fold.count, "earlier update")} for this request`}
           className={cn("text-muted-foreground h-8 shrink-0 font-mono text-[11px] tabular-nums", RING)} onClick={() => setFolds((s) => { const next = new Set(s); if (next.has(n.id)) next.delete(n.id); else next.add(n.id); return next; })}>
           +{fold.count}<ChevronDownIcon aria-hidden="true" className={cn("transition-transform duration-150 motion-reduce:transition-none", fold.open && "rotate-180")} /></Button>}
         {contextButton(n, active, lead, false)}
@@ -420,7 +467,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
   const countBadge = (count: number) => <span className="text-muted-foreground font-mono text-[11px] tabular-nums">{count}</span>;
   const compact = loaded && visible.length > 0;
   const statusText = feedError ? "Live updates paused" : !loaded ? "Connecting…" : waiting
-    ? [decisions.length && plural(decisions.length, "decision"), followups.length && plural(followups.length, "follow-up")].filter(Boolean).join(" · ")
+    ? [decisions.length && plural(decisions.length, "decision"), (followups.length + relatedBlockers.length) && plural(followups.length + relatedBlockers.length, "follow-up")].filter(Boolean).join(" · ")
     : "All caught up";
   const kindLabel = kind === "all" ? "All kinds" : NOTIFICATION_LABELS[kind as NotificationKind] ?? "All kinds";
 
@@ -488,13 +535,26 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
             {loaded && visible.length > 0 && <>
               {(decisions.length > 0 || kind === "all") && <section aria-labelledby="decisions-heading">
                 <div className="mb-3 flex items-center gap-3"><h2 id="decisions-heading" className="pixel text-sm tracking-wide">Decisions</h2>{countBadge(decisions.length)}<span className="bg-border h-px flex-1" /></div>
-                <div className="space-y-3">{decisions.map((n) => { const row = readyCapture(n); return row ? thoughtCard(n, row) : decisionCard(n); })}</div>
+                <div className="space-y-4">{decisionGroups.map(g => {
+                  const updates = attached.filter(n => sectionOf(n) === "earlier" && requestKey(n) === g.key);
+                  const open = expanded.has(g.key);
+                  return <div key={g.key} role="group" aria-label={`Request: ${g.label}`} className="space-y-2">
+                    {g.items.length > 1 && <p className="text-muted-foreground text-xs">Related request · {g.items.length} separate decisions</p>}
+                    {g.items.map(n => { const row = readyCapture(n); return row ? thoughtCard(n, row) : n.kind === "review_ready" ? reviewCard(n) : decisionCard(n); })}
+                    {relatedBlockers.filter(n => requestKey(n) === g.key).map(n => lineRow(n, false))}
+                    {updates.length > 0 && <>
+                      <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setExpanded(s => { const next = new Set(s); if (open) next.delete(g.key); else next.add(g.key); return next; })}>{open ? "Hide" : "Show"} {plural(updates.length, "related update")}</Button>
+                      {open && updates.map(n => lineRow(n, false))}
+                    </>}
+                  </div>;
+                })}</div>
                 {!decisions.length && <p className="text-muted-foreground flex items-center gap-2 pb-2 text-xs"><CheckCheckIcon aria-hidden="true" className="size-4 text-emerald-700 dark:text-emerald-400" />No agent is waiting on a decision.</p>}
               </section>}
               {groups.length > 0 && <section className={cn(decisions.length > 0 || kind === "all" ? "mt-8" : "")} aria-labelledby="followups-heading">
                 <div className="mb-1 flex items-center gap-3"><h2 id="followups-heading" className="pixel text-sm tracking-wide">Follow-ups</h2>{countBadge(followups.length)}<span className="bg-border h-px flex-1" /></div>
                 {groups.map((g) => {
                   const shown = shownInGroup(g);
+                  const updates = followupUpdates.filter(n => requestKey(n) === g.key);
                   const project = projects.find((p) => p.id === g.projectId);
                   const label = `${g.label}${projectId === "all" ? ` in ${project?.name || "Top level"}` : ""}`;
                   return <div key={g.key} role="group" aria-label={`${label}, ${g.items.length}`} className="border-b py-2 last:border-0">
@@ -505,16 +565,19 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
                       {g.items.length > 1 && <Button size="sm" variant="ghost" className={cn("text-muted-foreground ml-auto", RING)} onClick={() => void dismiss(g.items.map((n) => n.id), plural(g.items.length, g.label.toLowerCase()))} aria-label={`Dismiss all ${g.items.length}: ${label}`}>Dismiss {g.items.length}</Button>}
                     </div>
                     {shown.map((n) => lineRow(n, false))}
+                    {updates.length > 0 && <Button size="sm" variant="ghost" aria-expanded={expanded.has(g.key)} onClick={() => setExpanded(s => { const next = new Set(s); if (next.has(g.key)) next.delete(g.key); else next.add(g.key); return next; })}>{expanded.has(g.key) ? "Hide" : "Show"} {plural(updates.length, "related update")}</Button>}
+                    {expanded.has(g.key) && updates.map(n => lineRow(n, false))}
                     {g.items.length > shown.length && <Button size="sm" variant="ghost" className={cn("text-muted-foreground ml-10", RING)} onClick={() => setExpanded((s) => new Set([...s, g.key]))}>Show {g.items.length - shown.length} more</Button>}
                   </div>;
                 })}
               </section>}
               {earlier.length > 0 && <section className="mt-8" aria-labelledby="earlier-heading">
-                <div className="mb-1 flex items-center gap-3"><h2 id="earlier-heading" className="pixel text-muted-foreground text-sm tracking-wide">Earlier</h2><span className="bg-border h-px flex-1" /></div>
+                <div className="mb-1 flex items-center gap-3"><h2 id="earlier-heading" className="pixel text-muted-foreground text-sm tracking-wide">Updates & answers</h2><span className="bg-border h-px flex-1" /></div>
                 {earlierFolds.map((f) => {
                   const open = folds.has(f.lead.id);
                   return <div key={f.lead.id} role={f.rest.length ? "group" : undefined} aria-label={f.rest.length ? `${describe(f.lead).lead} and ${plural(f.rest.length, "earlier update")}` : undefined}>
                     {lineRow(f.lead, projectId === "all", { count: f.rest.length, open })}
+                    {readyCapture(f.lead) && f.rest.length > 0 && <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setFolds(s => { const next = new Set(s); if (open) next.delete(f.lead.id); else next.add(f.lead.id); return next; })}>{open ? "Hide" : "Show"} {plural(f.rest.length, "related update")}</Button>}
                     {open && f.rest.map((n) => lineRow(n, projectId === "all", { count: 0, open: false, nested: true }))}
                   </div>;
                 })}

@@ -4,10 +4,12 @@ import { getProject } from "@/lib/db/repo/projects";
 import { listItems, readItem } from "./store";
 import { vaultDirOf } from "./dir";
 import { IDEA_LABELS, KIND_LABELS, type VaultItem } from "./types";
+import { contextKey, REASONS, type ContextItemDraft, type PromptPart } from "@/lib/context/types";
 
 // Read-only Vault tools for agent sessions. Plain objects (like lib/tasks/tools.ts) so tests don't need the SDK.
 
-export type VaultToolContext = { projectId: string };
+/** `onRead` records what a session fetched (the Context view's "Fetched later"). */
+export type VaultToolContext = { projectId: string; onRead?: (item: VaultItem, text: string) => void };
 export const VAULT_TOOL_NAMES = ["vault_list", "vault_read"] as const;
 
 function defineTool<S extends z.ZodRawShape>(name: (typeof VAULT_TOOL_NAMES)[number], description: string, schema: S,
@@ -70,7 +72,13 @@ export function vaultTools(ctx: VaultToolContext) {
     }, async ({ id }) => {
       const item = await readItem(await vault(), id);
       if (!item) throw new Error("Vault item not found in this project.");
-      return readText(item);
+      const text = readText(item);
+      try {
+        ctx.onRead?.(item, text);
+      } catch (err) {
+        console.error("[thunk] record vault read failed", err);
+      }
+      return text;
     }),
   ];
 }
@@ -80,12 +88,16 @@ export const PINNED_LIMIT = 12_000;
 const INDEX_LIMIT = 30;
 
 /** System prompt section: pinned items' summaries in full, then an index of the rest with type and a one-line summary. */
-export function vaultPrompt(items: VaultItem[], dir: string) {
+export function vaultPrompt(all: VaultItem[], dir: string, { exclude }: { exclude?: Set<string> } = {}): PromptPart {
+  const items = all.filter((i) => !exclude?.has(contextKey("vault", i.id)));
+  const drafts: ContextItemDraft[] = [];
+  const item = (i: VaultItem, mode: ContextItemDraft["mode"], chars: number, reason?: string) =>
+    drafts.push({ kind: "vault", refId: i.id, title: i.title, path: i.path ?? null, mode, chars, reason: reason ?? null, source: i.summary ?? "" });
   const lines = [
     "# Thunk vault",
     `The project's Vault holds reference material the user brought in as-is (PDFs, screenshots, slides, docs, transcripts), shared by every workspace in the project. Each has a summary written when it was added. Originals live under \`${dir}\` (read-only for you). Use vault_list to search and vault_read for the full summary, extracted ideas and the original's path. Consult it when the user refers to a doc, deck, screenshot, spec or transcript, or when the work needs background the notes don't cover.`,
   ];
-  if (!items.length) return [...lines, "", "The Vault is empty."].join("\n");
+  if (!items.length) return { text: [...lines, "", "The Vault is empty."].join("\n"), items: drafts };
   const pinned = items.filter((i) => i.pinned && i.status === "ready" && i.summary?.trim());
   if (pinned.length) {
     lines.push("", "## Pinned (summaries; read the original for detail)");
@@ -95,10 +107,14 @@ export function vaultPrompt(items: VaultItem[], dir: string) {
       const text = i.summary!.trim();
       if (budget <= 0) {
         cut++;
+        item(i, "omitted", 0, REASONS.overLimit(PINNED_LIMIT));
         continue;
       }
       const piece = text.length > budget ? `${text.slice(0, budget)}\n…(truncated)` : text;
-      if (text.length > budget) cut++;
+      if (text.length > budget) {
+        cut++;
+        item(i, "truncated", budget, REASONS.overLimit(PINNED_LIMIT));
+      } else item(i, "full", text.length);
       budget -= piece.length;
       lines.push("", `### ${i.title.replace(/\s+/g, " ")} (${KIND_LABELS[i.kind]}, \`${i.filename}\`, id ${i.id})`, piece);
     }
@@ -110,8 +126,11 @@ export function vaultPrompt(items: VaultItem[], dir: string) {
     lines.push("", `## ${pinned.length ? "Other items" : "Items"} (${rest.length}${rest.length > INDEX_LIMIT ? `, newest ${INDEX_LIMIT} shown` : ""})`);
     for (const i of rest.slice(0, INDEX_LIMIT)) {
       const gist = i.status === "ready" ? firstLine(i.summary) : i.status === "failed" ? "couldn't be read" : "still being read";
-      lines.push(`- ${i.id} · ${KIND_LABELS[i.kind]} · ${i.title.replace(/\s+/g, " ")}${gist ? ` — ${gist}` : ""}`);
+      const line = `- ${i.id} · ${KIND_LABELS[i.kind]} · ${i.title.replace(/\s+/g, " ")}${gist ? ` — ${gist}` : ""}`;
+      lines.push(line);
+      item(i, "index", line.length, i.pinned ? undefined : REASONS.notPinned);
     }
+    for (const i of rest.slice(INDEX_LIMIT)) item(i, "omitted", 0, REASONS.notListed(INDEX_LIMIT));
   }
-  return lines.join("\n");
+  return { text: lines.join("\n"), items: drafts };
 }

@@ -1,4 +1,5 @@
 import type { DeliveryHistory, DeliverySnapshot } from "@/lib/projects/delivery-history";
+import { listWorkspaces } from "@/lib/db/repo/workspaces";
 import { notify, resolveBySubject, resolveWhere } from "./service";
 import { CI_STUCK_MS } from "./config";
 import { NOTIFICATION_LABELS, type NotificationKind } from "./types";
@@ -11,6 +12,9 @@ export async function deliveryNotifications(projectId: string, previous: Deliver
     if (e.type === "ci_passed" || e.type === "pr_merged") await resolveBySubject(`${key}:ci`);
     if (e.type === "pr_merged") {
       await resolveWhere({ projectId, subjectPrefix: `${key}:` });
+      // The review card for the work on this branch is done with: it merged.
+      for (const w of await listWorkspaces(projectId)) if (w.branch === e.branch || w.repos.some((r) => r.branch === e.branch))
+        await resolveWhere({ projectId, workspaceId: w.id, kinds: ["review_ready"] });
     }
     if (!["ci_failed", "review_requested", "deploy_ready", "pr_merged"].includes(e.type)) continue;
     const kind = e.type as NotificationKind;

@@ -1,11 +1,11 @@
 import "server-only";
 import { emitTask } from "@/lib/tasks/events";
 import { OPEN_TASK_STATUSES, type Task, type TaskCounts, type TaskEvent, type TaskStatus } from "@/lib/tasks/types";
-import type { Tables, TablesUpdate } from "../types";
+import type { Json, Tables, TablesUpdate } from "../types";
 import { db } from "../server";
 import { insertSql, run, updateSql } from "../sql";
 type Row = Tables<"tasks">;
-const COLUMNS = "id, project_id, workspace_id, title, body, status, priority, position, created_by, session_id, created_in_session_id, note_id, due_at, completed_at, created_at, updated_at, external_source, external_id, external_key, external_url, external_updated_at";
+const COLUMNS = "id, project_id, workspace_id, title, body, status, priority, position, created_by, session_id, created_in_session_id, note_id, due_at, completed_at, created_at, updated_at, external_source, external_id, external_key, external_url, external_updated_at, criteria, criteria_version";
 function toTask(r: Row): Task { return {
   id: r.id,
   projectId: r.project_id,
@@ -23,6 +23,8 @@ function toTask(r: Row): Task { return {
   completedAt: r.completed_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
+  criteria: (r.criteria as Task["criteria"]) ?? null,
+  criteriaVersion: r.criteria_version ?? 0,
   external: r.external_source && r.external_id ? { source: r.external_source as "linear", id: r.external_id, key: r.external_key ?? "", url: r.external_url ?? "", updatedAt: r.external_updated_at } : null,
 }; }
 function taskToRow(p: Partial<Task>): TablesUpdate<"tasks"> {
@@ -43,6 +45,8 @@ function taskToRow(p: Partial<Task>): TablesUpdate<"tasks"> {
   if (p.completedAt !== undefined) row.completed_at = p.completedAt;
   if (p.createdAt !== undefined) row.created_at = p.createdAt;
   if (p.updatedAt !== undefined) row.updated_at = p.updatedAt;
+  if (p.criteria !== undefined) row.criteria = p.criteria as Json;
+  if (p.criteriaVersion !== undefined) row.criteria_version = p.criteriaVersion;
   if (p.external !== undefined) {
     row.external_source = p.external?.source ?? null;
     row.external_id = p.external?.id ?? null;
@@ -81,6 +85,7 @@ async function insertTaskNow(input: NewTask): Promise<Task> {
     createdBy: input.createdBy ?? "user", sessionId: input.sessionId ?? null,
     createdInSessionId: input.createdInSessionId ?? null, noteId: input.noteId ?? null, dueAt: input.dueAt ?? null,
     external: input.external ?? null,
+    criteria: input.criteria?.length ? input.criteria : null, criteriaVersion: input.criteria?.length ? 1 : 0,
     position: (peers.length ? Math.max(...peers.map((t) => t.position)) : 0) + 1,
     completedAt: closed(input.status ?? "open") ? now : null, createdAt: now, updatedAt: now,
   };

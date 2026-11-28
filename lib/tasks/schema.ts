@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { TASK_STATUSES } from "./types";
+import { CRITERION_KINDS, TASK_STATUSES } from "./types";
+
+export const CriterionSchema = z.object({
+  id: z.string().trim().regex(/^[a-z0-9_-]{1,20}$/i).optional().describe("Short stable id such as c1; assigned when omitted."),
+  text: z.string().trim().min(1).max(500),
+  kind: z.enum(CRITERION_KINDS).optional().describe("How it would be shown: test, interaction, visual, source or other."),
+}).strict();
+export const CriteriaSchema = z.array(CriterionSchema).max(12);
 
 export const TaskInputSchema = z.object({
   projectId: z.uuid(),
@@ -15,6 +22,8 @@ export const TaskInputSchema = z.object({
 export const TaskPatchSchema = TaskInputSchema.omit({ projectId: true }).partial().extend({
   position: z.number().finite().optional(),
   after: z.uuid().optional(),
+  /** Replaces the criteria (an empty list clears them) and bumps criteriaVersion. */
+  criteria: CriteriaSchema.nullable().optional(),
 }).strict().refine((p) => p.position === undefined || p.after === undefined, "Use position or after, not both");
 export type TaskInput = z.infer<typeof TaskInputSchema>;
 export type TaskPatch = z.infer<typeof TaskPatchSchema>;

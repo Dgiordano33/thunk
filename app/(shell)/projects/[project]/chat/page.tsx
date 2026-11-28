@@ -16,7 +16,7 @@ export default async function ProjectChat({ params, searchParams }: { params: Pr
   const prompt = typeof canvas === "string" && typeof card === "string" ? await cardPrompt(project, canvas, card) : undefined;
   return <WorkspaceBaseProvider value={`/${project.slug}`}><NewChat
     key={prompt ? String(card) : undefined} initialPrompt={prompt}
-    projectId={project.id} workspaceLabel={project.name} firstSession={!latest}
+    projectId={project.id} contextProjectId={project.id} workspaceLabel={project.name} firstSession={!latest}
     defaultModel={latest?.model ?? env.DEFAULT_MODEL} defaultMode={latest?.permissionMode ?? "default"}
   /></WorkspaceBaseProvider>;
 }

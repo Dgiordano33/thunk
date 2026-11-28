@@ -53,6 +53,7 @@ Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/projects/delivery.ts")) {
     if (request === "node:child_process") return { execFile: fakeExec };
     if (request === "@/lib/notifications/delivery") return { deliveryNotifications: async () => {} };
+    if (request === "@/lib/evidence/service") return { recordDelivery: async () => {} };
     if (request === "../db/repo/projects") return { listProjects: async () => projects };
     if (request === "../db/repo/workspaces") return { listAllWorkspaces: async () => workspaces };
     if (request === "./runtime") return { runtimeSnapshot: async () => ({ processes: [{ kind: "run", running: true }], previewUrl: "http://127.0.0.1:3000", setupError: null }) };
@@ -176,4 +177,16 @@ test("delivery polling does no git or GitHub work without viewers or subscriptio
   const before = calls;
   await state.tick();
   assert.equal(calls, before);
+});
+
+
+test("delivery distinguishes completed local work, review, closed and verified merge", () => {
+  const {deliveryStage,deliveryCue}=require('../lib/projects/delivery-types.ts');
+  assert.equal(deliveryStage(null).label,"Not submitted for review");
+  assert.equal(deliveryStage({...raw(),isDraft:true}).label,"Draft");
+  assert.equal(deliveryStage(raw()).label,"Ready for review");
+  assert.equal(deliveryStage({...raw(),state:"CLOSED"}).label,"Closed without merging");
+  const merged={...raw(),state:"MERGED",checks:[{state:"fail"}]};
+  assert.equal(deliveryStage(merged).label,"Merged");
+  assert.equal(deliveryCue(merged).label,"Merged","old checks cannot obscure an observed merge");
 });

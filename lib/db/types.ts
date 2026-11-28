@@ -15,9 +15,9 @@ export type Database = {
   public: {
     Tables: {
       notifications: {
-        Row: { id: string; kind: string; urgency: string; project_id: string; workspace_id: string | null; session_id: string | null; run_id: string | null; subject_key: string; title: string; detail: string | null; href: string; actions: Json; status: string; read_at: string | null; resolved_at: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; kind: string; urgency: string; project_id: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; subject_key: string; title: string; detail?: string | null; href: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
-        Update: { id?: string; kind?: string; urgency?: string; project_id?: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; subject_key?: string; title?: string; detail?: string | null; href?: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
+        Row: { id: string; kind: string; urgency: string; project_id: string; workspace_id: string | null; session_id: string | null; run_id: string | null; request_key: string | null; subject_key: string; title: string; detail: string | null; href: string; actions: Json; status: string; read_at: string | null; resolved_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; kind: string; urgency: string; project_id: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; request_key?: string | null; subject_key: string; title: string; detail?: string | null; href: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; kind?: string; urgency?: string; project_id?: string; workspace_id?: string | null; session_id?: string | null; run_id?: string | null; request_key?: string | null; subject_key?: string; title?: string; detail?: string | null; href?: string; actions?: Json; status?: string; read_at?: string | null; resolved_at?: string | null; created_at?: string; updated_at?: string }
         Relationships: [
           { foreignKeyName: "notifications_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
           { foreignKeyName: "notifications_workspace_id_fkey"; columns: ["workspace_id"]; isOneToOne: false; referencedRelation: "workspaces"; referencedColumns: ["id"] },
@@ -434,6 +434,8 @@ export type Database = {
           external_key: string | null
           external_url: string | null
           external_updated_at: string | null
+          criteria: Json | null
+          criteria_version: number
         }
         Insert: {
           id?: string
@@ -457,6 +459,8 @@ export type Database = {
           external_key?: string | null
           external_url?: string | null
           external_updated_at?: string | null
+          criteria?: Json | null
+          criteria_version?: number
         }
         Update: {
           id?: string
@@ -480,6 +484,8 @@ export type Database = {
           external_key?: string | null
           external_url?: string | null
           external_updated_at?: string | null
+          criteria?: Json | null
+          criteria_version?: number
         }
         Relationships: [
           { foreignKeyName: "tasks_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },

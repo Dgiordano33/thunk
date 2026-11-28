@@ -18,6 +18,7 @@ const persisted = new Map();
 const tasks = new Map();
 const notes = new Map();
 const notifications = [];
+const relayRequests = [];
 let setupFailure = false;
 let workspaceInputs = [];
 const archivedWorkspaces = [];
@@ -51,13 +52,14 @@ const agent = {
 };
 const mocks = {
   "server-only": {},
+  "@/lib/db/repo/captures": { listCaptures: async (all) => relayRequests.filter((r) => all || !["kept","discarded"].includes(r.status)), captureTask: async () => null },
   "@/lib/agent": agent,
   "@/lib/projects": {
     ensureMainWorkspace: async () => main,
     createWorkspace: async (input) => { workspaceInputs.push(input); if (setupFailure) throw new Error("setup failed"); const workspace = nextWorkspace?.(input) ?? { ...main, id: id(), slug: input.name, branch: `thunk/${input.name}` }; nextWorkspace = null; workspaces.set(workspace.id, workspace); return workspace; },
     getWorkspaceContext: async (id) => workspaces.has(id) ? { project, workspace: workspaces.get(id) } : null,
   },
-  "@/lib/projects/paths": { projectConfigDir: () => tmp, workspaceMemoryFile: () => path.join(tmp, "MEMORY.md") },
+  "@/lib/projects/paths": { projectConfigDir: () => tmp, workspaceMemoryFile: () => path.join(tmp, "MEMORY.md"), sharedConfigDir: () => tmp },
   "@/lib/projects/repos": { sessionConfigRoot: () => tmp },
   "@/lib/prompts/context": { expandCommand: async (s) => s },
   "@/lib/db/repo/projects": { getProject: async (id) => id === project.id ? project : null, listProjects: async () => [project] },
@@ -66,7 +68,7 @@ const mocks = {
   "@/lib/db/repo/tasks": { getTask: async (id) => tasks.get(id), listTasks: async () => [...tasks.values()] },
   "@/lib/tasks/service": {
     createTask: async (input) => { const task = { id: id(), status: "open", ...input }; tasks.set(task.id, task); return task; },
-    patchTask: async (id, patch) => { const task = tasks.get(id); Object.assign(task, patch); return task; },
+    patchTask: async (id, patch) => { const task = tasks.get(id); const bump = patch.criteria !== undefined && JSON.stringify(patch.criteria) !== JSON.stringify(task.criteria ?? null); Object.assign(task, patch, bump ? { criteriaVersion: (task.criteriaVersion ?? 0) + 1 } : {}); return task; },
   },
   "@/lib/db/repo/sessions": { upsertSession: async () => {}, getSessionRow: async (id) => persisted.get(id)?.meta ?? null },
   "@/lib/db/repo/messages": { insertEvents: async () => {}, loadEvents: async (id) => sessions.get(id)?.events ?? persisted.get(id)?.events ?? [] },
@@ -79,11 +81,13 @@ const mocks = {
     writeNote: async (dirs, id, patch) => { const note = notes.get(`${dirs.notesDir}/${id}`); assert.equal(patch.expectedUpdatedAt, note.updatedAt); Object.assign(note, patch, { updatedAt: crypto.randomUUID() }); return note; },
   },
   "@/lib/notes/prompt": { INJECT_LIMIT: 24_000 },
-  "@/lib/workers/report": { collectReport: async ({ markdown }) => ({ summary: markdown, outcome: markdown.includes("outcome: blocked") ? "blocked" : "done", diffStat: { files: 1, additions: 2, deletions: 0 }, prUrl: null }) },
+  "@/lib/workers/report": { collectReport: async ({ markdown }) => ({ summary: markdown, outcome: markdown.includes("outcome: blocked") ? "blocked" : "done", diffStat: markdown.includes("no changes") ? null : { files: 1, additions: 2, deletions: 0 }, prUrl: null }) },
 };
 const cache = new Map();
 function load(name, from = path.join(root, "index.ts")) {
   if (Object.hasOwn(mocks, name)) return mocks[name];
+  // The service imports its report collector relatively; mock it so reports have a known diff.
+  if (name === "./report" && from.endsWith(path.join("lib", "workers", "service.ts"))) return mocks["@/lib/workers/report"];
   if (!name.startsWith("@/") && !name.startsWith(".")) return require(name);
   let filename = name.startsWith("@/") ? path.join(root, name.slice(2)) : path.resolve(path.dirname(from), name);
   if (!filename.endsWith(".ts")) filename += ".ts";
@@ -122,7 +126,7 @@ test("chief delegates in isolated worktrees, caps concurrency, batches reports a
   assert.deepEqual(await service.drainQueue(project.id), [fifth.taskId], "a freed slot starts the queued task");
   assert.equal(tasks.get(fifth.taskId).status, "in_progress");
   await service.stopWorker(project.id, fifth.taskId, "Not needed for this test");
-  await until(async () => await reports.savedReport(project, workers[1].sessionId));
+  await until(async () => await reports.savedReport(workers[1].sessionId));
   assert.equal(chief.events.filter((e) => e.type === "user_message").length, 0);
   await reports.flushReports(chief.id);
   const delivered = chief.events.filter((e) => e.type === "user_message");
@@ -135,11 +139,11 @@ test("chief delegates in isolated worktrees, caps concurrency, batches reports a
   await service.stopWorker(project.id, workers[2].taskId, "No longer needed");
   assert.equal(tasks.get(workers[2].taskId).status, "cancelled");
   await service.stopWorker(project.id, workers[3].taskId, "Cleanup");
-  await until(async () => await reports.savedReport(project, workers[3].sessionId));
+  await until(async () => await reports.savedReport(workers[3].sessionId));
   await reports.flushReports(chief.id);
   await service.messageWorker(project.id, workers[0].taskId, "Please fix the test");
   finish(first, "Fixed test");
-  await until(async () => (await reports.savedReport(project, first.id))?.content.includes("Fixed test"));
+  await until(async () => (await reports.savedReport(first.id))?.content.includes("Fixed test"));
   await reports.flushReports(chief.id);
   const before = notifications.length;
   await service.recoverWorkers();
@@ -156,7 +160,7 @@ test("note brief round trip, direct worker completion and setup failure", async 
   assert.match(input, /Truncated; read the note path/);
   assert.ok(input.length < 25_000);
   finish(live);
-  await until(async () => await reports.savedReport(project, live.id));
+  await until(async () => await reports.savedReport(live.id));
   assert.equal(tasks.get(worker.taskId).status, "done");
   const chief = await service.openChief(project.id);
   chief.meta.status = "running";
@@ -165,7 +169,7 @@ test("note brief round trip, direct worker completion and setup failure", async 
   const assigned = await service.delegate(project.id, chief.id, { taskId: existing.id });
   assert.equal(assigned.taskId, existing.id);
   finish(sessions.get(assigned.sessionId));
-  await until(async () => await reports.savedReport(project, assigned.sessionId));
+  await until(async () => await reports.savedReport(assigned.sessionId));
   await reports.flushReports(chief.id);
   setupFailure = true;
   await assert.rejects(service.delegate(project.id, null, { title: "Broken setup" }), /setup failed/);
@@ -186,9 +190,10 @@ test("work log serializes concurrent appends, memory uses explicit replacement",
 
 test("chief tools are exclusive and writes are denied", () => {
   assert.deepEqual(prompt.CHIEF_DISALLOWED_TOOLS, ["Edit", "Write", "NotebookEdit"]);
-  for (const command of ["echo x > file", "tee file", "git commit -am x", "git push", "rm -rf folder"]) assert.equal(prompt.chiefWriteCommand("Bash", { command }), true);
-  assert.equal(prompt.chiefWriteCommand("Bash", { command: "git diff --stat" }), false);
-  assert.equal(prompt.chiefWriteCommand("Edit", {}), true);
+  for (const command of ["echo x > file", "tee file", "git commit -am x", "git push", "rm -rf folder", "git merge x", "gh pr merge 1", "sed -i s/a/b/ f", "mv a b", "cp a b", "echo $(touch x)"]) assert.ok(prompt.readOnlyViolation("Bash", { command }), command);
+  assert.equal(prompt.readOnlyViolation("Bash", { command: "git diff --stat" }), null);
+  assert.ok(prompt.readOnlyViolation("Edit", {}));
+  assert.match(prompt.readOnlyDenial({ kind: "chief" }, "git merge changes the repository"), /delegate this to a worker\.$/);
   const { chiefTools } = load("@/lib/workers/tools");
   assert.deepEqual(chiefTools({ meta: { origin: { kind: "worker" } } }), []);
   assert.match(prompt.teamPrompt({ kind: "chief" }), /split unchecked checklist/i);
@@ -224,7 +229,7 @@ test("restart recovers detached results, reports interrupted work, and preserves
   finish(detached, "Finished while detached");
   persisted.set(detached.id, detached); sessions.delete(detached.id);
   await service.recoverWorkers();
-  assert.match((await reports.savedReport(project, detached.id)).content, /Finished while detached/);
+  assert.match((await reports.savedReport(detached.id)).content, /Finished while detached/);
   await reports.flushReports(chief.id);
   assert.match(chief.events.at(-1).content, /Finished while detached/);
   const count = notifications.length;
@@ -239,12 +244,12 @@ test("restart recovers detached results, reports interrupted work, and preserves
   persisted.set(interrupted.id, interrupted); sessions.delete(interrupted.id);
   await service.recoverWorkers();
   assert.equal(tasks.get(interrupted.meta.origin.taskId).status, "blocked");
-  assert.match((await reports.savedReport(project, interrupted.id)).content, /interrupted by server restart/);
+  assert.match((await reports.savedReport(interrupted.id)).content, /interrupted by server restart/);
   await reports.flushReports(chief.id);
 
   await reports.queueReport(project, detached.meta, 100, "<worker_report>First undelivered</worker_report>");
   await reports.queueReport(project, detached.meta, 200, "<worker_report>Second undelivered</worker_report>");
-  assert.equal((await reports.savedReports(project, detached.id)).filter((r) => !r.delivered).length, 2);
+  assert.equal((await reports.savedReports(detached.id)).filter((r) => !r.delivered).length, 2);
   await reports.flushReports(chief.id);
   assert.match(chief.events.at(-1).content, /First undelivered[\s\S]*Second undelivered/);
 });
@@ -259,15 +264,15 @@ test("reopening a finished worker neither arms a watcher nor changes its task", 
   emit(live, { type: "status", state: "closed" });
   await tick();
   assert.equal(tasks.get(taskId).status, "done");
-  assert.equal(await reports.savedReport(project, live.id), null);
+  assert.equal(await reports.savedReport(live.id), null);
 });
 
 test("an empty needs_person field does not block a finished worker", async () => {
   const worker = await service.delegate(project.id, null, { title: "Blank field" });
   finish(sessions.get(worker.sessionId), "```worker-summary\noutcome: done\nsummary: ok\nbranch: b\nneeds_person:\n```");
-  await until(async () => await reports.savedReport(project, worker.sessionId));
+  await until(async () => await reports.savedReport(worker.sessionId));
   assert.equal(tasks.get(worker.taskId).status, "done");
-  assert.match((await reports.savedReport(project, worker.sessionId)).content, /status="done"/);
+  assert.match((await reports.savedReport(worker.sessionId)).content, /status="done"/);
 });
 
 test("the chief cannot start a worker that bypasses permissions", async () => {
@@ -293,7 +298,7 @@ test("a deleted chief stops report retries", async () => {
   const meta = { id: id(), origin: { kind: "worker", chiefSessionId: ghost, taskId: id() } };
   await reports.queueReport(project, meta, 1, "<worker_report>Orphan</worker_report>");
   await reports.flushReports(ghost);
-  assert.equal((await reports.savedReport(project, meta.id)).delivered, true);
+  assert.equal((await reports.savedReport(meta.id)).delivered, true);
 });
 
 test("a new chief takes over reports from running workers", async () => {
@@ -304,7 +309,7 @@ test("a new chief takes over reports from running workers", async () => {
   fresh.meta.createdAt = new Date(Date.now() + 60_000).toISOString();
   const before = old.events.length;
   finish(sessions.get(worker.sessionId), "Handover complete");
-  await until(async () => await reports.savedReport(project, worker.sessionId));
+  await until(async () => await reports.savedReport(worker.sessionId));
   await reports.flushReports(old.id);
   assert.match(fresh.events.find((e) => e.type === "user_message").content, /Handover complete/);
   assert.equal(old.events.slice(before).some((e) => e.type === "user_message"), false);
@@ -400,17 +405,18 @@ test("delegation reuses existing workspaces, validates targets and serializes co
   assert.equal(sessions.get(worker.sessionId).ctx.workspace, target, "keeps the existing checkout and branch");
   finish(sessions.get(worker.sessionId));
   finish(sessions.get(second.sessionId));
-  await until(async () => await reports.savedReport(project, second.sessionId));
+  await until(async () => await reports.savedReport(second.sessionId));
   const followup = await service.delegate(project.id, chief.id, { title: "Next task", workspaceId: target.id });
   assert.equal(followup.workspaceId, target.id, "a finished worker does not block reuse");
   finish(sessions.get(followup.sessionId));
-  await until(async () => await reports.savedReport(project, followup.sessionId));
+  await until(async () => await reports.savedReport(followup.sessionId));
   await reports.flushReports(chief.id);
 });
 
 // ---- Orchestration: queue, scouts, races, stats, plans, overlaps, integration, cleanup ----
 const { execFileSync } = require("node:child_process");
 const workersState = load("@/lib/workers/state");
+const workerRows = load("@/lib/db/repo/worker-state");
 const sh = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 async function stopAll() {
   for (const live of sessions.values()) if (live.meta.origin?.kind === "worker" && ["running", "awaiting", "starting"].includes(live.meta.status)) agent.closeSession(live.id);
@@ -437,7 +443,7 @@ test("queued delegation revalidates existing workspace ownership, activity and a
   tasks.get(blocker.taskId).status = "done";
   assert.deepEqual(await service.drainQueue(project.id), []);
   assert.equal(tasks.get(archived.taskId).status, "blocked");
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, blocker.taskId, "Cleanup");
 });
 
@@ -459,7 +465,7 @@ test("dependsOn queues a task until its dependency is accepted; a cancelled depe
   assert.deepEqual(await service.drainQueue(project.id), []);
   assert.equal(tasks.get(ui.taskId).status, "blocked");
   assert.match(chief.events.at(-1).content, /<worker_queue task="[^"]+" status="blocked">[\s\S]*UI/);
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, schema.taskId, "Done with test");
 });
 
@@ -469,7 +475,7 @@ test("stopping a queued task removes it from the queue", async () => {
   const waiting = await service.delegate(project.id, null, { title: "Waiting", dependsOn: [blocker.taskId] });
   await service.stopWorker(project.id, waiting.taskId, "Not needed");
   assert.equal(tasks.get(waiting.taskId).status, "cancelled");
-  assert.equal((await workersState.readWorkerState(project)).queue.length, 0);
+  assert.equal((await workerRows.listQueue(project.id)).length, 0);
   await service.stopWorker(project.id, blocker.taskId, "Cleanup");
 });
 
@@ -488,8 +494,8 @@ test("a scout runs read-only in its own environment, needs no Git repository and
     assert.equal(prompt.readOnlySession({ kind: "worker", taskId: id(), chiefSessionId: null }), false);
     assert.match(prompt.teamPrompt(live.meta.origin), /read-only scout/);
     finish(live, "```worker-summary\noutcome: done\nsummary: The clock is mocked twice\nbranch: none\n```");
-    await until(async () => await reports.savedReport(project, live.id));
-    const report = (await reports.savedReport(project, live.id)).content;
+    await until(async () => await reports.savedReport(live.id));
+    const report = (await reports.savedReport(live.id)).content;
     assert.match(report, /Mode: scout/);
     assert.doesNotMatch(report, /^Diff:/m);
     assert.equal(tasks.get(scout.taskId).status, "done");
@@ -509,9 +515,9 @@ test("a race runs one task on several models; the pick hands the task to the win
   assert.match(prompt.teamPrompt(a.meta.origin), /Other workers are doing the same task/);
   finishWith(a, "Sonnet version", 0.4);
   finishWith(b, "Haiku version", 0.1);
-  await until(async () => (await reports.savedReport(project, a.id)) && (await reports.savedReport(project, b.id)));
+  await until(async () => (await reports.savedReport(a.id)) && (await reports.savedReport(b.id)));
   assert.equal(tasks.get(raced.taskId).status, "in_progress", "an undecided race leaves the task open");
-  assert.match((await reports.savedReport(project, b.id)).content, /pick one with workers_pick/);
+  assert.match((await reports.savedReport(b.id)).content, /pick one with workers_pick/);
   await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, id()), /not racing/);
   const picked = await service.pickRaceWinner(project.id, raced.taskId, b.id);
   assert.deepEqual(picked.archived, [a.meta.workspaceId]);
@@ -521,7 +527,7 @@ test("a race runs one task on several models; the pick hands the task to the win
   await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, a.id), /already has a winner/);
   await service.messageWorker(project.id, raced.taskId, "Add a benchmark");
   finishWith(b, "Benchmark added", 0.2);
-  await until(async () => (await reports.savedReport(project, b.id))?.content.includes("Benchmark added"));
+  await until(async () => (await reports.savedReport(b.id))?.content.includes("Benchmark added"));
   assert.equal(tasks.get(raced.taskId).status, "done", "the winner owns the task after the pick");
   const history = await service.workersHistory(project.id);
   const row = history.recent.find((r) => r.taskId === raced.taskId);
@@ -537,13 +543,13 @@ test("stats count each finish once, including after recovery", async () => {
   const worker = await service.delegate(project.id, null, { title: "Counted once", model: "claude-sonnet-5-5" });
   const live = sessions.get(worker.sessionId);
   finishWith(live, "First pass", 0.25);
-  await until(async () => await reports.savedReport(project, live.id));
+  await until(async () => await reports.savedReport(live.id));
   await service.recoverWorkers();
-  const stats = (await workersState.readWorkerState(project)).stats[worker.taskId];
+  const stats = await workerRows.getTaskStats(worker.taskId);
   assert.equal(stats.rounds, 1);
   assert.equal(stats.costUsd, 0.25);
   assert.equal(stats.outcome, "done");
-  assert.match((await reports.savedReport(project, live.id)).content, /Cost: \$0\.2500 this round/);
+  assert.match((await reports.savedReport(live.id)).content, /Cost: \$0\.2500 this round/);
   const summary = workersState.summarizeStats([stats, { ...stats, taskId: id(), rounds: 3, costUsd: 0.75, outcome: "done" }]);
   assert.deepEqual(summary.map((s) => [s.model, s.tasks, s.avgRounds, s.firstRoundDone, s.totalCostUsd]), [["claude-sonnet-5-5", 2, 2, 1, 1]]);
 });
@@ -569,7 +575,10 @@ test("a delegation plan waits for the person; approval delegates in order with d
   const [copy, email] = decided.results;
   assert.equal(copy.queued, false);
   assert.equal(email.queued, true);
-  assert.deepEqual((await workersState.readWorkerState(project)).queue.find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
+  assert.deepEqual((await workerRows.listQueue(project.id)).find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
+  const stored = await load("@/lib/db/repo/delegation-plans").getDelegationPlan(proposed.planId);
+  assert.equal(stored.status, "approved");
+  assert.deepEqual(stored.tasks.map((t) => [t.key, t.taskId, t.dependsOn]), [["copy", copy.taskId, undefined], ["email", email.taskId, ["copy"]]]);
   assert.ok(resolved.includes(`chief:plan:${proposed.planId}`));
   assert.match(chief.events.at(-1).content, /<delegation_plan id="[^"]+" status="approved">[\s\S]*Onboarding copy: started[\s\S]*Onboarding email: queued/);
   await assert.rejects(plans.decidePlan(project.id, proposed.planId, "approve"), /already approved/);
@@ -633,7 +642,14 @@ test("overlapping files are flagged, branches trial-merge into an integration wo
     assert.equal(sh(wsI.cwd, "status", "--porcelain"), "", "the conflicting merge was aborted");
     assert.equal(sh(root, "rev-parse", "main"), mainBefore, "nothing merged into main");
     assert.equal(sh(wsI.cwd, "log", "--first-parent", "--format=%s", "-3"), "Integrate C\nIntegrate A\nbase", "the clean branches are merged on the integration branch");
-    assert.deepEqual((await workersState.readWorkerState(project)).integrations.map((i) => i.workspaceId), [wsI.id]);
+    const integrations = load("@/lib/db/repo/integrations");
+    const current = await integrations.currentIntegrations(project.id);
+    assert.deepEqual(current.map((i) => i.workspaceId), [wsI.id]);
+    assert.deepEqual(current[0].merged.map((m) => m.title), ["A", "C"], "the trial merge result is stored");
+    assert.deepEqual(current[0].conflicts.map((m) => [m.title, m.files]), [["B", ["a.txt"]]]);
+    assert.equal(current[0].tests.exitCode, 0);
+    assert.deepEqual(current[0].headShas.map((h) => [h.taskId, h.sha]), [a, b, c].map((w, i) => [w.taskId, sh([wsA, wsB, wsC][i].cwd, "rev-parse", "HEAD")]));
+    assert.equal((await integrations.latestIntegrationForTask(b.taskId)).id, current[0].id, "a conflicting task still finds its trial merge");
     await assert.rejects(integrate.integrateWorkers(project.id, [id()]), /Worker task not found/);
 
     const cleanup = load("@/lib/workers/cleanup");
@@ -655,4 +671,215 @@ test("overlapping files are flagged, branches trial-merge into an integration wo
     assert.equal(archived.some((x) => x.workspaceId === wsA.id), false, "done but unmerged work is kept");
     assert.equal(archived.some((x) => x.workspaceId === wsB.id), false, "open tasks are kept");
   } finally { project.repos = saved; nextWorkspace = null; }
+});
+
+
+test("a worker report for a closed relay can still lead to follow-up delegation", async () => {
+  const relayId = id(); relayRequests.push({id:relayId,project_id:project.id,status:"kept"});
+  const chief = await service.openChief(project.id);
+  const started = await service.delegate(project.id,chief.id,{relayId,title:"Follow-up after close",brief:"Do it"});
+  assert.ok(started.taskId);
+  await assert.rejects(service.delegate(project.id,chief.id,{relayId:id(),title:"Unknown relay",brief:"Do it"}),/Relay request not found/);
+});
+
+test("resuming a relay reuses its completed and running tasks instead of creating workers twice", async () => {
+  const relayId = id(); relayRequests.push({id:relayId,project_id:project.id});
+  const chief = await service.openChief(project.id);
+  const first = await service.delegate(project.id,chief.id,{relayId,title:"Unique recovery work",brief:"Do it"});
+  const count=tasks.size;
+  const again=await service.delegate(project.id,chief.id,{relayId,title:"Unique recovery work",brief:"Do it"});
+  assert.equal(again.taskId,first.taskId);assert.equal(again.reused,true);assert.equal(tasks.size,count);
+  tasks.get(first.taskId).status="done";
+  const completed=await service.delegate(project.id,chief.id,{relayId,taskId:first.taskId});
+  assert.equal(completed.reused,true);assert.equal(completed.status,"done");assert.equal(tasks.size,count);
+  const ledger=load("@/lib/db/repo/worker-state");
+  assert.equal(await ledger.relayTaskId(relayId,"unique recovery work"),first.taskId);
+  assert.equal(await ledger.relayTaskId(relayId,`id:${first.taskId}`),first.taskId);
+  assert.deepEqual(await ledger.relayTaskIds(relayId),[first.taskId]);
+});
+
+test("the worker cap follows the limits setting without a restart", async () => {
+  const limits = load("@/lib/setup/limits");
+  const active = () => [...sessions.values()].filter((s) => s.meta.projectId === project.id && s.meta.origin?.kind === "worker" && ["starting", "running", "awaiting"].includes(s.meta.status)).length;
+  const started = [];
+  try {
+    limits.updateLimits({ workersPerProject: active() + 1 });
+    const fits = await service.delegate(project.id, null, { title: "Fits under the cap" });
+    started.push(fits.taskId);
+    assert.ok(fits.sessionId, "a free slot under the configured cap starts the worker");
+    const cap = active();
+    const waits = await service.delegate(project.id, null, { title: "Over the cap" });
+    started.push(waits.taskId);
+    assert.equal(waits.queued, true, "the configured cap queues the next task");
+    assert.match(waits.reason, new RegExp(`${cap} of ${cap} workers busy`));
+    assert.match(prompt.teamPrompt({ kind: "chief" }), cap === 1 ? /One worker runs at a time/ : new RegExp(`Up to ${cap} workers run at a time`));
+    limits.updateLimits({ workersPerProject: cap + 1 });
+    assert.deepEqual(await service.drainQueue(project.id), [waits.taskId], "raising the cap starts the queued task");
+  } finally {
+    for (const taskId of started) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
+    fs.rmSync(limits.limitsFile(), { force: true });
+  }
+});
+
+test("finished work with branch changes opens a review card; reports without changes stay informational", async () => {
+  await stopAll();
+  const forSession = (sessionId) => notifications.filter((n) => n.sessionId === sessionId);
+  const changed = await service.delegate(project.id, null, { title: "Changes something" });
+  finish(sessions.get(changed.sessionId), "Did the work");
+  await until(async () => await reports.savedReport(changed.sessionId));
+  const [review] = forSession(changed.sessionId);
+  assert.equal(review.kind, "review_ready");
+  assert.equal(review.urgency, "action");
+  assert.equal(review.subjectKey, `worker:${changed.sessionId}:report:${(await reports.savedReport(changed.sessionId)).seq}`);
+  assert.match(review.title, /Work completed/);
+  const unchanged = await service.delegate(project.id, null, { title: "Changes nothing" });
+  finish(sessions.get(unchanged.sessionId), "Looked, no changes needed");
+  await until(async () => await reports.savedReport(unchanged.sessionId));
+  assert.deepEqual(forSession(unchanged.sessionId).map((n) => [n.kind, n.urgency]), [["worker_report", "info"]]);
+  const blocked = await service.delegate(project.id, null, { title: "Gets blocked" });
+  finish(sessions.get(blocked.sessionId), "outcome: blocked");
+  await until(async () => await reports.savedReport(blocked.sessionId));
+  assert.deepEqual(forSession(blocked.sessionId).map((n) => [n.kind, n.urgency]), [["worker_report", "action"]]);
+  // A second round resolves the first card and opens a new one under the same request.
+  const live = sessions.get(changed.sessionId);
+  const first = await reports.savedReport(changed.sessionId);
+  await service.messageWorker(project.id, changed.taskId, "One more fix");
+  finish(live, "Fixed");
+  await until(async () => (await reports.savedReport(changed.sessionId)).seq > first.seq);
+  assert.ok(resolved.includes(`worker:${changed.sessionId}:report:${first.seq}`));
+  assert.deepEqual(forSession(changed.sessionId).map((n) => n.kind), ["review_ready", "review_ready"]);
+});
+
+test("criteria approved with a plan reach the worker's brief, and its evidence lines are recorded as claims", async () => {
+  await stopAll();
+  const plans = load("@/lib/workers/plans");
+  const evidence = load("@/lib/db/repo/task-evidence");
+  const chief = await service.openChief(project.id);
+  assert.match(prompt.teamPrompt(chief.meta.origin), /only for substantial work|Skip criteria for small/);
+  assert.match(prompt.teamPrompt({ kind: "worker", taskId: id(), chiefSessionId: null }), /evidence: Only when the brief lists acceptance criteria/);
+  const proposed = await plans.proposePlan(project.id, chief.id, { summary: "Fix login", tasks: [
+    { key: "fix", title: "Fix the login redirect", brief: "Stop the loop", criteria: [{ text: "Login tests pass", kind: "test" }, { text: "The error shows on the page", kind: "visual" }] },
+  ] });
+  assert.match(notifications.at(-1).detail, /Done when:\n {3}- Login tests pass \(test\)/);
+  const { results: [fix] } = await plans.decidePlan(project.id, proposed.planId, "approve");
+  const task = tasks.get(fix.taskId);
+  assert.deepEqual(task.criteria.map((c) => [c.id, c.kind]), [["c1", "test"], ["c2", "visual"]]);
+  const live = sessions.get(task.sessionId);
+  const brief = live.events.find((e) => e.type === "user_message").content;
+  assert.match(brief, /Acceptance criteria[\s\S]*- c1 \(test\): Login tests pass[\s\S]*- c2 \(visual\): The error shows on the page/);
+  assert.match(brief, /evidence: field last/);
+  finish(live, "```worker-summary\noutcome: done\nsummary: Fixed\nbranch: b\nevidence:\n- c1 | pass | test | npm test passed | tests/login.test.ts\n- c2 | unknown | note | could not open a browser | none\n```");
+  await until(async () => await reports.savedReport(live.id));
+  const rows = await evidence.listEvidence(task.id);
+  assert.deepEqual(rows.map((r) => [r.criterionId, r.origin, r.type, r.status]).reverse(), [["c1", "claimed", "test", "pass"], ["c2", "claimed", "note", "unknown"]]);
+  assert.ok(rows.every((r) => r.sessionId === live.id));
+  assert.match((await reports.savedReport(live.id)).content, /Evidence: 2 of 2 criteria reported by the worker/);
+});
+
+test("a revised plan reaches its open tasks: email notifications become Inbox only", async () => {
+  await stopAll();
+  const plans = load("@/lib/workers/plans");
+  const documents = load("@/lib/db/repo/documents");
+  const sources = load("@/lib/sources/service");
+  const sourceRepo = load("@/lib/db/repo/task-sources");
+  const workerState = load("@/lib/db/repo/worker-state");
+  const { staleness } = load("@/lib/evidence/types");
+  const chief = await service.openChief(project.id);
+  assert.ok(prompt.CHIEF_TOOL_NAMES.includes("tasks_revise"));
+  assert.match(prompt.teamPrompt(chief.meta.origin), /<source_revision id=[\s\S]*tasks_revise/);
+  // The chief wrote the plan as its response; that document is what the tasks implement.
+  const plan = "# Notify on review\n\n1. Send an email to the person when a review card opens.\n2. Add a notifications settings page with an email toggle.\n3. Document review cards in the README.\n";
+  const documentId = id();
+  await documents.insertDocument({ id: documentId, sessionId: chief.id, kind: "response", version: 1, markdown: plan });
+  emit(chief, { type: "turn_complete", markdown: plan, documentId });
+  const proposed = await plans.proposePlan(project.id, chief.id, { summary: "Notify on review", tasks: [
+    { key: "email", title: "Email on review", brief: "Send an email to the person when a review card opens.", criteria: [{ text: "An email is sent when a review card opens", kind: "test" }] },
+    { key: "settings", title: "Notification settings", brief: "Add a notifications settings page with an email toggle.", dependsOn: ["email"] },
+    { key: "docs", title: "Document review cards", brief: "Describe review cards in the README." },
+  ] });
+  const { results } = await plans.decidePlan(project.id, proposed.planId, "approve");
+  const [email, settings, docs] = results.map((r) => r.taskId);
+  assert.equal(results[1].queued, true, "settings waits for the email task");
+  assert.deepEqual((await sourceRepo.listTaskSources(email)).map((s) => [s.kind, s.sourceId, s.version, s.deliveredVersion]), [["document", documentId, 1, 1]]);
+  // Evidence gathered against the first criteria.
+  const earlier = { criteriaVersion: tasks.get(email).criteriaVersion, commitSha: null };
+
+  // The person edits the plan: email notifications become Inbox only.
+  const edited = plan.replace("1. Send an email to the person when a review card opens.", "1. Show a review card in the Inbox only; send no email.").replace(" with an email toggle", "");
+  const [change] = await sources.documentRevised(documentId, plan, edited);
+  assert.equal(change.version, 2);
+  const message = chief.events.filter((e) => e.type === "user_message").at(-1).content;
+  assert.match(message, new RegExp(`^<source_revision id="${change.id}" source="document"`));
+  assert.match(message, /\n-1\. Send an email to the person when a review card opens\.\n[\s\S]*\n\+1\. Show a review card in the Inbox only; send no email\.\n/);
+  for (const taskId of [email, settings, docs]) assert.match(message, new RegExp(`<task id="${taskId}"`));
+  assert.equal(notifications.filter((n) => n.kind === "plan_changed").length, 0, "nothing reaches the person before the chief proposes");
+
+  // The chief answers with tasks_revise; the unaffected task already implements v2.
+  await assert.rejects(sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [{ taskId: email, affected: true }] }), /summary and the complete new brief/);
+  const answer = await sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [
+    { taskId: email, affected: true, summary: "Notify in the Inbox only; drop the email", brief: "Open a review card in the Inbox when work is ready. Send no email.", criteria: [{ text: "A review card appears in the Inbox", kind: "test" }, { text: "No email is sent", kind: "test" }] },
+    { taskId: settings, affected: true, summary: "No email toggle", brief: "Add a notifications settings page." },
+    { taskId: docs, affected: false, summary: "README text still holds" },
+  ] });
+  assert.equal(answer.status, "open");
+  const card = notifications.at(-1);
+  assert.equal(card.kind, "plan_changed");
+  assert.equal(card.urgency, "action");
+  assert.equal(card.href, `/inbox/plan-changes/${change.id}`);
+  assert.match(card.detail, /Email on review: Notify in the Inbox only/);
+  assert.match(card.detail, /Unaffected: Document review cards/);
+  assert.equal((await sourceRepo.listTaskSources(docs))[0].deliveredVersion, 2);
+  assert.equal((await sourceRepo.listTaskSources(email))[0].deliveredVersion, 1, "the email worker still has v1");
+  await assert.rejects(sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [{ taskId: docs, affected: false }] }), /already proposed/);
+
+  // The person approves the email change and edits the settings brief.
+  await assert.rejects(sources.decidePlanChange(change.id, [{ taskId: email, decision: "approved" }]), /every task/);
+  const applied = await sources.decidePlanChange(change.id, [{ taskId: email, decision: "approved" }, { taskId: settings, decision: "approved", brief: "Add a notifications settings page for Inbox options." }]);
+  assert.equal(applied.status, "applied");
+  assert.deepEqual(applied.items.map((i) => [i.taskId, i.decision, i.delivery]), [[email, "approved", "sent"], [settings, "approved", "queued"], [docs, "pending", null]]);
+  assert.equal(tasks.get(email).body, "Open a review card in the Inbox when work is ready. Send no email.");
+  assert.deepEqual(tasks.get(email).criteria.map((c) => c.text), ["A review card appears in the Inbox", "No email is sent"]);
+  assert.equal(tasks.get(email).criteriaVersion, earlier.criteriaVersion + 1, "revised criteria bump the version");
+  assert.equal(staleness(earlier, [], tasks.get(email).criteriaVersion), "criteria", "earlier evidence covers an older revision");
+  const worker = sessions.get(tasks.get(email).sessionId);
+  const update = worker.events.filter((e) => e.type === "user_message").at(-1).content;
+  assert.match(update, new RegExp(`^<task_update task="${email}" source="document" version="2">`));
+  assert.match(update, /Send no email/);
+  assert.match(update, /No email is sent/);
+  assert.equal((await workerState.listQueue(project.id)).find((q) => q.taskId === settings).input.brief, "Add a notifications settings page for Inbox options.");
+  assert.ok(resolved.includes(`plan-change:${change.id}`));
+  assert.match(chief.events.filter((e) => e.type === "user_message").at(-1).content, new RegExp(`^<plan_change id="${change.id}" status="applied">[\\s\\S]*sent to its worker`));
+  await assert.rejects(sources.decidePlanChange(change.id, []), /already applied/);
+
+  // The update was queued behind the worker's turn; it picks it up, then reports which revision it implements.
+  assert.equal(worker.queuedMessages.length, 1);
+  worker.queuedMessages.length = 0;
+  emit(worker, { type: "message_dequeued", messageId: id() });
+  finish(worker, "Inbox only now");
+  await until(async () => await reports.savedReport(worker.id));
+  const report = await reports.savedReport(worker.id);
+  assert.match(report.content, /Implements plan v2/);
+  assert.deepEqual(report.sourceVersion, { kind: "document", sourceId: documentId, version: 2, latest: 2 });
+  assert.equal(load("@/lib/review/types").reportSummary(report.content), "Inbox only now");
+
+  // A later revision the worker has not been sent shows on its next report.
+  const [second] = await sources.documentRevised(documentId, edited, `${edited}4. Mention it in the changelog.\n`);
+  assert.equal(second.version, 3);
+  await service.messageWorker(project.id, email, "One more pass");
+  finish(worker, "Done again");
+  await until(async () => (await reports.savedReport(worker.id)).seq > report.seq);
+  assert.match((await reports.savedReport(worker.id)).content, /Implements plan v2 \(the plan is now v3/);
+
+  // A newer revision is approved before the older one: applying the older one must not roll the brief back.
+  const v3 = `${edited}4. Mention it in the changelog.\n`;
+  const [third] = await sources.documentRevised(documentId, v3, `${v3}5. Ship it behind a flag.\n`);
+  assert.equal(third.version, 4);
+  await sources.proposeTaskChanges(project.id, chief.id, { revisionId: second.id, tasks: [{ taskId: email, affected: true, summary: "Changelog", brief: "v3 brief" }] });
+  await sources.proposeTaskChanges(project.id, chief.id, { revisionId: third.id, tasks: [{ taskId: email, affected: true, summary: "Flag", brief: "v4 brief" }] });
+  await sources.decidePlanChange(third.id, [{ taskId: email, decision: "approved" }]);
+  const stale = await sources.decidePlanChange(second.id, [{ taskId: email, decision: "approved" }]);
+  assert.equal(tasks.get(email).body, "v4 brief");
+  assert.equal(stale.items.find((i) => i.taskId === email).decision, "rejected");
+  assert.match(chief.events.filter((e) => e.type === "user_message").at(-1).content, /already has v4/);
+  for (const taskId of [email, settings, docs]) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
 });

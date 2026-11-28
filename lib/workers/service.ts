@@ -1,7 +1,7 @@
-import { captureTask } from '@/lib/db/repo/captures';
+import { captureTask, listCaptures } from '@/lib/db/repo/captures';
 import "server-only";
 import { linearBranch } from "@/lib/integrations/linear/sync";
-import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
+import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, sweepIdleSessions, type LiveSession } from "@/lib/agent";
 import { createWorkspace, getWorkspaceContext } from "@/lib/projects";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
 import { getWorkspace } from "@/lib/db/repo/workspaces";
@@ -10,7 +10,7 @@ import { getTask, listTasks } from "@/lib/db/repo/tasks";
 import { createTask, patchTask } from "@/lib/tasks/service";
 import { withFileLock } from "@/lib/notes/file-write";
 import { loadEvents } from "@/lib/db/repo/messages";
-import { notify } from "@/lib/notifications/service";
+import { notify, resolveBySubject } from "@/lib/notifications/service";
 import { routineSlug } from "@/lib/routines/types";
 import type { SessionMeta } from "@/lib/agent/types";
 import { startWorkerSession, sendBrief } from "./start";
@@ -18,15 +18,19 @@ import { watchWorker, type WorkerResult } from "./watch";
 import { collectReport } from "./report";
 import { appendWorkLog, carryChiefPlan } from "./log";
 import { noteBrief } from "./notes";
-import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
+import { currentChiefId, enqueue, queueReport, savedReport, savedReports } from "./report-up";
 
-export const MAX_WORKERS_PER_PROJECT = 4;
+import { workersPerProject } from "@/lib/setup/limits";
 import { DelegateSchema, type DelegateInput } from "./schema";
-import { readWorkerState, summarizeStats, updateWorkerState, type RaceEntry } from "./state";
+import { summarizeStats, type RaceEntry } from "./state";
+import { countTaskFinish, dequeueDelegation, enqueueDelegation, findRace, getRace, getTaskStats, insertRace, isQueued, listQueue, listTaskStats, relayTaskId, rememberRelayTask, setRaceWinner, startTaskStats } from "@/lib/db/repo/worker-state";
 import { workerOverlaps } from "./conflicts";
+import { recordClaimed, runTestsOnFinish, workspaceHeads } from "@/lib/evidence/service";
 import { sessionPath } from "@/lib/routes";
 import type { Project } from "@/lib/projects/types";
-import type { Task } from "@/lib/tasks/types";
+import { normalizeCriteria, type Task } from "@/lib/tasks/types";
+import { latestDocumentOf, linkTaskSources, sourceStamp } from "@/lib/sources/service";
+import { stampLabel } from "@/lib/sources/types";
 const g = globalThis as typeof globalThis & { __thunkWorkerWatchers?: WeakSet<LiveSession>; __thunkWorkerHousekeeping?: { unsubscribe: () => void; timer: ReturnType<typeof setInterval> } };
 const watched = g.__thunkWorkerWatchers ??= new WeakSet();
 
@@ -53,10 +57,13 @@ export async function openChief(projectId: string, fresh = false) {
 }
 
 /** Send a message to the project's chief, resuming or starting it. Returns where it lives. */
-export async function messageChief(projectId: string, content: string) {
+export async function messageChief(projectId: string, content: string, messageId?: string, prepare?: (target: { sessionId: string; workspaceId: string }) => Promise<void>) {
   const chief = await openChief(projectId);
-  pushUserMessage(chief, content);
-  return { sessionId: chief.id, workspaceId: chief.meta.workspaceId };
+  // Persist the destination before dispatch so recovery can find the receipt even if the server stops immediately after send.
+  await prepare?.({ sessionId: chief.id, workspaceId: chief.meta.workspaceId });
+  const receipt = pushUserMessage(chief, content, { messageId });
+  const queued = chief.queuedMessages?.some((m) => m.id === receipt) ?? false;
+  return { sessionId: chief.id, workspaceId: chief.meta.workspaceId, messageId: receipt, queued };
 }
 
 const ACTIVE_STATES = ["starting", "running", "awaiting"];
@@ -89,14 +96,31 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
       if (chief?.meta.projectId !== projectId || chief.meta.origin?.kind !== "chief") throw new Error("Only this project's chief can delegate");
     }
     if (args.repoIds?.some((id) => !project.repos.some((r) => r.id === id))) throw new Error("Repository does not belong to project");
-    if (args.workspaceId) await workerTarget(projectId, args.workspaceId);
-    else if ((args.mode ?? "worktree") === "worktree") selectRepos(project, args.repoIds);
-    let task = args.taskId ? await getTask(args.taskId) : null;
-    if (args.taskId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
+    if (args.relayId) {
+      const request = (await listCaptures(true)).find((r) => r.id === args.relayId && r.project_id === projectId);
+      if (!request) throw new Error("Relay request not found in this project");
+    }
+    const taskKey = args.title?.trim().toLocaleLowerCase() ?? (args.noteId ? `note:${args.noteId}` : undefined);
+    const rememberTask = async (task: Task) => {
+      if (!args.relayId) return;
+      await rememberRelayTask(projectId, args.relayId, task.id, taskKey ?? task.title.trim().toLocaleLowerCase());
+    };
+    const previousId = args.relayId && taskKey ? await relayTaskId(args.relayId, taskKey) ?? undefined : undefined;
+    // Recovery reuses the original ledger. A repeated delegate cannot launch another copy of an existing worker.
+    const requestedId = args.taskId ?? previousId;
+    let task = requestedId ? await getTask(requestedId) : null;
+    if (requestedId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
+    const queuedAlready = task ? await isQueued(task.id) : false;
+    if (task && args.relayId && (task.sessionId || task.status === "done" || queuedAlready)) {
+      await rememberTask(task);
+      return { taskId: task.id, sessionId: task.sessionId, workspaceId: task.workspaceId, reused: true as const, status: task.status, message: "Existing task preserved. Inspect its report; use workers_message only for unfinished work." };
+    }
+    if (task?.status === "done") throw new Error("This task is already completed; create a new task only for new work");
     const owner = task?.sessionId && getSession(task.sessionId);
     if (owner && owner.id !== chiefSessionId && ACTIVE_STATES.includes(owner.meta.status)) throw new Error("Task already has an active session");
-    const state = await readWorkerState(project);
-    if (task && state.queue.some((q) => q.taskId === task!.id)) throw new Error("Task is already queued");
+    if (task && queuedAlready) throw new Error("Task is already queued");
+    if (args.workspaceId) await workerTarget(projectId, args.workspaceId);
+    else if ((args.mode ?? "worktree") === "worktree") selectRepos(project, args.repoIds);
     const dependsOn = [...new Set(args.dependsOn ?? [])];
     if (task && dependsOn.includes(task.id)) throw new Error("A task cannot depend on itself");
     const deps = await dependencyState(projectId, dependsOn);
@@ -104,14 +128,20 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     const noteId = args.noteId ?? task?.noteId;
     const note = noteId ? await noteBrief(project, noteId) : null;
     if (!task) task = await createTask({ projectId, title: args.title ?? note?.note.title.slice(0, 200) ?? "Delegated task", body: args.brief ?? null, noteId }, { createdBy: chiefSessionId ? "agent" : "user", createdInSessionId: chiefSessionId });
+    // Criteria approved with a plan, or given to delegate, become the task's; a change bumps its criteria version.
+    if (args.criteria?.length) task = await patchTask(task.id, { criteria: normalizeCriteria(args.criteria) });
+    // What the task came from: a revision of the plan document or note later reaches it through the chief.
+    const documentId = args.sourceDocumentId ?? (chiefSessionId ? await latestDocumentOf(chiefSessionId) : null);
+    await linkTaskSources(project, task, { noteId, documentId }).catch((err) => console.error("[thunk] task sources failed", err));
+    await rememberTask(task);
     const need = args.race?.length ?? 1;
-    const free = MAX_WORKERS_PER_PROJECT - activeWorkers(projectId);
+    const cap = workersPerProject(), free = cap - activeWorkers(projectId);
     if (deps.waiting.length || free < need) {
       const queued = task;
-      await updateWorkerState(project, (s) => { s.queue.push({ taskId: queued.id, chiefSessionId, input: { ...args, taskId: queued.id, ...(noteId ? { noteId } : {}) }, dependsOn, queuedAt: new Date().toISOString() }); });
-      const reason = deps.waiting.length ? `waiting for ${deps.waiting.join(", ")}` : `${MAX_WORKERS_PER_PROJECT - free} of ${MAX_WORKERS_PER_PROJECT} workers busy`;
+      const position = await enqueueDelegation(projectId, { taskId: queued.id, chiefSessionId, input: { ...args, taskId: queued.id, ...(noteId ? { noteId } : {}) }, dependsOn, queuedAt: new Date().toISOString() });
+      const reason = deps.waiting.length ? `waiting for ${deps.waiting.join(", ")}` : `${cap - free} of ${cap} workers busy`;
       await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id}) · ${reason}`);
-      return { taskId: task.id, queued: true as const, reason, position: state.queue.length + 1 };
+      return { taskId: task.id, queued: true as const, reason, position };
     }
     await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id})`);
     return launch(project, task, args, chiefSessionId, note);
@@ -148,20 +178,16 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
           // Linear attaches the PR to the issue when the branch carries its key.
           ...(task.external?.source === "linear" ? { branch: linearBranch(task.external.key, task.title) } : {}) });
       const live = await startWorkerSession({ workspaceId: workspace.id, title: raceId ? `${task.title} · ${model}` : task.title, model, permissionMode: scout ? "default" : args.permissionMode ?? "default",
-        origin: { kind: "worker", chiefSessionId, taskId: task.id, ...(target ? { existingWorkspace: true } : {}), ...(scout ? { scout: true } : {}), ...(raceId ? { raceId } : {}) } });
+        origin: { kind: "worker", chiefSessionId, taskId: task.id, ...(args.relayId ? { relayId: args.relayId } : {}), ...(target ? { existingWorkspace: true } : {}), ...(scout ? { scout: true } : {}), ...(raceId ? { raceId } : {}) } });
       started.push(live);
       entries.push({ sessionId: live.id, workspaceId: workspace.id, model: live.meta.model });
     }
     const [first] = started;
     await captureTask(task.id, {status:'working', session_id:first.id, workspace_id:first.meta.workspaceId});
     await patchTask(task.id, { ...(target ? { workspaceId: target.id } : {}), sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
-    await updateWorkerState(project, (s) => {
-      const now = new Date().toISOString();
-      const stats = s.stats[task.id] ??= { taskId: task.id, title: task.title, models: [], mode: scout ? "scout" : "worktree", startedAt: now, finishedAt: null, durationMs: 0, costUsd: 0, rounds: 0, outcome: null, counted: [] };
-      for (const e of entries) if (!stats.models.includes(e.model)) stats.models.push(e.model);
-      if (raceId) s.races[raceId] = { id: raceId, taskId: task.id, entries, winner: null, createdAt: now };
-    });
-    const brief = [`Task: ${task.title}\nTask ID: ${task.id}`, args.brief ?? task.body, note?.brief].filter(Boolean).join("\n\n");
+    await startTaskStats(projectId, { taskId: task.id, title: task.title, mode: scout ? "scout" : "worktree" }, entries.map((e) => e.model));
+    if (raceId) await insertRace(projectId, { id: raceId, taskId: task.id, entries, winner: null, createdAt: new Date().toISOString() });
+    const brief = [`Task: ${task.title}\nTask ID: ${task.id}`, args.brief ?? task.body, criteriaBrief(task), note?.brief].filter(Boolean).join("\n\n");
     for (const live of started) {
       attachWorker(live);
       await appendWorkLog(project, `[worker] started${scout ? " (scout)" : ""}${raceId ? ` (race · ${live.meta.model})` : ""}: ${task.title} · /w/${live.meta.workspaceId}/s/${live.id}`);
@@ -174,6 +200,18 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     await appendWorkLog(project, `[worker] blocked: ${task.title} · ${String(error)}`);
     throw error;
   }
+}
+
+/** The task's acceptance criteria in the worker's brief, with how to report evidence for each. */
+export function criteriaBrief(task: Pick<Task, "criteria">) {
+  if (!task.criteria?.length) return null;
+  return [
+    "Acceptance criteria (the task is done when each holds):",
+    ...task.criteria.map((c) => `- ${c.id} (${c.kind}): ${c.text}`),
+    "In your worker-summary block, add an evidence: field last, with one line per criterion:",
+    "- <id> | pass, fail or unknown | test, screenshot, source or note | what shows it (command and result, what you saw) | file path or URL, or none",
+    "Report only what you checked; say unknown rather than guess. Thunk records these as the agent's word and checks what it can itself.",
+  ].join("\n");
 }
 
 const g2 = globalThis as typeof globalThis & { __thunkDrainTimers?: Map<string, ReturnType<typeof setTimeout>> };
@@ -202,8 +240,8 @@ export async function drainQueue(projectId: string) {
   if (!project) return [];
   return withFileLock(`delegate:${projectId}`, async () => {
     const startedIds: string[] = [];
-    for (const item of (await readWorkerState(project)).queue) {
-      const dequeue = () => updateWorkerState(project, (s) => { s.queue = s.queue.filter((q) => q.taskId !== item.taskId); });
+    for (const item of await listQueue(projectId)) {
+      const dequeue = () => dequeueDelegation(item.taskId);
       const task = await getTask(item.taskId);
       if (!task || ["done", "cancelled"].includes(task.status)) { await dequeue(); continue; }
       const deps = await dependencyState(projectId, item.dependsOn);
@@ -216,8 +254,9 @@ export async function drainQueue(projectId: string) {
       }
       if (deps.waiting.length) continue;
       // Keep order among ready tasks: stop at the first that does not fit.
-      if (MAX_WORKERS_PER_PROJECT - activeWorkers(projectId) < (item.input.race?.length ?? 1)) break;
-      await dequeue();
+      if (workersPerProject() - activeWorkers(projectId) < (item.input.race?.length ?? 1)) break;
+      // Another server may have started it meanwhile; only the one that dequeues it launches it.
+      if (!await dequeue()) continue;
       const chiefId = item.chiefSessionId ? await currentChiefId(item.chiefSessionId) : null;
       try {
         const note = item.input.noteId ? await noteBrief(project, item.input.noteId).catch(() => null) : null;
@@ -234,28 +273,28 @@ export async function drainQueue(projectId: string) {
 
 export async function workersStatus(projectId: string, withDiff = false) {
   const [tasks, sessions] = await Promise.all([listTasks({ projectId }), listSessions({ projectId, limit: 10_000 })]);
-  const project = await getProject(projectId);
-  const state = project ? await readWorkerState(project) : null;
+  const queue = await listQueue(projectId);
   const rows = await Promise.all(tasks.filter((t) => t.sessionId).map(async (task) => {
     const session = sessions.find((s) => s.id === task.sessionId);
     if (session?.origin?.kind !== "worker") return null;
     const live = getSession(session.id);
     const ctx = live?.ctx ?? await getWorkspaceContext(session.workspaceId);
-    const report = ctx ? await savedReport(ctx.project, session.id) : null;
+    const report = await savedReport(session.id);
     const scout = Boolean(session.origin.scout);
-    const race = session.origin.raceId ? state?.races[session.origin.raceId] : undefined;
+    const race = session.origin.raceId ? await getRace(session.origin.raceId) : null;
+    const stats = await getTaskStats(task.id);
     return { task, sessionId: session.id, workspaceId: session.workspaceId, mode: scout ? "scout" as const : "worktree" as const,
       state: session.live ? session.status : "closed", waitingOn: session.live ? session.waitingOn ?? null : null, pendingPrompts: live?.pending.size ?? 0,
       branch: scout ? null : ctx?.workspace.branch ?? null, diffStat: withDiff && ctx && !scout ? (await collectReport({ ...ctx, markdown: "" })).diffStat : null,
-      lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null, stats: state?.stats[task.id] ? { ...state.stats[task.id], counted: undefined } : null,
-      race: race ? { raceId: race.id, winner: race.winner, entries: await Promise.all(race.entries.map(async (e) => ({ ...e, finished: Boolean(ctx && await savedReport(ctx.project, e.sessionId)) }))) } : null,
+      lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null, stats: stats ? { ...stats, counted: undefined } : null,
+      race: race ? { raceId: race.id, winner: race.winner, entries: await Promise.all(race.entries.map(async (e) => ({ ...e, finished: Boolean(await savedReport(e.sessionId)) }))) } : null,
       overlaps: [] as { taskId: string; title: string; paths: string[] }[] };
   })).then((r) => r.filter((row) => row !== null));
   if (withDiff) {
     const overlaps = await workerOverlaps(rows.filter((r) => r.mode === "worktree" && !["done", "cancelled"].includes(r.task.status)).map((r) => ({ taskId: r.task.id, title: r.task.title, workspaceId: r.workspaceId })));
     for (const row of rows) row.overlaps = overlaps.get(row.task.id) ?? [];
   }
-  const queued = (state?.queue ?? []).map((q, i) => ({ taskId: q.taskId, title: tasks.find((t) => t.id === q.taskId)?.title ?? q.taskId, position: i + 1, dependsOn: q.dependsOn, queuedAt: q.queuedAt, race: q.input.race ?? null, mode: q.input.mode ?? "worktree" }));
+  const queued = queue.map((q, i) => ({ taskId: q.taskId, title: tasks.find((t) => t.id === q.taskId)?.title ?? q.taskId, position: i + 1, dependsOn: q.dependsOn, queuedAt: q.queuedAt, race: q.input.race ?? null, mode: q.input.mode ?? "worktree" }));
   return { workers: rows, queued };
 }
 
@@ -263,7 +302,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
 export async function workersHistory(projectId: string) {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
-  const stats = Object.values((await readWorkerState(project)).stats);
+  const stats = await listTaskStats(projectId);
   return { byModel: summarizeStats(stats), recent: stats.sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 20).map(({ counted, ...s }) => (void counted, s)) };
 }
 
@@ -271,11 +310,10 @@ export async function workersHistory(projectId: string) {
 export async function pickRaceWinner(projectId: string, taskId: string, sessionId: string) {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found");
-  const race = Object.values((await readWorkerState(project)).races).find((r) => r.taskId === taskId && r.entries.some((e) => e.sessionId === sessionId));
+  const race = await findRace(taskId, sessionId);
   if (!race) throw new Error("That session is not racing on this task");
-  if (race.winner) throw new Error("This race already has a winner");
+  if (race.winner || !await setRaceWinner(race.id, sessionId)) throw new Error("This race already has a winner");
   const winner = race.entries.find((e) => e.sessionId === sessionId)!;
-  await updateWorkerState(project, (s) => { s.races[race.id].winner = sessionId; });
   await patchTask(taskId, { sessionId, workspaceId: winner.workspaceId });
   const { archiveWorkspace } = await import("@/lib/projects/archive");
   for (const loser of race.entries.filter((e) => e.sessionId !== sessionId)) {
@@ -306,11 +344,7 @@ export async function messageWorker(projectId: string, taskId: string, content: 
 }
 export async function stopWorker(projectId: string, taskId: string, reason: string) {
   const project = await getProject(projectId);
-  const dequeued = project && await updateWorkerState(project, (s) => {
-    const before = s.queue.length;
-    s.queue = s.queue.filter((q) => q.taskId !== taskId);
-    return s.queue.length < before;
-  });
+  const dequeued = project && await dequeueDelegation(taskId);
   if (dequeued) {
     const task = await patchTask(taskId, { status: "cancelled" });
     await appendWorkLog(project, `[chief] cancelled (queued): ${task.title} · ${reason}`);
@@ -318,7 +352,7 @@ export async function stopWorker(projectId: string, taskId: string, reason: stri
     return;
   }
   const { task, session } = await ownedWorker(projectId, taskId);
-  const race = session.origin?.kind === "worker" && session.origin.raceId && project ? (await readWorkerState(project)).races[session.origin.raceId] : null;
+  const race = session.origin?.kind === "worker" && session.origin.raceId ? await getRace(session.origin.raceId) : null;
   await patchTask(task.id, { status: "cancelled" });
   for (const id of race && !race.winner ? race.entries.map((e) => e.sessionId) : [session.id]) closeSession(id);
   if (project) await appendWorkLog(project, `[chief] cancelled: ${task.title} · ${reason}`);
@@ -331,47 +365,45 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const origin = meta.origin;
     const ctx = await getWorkspaceContext(meta.workspaceId);
     if (!ctx) return;
-    const previous = await savedReport(ctx.project, meta.id);
-    if (previous && previous.seq >= seq) { enqueue(reportFile(ctx.project, meta.id), previous); return; }
+    const previous = await savedReport(meta.id);
+    if (previous && previous.seq >= seq) { enqueue(previous); return; }
     // A scout reports research rather than code changes.
     const report = await collectReport({ ...ctx, workspace: origin.scout ? null : ctx.workspace, markdown: result.markdown });
     const needsPerson = /^needs_person:[ \t]*(.*)$/im.exec(result.markdown)?.[1]?.trim().replace(/^(none|false|no|n\/a)\.?$/i, "");
     const status = result.status === "cancelled" ? "cancelled" : result.status === "failed" || report.outcome === "failed" ? "failed" : report.outcome === "blocked" || needsPerson ? "blocked" : "done";
     const task = await getTask(origin.taskId);
-    const state = await readWorkerState(ctx.project);
-    const race = origin.raceId ? state.races[origin.raceId] : undefined;
+    const race = origin.raceId ? await getRace(origin.raceId) : null;
     // Racers leave the task alone until one is picked; the winner then owns it like any worker.
     const ownsTask = !race || race.winner === meta.id;
     const newerTurn = getSession(meta.id)?.events.some((e) => e.seq > seq && (e.type === "user_message" || e.type === "message_dequeued"));
     if (ownsTask && !newerTurn && task?.sessionId === meta.id && task.status !== "cancelled") await patchTask(task.id, { status: status === "cancelled" ? "cancelled" : status === "done" ? (origin.chiefSessionId ? "in_progress" : "done") : "blocked" });
-    const stats = await updateWorkerState(ctx.project, (s) => {
-      const row = s.stats[origin.taskId];
-      if (!row) return null;
-      const key = `${meta.id}:${seq}`;
-      if (!row.counted.includes(key)) {
-        row.counted.push(key);
-        row.costUsd += result.costUsd || 0;
-        if (ownsTask) row.rounds += 1;
-        row.outcome = status;
-        row.finishedAt = new Date().toISOString();
-        row.durationMs = Date.parse(row.finishedAt) - Date.parse(row.startedAt);
-      }
-      return { ...row };
-    });
+    const stats = await countTaskFinish(origin.taskId, `${meta.id}:${seq}`, { costUsd: result.costUsd, ownsTask, outcome: status });
     const capture = ownsTask && !newerTurn && task?.status !== 'cancelled' ? await captureTask(origin.taskId, {status: status === 'done' || status === 'blocked' ? 'ready' : 'failed', summary:report.summary, diff_stat:report.diffStat, cost_usd:stats?.costUsd ?? result.costUsd ?? 0, next_step:needsPerson || null, error:result.error}) : null;
+    // What the worker says shows each criterion; Thunk's own checks are recorded separately as observed.
+    const commitSha = origin.scout ? null : (await workspaceHeads(ctx).catch(() => []))[0] ?? null;
+    const claimed = ownsTask && task ? await recordClaimed(task, meta.id, result.markdown, commitSha).catch((err) => { console.error("[thunk] evidence failed", err); return []; }) : [];
     const overlaps = origin.scout ? [] : (await workerOverlaps(await openWorkerWorkspaces(meta.projectId))).get(origin.taskId) ?? [];
+    // Thunk stamps which revision of the plan or note the worker had been sent, so review shows what the work implements.
+    const stamp = await sourceStamp(origin.taskId).catch(() => null);
     const lines = [
       report.summary, result.error ?? "", needsPerson ? `Needs person: ${needsPerson}` : "",
       origin.scout ? "Mode: scout (read-only, no branch)" : `Branch: ${ctx.workspace.branch ?? "none"}\nDiff: ${JSON.stringify(report.diffStat)}`,
       race ? `Race: ${race.id} · model ${getSession(meta.id)?.meta.model ?? "unknown"} · ${race.entries.length} racers${race.winner ? ` · winner ${race.winner}` : " · pick one with workers_pick"}` : "",
       stats ? `Cost: $${(result.costUsd || 0).toFixed(4)} this round · $${stats.costUsd.toFixed(4)} for the task over ${stats.rounds} round${stats.rounds === 1 ? "" : "s"}` : "",
+      stamp ? `${stampLabel(stamp)}${stamp.latest > stamp.version ? ` (the ${stamp.kind === "document" ? "plan" : "note"} is now v${stamp.latest}; that revision has not reached this worker)` : ""}` : "",
+      task?.criteria?.length ? `Evidence: ${claimed.filter((e) => e.criterionId).length} of ${task.criteria.length} criteria reported by the worker` : "",
       overlaps.length ? `Overlaps: ${overlaps.map((o) => `${o.title} (${o.taskId}) on ${o.paths.slice(0, 5).join(", ")}${o.paths.length > 5 ? ` +${o.paths.length - 5}` : ""}`).join("; ")}` : "",
       `Workspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}`,
     ];
-    const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
-    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
+    const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${origin.relayId ? ` relay="${origin.relayId}"` : ""}${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
+    if (previous) await resolveBySubject(`worker:${meta.id}:report:${previous.seq}`);
+    // Finished work with changes on its branch opens the review card; everything else stays a report.
+    const review = status === "done" && !origin.scout && ownsTask && Boolean(report.diffStat?.files);
+    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: review ? "review_ready" : "worker_report", urgency: review || status === "failed" || status === "blocked" ? "action" : "info", requestKey: origin.relayId ? `capture:${origin.relayId}` : undefined, subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status === "done" ? "Work completed" : status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
-    await queueReport(ctx.project, meta, seq, content);
+    // Opt-in per project: run scripts.test in the worker's workspace and record the result. Runs after the report so it never delays it.
+    if (status === "done" && !origin.scout && ownsTask && task) void runTestsOnFinish(ctx, task, meta.id).catch((err) => console.error("[thunk] finish tests failed", err));
+    await queueReport(ctx.project, meta, seq, content, stamp);
     scheduleDrain(meta.projectId);
   });
 }
@@ -438,8 +470,9 @@ export async function recoverWorkers() {
     try {
       const project = await getProject(session.projectId);
       if (!project) continue;
-      const saved = await savedReport(project, session.id);
-      for (const report of await savedReports(project, session.id)) enqueue(reportFile(project, session.id), report);
+      const reports = await savedReports(session.id);
+      const saved = reports.at(-1) ?? null;
+      for (const report of reports) enqueue(report);
       const events = getSession(session.id)?.events ?? await loadEvents(session.id);
       const pending = new Set<string>();
       for (const event of events) {
@@ -464,13 +497,16 @@ export async function recoverWorkers() {
 
 /**
  * Start queued work when a task changes (a dependency may now be done), and archive finished
- * worker workspaces and release idle effort worktrees now and then. Replaces the previous subscription and timer, so HMR does not stack them.
+ * worker workspaces, release idle effort worktrees and drop idle ended sessions from memory now and then. Replaces the previous subscription and timer, so HMR does not stack them.
  */
 export function ensureWorkerHousekeeping() {
   const previous = g.__thunkWorkerHousekeeping;
   if (previous) { previous.unsubscribe(); clearInterval(previous.timer); }
   const unsubscribe = subscribeTasks((e) => { if (e.kind === "changed") scheduleDrain(e.projectId); });
-  const timer = setInterval(() => void import("./cleanup").then(async (m) => { await m.cleanupWorkerWorkspaces(); await m.releaseIdleWorkspaces(); }).catch((err) => console.error("[thunk] workspace cleanup failed", err)), 10 * 60_000);
+  const timer = setInterval(() => {
+    try { sweepIdleSessions(); } catch (err) { console.error("[thunk] idle session sweep failed", err); }
+    void import("./cleanup").then(async (m) => { await m.cleanupWorkerWorkspaces(); await m.releaseIdleWorkspaces(); }).catch((err) => console.error("[thunk] workspace cleanup failed", err));
+  }, 10 * 60_000);
   timer.unref?.();
   g.__thunkWorkerHousekeeping = { unsubscribe, timer };
   void listProjects().then((projects) => { for (const p of projects) scheduleDrain(p.id, 0); }).catch((err) => console.error("[thunk] worker queue recovery failed", err));

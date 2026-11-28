@@ -235,6 +235,12 @@
 }
 .dark .comment-mark { background: oklch(0.5 0.1 85 / 0.35); }
 .dark .comment-mark.is-active { background: oklch(0.55 0.13 85 / 0.6); }
+/* Text a memory proposal adds, in "Edit as document" (lib/editor/extensions/change-mark.ts). */
+.change-mark {
+  background: var(--status-running-soft);
+  border-bottom: 2px solid var(--status-ok);
+  border-radius: 2px;
+}
 
 /* ── World map (home) ─────────────────────────────────────────────── */
 

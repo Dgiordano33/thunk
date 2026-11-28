@@ -12,7 +12,9 @@ export type { Db } from "./sql";
 const INT8 = 20, NUMERIC = 1700, TIMESTAMPTZ = 1184, TIMESTAMP = 1114;
 const toNumber = (v: string) => Number(v);
 
-type State = { mode: "memory"; reason: string } | { mode: "invalid"; error: string } | { mode: "ready"; db: Db };
+/** Runs `fn` on one database session; `begin` is false when that session is already inside a transaction. */
+export type DbSession = <T>(fn: (session: { query: Db["query"] }, opts: { begin: boolean }) => Promise<T>) => Promise<T>;
+type State = { mode: "memory"; reason: string } | { mode: "invalid"; error: string } | { mode: "ready"; db: Db; session: DbSession };
 const g = globalThis as typeof globalThis & { __thunkDb?: State };
 
 function migrationsDir() {
@@ -46,7 +48,17 @@ function lockEmbedded(dir: string): boolean {
 }
 
 function withMigrations(db: Db, ready: Promise<void>): Db {
-  return { kind: db.kind, query: async (text, params) => { await ready; return db.query(text, params); } };
+  return {
+    kind: db.kind,
+    query: async (text, params) => { await ready; return db.query(text, params); },
+    transaction: async (fn) => { await ready; return db.transaction!(fn); },
+  };
+}
+
+/** A handle bound to one open transaction; nested `transaction` calls run inside it. */
+function inTransaction(kind: Db["kind"], query: Db["query"]): Db {
+  const tx: Db = { kind, query, transaction: (fn) => fn(tx) };
+  return tx;
 }
 
 function openPostgres(url: string): State {
@@ -61,7 +73,24 @@ function openPostgres(url: string): State {
   };
   const pool = new pg.Pool({ connectionString: url, types, max: 10, options: "-c timezone=UTC" });
   pool.on("error", (error) => console.error("[thunk] database connection error", error));
-  const db: Db = { kind: "postgres", query: async (text, params) => (await pool.query(text, params as unknown[])).rows };
+  const db: Db = {
+    kind: "postgres",
+    query: async (text, params) => (await pool.query(text, params as unknown[])).rows,
+    transaction: async (fn) => {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const result = await fn(inTransaction("postgres", async (text, params) => (await client.query(text, params as unknown[])).rows));
+        await client.query("commit");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  };
   const ready = (async () => {
     // Migrations need one session for the advisory lock and each transaction.
     const client = await pool.connect();
@@ -78,7 +107,16 @@ function openPostgres(url: string): State {
     }
   })();
   ready.catch((error) => console.error("[thunk] database setup failed", error));
-  return { mode: "ready", db: withMigrations(db, ready) };
+  const session: DbSession = async (fn) => {
+    await ready;
+    const client = await pool.connect();
+    try {
+      return await fn({ query: async (text, params) => (await client.query(text, params as unknown[])).rows }, { begin: true });
+    } finally {
+      client.release();
+    }
+  };
+  return { mode: "ready", db: withMigrations(db, ready), session };
 }
 
 function openEmbedded(dir: string): State {
@@ -101,8 +139,12 @@ function openEmbedded(dir: string): State {
   const db: Db = {
     kind: "pglite",
     query: async (text, params) => (await (await ready).query(text, params as unknown[])).rows as never,
+    transaction: async (fn) => (await ready).transaction((tx) => fn(inTransaction("pglite", async (text, params) => (await tx.query(text, params as unknown[])).rows as never))),
   };
-  return { mode: "ready", db };
+  // PGlite has one connection; transaction() holds every other query back until `fn` finishes.
+  const session: DbSession = async (fn) => (await ready).transaction((tx) =>
+    fn({ query: async (text, params) => (await tx.query(text, params as unknown[])).rows as never }, { begin: false }));
+  return { mode: "ready", db, session };
 }
 
 function open(config: DbConfig): State {
@@ -123,6 +165,13 @@ export function db(): Db | null {
   const s = state();
   if (s.mode === "invalid") throw new Error(s.error);
   return s.mode === "ready" ? s.db : null;
+}
+
+/** The database's single-session runner, or null in memory-only mode. Throws when the database settings are wrong. */
+export function dbSession(): DbSession | null {
+  const s = state();
+  if (s.mode === "invalid") throw new Error(s.error);
+  return s.mode === "ready" ? s.session : null;
 }
 
 /** True unless Thunk keeps everything in memory. */
