@@ -1,7 +1,7 @@
 "use client";
 
 import { ArchiveIcon, BrainIcon, FileTextIcon, NotebookTextIcon, PlusIcon, RepeatIcon, RefreshCwIcon, SquareCheckIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { noteRefKey, useContextOptions } from "@/components/context/use-context-options";
 import { Button } from "@/components/ui/button";
@@ -46,9 +46,15 @@ export function SessionContext() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // The session these items belong to; a response for a session that is no longer open is dropped.
+  const current = useRef(sessionId);
+  useEffect(() => { current.current = sessionId; setItems(null); setError(null); }, [sessionId]);
   const load = useCallback(() => {
     if (!sessionId) return;
-    api.sessionContext(sessionId).then((r) => { setItems(r.items); setError(null); }).catch((err: Error) => setError(err.message));
+    api.sessionContext(sessionId).then((r) => {
+      if (current.current !== sessionId) return;
+      setItems(r.items); setError(null);
+    }).catch((err: Error) => { if (current.current === sessionId) setError(err.message); });
   }, [sessionId]);
   // Re-read when the session settles: a turn may have read or changed context.
   useEffect(() => { load(); }, [load, status]);
@@ -57,7 +63,8 @@ export function SessionContext() {
     if (!sessionId) return;
     setBusy(item.id);
     try {
-      setItems((await api.contextItemAction(sessionId, item.id, action)).items);
+      const { items: next } = await api.contextItemAction(sessionId, item.id, action);
+      if (current.current === sessionId) setItems(next);
       if (action === "update") toast.success(`Sent the new version of “${item.title}”`);
     } catch (err) {
       toast.error(action === "update" ? "Couldn't send the update" : "Couldn't change the item", { description: (err as Error).message });

@@ -67,11 +67,13 @@ export async function writeTables(target, fill) {
         for await (const rows of batches) {
           if (!rows.length) continue;
           await target.query(
-            `insert into public."${table}" (${list}) select ${list} from jsonb_populate_recordset(null::public."${table}", $1::jsonb)`,
+            // overriding system value: identity columns (worker_queue.seq) keep the source's values.
+            `insert into public."${table}" (${list}) overriding system value select ${list} from jsonb_populate_recordset(null::public."${table}", $1::jsonb)`,
             [JSON.stringify(rows)],
           );
           counts[table] += rows.length;
         }
+        await resetSequences(target, table);
         return counts[table];
       },
     });
@@ -79,6 +81,21 @@ export async function writeTables(target, fill) {
     await target.exec("set session_replication_role = origin;");
   }
   return counts;
+}
+
+/** Moves identity and serial sequences past the copied rows, so new rows don't reuse their values. */
+async function resetSequences(target, table) {
+  const columns = await target.query(
+    `select column_name as name from information_schema.columns
+      where table_schema = 'public' and table_name = $1 and (is_identity = 'YES' or column_default like 'nextval(%')`,
+    [table],
+  );
+  for (const { name } of columns) {
+    await target.query(
+      `select setval(pg_get_serial_sequence($1, $2), coalesce((select max("${name}") from public."${table}"), 0) + 1, false)`,
+      [`public."${table}"`, name],
+    );
+  }
 }
 
 /** Refuses a source that has run migrations this checkout doesn't know. */

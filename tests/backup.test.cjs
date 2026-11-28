@@ -101,6 +101,40 @@ test("restored rows keep their values, and routines stay as they were", async (t
   assert.deepEqual([routine.enabled, routine.events], [true, ["pr_opened"]]);
 });
 
+test("identity columns restore with their values and new rows continue after them", async (t) => {
+  const { createBackup, restoreBackup } = await core();
+  const { dataDir } = tempDataDir(t);
+  const source = await testDb();
+  t.after(() => source.close());
+  const [p] = await source.query("insert into projects (name, data_key, slug) values ('Demo', 'demo', 'demo') returning id");
+  for (const id of ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"]) {
+    await source.query("insert into worker_queue (task_id, project_id, input) values ($1, $2, '{}')", [id, p.id]);
+  }
+  const backup = await createBackup({ dataDir, outDir: path.join(dataDir, "backups"), db: source });
+  const target = await testDb();
+  t.after(() => target.close().catch(() => {}));
+  await restoreBackup({ archive: backup.file, dataDir, migrations: MIGRATIONS, openDatabase: async () => ({ ...target, close: async () => {}, external: false }) });
+  const before = (await source.query("select task_id, seq::int as seq from worker_queue order by seq")).map((r) => r.seq);
+  assert.deepEqual((await target.query("select seq::int as seq from worker_queue order by seq")).map((r) => r.seq), before);
+  const [next] = await target.query("insert into worker_queue (task_id, project_id, input) values ('00000000-0000-4000-8000-000000000003', $1, '{}') returning seq::int as seq", [p.id]);
+  assert.ok(next.seq > Math.max(...before), "the sequence moved past the restored rows");
+});
+
+test("a session backup only holds the session for the table dump", async (t) => {
+  const { createBackup } = await core();
+  const { dataDir } = tempDataDir(t);
+  const source = await testDb();
+  t.after(() => source.close());
+  let open = 0;
+  let held = false;
+  const session = async (fn) => { open++; held = true; try { return await fn({ query: source.query }, { begin: true }); } finally { held = false; } };
+  const backup = await createBackup({ dataDir, outDir: path.join(dataDir, "backups"), session });
+  assert.equal(open, 1);
+  assert.ok(!held);
+  assert.ok(backup.manifest.database);
+  assert.ok(backup.manifest.tables.projects);
+});
+
 test("restore refuses while a live Thunk holds the lock, and refuses a backup from a newer checkout", async (t) => {
   const { createBackup, restoreBackup } = await core();
   const { dataDir } = tempDataDir(t);

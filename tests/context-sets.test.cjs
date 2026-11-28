@@ -36,6 +36,7 @@ const routines = require("../lib/db/repo/routines.ts");
 const sets = require("../lib/context/sets.ts");
 const { renderRoutineContext, validateRoutineContext } = require("../lib/routines/context.ts");
 const { RoutineContextSchema } = require("../lib/routines/schema.ts");
+const { ContextSetPatchSchema } = require("../lib/context/schema.ts");
 
 const json = (method, body) => new Request("http://x", { method, ...(body ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } } : {}) });
 const ctx = (id) => ({ params: Promise.resolve({ id }) });
@@ -73,6 +74,11 @@ test("context sets: create, list, rename, reject other projects' items and dupli
 
   assert.equal((await sets.item.DELETE(json("DELETE"), ctx(set.id))).status, 200);
   assert.equal((await sets.item.GET(json("GET"), ctx(set.id))).status, 404);
+});
+
+test("a rename patch leaves the set's Vault items alone", () => {
+  assert.deepEqual(ContextSetPatchSchema.parse({ name: "Renamed" }), { name: "Renamed" });
+  assert.deepEqual(ContextSetPatchSchema.parse({ vaultIds: [] }), { vaultIds: [] });
 });
 
 test("a routine can point at a set instead of its own list; deleting the set sends it back to its own", async () => {

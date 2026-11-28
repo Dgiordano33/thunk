@@ -50,7 +50,8 @@ export function ProposalReview({ proposalId, onDone, compact = false }: { propos
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [mode, setMode] = useState<"items" | "document">("items");
-  const [documentText, setDocumentText] = useState("");
+  // null until the editor has mounted and reported its markdown, so Apply can't send an empty or stale document.
+  const [documentText, setDocumentText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -87,7 +88,7 @@ export function ProposalReview({ proposalId, onDone, compact = false }: { propos
   const apply = async () => {
     setBusy(true); setNotice(null);
     try {
-      const result = await api.applyMemoryProposal(proposal.id, { choices: selection(), memoryHash: review.memoryHash, ...(mode === "document" ? { document: documentText } : {}) });
+      const result = await api.applyMemoryProposal(proposal.id, { choices: selection(), memoryHash: review.memoryHash, ...(mode === "document" && documentText !== null ? { document: documentText } : {}) });
       if (result.applied) {
         setReview({ ...review, proposal: result.proposal });
         toast.success("Project memory updated");
@@ -156,12 +157,12 @@ export function ProposalReview({ proposalId, onDone, compact = false }: { propos
 
     {open && <footer className="flex flex-wrap items-center gap-2 border-t pt-4">
       {mode === "items"
-        ? <Button variant="ghost" disabled={busy || blocked || !accepted.length} onClick={() => setMode("document")}><FileTextIcon aria-hidden="true" />Edit as document</Button>
+        ? <Button variant="ghost" disabled={busy || blocked || !accepted.length} onClick={() => { setDocumentText(null); setMode("document"); }}><FileTextIcon aria-hidden="true" />Edit as document</Button>
         : <Button variant="ghost" disabled={busy} onClick={() => setMode("items")}>Back to changes</Button>}
       <span className="text-muted-foreground text-xs">{accepted.length} of {proposal.items.length} accepted{blocked ? " · resolve flagged changes first" : ""}</span>
       <span className="ml-auto flex gap-2">
         <Button variant="outline" disabled={busy} onClick={() => void reject()}>Reject all</Button>
-        <Button disabled={busy || !accepted.length || (mode === "items" && blocked)} onClick={() => void apply()}>{busy && <Loader2Icon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}Apply {mode === "document" ? "document" : `${accepted.length} ${accepted.length === 1 ? "change" : "changes"}`}</Button>
+        <Button disabled={busy || !accepted.length || (mode === "items" && blocked) || (mode === "document" && documentText === null)} onClick={() => void apply()}>{busy && <Loader2Icon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}Apply {mode === "document" ? "document" : `${accepted.length} ${accepted.length === 1 ? "change" : "changes"}`}</Button>
       </span>
     </footer>}
     {!open && <p className="text-muted-foreground border-t pt-4 text-sm">{proposal.status === "applied" ? "These changes are in project memory." : proposal.status === "rejected" ? "Project memory was left as it was." : "Nothing needed changing."}</p>}

@@ -20,7 +20,11 @@ export const ContextSetInputSchema = z.object({
   vaultIds: selection.vaultIds.default([]),
 }).strict();
 
-export const ContextSetPatchSchema = ContextSetInputSchema.partial().strict();
+// Built without the vaultIds default: zod applies defaults even under .partial(), so a rename would clear them.
+export const ContextSetPatchSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(80),
+  ...selection,
+}).partial().strict();
 
 export type ContextSetInput = z.infer<typeof ContextSetInputSchema>;
 export type ContextSetPatch = z.infer<typeof ContextSetPatchSchema>;

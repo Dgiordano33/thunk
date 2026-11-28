@@ -113,19 +113,26 @@ export async function dumpTables(db, dir, { begin = true, batch = 500 } = {}) {
 /**
  * Writes `<outDir>/thunk-<iso>.tar.gz`, mode 0600 because config/ holds integration tokens.
  * `db` is `{ query }`, or null when Thunk keeps no database; `begin: false` when the caller
- * already holds a transaction. `claudeDir` (usually ~/.claude) adds its `projects/` transcripts.
+ * already holds a transaction. `session(fn)` instead runs `fn(db, { begin })` on a session the caller
+ * opens; only the table dump runs inside it, so a PGlite transaction isn't held while tar packs files.
+ * `claudeDir` (usually ~/.claude) adds its `projects/` transcripts.
  *
- * @param {{ dataDir: string, outDir: string, db: { query: (sql: string, params?: unknown[]) => Promise<any[]> } | null,
+ * @param {{ dataDir: string, outDir: string, db?: { query: (sql: string, params?: unknown[]) => Promise<any[]> } | null,
+ *   session?: ((fn: (db: { query: (sql: string, params?: unknown[]) => Promise<any[]> }, options: { begin: boolean }) => Promise<any>) => Promise<any>) | null,
  *   begin?: boolean, claudeDir?: string | null, version?: string | null, now?: Date }} options
  */
-export async function createBackup({ dataDir, outDir, db, begin = true, claudeDir = null, version = null, now = new Date() }) {
+export async function createBackup({ dataDir, outDir, db = null, session = null, begin = true, claudeDir = null, version = null, now = new Date() }) {
+  const hasDb = Boolean(db || session);
   await mkdir(outDir, { recursive: true, mode: 0o700 });
   const name = archiveName(now);
   const file = path.join(outDir, name);
   const partial = `${file}.partial`;
   const staging = await mkdtemp(path.join(outDir, ".staging-"));
   try {
-    const dumped = db ? await dumpTables(db, path.join(staging, "db"), { begin }) : { tables: {}, migrations: [] };
+    const dbDir = path.join(staging, "db");
+    const dumped = session
+      ? await session((sessionDb, options) => dumpTables(sessionDb, dbDir, { begin: options.begin }))
+      : db ? await dumpTables(db, dbDir, { begin }) : { tables: {}, migrations: [] };
     const folders = FOLDERS.filter((f) => existsSync(path.join(dataDir, f)));
     const files = {};
     for (const f of folders) files[f] = await countFiles(path.join(dataDir, f));
@@ -137,14 +144,14 @@ export async function createBackup({ dataDir, outDir, db, begin = true, claudeDi
       version,
       migration: dumped.migrations.at(-1) ?? null,
       migrations: dumped.migrations,
-      database: Boolean(db),
+      database: hasDb,
       tables: dumped.tables,
       files,
       transcripts,
     };
     await writeFile(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 2), { mode: 0o600 });
 
-    const args = ["-czf", "-", "-C", staging, "manifest.json", ...(db ? ["db"] : [])];
+    const args = ["-czf", "-", "-C", staging, "manifest.json", ...(hasDb ? ["db"] : [])];
     if (folders.length) args.push("-C", dataDir, ...folders);
     if (transcripts) args.push("-C", path.dirname(claudeDir), transcripts);
     const out = createWriteStream(partial, { mode: 0o600 });

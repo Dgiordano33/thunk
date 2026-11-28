@@ -324,12 +324,12 @@ const hang = () => new Promise(() => {});
 const fillSlots = () => { for (let i = 0; i < 12; i++) routinesState.active.set(`busy-${i}`, { runId: `busy-${i}`, routineId: `busy-${i}`, sessionId: null, cancel() {} }); };
 const minutesFrom = (iso, minutes) => new Date(new Date(iso).getTime() + minutes * 60_000);
 
-async function triggerDb(t, { fail } = {}) {
+async function triggerDb(t, { fail, failOn = /from routine_runs/ } = {}) {
   const { testDb } = require("./helpers/test-db.cjs");
   const real = await testDb();
   t.after(() => { fakes.db = null; routinesState.active.clear(); return real.close(); });
   // `fail` makes every routine_runs read throw, so startRun fails after the routine is loaded.
-  const db = { kind: real.kind, query: (sql, params) => (fail?.() && /from routine_runs/.test(sql) ? Promise.reject(new Error("database is down")) : real.query(sql, params)) };
+  const db = { kind: real.kind, query: (sql, params) => (fail?.() && failOn.test(sql) ? Promise.reject(new Error("database is down")) : real.query(sql, params)) };
   const [p] = await real.query("insert into projects (name, data_key, slug) values ('Town', 'town', 'town') returning id");
   const [r] = await real.query("insert into routines (project_id, name, prompt, model, schedule_cron, schedule_tz, next_run_at) values ($1, 'Nightly', 'go', 'm', '0 9 * * *', 'UTC', now() - interval '1 minute') returning id, next_run_at", [p.id]);
   fakes.db = db;
@@ -447,6 +447,23 @@ test("a startRun that throws is retried three times, then fails with an Inbox ca
   assert.equal(cards[0].kind, "run_failed");
   assert.match(cards[0].detail, /database is down/);
   failing = false;
+});
+
+test("a run that started but couldn't be recorded on its trigger is not started again", async (t) => {
+  routinesState.active.clear();
+  fakes.workspaceContext = hang;
+  let failing = true;
+  const { db, routineId } = await triggerDb(t, { fail: () => failing, failOn: /update (public\.)?routine_triggers/ });
+  await triggers.enqueueTriggers(routineId, [{ source: "cron", dedupeKey: `cron:${routineId}:recorded` }]);
+  await dispatchTriggers();
+  assert.equal((await db.query("select * from routine_runs where routine_id = $1", [routineId])).length, 1);
+  failing = false;
+  routinesState.active.clear();
+  await dispatchTriggers();
+  const runs = await db.query("select id from routine_runs where routine_id = $1", [routineId]);
+  assert.equal(runs.length, 1, "the next tick only records the run");
+  const [trigger] = await triggers.listTriggers(routineId);
+  assert.deepEqual([trigger.status, trigger.runId, trigger.attempts], ["started", runs[0].id, 0]);
 });
 
 test("on restart an interrupted run is retried once from its trigger when the routine catches up", async () => {

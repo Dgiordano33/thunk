@@ -869,6 +869,17 @@ test("a revised plan reaches its open tasks: email notifications become Inbox on
   finish(worker, "Done again");
   await until(async () => (await reports.savedReport(worker.id)).seq > report.seq);
   assert.match((await reports.savedReport(worker.id)).content, /Implements plan v2 \(the plan is now v3/);
-  await sources.dismissPlanChange(second.id);
+
+  // A newer revision is approved before the older one: applying the older one must not roll the brief back.
+  const v3 = `${edited}4. Mention it in the changelog.\n`;
+  const [third] = await sources.documentRevised(documentId, v3, `${v3}5. Ship it behind a flag.\n`);
+  assert.equal(third.version, 4);
+  await sources.proposeTaskChanges(project.id, chief.id, { revisionId: second.id, tasks: [{ taskId: email, affected: true, summary: "Changelog", brief: "v3 brief" }] });
+  await sources.proposeTaskChanges(project.id, chief.id, { revisionId: third.id, tasks: [{ taskId: email, affected: true, summary: "Flag", brief: "v4 brief" }] });
+  await sources.decidePlanChange(third.id, [{ taskId: email, decision: "approved" }]);
+  const stale = await sources.decidePlanChange(second.id, [{ taskId: email, decision: "approved" }]);
+  assert.equal(tasks.get(email).body, "v4 brief");
+  assert.equal(stale.items.find((i) => i.taskId === email).decision, "rejected");
+  assert.match(chief.events.filter((e) => e.type === "user_message").at(-1).content, /already has v4/);
   for (const taskId of [email, settings, docs]) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
 });

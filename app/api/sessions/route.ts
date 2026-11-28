@@ -5,7 +5,7 @@ import { expandCommand } from "@/lib/prompts/context";
 import { z } from "zod";
 import { listSessions, pushUserMessage, startSession } from "@/lib/agent";
 import { handle, HttpError, parseBody } from "@/lib/api/http";
-import { sessionSetContext } from "@/lib/context/sets";
+import { checkSessionSet, sessionSetContext } from "@/lib/context/sets";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +40,7 @@ const CreateBody = z
 
 export const POST = handle(async (req: Request) => {
   const body = await parseBody(req, CreateBody);
+  if (body.contextSetId) await checkSessionSet(body.contextSetId, body.projectId);
   const target = body.boardId ? { ...body, workspaceId: (await ensureBoardWorkspace(body.projectId!, body.boardId)).id, origin: { kind: "board" as const, boardId: body.boardId } } : body;
   const live = await startSession(target).catch((err: Error) => {
     throw new HttpError(400, err.message);

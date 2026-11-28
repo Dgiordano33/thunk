@@ -74,7 +74,7 @@ export async function sourceStamp(taskId: string): Promise<SourceStamp | null> {
  * and those tasks; it answers with tasks_revise. `sourceIds` are every id the source has gone by (a document's earlier
  * versions). Returns the plan changes it opened, one per project.
  */
-export async function sourceRevised(input: { kind: SourceKind; sourceIds: string[]; before?: string | null; after: string; title?: string }) {
+export async function sourceRevised(input: { kind: SourceKind; sourceIds: string[]; before?: string | null; beforeOf?: string; after: string; title?: string }) {
   const hash = contentHash(input.after);
   const links = (await tasksForSources(input.kind, input.sourceIds)).filter((l) => l.contentHash !== hash);
   const byProject = new Map<string, { project: Project; tasks: Task[]; links: TaskSource[] }>();
@@ -94,8 +94,11 @@ export async function sourceRevised(input: { kind: SourceKind; sourceIds: string
   for (const { project, tasks, links: projectLinks } of byProject.values()) {
     const [first] = projectLinks;
     // The worker knows the text it was briefed with; diff from that. A document's first revision diffs from the
-    // editor's baseline instead, so formatting the editor normalised does not show as a change.
-    const before = first.version === 1 && input.before != null ? input.before : first.content ?? input.before ?? "";
+    // editor's baseline instead, so formatting the editor normalised does not show as a change. That baseline is
+    // only the briefed text when the tasks were linked to the revised document itself (`beforeOf`), not to an
+    // earlier document in its lineage.
+    const baseline = input.before != null && (input.beforeOf === undefined || first.sourceId === input.beforeOf);
+    const before = first.version === 1 && baseline ? input.before! : first.content ?? input.before ?? "";
     const title = input.title ?? (input.kind === "document" ? documentTitle(input.after) : first.sourceId);
     const revised = await reviseTaskSources(projectLinks, input.after, hash);
     const version = Math.max(...revised.map((r) => r.version), 2);
@@ -115,7 +118,7 @@ export async function sourceRevised(input: { kind: SourceKind; sourceIds: string
 
 /** A plan document got a revision (POST /api/documents/[id]/revisions). */
 export async function documentRevised(documentId: string, before: string, after: string) {
-  return sourceRevised({ kind: "document", sourceIds: await documentLineage(documentId), before, after });
+  return sourceRevised({ kind: "document", sourceIds: await documentLineage(documentId), before, beforeOf: documentId, after });
 }
 
 /** A linked note's current text, compared with what its tasks were last given. */
@@ -238,9 +241,12 @@ export async function decidePlanChange(id: string, choices: PlanChangeChoice[]) 
     if (undecided.length) throw new HttpError(400, `Approve or reject every task: ${undecided.map((i) => i.title).join(", ")}`);
     const items: PlanChangeItem[] = [];
     const lines: string[] = [];
-    for (const item of change.items) {
+    const deliveredLine = (item: PlanChangeItem) => `- ${item.title} (${item.taskId}): approved; ${item.delivery === "sent" ? "sent to its worker as a <task_update>" : item.delivery === "queued" ? "the queued task starts with the new brief" : "saved on the task"}`;
+    for (const [index, item] of change.items.entries()) {
       const choice = byTask.get(item.taskId);
       if (!item.affected || !choice) { items.push(item); continue; }
+      // Applied by an earlier attempt that failed on a later task: its worker already has this update.
+      if (item.decision === "approved") { items.push(item); lines.push(deliveredLine(item)); continue; }
       if (choice.decision === "rejected") {
         items.push({ ...item, decision: "rejected" });
         lines.push(`- ${item.title} (${item.taskId}): rejected; it keeps its current brief`);
@@ -254,13 +260,24 @@ export async function decidePlanChange(id: string, choices: PlanChangeChoice[]) 
         lines.push(`- ${item.title} (${item.taskId}): not changed; the task is ${task?.status ?? "gone"}`);
         continue;
       }
+      const links = (await listTaskSources(task.id)).filter((l) => l.kind === change.kind);
+      // A newer revision already reached this task; applying this older one would roll its brief back.
+      const newer = Math.max(0, ...links.map((l) => l.deliveredVersion));
+      if (newer > change.version) {
+        items.push({ ...item, decision: "rejected" });
+        lines.push(`- ${item.title} (${item.taskId}): not changed; it already has v${newer}`);
+        continue;
+      }
       // Null criteria in the proposal keeps the task's own; an edit to an empty list clears them.
       const keep = choice.criteria === undefined && item.criteria === null;
       const updated = await patchTask(task.id, { body: brief, ...(keep ? {} : { criteria }) });
       const delivery = await deliver(change, updated, item, brief, keep ? updated.criteria ?? null : criteria);
-      for (const link of (await listTaskSources(task.id)).filter((l) => l.kind === change.kind)) await setDeliveredVersion(link, change.version);
-      items.push({ ...item, decision: "approved", brief, criteria: keep ? null : criteria, delivery });
-      lines.push(`- ${item.title} (${item.taskId}): approved; ${delivery === "sent" ? "sent to its worker as a <task_update>" : delivery === "queued" ? "the queued task starts with the new brief" : "saved on the task"}`);
+      for (const link of links) await setDeliveredVersion(link, change.version);
+      const applied: PlanChangeItem = { ...item, decision: "approved", brief, criteria: keep ? null : criteria, delivery };
+      items.push(applied);
+      lines.push(deliveredLine(applied));
+      // Save progress so a failure on a later task doesn't send this one its update again on retry.
+      await updatePlanChange(id, ["open"], { items: [...items, ...change.items.slice(index + 1)] });
     }
     const updated = await updatePlanChange(id, ["open"], { status: "applied", items });
     if (!updated) throw new HttpError(409, "This change was already decided");
@@ -277,7 +294,7 @@ export async function dismissPlanChange(id: string) {
   return withFileLock(`plan-change:${id}`, async () => {
     const change = await getPlanChange(id);
     if (!change) throw new HttpError(404, "Plan change not found");
-    const updated = await updatePlanChange(id, ["waiting", "open"], { status: "dismissed", items: change.items.map((i) => i.affected ? { ...i, decision: "rejected" } : i) });
+    const updated = await updatePlanChange(id, ["waiting", "open"], { status: "dismissed", items: change.items.map((i) => i.affected && i.decision !== "approved" ? { ...i, decision: "rejected" } : i) });
     if (!updated) throw new HttpError(409, `This change was already ${change.status}`);
     await resolveBySubject(changeSubject(id));
     await tellChief(change, "The person set these changes aside. Every task keeps its current brief.", "dismissed");

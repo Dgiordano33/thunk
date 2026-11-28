@@ -74,10 +74,8 @@ export async function runBackup({ withTranscripts = false }: { withTranscripts?:
     const settings = await readBackupSettings();
     const dir = backupDir(settings);
     const common = { dataDir: DATA_DIR, outDir: dir, claudeDir: withTranscripts ? claudeDir() : null, version: serverInfo().revision };
-    const session = dbSession();
-    const backup = session
-      ? await session((db, { begin }) => createBackup({ ...common, db, begin }))
-      : await createBackup({ ...common, db: null });
+    // Only the table dump holds the session: on PGlite it blocks every other query, so tar runs after it.
+    const backup = await createBackup({ ...common, session: dbSession() });
     const removed: string[] = await pruneBackups(dir, settings.keep);
     state.lastError = null;
     return { file: backup.file as string, name: backup.name as string, size: backup.size as number, createdAt: backup.manifest.createdAt as string, removed };

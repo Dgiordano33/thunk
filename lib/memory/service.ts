@@ -117,6 +117,8 @@ export async function applyMemoryProposal(id: string, input: ApplyInput): Promis
   let next: string;
   if (input.document !== undefined) {
     if (changed) throw new MemoryProposalError("Project memory changed while you were editing. Copy your edits, reload, and apply again.", 409);
+    // A blank document over non-empty memory is almost always an editor that hadn't loaded, not an intent to wipe it.
+    if (!input.document.trim() && current.trim()) throw new MemoryProposalError("The document is empty. Reload and apply again, or edit project memory directly.");
     next = input.document.endsWith("\n") ? input.document : `${input.document}\n`;
   } else {
     const items: ComposeItem[] = accepted.map((item) => ({ id: item.id, op: item.op, target: item.target, text: textOf(item) }));

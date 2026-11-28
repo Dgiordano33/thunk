@@ -30,7 +30,26 @@ export async function dispatchTriggers(now = new Date()) {
   }
 }
 
+/**
+ * Triggers whose run started but whose "started" row didn't save (a brief database error). Kept so the next
+ * tick retries only the bookkeeping instead of treating the trigger as unstarted and running it again.
+ * On globalThis so HMR doesn't forget them.
+ */
+const g = globalThis as typeof globalThis & { __thunkStartedTriggers?: Map<string, string> };
+const startedRuns = g.__thunkStartedTriggers ??= new Map<string, string>();
+
+async function markStarted(triggerId: string, runId: string) {
+  try {
+    await updateTrigger(triggerId, { status: "started", runId, error: null });
+    startedRuns.delete(triggerId);
+  } catch (err) {
+    console.error(`[thunk] routine trigger ${triggerId} started run ${runId} but couldn't record it; retrying next tick`, err);
+  }
+}
+
 async function dispatchOne(trigger: RoutineTrigger, now: Date) {
+  const startedRun = startedRuns.get(trigger.id);
+  if (startedRun) return markStarted(trigger.id, startedRun);
   const routine = await getRoutine(trigger.routineId);
   if (!routine || !routine.enabled) {
     await updateTrigger(trigger.id, { status: "skipped", error: routine ? "routine is turned off" : "routine no longer exists" });
@@ -40,9 +59,9 @@ async function dispatchOne(trigger: RoutineTrigger, now: Date) {
     const run = await recordSkip(routine, trigger.source, trigger.payload, message);
     await updateTrigger(trigger.id, { status: "skipped", error: message, runId: run.id });
   };
+  let runId: string;
   try {
-    const run = await startRun(routine, trigger.source, trigger.payload);
-    await updateTrigger(trigger.id, { status: "started", runId: run.id, error: null });
+    runId = (await startRun(routine, trigger.source, trigger.payload)).id;
   } catch (err) {
     if (err instanceof RunRejected) {
       const age = now.getTime() - new Date(trigger.createdAt).getTime();
@@ -60,5 +79,9 @@ async function dispatchOne(trigger: RoutineTrigger, now: Date) {
       return;
     }
     await updateTrigger(trigger.id, { attempts, nextAttemptAt: later(now, MIN_DELAY_MS * 2 ** (attempts - 1)), error: message });
+    return;
   }
+  // Outside the try: once startRun has returned, the run exists, so a failure here must never start it again.
+  startedRuns.set(trigger.id, runId);
+  await markStarted(trigger.id, runId);
 }

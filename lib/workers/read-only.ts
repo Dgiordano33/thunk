@@ -72,6 +72,32 @@ const GH_READ: Record<string, Set<string>> = {
   repo: new Set(["view"]),
 };
 
+/**
+ * Whether `arg` is the long option `full`, written out or abbreviated: git's parse-options and GNU getopt
+ * both accept any unambiguous prefix (`--ext` for `--ext-diff`), with or without `=value`.
+ */
+function longFlag(arg: string, full: string): boolean {
+  if (!arg.startsWith("--")) return false;
+  const name = arg.split("=")[0];
+  return name.length > 3 && full.startsWith(name);
+}
+
+/**
+ * Environment assignments allowed before a command. Anything else is refused: variables such as
+ * GIT_EXTERNAL_DIFF, GIT_SSH_COMMAND, GIT_CONFIG_*, PAGER or LD_PRELOAD make an allowed command run a program.
+ */
+const SAFE_ENV = new Set(["LANG", "LC_ALL", "LC_CTYPE", "LC_COLLATE", "LC_MESSAGES", "TZ", "NO_COLOR", "CLICOLOR", "FORCE_COLOR", "COLUMNS", "TERM"]);
+const PAGER_ENV = new Set(["PAGER", "GIT_PAGER"]);
+
+function checkAssignment(word: string): string | null {
+  const eq = word.indexOf("=");
+  const name = word.slice(0, eq);
+  const value = word.slice(eq + 1);
+  if (SAFE_ENV.has(name)) return null;
+  if (PAGER_ENV.has(name) && (value === "" || value === "cat")) return null;
+  return `setting ${name} before a command is not allowed`;
+}
+
 function checkGit(args: string[]): string | null {
   let i = 0;
   while (i < args.length && args[i].startsWith("-")) {
@@ -83,7 +109,9 @@ function checkGit(args: string[]): string | null {
   const sub = args[i];
   const rest = args.slice(i + 1);
   if (!sub || !GIT_READ.has(sub)) return `git ${sub ?? ""} changes the repository`.trim();
-  if (rest.some((a) => a === "--output" || a.startsWith("--output=") || a === "-o" && sub !== "grep" && sub !== "rev-parse" || a === "--ext-diff" || a === "--textconv")) return `git ${sub} with an output file or external program`;
+  if (rest.some((a) => longFlag(a, "--output") || a === "-o" && sub !== "grep" && sub !== "rev-parse" || longFlag(a, "--ext-diff") || longFlag(a, "--textconv"))) return `git ${sub} with an output file or external program`;
+  // git grep -O<cmd> / --open-files-in-pager=<cmd> runs <cmd> through a shell; short flags can be bundled (-iO...).
+  if (sub === "grep" && rest.some((a) => longFlag(a, "--open-files-in-pager") || /^-[a-zA-Z]*O/.test(a))) return "git grep -O runs a program";
   if (sub === "branch") {
     for (let j = 0; j < rest.length; j++) {
       const a = rest[j].split("=")[0];
@@ -109,7 +137,8 @@ function checkGh(args: string[]): string | null {
 
 function checkPlain(cmd: string, args: string[]): string | null {
   if (cmd === "find" && args.some((a) => ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(a))) return "find with -delete, -exec or a file output";
-  if (cmd === "sort" && args.some((a) => a === "-o" || a.startsWith("--output") || /^-[a-zA-Z]*o/.test(a))) return "sort -o writes a file";
+  if (cmd === "sort" && args.some((a) => a === "-o" || longFlag(a, "--output") || /^-[a-zA-Z]*o/.test(a))) return "sort -o writes a file";
+  if (cmd === "sort" && args.some((a) => longFlag(a, "--compress-program"))) return "sort --compress-program runs a program";
   if (cmd === "tree" && args.some((a) => a === "-o")) return "tree -o writes a file";
   if (cmd === "rg" && args.some((a) => a === "--pre" || a.startsWith("--pre="))) return "rg --pre runs a program";
   if (cmd === "date" && args.some((a) => a === "-s" || a.startsWith("--set"))) return "date --set changes the clock";
@@ -119,7 +148,11 @@ function checkPlain(cmd: string, args: string[]): string | null {
 
 function checkSegment(words: string[]): string | null {
   let i = 0;
-  while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
+  while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) {
+    const reason = checkAssignment(words[i]);
+    if (reason) return reason;
+    i++;
+  }
   const [cmd, ...args] = words.slice(i);
   if (!cmd) return null;
   const name = cmd.split("/").pop()!;

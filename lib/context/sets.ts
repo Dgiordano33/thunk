@@ -12,6 +12,15 @@ import { recordContextItems } from "./record";
 
 type Ctx<P> = { params: Promise<P> };
 
+/**
+ * Refuse a missing set, or one from another project when the project is known, before a session is created for it,
+ * so a bad id doesn't leave an empty session behind. sessionSetContext checks the project again once it is.
+ */
+export async function checkSessionSet(setId: string, projectId?: string | null) {
+  const set = await getContextSet(setId);
+  if (!set || (projectId && set.projectId !== projectId)) throw new HttpError(400, "That context set isn't in this project");
+}
+
 /** A new session's saved set, read now and recorded as attached; "" when the set is empty. */
 export async function sessionSetContext(live: LiveSession, setId: string) {
   const set = await getContextSet(setId);
