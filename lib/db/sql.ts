@@ -2,6 +2,22 @@
 export interface Db {
   kind: "postgres" | "pglite";
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
+  /** Runs `fn` on one connection inside begin/commit, rolling back if it throws. Nested calls reuse the transaction. */
+  transaction?<T>(fn: (tx: Db) => Promise<T>): Promise<T>;
+}
+
+/**
+ * `fn` in one transaction. Inside it, use only `tx`: PGlite has a single connection, so a query
+ * through the outer handle would wait for the transaction to finish. Test doubles without
+ * `transaction` run `fn` directly.
+ */
+export function transaction<T>(db: Db, fn: (tx: Db) => Promise<T>): Promise<T> {
+  return db.transaction ? db.transaction(fn) : fn(db);
+}
+
+/** Serializes transactions on `key` across every process sharing the database, until this one ends. */
+export async function lockKey(tx: Db, key: string) {
+  await tx.query("select pg_advisory_xact_lock(hashtext($1))", [key]);
 }
 
 /** jsonb columns. Values for them are sent as JSON text, so arrays aren't mistaken for Postgres arrays. */

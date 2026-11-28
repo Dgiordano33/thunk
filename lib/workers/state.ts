@@ -22,11 +22,10 @@ export type DelegationPlan = DelegationPlanInput & {
   id: string; chiefSessionId: string; status: PlanStatus; createdAt: string; decidedAt: string | null;
   note: string | null; taskIds: Record<string, string>;
 };
-/** The project's current integration worktree; older ones are archived when a new one is made. */
-export type Integration = { workspaceId: string; taskIds: string[]; createdAt: string };
-export type WorkerState = { relayTasks: Record<string, Record<string, string>>; queue: QueuedDelegation[]; stats: Record<string, TaskStats>; races: Record<string, Race>; plans: Record<string, DelegationPlan>; integrations: Integration[] };
+/** Plans and integrations live in Postgres (`lib/db/repo/delegation-plans.ts`, `integrations.ts`). */
+export type WorkerState = { relayTasks: Record<string, Record<string, string>>; queue: QueuedDelegation[]; stats: Record<string, TaskStats>; races: Record<string, Race> };
 
-const empty = (): WorkerState => ({ relayTasks: {}, queue: [], stats: {}, races: {}, plans: {}, integrations: [] });
+const empty = (): WorkerState => ({ relayTasks: {}, queue: [], stats: {}, races: {} });
 export const stateFile = (project: Pick<Project, "dataKey">) => path.join(projectConfigDir(project.dataKey), "workers", "state.json");
 
 export async function readWorkerState(project: Pick<Project, "dataKey">): Promise<WorkerState> {

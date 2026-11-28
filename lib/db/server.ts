@@ -48,7 +48,17 @@ function lockEmbedded(dir: string): boolean {
 }
 
 function withMigrations(db: Db, ready: Promise<void>): Db {
-  return { kind: db.kind, query: async (text, params) => { await ready; return db.query(text, params); } };
+  return {
+    kind: db.kind,
+    query: async (text, params) => { await ready; return db.query(text, params); },
+    transaction: async (fn) => { await ready; return db.transaction!(fn); },
+  };
+}
+
+/** A handle bound to one open transaction; nested `transaction` calls run inside it. */
+function inTransaction(kind: Db["kind"], query: Db["query"]): Db {
+  const tx: Db = { kind, query, transaction: (fn) => fn(tx) };
+  return tx;
 }
 
 function openPostgres(url: string): State {
@@ -63,7 +73,24 @@ function openPostgres(url: string): State {
   };
   const pool = new pg.Pool({ connectionString: url, types, max: 10, options: "-c timezone=UTC" });
   pool.on("error", (error) => console.error("[thunk] database connection error", error));
-  const db: Db = { kind: "postgres", query: async (text, params) => (await pool.query(text, params as unknown[])).rows };
+  const db: Db = {
+    kind: "postgres",
+    query: async (text, params) => (await pool.query(text, params as unknown[])).rows,
+    transaction: async (fn) => {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const result = await fn(inTransaction("postgres", async (text, params) => (await client.query(text, params as unknown[])).rows));
+        await client.query("commit");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  };
   const ready = (async () => {
     // Migrations need one session for the advisory lock and each transaction.
     const client = await pool.connect();
@@ -112,6 +139,7 @@ function openEmbedded(dir: string): State {
   const db: Db = {
     kind: "pglite",
     query: async (text, params) => (await (await ready).query(text, params as unknown[])).rows as never,
+    transaction: async (fn) => (await ready).transaction((tx) => fn(inTransaction("pglite", async (text, params) => (await tx.query(text, params as unknown[])).rows as never))),
   };
   // PGlite has one connection; transaction() holds every other query back until `fn` finishes.
   const session: DbSession = async (fn) => (await ready).transaction((tx) =>

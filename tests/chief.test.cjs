@@ -573,6 +573,9 @@ test("a delegation plan waits for the person; approval delegates in order with d
   assert.equal(copy.queued, false);
   assert.equal(email.queued, true);
   assert.deepEqual((await workersState.readWorkerState(project)).queue.find((q) => q.taskId === email.taskId).dependsOn, [copy.taskId]);
+  const stored = await load("@/lib/db/repo/delegation-plans").getDelegationPlan(proposed.planId);
+  assert.equal(stored.status, "approved");
+  assert.deepEqual(stored.tasks.map((t) => [t.key, t.taskId, t.dependsOn]), [["copy", copy.taskId, undefined], ["email", email.taskId, ["copy"]]]);
   assert.ok(resolved.includes(`chief:plan:${proposed.planId}`));
   assert.match(chief.events.at(-1).content, /<delegation_plan id="[^"]+" status="approved">[\s\S]*Onboarding copy: started[\s\S]*Onboarding email: queued/);
   await assert.rejects(plans.decidePlan(project.id, proposed.planId, "approve"), /already approved/);
@@ -636,7 +639,14 @@ test("overlapping files are flagged, branches trial-merge into an integration wo
     assert.equal(sh(wsI.cwd, "status", "--porcelain"), "", "the conflicting merge was aborted");
     assert.equal(sh(root, "rev-parse", "main"), mainBefore, "nothing merged into main");
     assert.equal(sh(wsI.cwd, "log", "--first-parent", "--format=%s", "-3"), "Integrate C\nIntegrate A\nbase", "the clean branches are merged on the integration branch");
-    assert.deepEqual((await workersState.readWorkerState(project)).integrations.map((i) => i.workspaceId), [wsI.id]);
+    const integrations = load("@/lib/db/repo/integrations");
+    const current = await integrations.currentIntegrations(project.id);
+    assert.deepEqual(current.map((i) => i.workspaceId), [wsI.id]);
+    assert.deepEqual(current[0].merged.map((m) => m.title), ["A", "C"], "the trial merge result is stored");
+    assert.deepEqual(current[0].conflicts.map((m) => [m.title, m.files]), [["B", ["a.txt"]]]);
+    assert.equal(current[0].tests.exitCode, 0);
+    assert.deepEqual(current[0].headShas.map((h) => [h.taskId, h.sha]), [a, b, c].map((w, i) => [w.taskId, sh([wsA, wsB, wsC][i].cwd, "rev-parse", "HEAD")]));
+    assert.equal((await integrations.latestIntegrationForTask(b.taskId)).id, current[0].id, "a conflicting task still finds its trial merge");
     await assert.rejects(integrate.integrateWorkers(project.id, [id()]), /Worker task not found/);
 
     const cleanup = load("@/lib/workers/cleanup");
