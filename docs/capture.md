@@ -24,4 +24,6 @@ Interrupted requests show the stopping reason (including provider errors or a se
 
 Receipt and session state are reconciled every ten seconds and at startup. A stopped session is detected on the next check. An idle chief gets a short 30-second allowance to persist its report; if it never reports, the Inbox explains that specific condition instead of waiting five minutes. Only workers and queued tasks linked to this request keep it working; unrelated project work cannot conceal an interruption. A late report can still settle an interrupted request.
 
+A ready thought whose worker changed code shows the same three parts as a Changes to review card: Changes (diff stat, Review diff and Request changes), Trial merge (latest result, out of date when the branch moved, Run again) and Pull request (Open PR, checks, link). Open PR is always a click; nothing pushes or opens a PR on its own.
+
 Delivery has a separate meaning from an answer: **Work completed** is the worker's task outcome; **Ready for review** is an open, non-draft pull request; **Merged** requires GitHub's merged state. Drafts and PRs closed without merging are labeled separately. Passing checks, answering a conversation, and closing it do not imply a merge. Routine progress stays folded under its request and does not raise desktop alerts; blockers and approvals remain visible.

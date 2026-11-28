@@ -63,3 +63,41 @@ export async function workspacePrStatus(opts: {
   }
   return { branch, base, pr, canCreate: !pr || pr.state !== "OPEN", reason: null };
 }
+
+/** Title and body for a workspace's PR: its worker's task and the summary of the latest report. */
+async function pullRequestText(workspaceId: string, branch: string) {
+  const { listSessions } = await import("@/lib/agent");
+  const { getTask } = await import("@/lib/db/repo/tasks");
+  const { latestWorkerReport } = await import("@/lib/db/repo/worker-reports");
+  const { reportSummary } = await import("@/lib/review/types");
+  const worker = (await listSessions({ workspaceId, limit: 50 })).find((s) => s.origin?.kind === "worker" && !s.origin.scout);
+  const task = worker?.origin?.kind === "worker" ? await getTask(worker.origin.taskId) : null;
+  const summary = worker ? reportSummary((await latestWorkerReport(worker.id))?.content) : null;
+  const title = (task?.title || worker?.title || branch).slice(0, 200);
+  const body = [summary ?? task?.body ?? "", task ? `Task: ${task.title} (${task.id})` : "", "Opened from Thunk."].filter(Boolean).join("\n\n");
+  return { title, body };
+}
+
+/**
+ * Push the workspace's branch and open a pull request for it, titled from its worker's report.
+ * Only ever called from a person's click (POST /api/workspaces/[id]/pr); agents never open PRs this way.
+ * Returns the existing PR when one is already open.
+ */
+export async function openPullRequest(workspaceId: string, opts: { repoId?: string | null } = {}): Promise<{ url: string; created: boolean; status: WorkspacePrStatus }> {
+  const { getWorkspaceContext } = await import("@/lib/projects");
+  const { findRepoTarget } = await import("./repo-targets");
+  const ctx = await getWorkspaceContext(workspaceId);
+  if (!ctx) throw new Error("Workspace not found");
+  const target = findRepoTarget(ctx, opts.repoId);
+  if (!target) throw new Error(opts.repoId ? "Repo not in this workspace" : "This workspace has no Git repository");
+  const before = await workspacePrStatus({ cwd: target.cwd, defaultBranch: target.defaultBranch, baseRef: target.baseRef });
+  if (before.pr?.state === "OPEN") return { url: before.pr.url, created: false, status: before };
+  if (!before.canCreate || !before.branch) throw new Error(before.reason ?? "This workspace cannot open a pull request");
+  const { title, body } = await pullRequestText(workspaceId, before.branch);
+  const long = { cwd: target.cwd, maxBuffer: 1024 * 1024, timeout: 120_000 };
+  await exec("git", ["push", "--set-upstream", "origin", before.branch], long);
+  const { stdout } = await exec("gh", ["pr", "create", "--base", before.base, "--head", before.branch, "--title", title, "--body", body], long);
+  const url = stdout.trim().split("\n").filter(Boolean).at(-1) ?? "";
+  const status = await workspacePrStatus({ cwd: target.cwd, defaultBranch: target.defaultBranch, baseRef: target.baseRef });
+  return { url: status.pr?.url ?? url, created: true, status };
+}

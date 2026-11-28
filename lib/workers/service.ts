@@ -370,7 +370,9 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     ];
     const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${origin.relayId ? ` relay="${origin.relayId}"` : ""}${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
     if (previous) await resolveBySubject(`worker:${meta.id}:report:${previous.seq}`);
-    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: status === "failed" || status === "blocked" ? "action" : "info", requestKey: origin.relayId ? `capture:${origin.relayId}` : undefined, subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status === "done" ? "Work completed" : status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
+    // Finished work with changes on its branch opens the review card; everything else stays a report.
+    const review = status === "done" && !origin.scout && ownsTask && Boolean(report.diffStat?.files);
+    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: review ? "review_ready" : "worker_report", urgency: review || status === "failed" || status === "blocked" ? "action" : "info", requestKey: origin.relayId ? `capture:${origin.relayId}` : undefined, subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status === "done" ? "Work completed" : status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
     await queueReport(ctx.project, meta, seq, content);
     scheduleDrain(meta.projectId);

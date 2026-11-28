@@ -102,6 +102,21 @@ test("delivery is project scoped, detects stuck CI once, and clears requests on 
   assert.equal(rows.filter((n) => n.kind === "ci_failed").length, 1);
   assert.equal(rows.find((n) => n.kind === "pr_merged").urgency, "info");
 });
+test("a merged pull request resolves the review card for the work on its branch only", async () => {
+  require("../lib/db/repo/workspaces.ts");
+  const ws = globalThis.__thunkMemWorkspacesV2;
+  const now = new Date().toISOString();
+  const workspace = (name) => ({ id: `w-${name}`, projectId: "p", name, slug: name, cwd: `/${name}`, branch: name, repos: [], status: "active", visibility: "project", createdAt: now, updatedAt: now });
+  ws.set("w-topic", workspace("topic")); ws.set("w-other", workspace("other"));
+  const card = (workspaceId) => service.notify({ ...base, projectId: "p", kind: "review_ready", workspaceId, sessionId: `s-${workspaceId}`, subjectKey: `worker:s-${workspaceId}:report:1`, title: "Worker · Fix · Work completed" });
+  const topic = await card("w-topic"), other = await card("w-other");
+  const pr = { number: 9, title: "Topic", url: "https://github.com/a/b/pull/9", head: "x" };
+  await deliveryNotifications("p", { seq: 0, events: [] }, { seq: 1, events: [{ seq: 1, id: "m", type: "pr_merged", branch: "topic", pr }] }, []);
+  const rows = await repo.listNotifications({ status: "all" });
+  assert.equal(rows.find((n) => n.id === topic.id).status, "resolved");
+  assert.equal(rows.find((n) => n.id === other.id).status, "open");
+  ws.delete("w-topic"); ws.delete("w-other");
+});
 test("notify tool validates untrusted input and binds scope to the calling session", async () => {
   const tool = notificationTools({ projectId: "p", workspaceId: "w", sessionId: "s" })[0];
   assert.equal((await tool.handler({ title: "" })).isError, true);

@@ -81,11 +81,13 @@ const mocks = {
     writeNote: async (dirs, id, patch) => { const note = notes.get(`${dirs.notesDir}/${id}`); assert.equal(patch.expectedUpdatedAt, note.updatedAt); Object.assign(note, patch, { updatedAt: crypto.randomUUID() }); return note; },
   },
   "@/lib/notes/prompt": { INJECT_LIMIT: 24_000 },
-  "@/lib/workers/report": { collectReport: async ({ markdown }) => ({ summary: markdown, outcome: markdown.includes("outcome: blocked") ? "blocked" : "done", diffStat: { files: 1, additions: 2, deletions: 0 }, prUrl: null }) },
+  "@/lib/workers/report": { collectReport: async ({ markdown }) => ({ summary: markdown, outcome: markdown.includes("outcome: blocked") ? "blocked" : "done", diffStat: markdown.includes("no changes") ? null : { files: 1, additions: 2, deletions: 0 }, prUrl: null }) },
 };
 const cache = new Map();
 function load(name, from = path.join(root, "index.ts")) {
   if (Object.hasOwn(mocks, name)) return mocks[name];
+  // The service imports its report collector relatively; mock it so reports have a known diff.
+  if (name === "./report" && from.endsWith(path.join("lib", "workers", "service.ts"))) return mocks["@/lib/workers/report"];
   if (!name.startsWith("@/") && !name.startsWith(".")) return require(name);
   let filename = name.startsWith("@/") ? path.join(root, name.slice(2)) : path.resolve(path.dirname(from), name);
   if (!filename.endsWith(".ts")) filename += ".ts";
@@ -717,4 +719,33 @@ test("the worker cap follows the limits setting without a restart", async () => 
     for (const taskId of started) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
     fs.rmSync(limits.limitsFile(), { force: true });
   }
+});
+
+test("finished work with branch changes opens a review card; reports without changes stay informational", async () => {
+  await stopAll();
+  const forSession = (sessionId) => notifications.filter((n) => n.sessionId === sessionId);
+  const changed = await service.delegate(project.id, null, { title: "Changes something" });
+  finish(sessions.get(changed.sessionId), "Did the work");
+  await until(async () => await reports.savedReport(changed.sessionId));
+  const [review] = forSession(changed.sessionId);
+  assert.equal(review.kind, "review_ready");
+  assert.equal(review.urgency, "action");
+  assert.equal(review.subjectKey, `worker:${changed.sessionId}:report:${(await reports.savedReport(changed.sessionId)).seq}`);
+  assert.match(review.title, /Work completed/);
+  const unchanged = await service.delegate(project.id, null, { title: "Changes nothing" });
+  finish(sessions.get(unchanged.sessionId), "Looked, no changes needed");
+  await until(async () => await reports.savedReport(unchanged.sessionId));
+  assert.deepEqual(forSession(unchanged.sessionId).map((n) => [n.kind, n.urgency]), [["worker_report", "info"]]);
+  const blocked = await service.delegate(project.id, null, { title: "Gets blocked" });
+  finish(sessions.get(blocked.sessionId), "outcome: blocked");
+  await until(async () => await reports.savedReport(blocked.sessionId));
+  assert.deepEqual(forSession(blocked.sessionId).map((n) => [n.kind, n.urgency]), [["worker_report", "action"]]);
+  // A second round resolves the first card and opens a new one under the same request.
+  const live = sessions.get(changed.sessionId);
+  const first = await reports.savedReport(changed.sessionId);
+  await service.messageWorker(project.id, changed.taskId, "One more fix");
+  finish(live, "Fixed");
+  await until(async () => (await reports.savedReport(changed.sessionId)).seq > first.seq);
+  assert.ok(resolved.includes(`worker:${changed.sessionId}:report:${first.seq}`));
+  assert.deepEqual(forSession(changed.sessionId).map((n) => n.kind), ["review_ready", "review_ready"]);
 });

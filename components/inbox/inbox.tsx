@@ -8,7 +8,7 @@ import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
   ArrowUpRightIcon, BrainIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
-  GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
+  GitCompareIcon, GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -32,6 +32,8 @@ import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/hint";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { QuickContext } from "./quick-context";
+import { ReviewParts } from "./review-card";
+import { reportSummary } from "@/lib/review/types";
 import { describe, destination, dismissScope, FAILED_KINDS, isDismissable, foldBySession, groupFollowups, isDecision, isExternal, kindCounts, nextDecision, nextFocus, plural, requestKey, sectionOf, type Group } from "./model";
 
 /** Group rows past this many fold behind "Show N more" so one noisy PR can't push decisions off screen. */
@@ -42,7 +44,7 @@ const MAX_OPTIONS = 4;
 const RING = "focus-visible:ring-2 focus-visible:ring-ring";
 const ICONS: Partial<Record<NotificationKind, LucideIcon>> = {
   permission: ShieldQuestionIcon, question: MessageSquareIcon, agent_request: MessageSquareIcon, plan: ClipboardListIcon, delegation_plan: ClipboardListIcon,
-  worker_report: FileTextIcon, review_requested: GitPullRequestIcon, ci_stuck: HourglassIcon, session_stuck: HourglassIcon, deploy_ready: RocketIcon,
+  worker_report: FileTextIcon, review_ready: GitCompareIcon, review_requested: GitPullRequestIcon, ci_stuck: HourglassIcon, session_stuck: HourglassIcon, deploy_ready: RocketIcon,
   pr_merged: GitMergeIcon, run_needs_attention: CircleDotIcon, memory_proposal: BrainIcon,
 };
 const iconFor = (n: Notification) => ICONS[n.kind] ?? (FAILED_KINDS.includes(n.kind) ? CircleAlertIcon : CheckIcon);
@@ -340,6 +342,42 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
       </article>
     );
   };
+  /** Finished work with changes: what changed, the trial merge and the pull request, each with its next step. */
+  const reviewCard = (n: Notification) => {
+    const project = projects.find((p) => p.id === n.projectId);
+    const workspace = project?.workspaces.find((w) => w.id === n.workspaceId);
+    const { lead } = describe(n);
+    const active = n.id === focusId;
+    const tab = active ? 0 : -1;
+    return (
+      <article key={n.id} {...rowProps(n, `${NOTIFICATION_LABELS[n.kind]}: ${lead}`)} className={cn(
+        "bg-background relative min-w-0 rounded-sm border border-l-2 border-l-[var(--status-attention)] px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5",
+        selected.has(n.id) && "bg-accent/40",
+      )}>
+        <div className="flex gap-3 sm:gap-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm bg-[var(--status-attention-soft)] text-[var(--status-attention-ink)]"><GitCompareIcon aria-hidden="true" className="size-4" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className="text-foreground/80 font-medium">{NOTIFICATION_LABELS[n.kind]}</span>
+              <span aria-hidden="true" className="text-muted-foreground/50">/</span>
+              <span className="truncate">{project?.name || "Top level"}{workspace ? ` · ${workspace.name}` : ""}</span>
+              <time className="ml-auto shrink-0 tabular-nums" dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{relativeTime(n.createdAt)}</time>
+            </div>
+            <h3 className="text-[15px] leading-relaxed font-medium break-words">{lead}</h3>
+            {n.sessionId && n.workspaceId && <ReviewParts sessionId={n.sessionId} workspaceId={n.workspaceId} summary={reportSummary(n.detail)} tab={tab} onChanged={() => void refreshNotifications()} />}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {n.sessionId && <Button data-reply tabIndex={tab} variant="ghost" className={RING} onClick={() => openReply(n.id)}><ReplyIcon aria-hidden="true" />Reply</Button>}
+              {contextButton(n, active, lead, true)}
+              <Button asChild tabIndex={tab} variant="ghost" className={RING}><OpenLink n={n} data-open="">{destination(n)}<ArrowUpRightIcon aria-hidden="true" /></OpenLink></Button>
+              <span className="ml-auto flex items-center gap-1">{selectBox(n, active, lead)}{dismissButton(n, active, lead)}</span>
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs">Work completed is not merged. Dismissing files the card; it doesn’t open a PR or merge anything.</p>
+            {contextPanel(n, lead)}
+          </div>
+        </div>
+      </article>
+    );
+  };
   /** A ready thought: what you said, what the worker assumed and did, and the one step it held back. */
   const thoughtCard = (n: Notification, row: Capture) => {
     const project = projects.find((p) => p.id === n.projectId);
@@ -502,7 +540,7 @@ export function Inbox({ projects }: { projects: SidebarProject[] }) {
                   const open = expanded.has(g.key);
                   return <div key={g.key} role="group" aria-label={`Request: ${g.label}`} className="space-y-2">
                     {g.items.length > 1 && <p className="text-muted-foreground text-xs">Related request · {g.items.length} separate decisions</p>}
-                    {g.items.map(n => { const row = readyCapture(n); return row ? thoughtCard(n, row) : decisionCard(n); })}
+                    {g.items.map(n => { const row = readyCapture(n); return row ? thoughtCard(n, row) : n.kind === "review_ready" ? reviewCard(n) : decisionCard(n); })}
                     {relatedBlockers.filter(n => requestKey(n) === g.key).map(n => lineRow(n, false))}
                     {updates.length > 0 && <>
                       <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setExpanded(s => { const next = new Set(s); if (open) next.delete(g.key); else next.add(g.key); return next; })}>{open ? "Hide" : "Show"} {plural(updates.length, "related update")}</Button>

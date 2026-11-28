@@ -216,3 +216,12 @@ test("a memory proposal is a Decision card that leads to its review screen", () 
   assert.match(html, /Memory update/);
   assert.match(html, /href="\/inbox\/memory\/p1"[^>]*>Review changes/);
 });
+test("finished work with changes is a Decision card that loads its review in place", () => {
+  const review = { ...base, id: "review", subjectKey: "worker:s:report:3", kind: "review_ready", urgency: "action", status: "open", sessionId: "s", title: "Worker · Fix login · Work completed", detail: "<worker_report task=\"t\">\nFixed the redirect loop\nBranch: thunk/fix\n</worker_report>" };
+  const html = renderInbox({ items: [review], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
+  assert.ok(html.indexOf(">Decisions<") < html.indexOf("Worker · Fix login"));
+  assert.match(html, /Changes to review/);
+  assert.match(html, /aria-label="Loading review"/);
+  assert.match(html, /Work completed is not merged/);
+  assert.equal(model.sectionOf(review), "decision");
+});

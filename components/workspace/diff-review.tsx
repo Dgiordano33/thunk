@@ -31,22 +31,27 @@ export function useDiffComments(workspaceId: string) {
   return { comments, setComments, storageError };
 }
 
-export function SendReview({ workspaceId, comments, onSent }: { workspaceId: string; comments: DiffComment[]; onSent: (ids: string[]) => void }) {
+/**
+ * Send the hunk comments as one review. In the workspace it goes to the active chat; the Inbox's review card
+ * passes `send`, which delivers it to the worker's own session (resumed first), labelled "Request changes".
+ */
+export function SendReview({ workspaceId, comments, onSent, send, label }: { workspaceId: string; comments: DiffComment[]; onSent: (ids: string[]) => void; send?: (review: string) => Promise<void>; label?: string }) {
   const meta = useSession((s) => s.meta);
   const status = useSession((s) => s.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!comments.length) return null;
+  const toChat = !send;
   return <div className="flex flex-col gap-2 border-y p-3 text-xs">
     <p>{comments.length} review comment{comments.length === 1 ? "" : "s"} · saved in this browser</p>
-    <Button size="sm" disabled={busy || !meta?.live || meta.workspaceId !== workspaceId || status === "closed" || status === "error"} onClick={async () => {
-      if (!meta) return;
+    <Button size="sm" disabled={busy || toChat && (!meta?.live || meta.workspaceId !== workspaceId || status === "closed" || status === "error")} onClick={async () => {
+      if (toChat && !meta) return;
       setBusy(true); setError(null);
-      try { await api.send(meta.id, buildReview(comments)); onSent(comments.map((c) => c.id)); }
+      try { await (send ? send(buildReview(comments)) : api.send(meta!.id, buildReview(comments)).then(() => {})); onSent(comments.map((c) => c.id)); }
       catch (err) { setError((err as Error).message); }
       finally { setBusy(false); }
-    }}>{busy ? "Sending…" : "Send review to active chat"}</Button>
-    {!meta?.live && <p>Open a live chat in this workspace to send the review.</p>}
+    }}>{busy ? "Sending…" : label ?? "Send review to active chat"}</Button>
+    {toChat && !meta?.live && <p>Open a live chat in this workspace to send the review.</p>}
     {error && <p role="alert" className="text-destructive">{error}</p>}
     {comments.map((c) => <div key={c.id} className="min-w-0 rounded border p-2">
       <p className="truncate font-medium">{c.path} · {c.hunk.split("\n")[0]}</p>

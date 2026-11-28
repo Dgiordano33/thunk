@@ -2,6 +2,7 @@
 import type { Capture } from '@/lib/capture/types';
 import type { Captures } from './use-captures';
 import { parseThread } from '@/lib/capture/thread';
+import { ReviewParts } from '@/components/inbox/review-card';
 
 const STATE: Record<Capture['status'], string> = { routing: 'Routing', queued: 'Queued', working: 'Working', ready: 'Answered', kept: 'Conversation closed', discarded: 'Discarded', failed: 'Interrupted' };
 const minutes = (row: Capture) => Math.max(0, Math.round((Date.parse(row.updated_at) - Date.parse(row.created_at)) / 60000));
@@ -62,6 +63,7 @@ export function ThoughtReview({ row, tab, onRedirect, pending = false }: { row: 
       {row.assumptions.length > 0 && <p><span className="text-muted-foreground text-xs">Assumed </span>{row.assumptions.join(' · ')}</p>}
       {row.summary && <div><span className="text-muted-foreground text-xs">Did </span><span className="whitespace-pre-wrap">{row.summary}</span></div>}
     </>}
+    {!chief && row.mode === 'worktree' && row.status === 'ready' && row.session_id && row.workspace_id && <ReviewParts sessionId={row.session_id} workspaceId={row.workspace_id} tab={tab} />}
     {row.next_step && <p><span className="text-muted-foreground text-xs">{chief ? 'Waiting on your go-ahead ' : 'Next '}</span>{row.next_step}</p>}
     {!chief && <p className="text-muted-foreground font-mono text-[11px]">${Number(row.cost_usd).toFixed(4)} · {minutes(row)} min since capture{row.diff_stat ? ` · ${JSON.stringify(row.diff_stat)}` : ''}</p>}
     <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const text = String(new FormData(e.currentTarget).get('text') ?? ''); onRedirect(text); }}>

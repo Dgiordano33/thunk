@@ -152,6 +152,11 @@ export const api = {
     ),
   workspacePr: (id: string, repoId?: string) =>
     call<{ status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr${repoId ? `?repo=${encodeURIComponent(repoId)}` : ""}`),
+  /** Push the branch and open a PR. Only ever from a person's click. */
+  openPullRequest: (id: string, repoId?: string) => post<{ url: string; created: boolean; status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`, repoId ? { repoId } : {}),
+  /** Trial-merge the workspace's worker branch again and run the tests. */
+  integrateWorkspace: (id: string, taskId?: string) => post<{ result: unknown }>(`/api/workspaces/${id}/integrate`, taskId ? { taskId } : {}),
+  sessionReview: (id: string) => call<{ review: import("@/lib/review/types").ReviewState }>(`/api/sessions/${id}/review`),
   workspaceFileRoots: (id: string) => call<{ roots: FileRoot[] }>(`/api/workspaces/${id}/files`),
   workspaceDirectory: (id: string, root: string, dir: string) =>
     call<{ entries: FileEntry[] }>(`/api/workspaces/${id}/files?root=${encodeURIComponent(root)}&dir=${encodeURIComponent(dir)}`),

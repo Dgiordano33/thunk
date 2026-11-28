@@ -1,7 +1,7 @@
 import type { Notification, NotificationKind } from "@/lib/notifications/types";
 
-/** Kinds where an agent is blocked on a person's answer, or a thought waits for review. They keep full cards; everything else is a one-line row. */
-export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "permission", "question", "plan", "delegation_plan", "agent_request", "memory_proposal"];
+/** Kinds where an agent is blocked on a person's answer, or a thought or finished branch waits for review. They keep full cards; everything else is a one-line row. */
+export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "review_ready", "permission", "question", "plan", "delegation_plan", "agent_request", "memory_proposal"];
 /** A ready thought closes through Keep, Discard, Go ahead or Redirect, never a bare dismiss that would strand the capture. */
 export const isDismissable = (n: Notification) => n.status === "open" && n.kind !== "capture_ready";
 const DELIVERY_KINDS: NotificationKind[] = ["ci_failed", "ci_stuck", "review_requested", "deploy_ready", "pr_merged"];

@@ -69,6 +69,7 @@ const INFO: Partial<Record<NotificationKind, string>> = {
 };
 const ACTION: Partial<Record<NotificationKind, string>> = {
   question: "Answer so the agent can continue.",
+  review_ready: "A worker finished with changes on its branch. Review the diff, the trial merge and the pull request; nothing has merged.",
   plan: "Review the plan, then approve it or reply with changes.",
   delegation_plan: "Review how the chief wants to split this work, then approve it or reply.",
   agent_request: "The agent asked for your help. Reply here or open the session.",
