@@ -1,6 +1,7 @@
 import "server-only";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { emit, setState, type LiveSession, type TurnState } from "./session-registry";
+import { recordToolUse } from "@/lib/context/record";
 
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
@@ -58,6 +59,7 @@ export function handleMessage(live: LiveSession, msg: SDKMessage) {
           appendText(live, turn, block.text);
         } else if (block.type === "tool_use") {
           turn.lastPartWasTool = true;
+          recordToolUse(live.id, block.name, block.input);
           emit(live, {
             type: "tool_use",
             turnId: turn.id,

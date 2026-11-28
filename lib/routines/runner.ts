@@ -14,6 +14,7 @@ import { getProject } from "@/lib/db/repo/projects";
 import { countRunsSince, insertRun, isSkip, startOfToday, updateRoutine, updateRun } from "@/lib/db/repo/routines";
 import { routineRunsAtOnce } from "@/lib/setup/limits";
 import { renderRoutineContext } from "./context";
+import { recordContextItems } from "@/lib/context/record";
 import { keepRunOutputs, runTasks, type KeptNote } from "./outputs";
 import { renderPrompt } from "./prompt";
 import { collectReport, writeRunNote } from "./report";
@@ -139,7 +140,9 @@ async function execute(routine: Routine, run: RoutineRun, trigger: RunTrigger, p
       status: (status) => updateRun(run.id, { status }),
     }, () => cancelled);
     const context = await renderRoutineContext({ project, context: routine.context, trigger, payload });
-    const prompt = [renderPrompt(routine.prompt, trigger, payload), context].filter(Boolean).join("\n\n---\n\n");
+    const brief = renderPrompt(routine.prompt, trigger, payload);
+    const prompt = [brief, context.text].filter(Boolean).join("\n\n---\n\n");
+    void recordContextItems(live.id, "attached", [{ kind: "routine", refId: routine.id, title: routine.name, mode: "full", chars: brief.length, source: routine.prompt }, ...context.items]);
     await sendBrief(live, prompt);
   } catch (err) {
     if (live) closeSession(live.id);

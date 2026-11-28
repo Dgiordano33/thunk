@@ -113,6 +113,17 @@ Tasks are stored in the database. Task events use an in-process SSE feed, like o
 
 Tasks API: `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/[id]`, `POST …/[id]/send`, `GET /api/tasks/tree?projectId=…`, `GET /api/tasks/counts`, `GET /api/tasks/events`, and `GET/POST /api/tasks/import-notes`. Run `npm run test:tasks` for task checks.
 
+## Context
+
+Open a session and pick the workspace panel's **Context** tab (`?tab=context`) to see what that session was given:
+
+- **In the prompt**: project instructions, project memory, injected notes, pinned Vault summaries and the open-task list, recorded each time the session starts or resumes (`session_context_items`, origin `prompt`). Items cut at a limit say so.
+- **Attached**: what was sent into the conversation after it started, such as a routine's brief and its attached notes and tasks.
+- **Fetched later**: notes, memory files and Vault items the agent read itself, through `vault_read` or a `Read` of a file in the project's notes, memory or Vault directories.
+- **Left out**, with the reason: over the 24,000-character note limit (12,000 for pinned Vault summaries), not marked to inject, not pinned, or no longer there.
+
+An item whose file or task changed since the session got it shows **Changed, not sent**. Notes have no history, so the version is a hash of the text the session got. `GET /api/sessions/[id]/context` returns the items, each with `changedSince`.
+
 ## How it works
 
 For the product-level picture (objects, Relay, the context loop), see [How Thunk works](docs/how-thunk-works.md). The code is laid out as follows.

@@ -211,8 +211,8 @@ test("vault tools list, filter and read items for the session's project only", a
   const text = tools.readText(item);
   assert.match(text, /Original file \(read it with your file tools\): .*original\.md/);
   assert.match(text, /\[Action\] \*\*Shorten signup\*\* — Three fields drop off\. \(sent to note abc123\)/);
-  assert.match(tools.vaultPrompt([item], v.dir), /vault_list/);
-  assert.match(tools.vaultPrompt([], v.dir), /The Vault is empty/);
+  assert.match(tools.vaultPrompt([item], v.dir).text, /vault_list/);
+  assert.match(tools.vaultPrompt([], v.dir).text, /The Vault is empty/);
 
   const run = (name, args, projectId = "p1") => tools.vaultTools({ projectId }).find((x) => x.name === name).handler(args);
   assert.match((await run("vault_list", {})).content[0].text, /Onboarding research/);
@@ -242,13 +242,13 @@ test("pinned items sort first and put their summary in the session prompt; the r
   assert.deepEqual(items.map((i) => i.id), [old.id, fresh.id], "pinned first even though older");
   assert.match(tools.listLine(items[0]), / · ready · pinned · Brand guide/);
 
-  const prompt = tools.vaultPrompt(items, v.dir);
+  const prompt = tools.vaultPrompt(items, v.dir).text;
   assert.match(prompt, /## Pinned[\s\S]*### Brand guide \(PDF, `brand\.pdf`, id [a-z0-9]{10}\)\nUse bronze\.\nNever purple\./);
   assert.match(prompt, new RegExp(`## Other items \\(1\\)\\n- ${fresh.id} · Image · Pricing screenshot — Tiers`));
 
   await store.updateItem(v, old.id, { pinned: false });
-  assert.doesNotMatch(tools.vaultPrompt(await store.listItems(v), v.dir), /## Pinned/);
-  const big = tools.vaultPrompt([{ ...items[0], summary: "x".repeat(tools.PINNED_LIMIT + 50) }], v.dir);
+  assert.doesNotMatch(tools.vaultPrompt(await store.listItems(v), v.dir).text, /## Pinned/);
+  const big = tools.vaultPrompt([{ ...items[0], summary: "x".repeat(tools.PINNED_LIMIT + 50) }], v.dir).text;
   assert.match(big, /…\(truncated\)/);
   assert.match(big, /1 pinned summary was truncated/);
 });

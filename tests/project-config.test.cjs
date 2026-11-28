@@ -99,7 +99,7 @@ test("both providers get capped project instructions, and Claude protects projec
     assert.ok(options.sandbox.filesystem.denyWrite.includes(paths.projectConfigDir(project.dataKey)));
     assert.ok(options.settings.permissions.deny.some((rule) => rule.includes("/config/**")));
     for (const provider of ["claude", "codex"]) {
-      const prompt = hierarchyPrompt(live, "memory fact", provider, undefined, [], undefined, "x".repeat(24_001));
+      const prompt = hierarchyPrompt(live, "memory fact", provider, undefined, [], undefined, "x".repeat(24_001)).text;
       assert.match(prompt, /instructions truncated/);
       assert.ok(!prompt.includes("x".repeat(24_001)));
       if (provider === "codex") assert.ok(prompt.indexOf("Project instructions") < prompt.indexOf("Project memory (current contents)"));

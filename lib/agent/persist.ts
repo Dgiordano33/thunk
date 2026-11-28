@@ -7,6 +7,7 @@ import { db, hasDatabase } from "@/lib/db/server";
 import { insertSql, run, updateSql } from "@/lib/db/sql";
 import type { Json } from "@/lib/db/types";
 import { onSessionCreated, subscribe, type LiveSession } from "./session-registry";
+import { sessionPersisted } from "@/lib/context/record";
 import type { HarnessEvent } from "./types";
 
 const FLUSH_MS = 300;
@@ -20,7 +21,10 @@ const toolCalls = (write: Promise<unknown>) => write.catch((err) => console.erro
  * the messages table stays small but still replays through the client reducer.
  */
 function persistSession(live: LiveSession) {
-  if (!hasDatabase()) return trackMemoryDocuments(live);
+  if (!hasDatabase()) {
+    sessionPersisted(live.id);
+    return trackMemoryDocuments(live);
+  }
 
   let queue: HarnessEvent[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -29,6 +33,7 @@ function persistSession(live: LiveSession) {
 
   const ready = (async () => {
     await upsertSession(live.meta);
+    sessionPersisted(live.id);
     await touchWorkspace(live.meta.workspaceId);
   })().catch((err) => console.error("[thunk] persist session failed", err));
   chain = ready;

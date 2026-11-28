@@ -5,6 +5,7 @@ import type { Project, Workspace } from "@/lib/projects/types";
 import { notesDirsFor } from "./resolve";
 import { listNotes } from "./store";
 import type { Note } from "./types";
+import { contextKey, REASONS, type ContextItemDraft, type PromptPart } from "@/lib/context/types";
 
 /** Cap on injected note text so a big notebook can't crowd out the conversation. */
 export const INJECT_LIMIT = 24_000;
@@ -35,7 +36,12 @@ function indexLine(n: Note) {
 
 // A follow-up could expose structured note writes as an in-process MCP server
 // (`createSdkMcpServer`); for now agents edit the files with their normal tools.
-export function notesPrompt(notes: SessionNotes) {
+export function notesPrompt(all: SessionNotes, { exclude }: { exclude?: Set<string> } = {}): PromptPart {
+  const kept = (n: Note) => !exclude?.has(contextKey("note", n.id));
+  const notes: SessionNotes = { ...all, project: all.project.filter(kept), workspace: all.workspace.filter(kept), repos: all.repos.map((r) => ({ ...r, notes: r.notes.filter(kept) })) };
+  const items: ContextItemDraft[] = [];
+  const item = (n: Note, mode: ContextItemDraft["mode"], chars: number, reason?: string) =>
+    items.push({ kind: "note", refId: n.id, title: n.title, path: n.path, mode, chars, reason: reason ?? null, source: n.markdown, keepContent: true });
   const lines = [
     "# Thunk notes",
     "Besides memory, notes belong to projects and can optionally link to workspaces. Each note is a markdown file with a small frontmatter block (`title`, `pinned`, `inject`, `actionable`, `tags`, `created`, `updated`). Read and edit them with your file tools:",
@@ -52,7 +58,9 @@ export function notesPrompt(notes: SessionNotes) {
     lines.push("", "## Repo notebooks", "These files are in the main checkout. When working in a worktree, edit your branch's copy; the Library reflects main after merge.");
     for (const repo of notes.repos) lines.push(`- ${repo.label} (\`${repo.dir}\`, in the repo, main checkout)`, ...repo.notes.map(indexLine));
   }
-  const injected = [...notes.project, ...notes.workspace, ...notes.repos.flatMap((r) => r.notes)].filter((n) => n.inject && n.markdown.trim());
+  const every = [...notes.project, ...notes.workspace, ...notes.repos.flatMap((r) => r.notes)];
+  const injected = every.filter((n) => n.inject && n.markdown.trim());
+  for (const n of every) if (!injected.includes(n)) item(n, "index", 0, n.inject ? undefined : REASONS.notInjected);
   if (injected.length) {
     lines.push("", "## Injected notes (current contents)");
     let budget = INJECT_LIMIT;
@@ -61,14 +69,18 @@ export function notesPrompt(notes: SessionNotes) {
       const text = n.markdown.trim();
       if (budget <= 0) {
         cut++;
+        item(n, "omitted", 0, REASONS.overLimit(INJECT_LIMIT));
         continue;
       }
       const piece = text.length > budget ? `${text.slice(0, budget)}\n…(truncated)` : text;
-      if (text.length > budget) cut++;
+      if (text.length > budget) {
+        cut++;
+        item(n, "truncated", budget, REASONS.overLimit(INJECT_LIMIT));
+      } else item(n, "full", text.length);
       budget -= piece.length;
       lines.push("", `### ${n.title} (\`${n.path}\`)`, piece);
     }
     if (cut) lines.push("", `(${cut} injected note${cut === 1 ? " was" : "s were"} truncated or omitted to stay under ${INJECT_LIMIT} characters; read the files for the rest.)`);
   }
-  return lines.join("\n");
+  return { text: lines.join("\n"), items };
 }

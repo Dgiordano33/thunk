@@ -58,7 +58,7 @@ beforeEach(() => {
 
 test("attached notes and tasks render with their current content; missing ones are named", async () => {
   const context = { notes: [{ scope: { kind: "projects", id: "p1" }, id: "spec" }, { scope: { kind: "repos", id: "rf1" }, id: "adr" }, { scope: { kind: "projects", id: "p1" }, id: "gone" }], taskIds: ["t-1", "t-x"] };
-  const text = await renderRoutineContext({ project, context, trigger: "manual", payload: null });
+  const text = (await renderRoutineContext({ project, context, trigger: "manual", payload: null })).text;
   assert.match(text, /# Context for this run/);
   assert.match(text, /## Note: Spec[\s\S]*The plan\./);
   assert.match(text, /## Note: ADR[\s\S]*repo notebook/);
@@ -66,21 +66,21 @@ test("attached notes and tasks render with their current content; missing ones a
   assert.doesNotMatch(text, /Task t-x/);
   assert.match(text, /No longer available: note `gone`, task `t-x`/);
   notes["projects:p1:spec"].markdown = "Edited between runs.";
-  assert.match(await renderRoutineContext({ project, context, trigger: "cron" }), /Edited between runs\./);
+  assert.match((await renderRoutineContext({ project, context, trigger: "cron" })).text, /Edited between runs\./);
 });
 
 test("notes from another project's workspace never render, and nothing attached renders nothing", async () => {
   notes[`workspaces:${otherWs}:spy`] = note("Spy", "secret");
-  const text = await renderRoutineContext({ project, context: { notes: [{ scope: { kind: "workspaces", id: otherWs }, id: "spy" }], taskIds: [] }, trigger: "manual" });
+  const text = (await renderRoutineContext({ project, context: { notes: [{ scope: { kind: "workspaces", id: otherWs }, id: "spy" }], taskIds: [] }, trigger: "manual" })).text;
   assert.doesNotMatch(text, /secret/);
-  assert.equal(await renderRoutineContext({ project, context: { notes: [], taskIds: [] }, trigger: "manual" }), "");
+  assert.equal((await renderRoutineContext({ project, context: { notes: [], taskIds: [] }, trigger: "manual" })).text, "");
   await assert.rejects(validateRoutineContext(project, { notes: [{ scope: { kind: "projects", id: "p2" }, id: "spec" }], taskIds: [] }), /another project/);
   await assert.rejects(validateRoutineContext(project, { notes: [], taskIds: ["t-x"] }), /isn't in this project/);
   await validateRoutineContext(project, { notes: [{ scope: { kind: "projects", id: "p1" }, id: "spec" }], taskIds: ["t-1"] });
 });
 
 test("the task that fired a task event leads the context", async () => {
-  const text = await renderRoutineContext({ project, context: { notes: [], taskIds: ["t-2"] }, trigger: "task_created", payload: { task: { id: "t-1" } } });
+  const text = (await renderRoutineContext({ project, context: { notes: [], taskIds: ["t-2"] }, trigger: "task_created", payload: { task: { id: "t-1" } } })).text;
   assert.ok(text.indexOf("Task that was just created: Task t-1") < text.indexOf("## Task: Task t-2"));
 });
 

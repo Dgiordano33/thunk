@@ -21,7 +21,9 @@ import { readMemory } from "@/lib/projects/memory";
 import { projectInstructionsFile, projectMemoryDir, projectMemoryFile, workspaceMemoryDir, workspaceMemoryFile } from "@/lib/projects/paths";
 import { routineSystemPrompt } from "@/lib/routines/prompt";
 import { appendText, ensureTurn, finishTurn, stringifyToolResult } from "../event-bridge";
-import { DOCUMENT_PROMPT, hierarchyPrompt } from "../options";
+import { DOCUMENT_PROMPT, hierarchyPrompt, sessionContextDirs, vaultReadRecorder } from "../options";
+import { recordContextItems, recordToolUse, watchContextReads } from "@/lib/context/record";
+import { removedContextKeys } from "@/lib/db/repo/context-items";
 import { otherRepoDirectories } from "@/lib/projects/repos-prompt";
 import { emit, setState, type AgentDriver, type LiveSession, type PendingRequest } from "../session-registry";
 import { CodexRpc, type RpcId } from "./rpc";
@@ -158,7 +160,7 @@ function toolResult(item: Item): { content: string; isError: boolean } {
  */
 export async function createCodexDriver(live: LiveSession, { resume }: { resume?: string }): Promise<AgentDriver> {
   const { project, workspace } = live.ctx;
-  const [projectMemory, workspaceMemory, notes, tasks, vaultItems, instructions, connectors] = await Promise.all([
+  const [projectMemory, workspaceMemory, notes, tasks, vaultItems, instructions, connectors, removed] = await Promise.all([
     readMemory(projectMemoryFile(project.dataKey)),
     readMemory(workspaceMemoryFile(project.dataKey, workspace.slug)),
     loadSessionNotes(project, workspace),
@@ -166,6 +168,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     listItems(vaultDirOf(project)).catch(() => []),
     readMemory(projectInstructionsFile(project.dataKey)),
     sessionConnectors(project.dataKey),
+    removedContextKeys(live.id).catch(() => new Set<string>()),
   ]);
   const dataDirs = [projectMemoryDir(project.dataKey), workspaceMemoryDir(project.dataKey, workspace.slug), notes.projectDir, notes.workspaceDir, ...notes.repos.filter((r) => r.extra).map((r) => r.dir)];
   await Promise.all(dataDirs.map((d) => mkdir(d, { recursive: true })));
@@ -176,16 +179,23 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
     if (checkout.worktreePath && repo) writableRoots.push(path.join(repo.path, ".git"));
   }
 
+  const prompt = hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions, { exclude: removed });
+  const withWorkspaceMemory = Boolean(workspaceMemory.trim()) && !removed.has("memory:workspace");
+  void recordContextItems(live.id, "prompt", [
+    ...prompt.items,
+    ...(withWorkspaceMemory ? [{ kind: "memory" as const, refId: "workspace", title: "Workspace memory", path: workspaceMemoryFile(project.dataKey, workspace.slug), mode: "full" as const, chars: workspaceMemory.trim().length, source: workspaceMemory }] : []),
+  ]);
+  watchContextReads(live.id, sessionContextDirs(live, notes, vaultDirOf(project).dir));
   const developerInstructions = [
     DOCUMENT_PROMPT,
-    hierarchyPrompt(live, projectMemory, "codex", notes, [...tasks.workspace, ...tasks.project], { items: vaultItems, dir: vaultDirOf(project).dir }, instructions),
-    ...(workspaceMemory.trim() ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
+    prompt.text,
+    ...(withWorkspaceMemory ? ["## Workspace memory (current contents)", workspaceMemory.trim()] : []),
     ...(hasCanvasTools(live) ? [canvasPrompt] : []),
     teamPrompt(live.meta.origin),
     ...(live.meta.origin?.kind === "routine" ? [routineSystemPrompt(live.meta.origin)] : []),
   ].join("\n\n");
 
-  const taskTools = [...canvasTools(live), ...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live), ...memoryTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, origin: live.meta.origin }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id })];
+  const taskTools = [...canvasTools(live), ...chiefTools(live), ...routeReportTool(live), ...topChiefTools(live), ...notificationTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id }, live), ...memoryTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, origin: live.meta.origin }), ...tasksTools({ projectId: project.id, workspaceId: workspace.id, sessionId: live.id, routine: live.meta.origin?.kind === "routine", projectScope: workspace.visibility === "project" || workspace.slug === "main" }), ...vaultTools({ projectId: project.id, onRead: vaultReadRecorder(live.id) })];
   let closed = false;
   let threadId: string | null = null;
   let activeTurnId: string | null = null;
@@ -238,6 +248,7 @@ export async function createCodexDriver(live: LiveSession, { resume }: { resume?
         const call = toolCall(item);
         if (!call) return;
         toolInputs.set(item.id, call);
+        recordToolUse(live.id, call.name, call.input);
         openTools.add(item.id);
         turn.lastPartWasTool = true;
         emit(live, { type: "tool_use", turnId: turn.id, toolUseId: item.id, name: call.name, input: call.input });

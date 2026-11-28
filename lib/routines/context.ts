@@ -7,6 +7,8 @@ import type { Project } from "@/lib/projects/types";
 import { getTask } from "@/lib/db/repo/tasks";
 import { getWorkspace } from "@/lib/db/repo/workspaces";
 import { TASK_STATUS_LABELS, type Task } from "@/lib/tasks/types";
+import { taskSource } from "@/lib/tasks/prompt";
+import { REASONS, type ContextItemDraft, type PromptPart } from "@/lib/context/types";
 import type { RoutineContext, RoutineNoteRef, RunTrigger } from "./types";
 
 /** Per-item and total caps keep a routine with large notes from filling the brief. */
@@ -65,52 +67,71 @@ export async function renderRoutineContext(opts: {
   context: RoutineContext;
   trigger: RunTrigger;
   payload?: Record<string, unknown> | null;
-}): Promise<string> {
+}): Promise<PromptPart> {
   const { project, context, trigger, payload } = opts;
   const sections: string[] = [];
   const missing: string[] = [];
+  const items: ContextItemDraft[] = [];
   let budget = TOTAL_CHARS;
-  const push = (text: string) => {
-    if (budget <= 0) return false;
+  /** Adds a section and records how much of it fit; false once the budget is spent. */
+  const push = (text: string, draft: Omit<ContextItemDraft, "mode" | "chars">, cutAt?: number) => {
+    if (budget <= 0) {
+      items.push({ ...draft, mode: "omitted", chars: 0, reason: REASONS.overLimit(TOTAL_CHARS) });
+      return false;
+    }
     const clipped = clip(text, budget);
     budget -= clipped.length;
     sections.push(clipped);
+    const cut = clipped.length < text.length ? TOTAL_CHARS : cutAt;
+    items.push({ ...draft, mode: cut ? "truncated" : "full", chars: clipped.length, reason: cut ? REASONS.overLimit(cut) : null });
     return true;
   };
+  const taskDraft = (task: Task) => ({ kind: "task" as const, refId: task.id, title: task.title, source: taskSource(task) });
 
   const eventTaskId = (trigger === "task_created" || trigger === "task_completed")
     ? ((payload?.task as { id?: unknown } | undefined)?.id as string | undefined)
     : undefined;
   if (eventTaskId) {
     const task = await getTask(eventTaskId);
-    if (task && task.projectId === project.id) push(renderTask(task, trigger === "task_created" ? "Task that was just created" : "Task that was just completed", await linkedNote(project, task)));
+    if (task && task.projectId === project.id) push(renderTask(task, trigger === "task_created" ? "Task that was just created" : "Task that was just completed", await linkedNote(project, task)), taskDraft(task));
   }
 
-  for (const ref of context.notes) {
+  const refs = context.notes;
+  for (const [i, ref] of refs.entries()) {
     const note = await loadNote(project, ref).catch(() => null);
     if (!note) {
       missing.push(`note \`${ref.id}\``);
+      items.push({ kind: "note", refId: ref.id, title: ref.id, mode: "omitted", chars: 0, reason: REASONS.missing });
       continue;
     }
     const where = ref.scope.kind === "projects" ? "project notebook" : ref.scope.kind === "repos" ? "repo notebook" : "workspace notebook";
-    if (!push([`## Note: ${note.title}`, "", `- **Where:** ${where}, \`${note.path}\``, `- **Updated:** ${note.updatedAt}`, "", clip(note.markdown.trim() || "_Empty note._", NOTE_CHARS)].join("\n"))) break;
+    const body = note.markdown.trim() || "_Empty note._";
+    const draft = { kind: "note" as const, refId: note.id, title: note.title, path: note.path, source: note.markdown, keepContent: true };
+    if (!push([`## Note: ${note.title}`, "", `- **Where:** ${where}, \`${note.path}\``, `- **Updated:** ${note.updatedAt}`, "", clip(body, NOTE_CHARS)].join("\n"), draft, body.length > NOTE_CHARS ? NOTE_CHARS : undefined)) {
+      for (const rest of refs.slice(i + 1)) items.push({ kind: "note", refId: rest.id, title: rest.id, mode: "omitted", chars: 0, reason: REASONS.overLimit(TOTAL_CHARS) });
+      break;
+    }
   }
 
-  for (const id of context.taskIds) {
+  for (const [i, id] of context.taskIds.entries()) {
     if (id === eventTaskId) continue;
     const task = await getTask(id);
     if (!task || task.projectId !== project.id) {
       missing.push(`task \`${id}\``);
+      items.push({ kind: "task", refId: id, title: id.slice(0, 8), mode: "omitted", chars: 0, reason: REASONS.missing });
       continue;
     }
-    if (!push(renderTask(task, "Task", await linkedNote(project, task)))) break;
+    if (!push(renderTask(task, "Task", await linkedNote(project, task)), taskDraft(task))) {
+      for (const rest of context.taskIds.slice(i + 1)) items.push({ kind: "task", refId: rest, title: rest.slice(0, 8), mode: "omitted", chars: 0, reason: REASONS.overLimit(TOTAL_CHARS) });
+      break;
+    }
   }
 
-  if (!sections.length && !missing.length) return "";
-  return [
+  if (!sections.length && !missing.length) return { text: "", items };
+  return { items, text: [
     "# Context for this run",
     "These notes and tasks were attached to the routine and read at the start of this run, so they are current. Treat them as the source of truth for the work. Edit notes at the paths shown; update tasks by ID with the tasks tools.",
     ...sections,
     ...(missing.length ? [`_No longer available: ${missing.join(", ")}. Mention this in your report._`] : []),
-  ].join("\n\n");
+  ].join("\n\n") };
 }
