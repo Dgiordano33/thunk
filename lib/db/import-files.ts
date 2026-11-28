@@ -4,6 +4,8 @@ import path from "node:path";
 import { listProjects } from "@/lib/db/repo/projects";
 import { insertPlanRows } from "@/lib/db/repo/delegation-plans";
 import { insertIntegrationRow } from "@/lib/db/repo/integrations";
+import { insertRoutePlanRow, insertRouteRow, type Route, type RoutePlan } from "@/lib/db/repo/routes";
+import { HOME_DATA_KEY } from "@/lib/home/constants";
 import { insertQueueRow, insertRaceRow, insertRelayRow, insertStatsRow } from "@/lib/db/repo/worker-state";
 import { readOptional } from "@/lib/notes/file-write";
 import { projectConfigDir } from "@/lib/projects/paths";
@@ -40,6 +42,14 @@ async function importWorkerState(tx: Db, projectId: string, state: LegacyWorkerS
   }
 }
 
+export const routingStateFile = (home: Pick<Project, "dataKey">) => path.join(projectConfigDir(home.dataKey), "routing", "state.json");
+
+/** The Home project's routing plans, then the routes they created. */
+async function importRoutingState(tx: Db, state: { plans?: Record<string, RoutePlan>; routes?: Record<string, Route> }) {
+  for (const plan of Object.values(state.plans ?? {})) await insertRoutePlanRow(tx, plan);
+  for (const route of Object.values(state.routes ?? {})) await insertRouteRow(tx, route);
+}
+
 /** Import one JSON file in one transaction, then rename it to `<file>.imported`. */
 async function importFile(client: Db, file: string, load: (tx: Db, value: never) => Promise<void>) {
   const text = await readOptional(file);
@@ -58,10 +68,14 @@ async function importFile(client: Db, file: string, load: (tx: Db, value: never)
 export async function importStateFiles() {
   const client = db();
   if (!client) return;
+  const files: { file: string; load: (tx: Db, value: never) => Promise<void> }[] = [];
   for (const project of await listProjects({ includeHome: true })) {
-    const file = workerStateFile(project);
+    files.push({ file: workerStateFile(project), load: (tx, state: LegacyWorkerState) => importWorkerState(tx, project.id, state) });
+    if (project.dataKey === HOME_DATA_KEY) files.push({ file: routingStateFile(project), load: importRoutingState });
+  }
+  for (const { file, load } of files) {
     try {
-      if (await importFile(client, file, (tx, state: LegacyWorkerState) => importWorkerState(tx, project.id, state))) console.log(`[thunk] imported ${file}`);
+      if (await importFile(client, file, load)) console.log(`[thunk] imported ${file}`);
     } catch (error) {
       console.error(`[thunk] importing ${file} failed; it stays in place and is retried on the next start`, error);
     }

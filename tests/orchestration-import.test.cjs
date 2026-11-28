@@ -162,3 +162,35 @@ test("Postgres: a new trial merge replaces the current one in one transaction, a
   assert.deepEqual(one.taskIds, { a: task });
   assert.equal(await plans.getDelegationPlan("not-a-uuid"), null);
 });
+
+test("routing plans and routes move from the Home project's routing/state.json into Postgres", async (t) => {
+  await withDb(t);
+  await current.query("insert into projects (name, data_key, slug) values ('Home', '__home', '__home')");
+  const routes = require("../lib/db/repo/routes.ts");
+  const [planId, pendingId, projectId] = [id(), id(), id()];
+  const file = path.join(configDir("__home"), "routing", "state.json");
+  const item = { projectId, title: "Fix login", brief: "It fails", why: "#app", line: 2 };
+  const route = { ref: "a1b2c3d4", planId, projectId, projectName: "App", workspaceId: null, title: "Fix login", brief: "It fails", noteId: "inbox", status: "done", summary: "Fixed", createdAt: "2026-11-20T09:10:00.000Z", updatedAt: "2026-11-21T09:00:00.000Z" };
+  const fixture = {
+    plans: {
+      [planId]: { id: planId, summary: "Route the inbox", noteId: "inbox", items: [item], status: "approved", createdAt: "2026-11-20T09:00:00.000Z", decidedAt: "2026-11-20T09:10:00.000Z", note: null, refs: [route.ref] },
+      [pendingId]: { id: pendingId, summary: "Later", items: [item], status: "pending", createdAt: "2026-11-20T10:00:00.000Z", decidedAt: null, note: null, refs: [] },
+    },
+    routes: { [route.ref]: route },
+  };
+  write(file, fixture);
+  await importStateFiles();
+  assert.deepEqual(instants(await routes.getRoutePlan(planId)), instants(fixture.plans[planId]));
+  assert.deepEqual((await routes.listRoutePlans("pending")).map((p) => p.id), [pendingId]);
+  assert.deepEqual(instants(await routes.listRoutes()), instants([route]));
+  assert.equal(fs.existsSync(file), false);
+  assert.ok(fs.existsSync(`${file}.imported`));
+
+  assert.equal(await routes.settleRoute(route.ref, id(), "failed", "x"), null, "only the project it went to settles it");
+  assert.equal((await routes.settleRoute(route.ref, projectId, "blocked", "Waiting")).status, "blocked");
+  assert.equal((await routes.decideRoutePlanRow(pendingId, "rejected", "No")).note, "No");
+  assert.equal(await routes.decideRoutePlanRow(pendingId, "approved", null), null);
+  write(file, fixture);
+  await importStateFiles();
+  assert.equal((await routes.listRoutes())[0].status, "blocked", "importing again keeps newer rows");
+});
