@@ -1,4 +1,5 @@
 'use client';
+import { EditorControls } from '@/components/editor/editor-controls';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { editorExtensions } from '@/lib/editor/extensions';
@@ -27,5 +28,5 @@ export function BoardDocEditor({ card, label, onChange, onComment, onMention, on
     useEffect(() => { editor?.setOptions({ editorProps: { attributes: { class: 'outline-none min-h-6', 'aria-label': label } } }); }, [editor, label]);
     useEffect(() => { if (editor && docToMarkdown(editor) !== card.markdown)
         editor.commands.setContent(card.contentJson ?? card.markdown, { contentType: card.contentJson ? 'json' : 'markdown', emitUpdate: false }); }, [editor, card.markdown, card.contentJson]);
-    return <div className="doc-prose"><EditorContent editor={editor}/>{editor && <BoardDocToolbar editor={editor} onComment={() => { const id = crypto.randomUUID(); const quote = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' '); editor.chain().focus().setComment(id).run(); onComment(quote, id); }}/>}</div>;
+    return <div className="doc-prose">{editor && editor.isEditable && <EditorControls editor={editor} cardId={card.id}/>}<EditorContent editor={editor}/>{editor && <BoardDocToolbar editor={editor} onComment={() => { const id = crypto.randomUUID(); const quote = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' '); editor.chain().focus().setComment(id).run(); onComment(quote, id); }}/>}</div>;
 }

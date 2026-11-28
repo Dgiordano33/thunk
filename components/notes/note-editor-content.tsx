@@ -1,5 +1,6 @@
 "use client";
 
+import { EditorControls } from '@/components/editor/editor-controls';
 import { useRouter } from "next/navigation";
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -381,7 +382,7 @@ function NoteEditorBody({ scope, initial, onDeleted, topLevel }: { scope: NoteSc
           />
         )}
         <div className="doc-prose">
-          <EditorContent editor={editor} />
+          {editor && editor.isEditable && <EditorControls editor={editor}/>}<EditorContent editor={editor} />
         </div>
       </div>
       <footer className="text-muted-foreground flex shrink-0 items-center gap-2 border-t px-4 py-1.5 text-[11px]">
