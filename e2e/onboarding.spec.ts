@@ -14,7 +14,7 @@ async function settings(page: Page) {
 
 test('intro skips once, replays, resets hints, and hands off to add project', async ({ page, context }) => {
   await page.goto('/projects');
-  const intro = page.getByRole('dialog', { name: 'How work is organised' });
+  const intro = page.getByRole('dialog', { name: 'Choose your theme' });
   await expect(intro).toBeVisible();
   await intro.getByRole('button', { name: 'Skip' }).click();
   await page.reload();
@@ -32,7 +32,8 @@ test('intro skips once, replays, resets hints, and hands off to add project', as
   await settings(page);
   await page.getByRole('button', { name: 'Reset hints', exact: true }).click();
   await expect(intro).toBeVisible();
-  await intro.getByRole('button', { name: 'Next' }).click();
+  await intro.getByRole('button', { name: 'Continue in Space' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   const handoff = page.getByRole('dialog', { name: 'Write it down, relay it' });
   await expect(handoff).toContainText('hands it to that project');
@@ -56,7 +57,7 @@ test('existing install skips intro; checklist uses real project, workspace and n
   const { project } = await created.json();
   await context.clearCookies();
   await page.goto('/projects');
-  await expect(page.getByRole('dialog', { name: 'How work is organised' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Choose your theme' })).toBeHidden();
   let progress = await (await request.get('/api/onboarding/progress')).json();
   expect(progress.projects).toBeGreaterThan(0);
   const before = progress.workspaces;
@@ -75,6 +76,7 @@ test('existing install skips intro; checklist uses real project, workspace and n
   await expect(page.getByLabel('Getting started')).toBeHidden();
   await context.addCookies([{ name: 'thunk.onboarding', value: '', url: baseURL! }]);
   await page.goto('/projects');
+  await page.getByRole('button', { name: 'Continue in Space' }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -86,7 +88,7 @@ for (const look of ['space', 'vanilla']) for (const theme of ['light', 'dark']) 
     await context.addCookies([{ name: 'thunk.look', value: look, url: baseURL! }]);
     await page.addInitScript(theme => localStorage.setItem('thunk.theme', theme), theme);
     await page.goto('/projects');
-    await expect(page.getByRole('dialog', { name: 'How work is organised' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Choose your theme' })).toBeVisible();
     await page.screenshot({ animations: "disabled", path: path.resolve(`.context/onboarding-${look}-${theme}.png`) });
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     if (look === 'space') await expect(page.getByRole('complementary', { name: 'Map legend' })).toBeVisible();
@@ -100,7 +102,7 @@ for (const look of ['space', 'vanilla']) for (const theme of ['light', 'dark']) 
 test('mobile intro uses a drawer without the diagram', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/projects');
-  const dialog = page.getByRole('dialog', { name: 'How work is organised' });
+  const dialog = page.getByRole('dialog', { name: 'Choose your theme' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('list')).toHaveCount(0);
   await page.screenshot({ animations: "disabled", path: path.resolve('.context/onboarding-mobile.png') });
@@ -184,3 +186,27 @@ test('the Relay hints explain the handoff once', async ({ page, request, context
   const progress = await (await request.get('/api/onboarding/progress')).json();
   expect(progress).toMatchObject({ captures: expect.any(Number), delegated: expect.any(Number) });
 });
+
+for (const mobile of [false, true]) {
+  test(`intro theme choice persists and can be changed on replay (${mobile ? 'mobile' : 'desktop'})`, async ({ page, context }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/projects');
+    const choice = page.getByRole('dialog', { name: 'Choose your theme' });
+    await expect(choice).toContainText('You can switch later in Settings → Appearance.');
+    await choice.getByRole('button', { name: 'Switch to Plain' }).click();
+    const hierarchy = page.getByRole('dialog', { name: 'How work is organised' });
+    await expect(hierarchy).toBeVisible();
+    await expect(page.locator('html')).toHaveClass(/look-vanilla/);
+    expect((await context.cookies()).find(c => c.name === 'thunk.look')?.value).toBe('vanilla');
+    await hierarchy.getByRole('button', { name: 'Skip', exact: true }).click();
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/look-vanilla/);
+    await settings(page);
+    await page.getByRole('button', { name: 'Show intro', exact: true }).click();
+    await expect(choice.getByRole('button', { name: 'Continue in Plain' })).toBeVisible();
+    await choice.getByRole('button', { name: 'Switch to Space' }).click();
+    await expect(hierarchy).toBeVisible();
+    await expect(page.locator('html')).toHaveClass(/look-space/);
+    expect((await context.cookies()).find(c => c.name === 'thunk.look')?.value).toBe('space');
+  });
+}
