@@ -749,3 +749,29 @@ test("finished work with branch changes opens a review card; reports without cha
   assert.ok(resolved.includes(`worker:${changed.sessionId}:report:${first.seq}`));
   assert.deepEqual(forSession(changed.sessionId).map((n) => n.kind), ["review_ready", "review_ready"]);
 });
+
+test("criteria approved with a plan reach the worker's brief, and its evidence lines are recorded as claims", async () => {
+  await stopAll();
+  const plans = load("@/lib/workers/plans");
+  const evidence = load("@/lib/db/repo/task-evidence");
+  const chief = await service.openChief(project.id);
+  assert.match(prompt.teamPrompt(chief.meta.origin), /only for substantial work|Skip criteria for small/);
+  assert.match(prompt.teamPrompt({ kind: "worker", taskId: id(), chiefSessionId: null }), /evidence: Only when the brief lists acceptance criteria/);
+  const proposed = await plans.proposePlan(project.id, chief.id, { summary: "Fix login", tasks: [
+    { key: "fix", title: "Fix the login redirect", brief: "Stop the loop", criteria: [{ text: "Login tests pass", kind: "test" }, { text: "The error shows on the page", kind: "visual" }] },
+  ] });
+  assert.match(notifications.at(-1).detail, /Done when:\n {3}- Login tests pass \(test\)/);
+  const { results: [fix] } = await plans.decidePlan(project.id, proposed.planId, "approve");
+  const task = tasks.get(fix.taskId);
+  assert.deepEqual(task.criteria.map((c) => [c.id, c.kind]), [["c1", "test"], ["c2", "visual"]]);
+  const live = sessions.get(task.sessionId);
+  const brief = live.events.find((e) => e.type === "user_message").content;
+  assert.match(brief, /Acceptance criteria[\s\S]*- c1 \(test\): Login tests pass[\s\S]*- c2 \(visual\): The error shows on the page/);
+  assert.match(brief, /evidence: field last/);
+  finish(live, "```worker-summary\noutcome: done\nsummary: Fixed\nbranch: b\nevidence:\n- c1 | pass | test | npm test passed | tests/login.test.ts\n- c2 | unknown | note | could not open a browser | none\n```");
+  await until(async () => await reports.savedReport(live.id));
+  const rows = await evidence.listEvidence(task.id);
+  assert.deepEqual(rows.map((r) => [r.criterionId, r.origin, r.type, r.status]).reverse(), [["c1", "claimed", "test", "pass"], ["c2", "claimed", "note", "unknown"]]);
+  assert.ok(rows.every((r) => r.sessionId === live.id));
+  assert.match((await reports.savedReport(live.id)).content, /Evidence: 2 of 2 criteria reported by the worker/);
+});

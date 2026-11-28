@@ -7,7 +7,7 @@ import { transaction } from "../sql";
 export type StoredPlan = Omit<DelegationPlan, "tasks"> & { projectId: string; tasks: (DelegationPlan["tasks"][number] & { taskId: string | null })[] };
 
 type PlanRow = { id: string; project_id: string; chief_session_id: string; relay_id: string | null; summary: string; note_id: string | null; status: string; created_at: string; decided_at: string | null; note: string | null };
-type TaskRow = { plan_id: string; key: string; position: number; title: string; brief: string; model: string | null; mode: string | null; depends_on: string[]; race: string[] | null; task_id: string | null };
+type TaskRow = { plan_id: string; key: string; position: number; title: string; brief: string; model: string | null; mode: string | null; depends_on: string[]; race: string[] | null; task_id: string | null; criteria?: { id?: string; text: string; kind?: string }[] | null };
 
 const g = globalThis as typeof globalThis & { __thunkMemPlans?: Map<string, StoredPlan> };
 const mem: Map<string, StoredPlan> = (g.__thunkMemPlans ??= new Map());
@@ -20,6 +20,7 @@ function toPlan(row: PlanRow, rows: TaskRow[]): StoredPlan {
     // Absent rather than null, so the plan's tasks still parse as delegate input.
     ...(t.model ? { model: t.model } : {}), ...(t.mode ? { mode: t.mode as "worktree" | "scout" } : {}),
     ...(t.depends_on.length ? { dependsOn: t.depends_on } : {}), ...(t.race ? { race: t.race } : {}),
+    ...(t.criteria?.length ? { criteria: t.criteria as NonNullable<DelegationPlan["tasks"][number]["criteria"]> } : {}),
     taskId: t.task_id,
   }));
   return {
@@ -40,9 +41,9 @@ export async function insertPlanRows(tx: Db, projectId: string, plan: Delegation
   if (!inserted) return;
   for (const [position, t] of plan.tasks.entries()) {
     await tx.query(
-      `insert into delegation_plan_tasks (plan_id, key, position, title, brief, model, mode, depends_on, race, task_id)
-       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)`,
-      [plan.id, t.key, position, t.title, t.brief, t.model ?? null, t.mode ?? null, JSON.stringify(t.dependsOn ?? []), t.race ? JSON.stringify(t.race) : null, plan.taskIds[t.key] ?? null],
+      `insert into delegation_plan_tasks (plan_id, key, position, title, brief, model, mode, depends_on, race, task_id, criteria)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11::jsonb)`,
+      [plan.id, t.key, position, t.title, t.brief, t.model ?? null, t.mode ?? null, JSON.stringify(t.dependsOn ?? []), t.race ? JSON.stringify(t.race) : null, plan.taskIds[t.key] ?? null, t.criteria?.length ? JSON.stringify(t.criteria) : null],
     );
   }
 }

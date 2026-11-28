@@ -11,6 +11,7 @@ import { api } from "@/lib/client/api";
 import { deliveryCue, deliveryStage } from "@/lib/projects/delivery-types";
 import type { ChangedFile, RepoChanges, WorkspaceChanges } from "@/lib/projects/types";
 import type { ReviewState } from "@/lib/review/types";
+import { observedFor, type ReviewEvidence } from "@/lib/evidence/types";
 import type { DiffComment } from "@/lib/review/diff";
 import { cn } from "@/lib/utils";
 import { plural } from "./model";
@@ -87,6 +88,7 @@ export function ReviewParts({ sessionId, workspaceId, summary, tab, onChanged }:
       </Button>}
       {diffOpen && <InboxDiff workspaceId={workspaceId} sessionId={sessionId} />}
     </Part>
+    {review.criteria?.length ? <Part title="Criteria"><CriteriaTable review={review} tab={tab} /></Part> : null}
     <Part title="Trial merge">
       {!integration ? <p className="text-muted-foreground text-xs">Not trial-merged yet.</p> : <>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -120,6 +122,44 @@ export function ReviewParts({ sessionId, workspaceId, summary, tab, onChanged }:
       </div>
     </Part>
   </div>;
+}
+
+const STATUS_CUE: Record<ReviewEvidence["status"], Cue> = { pass: "pass", fail: "fail", unknown: "none" };
+const STATUS_WORD: Record<ReviewEvidence["status"], string> = { pass: "Pass", fail: "Fail", unknown: "Unknown" };
+
+/** Where a row points: an outside link, a page in Thunk, or a file path. */
+function EvidenceRef({ value, tab }: { value: string; tab: number }) {
+  const link = cn("text-muted-foreground hover:text-foreground rounded-sm underline underline-offset-2", RING);
+  if (/^https?:\/\//.test(value)) return <a href={value} target="_blank" rel="noreferrer" tabIndex={tab} className={link}>{(() => { try { return new URL(value).hostname; } catch { return "Link"; } })()}<span className="sr-only"> (opens in a new tab)</span></a>;
+  if (value.startsWith("/w/")) return <Link href={value} tabIndex={tab} className={link}>Open in Thunk</Link>;
+  return <span className="text-muted-foreground font-mono text-[11px] break-all">{value}</span>;
+}
+
+/**
+ * Each criterion with what shows it: the worker's claim for it (Agent says) and what Thunk checked itself (Checked),
+ * newest of each kind first. Rows that cover an older commit or older criteria say so.
+ */
+export function CriteriaTable({ review, tab }: { review: ReviewState; tab: number }) {
+  const observed = review.evidence.filter((e) => e.origin === "observed");
+  const latestPerType = (rows: ReviewEvidence[]) => rows.filter((e, i) => rows.findIndex((o) => o.type === e.type) === i);
+  return <table className="w-full table-fixed border-collapse text-xs">
+    <thead className="sr-only"><tr><th scope="col">Criterion</th><th scope="col">Evidence</th></tr></thead>
+    <tbody>{review.criteria!.map((c) => {
+      const claimed = review.evidence.filter((e) => e.origin === "claimed" && e.criterionId === c.id).slice(0, 1);
+      const checked = latestPerType(observed.filter((e) => observedFor(c.kind).includes(e.type)));
+      const rows = [...checked, ...claimed];
+      return <tr key={c.id} className="border-t align-top first:border-t-0">
+        <th scope="row" className="w-2/5 py-1.5 pr-3 text-left font-normal"><span className="text-muted-foreground font-mono">{c.id}</span> {c.text}</th>
+        <td className="py-1.5">{rows.length ? <ul className="space-y-1">{rows.map((e) => <li key={e.id} className={cn("flex flex-wrap items-baseline gap-x-2 gap-y-0.5", e.stale && "opacity-70")}>
+          <span className={cn("rounded-[4px] border px-1 text-[10px] font-medium", e.origin === "observed" ? "text-foreground" : "text-muted-foreground border-dashed")}>{e.origin === "observed" ? "Checked" : "Agent says"}</span>
+          <Status cue={STATUS_CUE[e.status]}>{STATUS_WORD[e.status]}</Status>
+          <span className="min-w-0 break-words">{e.detail}</span>
+          {e.ref && <EvidenceRef value={e.ref} tab={tab} />}
+          {e.stale && <span className="status-cue is-pending">Covers an older revision{e.stale === "criteria" ? " of the criteria" : ""}</span>}
+        </li>)}</ul> : <span className="text-muted-foreground">No evidence yet</span>}</td>
+      </tr>;
+    })}</tbody>
+  </table>;
 }
 
 /** The worker's diff, file by file, with hunk comments sent back to the worker as one review. */

@@ -31,6 +31,7 @@ Module._load = function (name, ...rest) {
 };
 const { Inbox } = require("./inbox.tsx");
 const model = require("./model.ts");
+const reviewCard = require("./review-card.tsx");
 Module._load = originalLoad;
 const projects = [{ id: "thunk", name: "Thunk", workspaces: [{ id: "inbox", name: "notifications" }] }, { id: "docs", name: "Documentation", workspaces: [{ id: "main", name: "main" }] }];
 const base = { projectId: "thunk", workspaceId: "inbox", sessionId: null, runId: null, subjectKey: "preview", href: "/", detail: null, actions: [], readAt: null, resolvedAt: null, createdAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date().toISOString() };
@@ -224,4 +225,21 @@ test("finished work with changes is a Decision card that loads its review in pla
   assert.match(html, /aria-label="Loading review"/);
   assert.match(html, /Work completed is not merged/);
   assert.equal(model.sectionOf(review), "decision");
+});
+test("the criteria table separates what Thunk checked from what the agent says, and marks older revisions", () => {
+  const row = (over) => ({ id: crypto.randomUUID(), taskId: "t", criterionId: null, origin: "observed", type: "test", status: "pass", detail: "npm test exited 0", ref: null, commitSha: "a", criteriaVersion: 1, sessionId: null, createdAt: "", stale: null, ...over });
+  const review = {
+    criteria: [{ id: "c1", text: "Login tests pass", kind: "test" }, { id: "c2", text: "Error shows on the page", kind: "visual" }, { id: "c3", text: "Docs mention it", kind: "source" }],
+    criteriaVersion: 2,
+    evidence: [
+      row({ type: "ci", detail: "3 checks passed on #4", ref: "https://github.com/o/r/pull/4" }),
+      row({ origin: "claimed", criterionId: "c1", detail: "ran npm test", stale: "criteria" }),
+      row({ origin: "claimed", criterionId: "c2", type: "screenshot", status: "unknown", detail: "no browser", ref: "shots/login.png" }),
+    ],
+  };
+  const html = renderToStaticMarkup(React.createElement(reviewCard.CriteriaTable, { review, tab: 0 }));
+  assert.match(html, />Checked<\/span>[\s\S]*3 checks passed[\s\S]*github\.com/);
+  assert.match(html, />Agent says<\/span>[\s\S]*ran npm test[\s\S]*Covers an older revision of the criteria/);
+  assert.match(html, /shots\/login\.png/);
+  assert.match(html, /No evidence yet/);
 });

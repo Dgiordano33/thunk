@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import type { SessionMeta } from "@/lib/agent/types";
-import { TASK_STATUSES, TASK_STATUS_LABELS, type Task, type TaskPriority, type TaskStatus } from "@/lib/tasks/types";
+import { CRITERION_KINDS, TASK_STATUSES, TASK_STATUS_LABELS, type CriterionKind, type Task, type TaskPriority, type TaskStatus } from "@/lib/tasks/types";
+import { PlusIcon, XIcon } from "lucide-react";
 import { scopeKey, type NoteMeta } from "@/lib/notes/types";
 import { api } from "@/lib/client/api";
 
@@ -41,6 +42,9 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
     return () => { active = false; };
   }, [noteId, task?.body, task?.title]);
   const [dueAt, setDueAt] = useState(task?.dueAt?.slice(0, 10) ?? "");
+  const [criteria, setCriteria] = useState<{ id?: string; text: string; kind: CriterionKind }[]>(task?.criteria ?? []);
+  const cleanCriteria = criteria.filter((c) => c.text.trim()).map((c) => ({ ...(c.id ? { id: c.id } : {}), text: c.text.trim(), kind: c.kind }));
+  const criteriaChanged = JSON.stringify(cleanCriteria) !== JSON.stringify((task?.criteria ?? []).map((c) => ({ id: c.id, text: c.text, kind: c.kind })));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedNotes, setLoadedNotes] = useState<{ scope: string; notes: NoteMeta[] } | null>(null);
@@ -56,6 +60,8 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
     if (busy || !title.trim()) return;
     setBusy(true); setError(null);
     try {
+      // Criteria save on their own: a change bumps the task's criteria version, so earlier evidence is marked older.
+      if (task && criteriaChanged) await api.patchTask(task.id, { criteria: cleanCriteria.length ? cleanCriteria : null });
       await onSave({ projectId, title: title.trim(), body: body || null, status, priority, workspaceId: scope === "project" ? null : scope, sessionId: sessionId === "none" ? null : sessionId, noteId: noteId || null, dueAt: dueAt === task?.dueAt?.slice(0, 10) ? task.dueAt : dueAt ? new Date(`${dueAt}T00:00:00Z`).toISOString() : null });
       onClose();
     } catch (err) { setError((err as Error).message); }
@@ -69,6 +75,16 @@ export function TaskSheet({ task, title: initialTitle = "", projectId, workspace
         <fieldset disabled={busy} className="space-y-4">
           <label className="grid gap-1.5 text-xs">Title<Input autoFocus required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
           <label className="grid gap-1.5 text-xs">Details (Markdown)<Textarea rows={8} maxLength={20000} value={body} onChange={(e) => setBody(e.target.value)} /></label>
+          {task && <fieldset className="space-y-1.5 text-xs">
+            <legend className="mb-1.5">Done when <span className="text-muted-foreground">(optional acceptance criteria{task.criteriaVersion ? ` · version ${task.criteriaVersion}` : ""})</span></legend>
+            {criteria.map((c, i) => <div key={c.id ?? `new-${i}`} className="flex items-center gap-2">
+              <Input aria-label={`Criterion ${i + 1}`} maxLength={500} value={c.text} placeholder="What shows this part is done" onChange={(e) => setCriteria((all) => all.map((o, j) => j === i ? { ...o, text: e.target.value } : o))} />
+              <Select value={c.kind} onValueChange={(v) => setCriteria((all) => all.map((o, j) => j === i ? { ...o, kind: v as CriterionKind } : o))}><SelectTrigger aria-label={`Kind of criterion ${i + 1}`} className="w-32 shrink-0"><SelectValue /></SelectTrigger><SelectContent>{CRITERION_KINDS.map((k) => <SelectItem key={k} value={k} className="capitalize">{k}</SelectItem>)}</SelectContent></Select>
+              <Button type="button" size="icon" variant="ghost" aria-label={`Remove criterion ${i + 1}`} onClick={() => setCriteria((all) => all.filter((_, j) => j !== i))}><XIcon /></Button>
+            </div>)}
+            {criteria.length < 12 && <Button type="button" size="sm" variant="outline" onClick={() => setCriteria((all) => [...all, { text: "", kind: "other" }])}><PlusIcon />Add criterion</Button>}
+            {criteriaChanged && (task.criteria?.length ?? 0) > 0 && <p className="text-muted-foreground">Saving marks evidence gathered against the old criteria as covering an older revision.</p>}
+          </fieldset>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5 text-xs">Status<Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}><SelectTrigger aria-label="Status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{TASK_STATUSES.map((s) => <SelectItem key={s} value={s}>{TASK_STATUS_LABELS[s]}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1.5 text-xs">Priority<Select value={String(priority)} onValueChange={(v) => setPriority(Number(v) as TaskPriority)}><SelectTrigger aria-label="Priority" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{["None", "Low", "Medium", "High"].map((p, i) => <SelectItem key={p} value={String(i)}>{p}</SelectItem>)}</SelectContent></Select></div>

@@ -434,6 +434,8 @@ export type Database = {
           external_key: string | null
           external_url: string | null
           external_updated_at: string | null
+          criteria: Json | null
+          criteria_version: number
         }
         Insert: {
           id?: string
@@ -457,6 +459,8 @@ export type Database = {
           external_key?: string | null
           external_url?: string | null
           external_updated_at?: string | null
+          criteria?: Json | null
+          criteria_version?: number
         }
         Update: {
           id?: string
@@ -480,6 +484,8 @@ export type Database = {
           external_key?: string | null
           external_url?: string | null
           external_updated_at?: string | null
+          criteria?: Json | null
+          criteria_version?: number
         }
         Relationships: [
           { foreignKeyName: "tasks_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },

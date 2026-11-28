@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CardStats } from "@/components/space/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/lib/client/api";
 import type { SessionMeta } from "@/lib/agent/types";
 
@@ -25,6 +26,17 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
     const timer = setInterval(() => void refresh(), 10_000);
     return () => { alive = false; clearInterval(timer); };
   }, [projectId]);
+  const [testOnFinish, setTestOnFinish] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.reviewSettings(projectId).then((r) => { if (alive) setTestOnFinish(r.settings.testOnFinish); }).catch(() => {});
+    return () => { alive = false; };
+  }, [projectId]);
+  const toggleTests = async (on: boolean) => {
+    setTestOnFinish(on);
+    try { setTestOnFinish((await api.saveReviewSettings(projectId, { testOnFinish: on })).settings.testOnFinish); }
+    catch (err) { setTestOnFinish(!on); setError((err as Error).message); }
+  };
   const open = async (fresh = false) => {
     setBusy(true); setError(null);
     try {
@@ -52,6 +64,10 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
       <Button size="sm" disabled={busy} onClick={() => void open()}>Open the chief</Button>
       {team?.chief && <Button size="sm" variant="outline" disabled={busy} onClick={() => void open(true)}>New chief</Button>}
     </div>
+    <label className="flex items-start gap-2">
+      <Checkbox className="mt-0.5" disabled={testOnFinish === null} checked={Boolean(testOnFinish)} onCheckedChange={(v) => void toggleTests(v === true)} />
+      <span><span className="font-medium">Run tests when a worker finishes</span><span className="text-muted-foreground block">Runs <code className="font-mono">scripts.test</code> from thunk.json in the worker’s workspace and shows the result on its review card as checked by Thunk.</span></span>
+    </label>
     {error && <p role="alert" className="text-destructive">{error}</p>}
   </div>;
 }

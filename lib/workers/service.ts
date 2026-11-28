@@ -25,9 +25,10 @@ import { DelegateSchema, type DelegateInput } from "./schema";
 import { summarizeStats, type RaceEntry } from "./state";
 import { countTaskFinish, dequeueDelegation, enqueueDelegation, findRace, getRace, getTaskStats, insertRace, isQueued, listQueue, listTaskStats, relayTaskId, rememberRelayTask, setRaceWinner, startTaskStats } from "@/lib/db/repo/worker-state";
 import { workerOverlaps } from "./conflicts";
+import { recordClaimed, runTestsOnFinish, workspaceHeads } from "@/lib/evidence/service";
 import { sessionPath } from "@/lib/routes";
 import type { Project } from "@/lib/projects/types";
-import type { Task } from "@/lib/tasks/types";
+import { normalizeCriteria, type Task } from "@/lib/tasks/types";
 const g = globalThis as typeof globalThis & { __thunkWorkerWatchers?: WeakSet<LiveSession>; __thunkWorkerHousekeeping?: { unsubscribe: () => void; timer: ReturnType<typeof setInterval> } };
 const watched = g.__thunkWorkerWatchers ??= new WeakSet();
 
@@ -125,6 +126,8 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     const noteId = args.noteId ?? task?.noteId;
     const note = noteId ? await noteBrief(project, noteId) : null;
     if (!task) task = await createTask({ projectId, title: args.title ?? note?.note.title.slice(0, 200) ?? "Delegated task", body: args.brief ?? null, noteId }, { createdBy: chiefSessionId ? "agent" : "user", createdInSessionId: chiefSessionId });
+    // Criteria approved with a plan, or given to delegate, become the task's; a change bumps its criteria version.
+    if (args.criteria?.length) task = await patchTask(task.id, { criteria: normalizeCriteria(args.criteria) });
     await rememberTask(task);
     const need = args.race?.length ?? 1;
     const cap = workersPerProject(), free = cap - activeWorkers(projectId);
@@ -179,7 +182,7 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     await patchTask(task.id, { ...(target ? { workspaceId: target.id } : {}), sessionId: first.id, status: "in_progress", ...(noteId ? { noteId } : {}) });
     await startTaskStats(projectId, { taskId: task.id, title: task.title, mode: scout ? "scout" : "worktree" }, entries.map((e) => e.model));
     if (raceId) await insertRace(projectId, { id: raceId, taskId: task.id, entries, winner: null, createdAt: new Date().toISOString() });
-    const brief = [`Task: ${task.title}\nTask ID: ${task.id}`, args.brief ?? task.body, note?.brief].filter(Boolean).join("\n\n");
+    const brief = [`Task: ${task.title}\nTask ID: ${task.id}`, args.brief ?? task.body, criteriaBrief(task), note?.brief].filter(Boolean).join("\n\n");
     for (const live of started) {
       attachWorker(live);
       await appendWorkLog(project, `[worker] started${scout ? " (scout)" : ""}${raceId ? ` (race · ${live.meta.model})` : ""}: ${task.title} · /w/${live.meta.workspaceId}/s/${live.id}`);
@@ -192,6 +195,18 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
     await appendWorkLog(project, `[worker] blocked: ${task.title} · ${String(error)}`);
     throw error;
   }
+}
+
+/** The task's acceptance criteria in the worker's brief, with how to report evidence for each. */
+export function criteriaBrief(task: Pick<Task, "criteria">) {
+  if (!task.criteria?.length) return null;
+  return [
+    "Acceptance criteria (the task is done when each holds):",
+    ...task.criteria.map((c) => `- ${c.id} (${c.kind}): ${c.text}`),
+    "In your worker-summary block, add an evidence: field last, with one line per criterion:",
+    "- <id> | pass, fail or unknown | test, screenshot, source or note | what shows it (command and result, what you saw) | file path or URL, or none",
+    "Report only what you checked; say unknown rather than guess. Thunk records these as the agent's word and checks what it can itself.",
+  ].join("\n");
 }
 
 const g2 = globalThis as typeof globalThis & { __thunkDrainTimers?: Map<string, ReturnType<typeof setTimeout>> };
@@ -359,12 +374,16 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     if (ownsTask && !newerTurn && task?.sessionId === meta.id && task.status !== "cancelled") await patchTask(task.id, { status: status === "cancelled" ? "cancelled" : status === "done" ? (origin.chiefSessionId ? "in_progress" : "done") : "blocked" });
     const stats = await countTaskFinish(origin.taskId, `${meta.id}:${seq}`, { costUsd: result.costUsd, ownsTask, outcome: status });
     const capture = ownsTask && !newerTurn && task?.status !== 'cancelled' ? await captureTask(origin.taskId, {status: status === 'done' || status === 'blocked' ? 'ready' : 'failed', summary:report.summary, diff_stat:report.diffStat, cost_usd:stats?.costUsd ?? result.costUsd ?? 0, next_step:needsPerson || null, error:result.error}) : null;
+    // What the worker says shows each criterion; Thunk's own checks are recorded separately as observed.
+    const commitSha = origin.scout ? null : (await workspaceHeads(ctx).catch(() => []))[0] ?? null;
+    const claimed = ownsTask && task ? await recordClaimed(task, meta.id, result.markdown, commitSha).catch((err) => { console.error("[thunk] evidence failed", err); return []; }) : [];
     const overlaps = origin.scout ? [] : (await workerOverlaps(await openWorkerWorkspaces(meta.projectId))).get(origin.taskId) ?? [];
     const lines = [
       report.summary, result.error ?? "", needsPerson ? `Needs person: ${needsPerson}` : "",
       origin.scout ? "Mode: scout (read-only, no branch)" : `Branch: ${ctx.workspace.branch ?? "none"}\nDiff: ${JSON.stringify(report.diffStat)}`,
       race ? `Race: ${race.id} · model ${getSession(meta.id)?.meta.model ?? "unknown"} · ${race.entries.length} racers${race.winner ? ` · winner ${race.winner}` : " · pick one with workers_pick"}` : "",
       stats ? `Cost: $${(result.costUsd || 0).toFixed(4)} this round · $${stats.costUsd.toFixed(4)} for the task over ${stats.rounds} round${stats.rounds === 1 ? "" : "s"}` : "",
+      task?.criteria?.length ? `Evidence: ${claimed.filter((e) => e.criterionId).length} of ${task.criteria.length} criteria reported by the worker` : "",
       overlaps.length ? `Overlaps: ${overlaps.map((o) => `${o.title} (${o.taskId}) on ${o.paths.slice(0, 5).join(", ")}${o.paths.length > 5 ? ` +${o.paths.length - 5}` : ""}`).join("; ")}` : "",
       `Workspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}`,
     ];
@@ -374,6 +393,8 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const review = status === "done" && !origin.scout && ownsTask && Boolean(report.diffStat?.files);
     if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: review ? "review_ready" : "worker_report", urgency: review || status === "failed" || status === "blocked" ? "action" : "info", requestKey: origin.relayId ? `capture:${origin.relayId}` : undefined, subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status === "done" ? "Work completed" : status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
+    // Opt-in per project: run scripts.test in the worker's workspace and record the result. Runs after the report so it never delays it.
+    if (status === "done" && !origin.scout && ownsTask && task) void runTestsOnFinish(ctx, task, meta.id).catch((err) => console.error("[thunk] finish tests failed", err));
     await queueReport(ctx.project, meta, seq, content);
     scheduleDrain(meta.projectId);
   });

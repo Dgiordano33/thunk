@@ -13,6 +13,7 @@ import { getProject } from "@/lib/db/repo/projects";
 import { appendWorkLog } from "./log";
 import { ownedWorker } from "./service";
 import { recordIntegration, type HeadSha } from "@/lib/db/repo/integrations";
+import { recordIntegration as recordIntegrationEvidence } from "@/lib/evidence/service";
 
 const exec = promisify(execFile);
 export const INTEGRATION_TEST_MINUTES = 15;
@@ -90,6 +91,7 @@ export async function integrateWorkers(projectId: string, taskIds: string[], { r
     merged: result.merged, conflicts: result.conflicts, tests: result.tests, headShas,
   });
   for (const old of replaced) await archiveWorkspace(old.workspaceId).catch(() => {});
+  await recordIntegrationEvidence(result, headShas).catch((err) => console.error("[thunk] integration evidence failed", err));
   const tests = "exitCode" in result.tests ? `tests exit ${result.tests.exitCode}` : result.tests.reason.toLowerCase();
   await appendWorkLog(project, `[chief] integration: ${result.merged.length} merged, ${result.conflicts.length} conflicting · ${tests} · /w/${workspace.id}`);
   return result;

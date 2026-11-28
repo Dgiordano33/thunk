@@ -156,6 +156,8 @@ export const api = {
   openPullRequest: (id: string, repoId?: string) => post<{ url: string; created: boolean; status: WorkspacePrStatus }>(`/api/workspaces/${id}/pr`, repoId ? { repoId } : {}),
   /** Trial-merge the workspace's worker branch again and run the tests. */
   integrateWorkspace: (id: string, taskId?: string) => post<{ result: unknown }>(`/api/workspaces/${id}/integrate`, taskId ? { taskId } : {}),
+  reviewSettings: (projectId: string) => call<{ settings: { testOnFinish: boolean } }>(`/api/projects/${projectId}/review-settings`),
+  saveReviewSettings: (projectId: string, body: { testOnFinish: boolean }) => call<{ settings: { testOnFinish: boolean } }>(`/api/projects/${projectId}/review-settings`, { method: "PUT", json: body }),
   sessionReview: (id: string) => call<{ review: import("@/lib/review/types").ReviewState }>(`/api/sessions/${id}/review`),
   workspaceFileRoots: (id: string) => call<{ roots: FileRoot[] }>(`/api/workspaces/${id}/files`),
   workspaceDirectory: (id: string, root: string, dir: string) =>

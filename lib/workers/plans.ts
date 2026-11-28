@@ -15,7 +15,8 @@ const subject = (planId: string) => `chief:plan:${planId}`;
 export function renderPlan(plan: Pick<DelegationPlan, "summary" | "tasks">) {
   return [plan.summary, "", ...plan.tasks.map((t, i) => {
     const how = [t.mode === "scout" ? "scout" : null, t.race ? `race ${t.race.join(" vs ")}` : t.model ?? null, t.dependsOn?.length ? `after ${t.dependsOn.join(", ")}` : null].filter(Boolean).join(" · ");
-    return `${i + 1}. [${t.key}] ${t.title}${how ? ` (${how})` : ""}\n   ${t.brief.split("\n")[0].slice(0, 300)}`;
+    const criteria = t.criteria?.length ? `\n   Done when:${t.criteria.map((c) => `\n   - ${c.text}${c.kind && c.kind !== "other" ? ` (${c.kind})` : ""}`).join("")}` : "";
+    return `${i + 1}. [${t.key}] ${t.title}${how ? ` (${how})` : ""}\n   ${t.brief.split("\n")[0].slice(0, 300)}${criteria}`;
   })].join("\n");
 }
 
@@ -62,7 +63,7 @@ export async function decidePlan(projectId: string, planId: string, decision: "a
         if (missing.length) { results.push({ key: t.key, title: t.title, error: `Skipped: ${missing.join(", ")} did not start` }); continue; }
         try {
           const started = await delegate(projectId, chiefId && getSession(chiefId)?.meta.origin?.kind === "chief" ? chiefId : null, {
-            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId,
+            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId, criteria: t.criteria,
             dependsOn: t.dependsOn?.map((k) => plan.taskIds[k]),
           });
           plan.taskIds[t.key] = started.taskId;

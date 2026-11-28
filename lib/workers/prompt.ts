@@ -41,6 +41,7 @@ Before starting two or more workers for one request, propose the split with dele
 ${limits.workersPerProject === 1 ? "One worker runs" : `Up to ${limits.workersPerProject} workers run`} at a time. Extra tasks and tasks with dependsOn are queued and start on their own when a slot frees or their dependencies are done (accepted with tasks_complete). Use dependsOn for ordered work instead of waiting yourself; never poll.
 Use mode "scout" for research, investigation or review that changes nothing: it runs read-only in its own environment and needs no Git repository.
 Use race with 2–3 models only when the approach is uncertain or quality matters more than cost; judge the racers' reports, then call workers_pick. workers_history shows cost and first-round acceptance by model; prefer a cheaper model where it is usually accepted first time.
+For substantial work (several files, user-visible behaviour, anything a reviewer would want checked), give each task criteria: a short list of what done means, each { text, kind } with kind test, interaction, visual, source or other, written so a check can show it. Skip criteria for small or obvious tasks. They go on delegate or on each delegate_plan task, are approved with the plan, and the worker reports one evidence line per criterion. Reports mark what Thunk checked itself apart from what the worker says.
 Workers report by push. Judge each report against its task; use tasks_complete only when it meets the brief, otherwise workers_message or delegate again. Keep task statuses truthful. Bring decisions with a recommendation.
 A report's Overlaps line names other workers touching the same files. Before you suggest merging several branches, call workers_integrate to trial-merge them and run the tests, and tell the person which merge cleanly and which conflict.
 Workers ask you first: a <worker_question id="…"> is a parked question. Answer from the brief, task, notes, project and workspace memory and the work log with workers_answer, one answer per question keyed by its exact text, using an option label or your own words. If the answer needs the person's judgment or is not covered, call workers_escalate with your recommendation. Unanswered questions go to the person after ${minutes(limits.chiefAnswerMinutes)}. You cannot grant permissions or approve plans; those always go to the person. Never merge automatically.
@@ -68,6 +69,7 @@ outcome: done | blocked | failed
 summary: What changed, checks performed, and limitations
 branch: Current branch
 needs_person: Optional decision needed
+evidence: Only when the brief lists acceptance criteria: one line per criterion, as the brief says
 \`\`\``;
   return "";
 }

@@ -1,5 +1,7 @@
 // Client-safe: the review card's shape, built on the server by lib/review/card.ts.
+import type { ReviewEvidence } from "@/lib/evidence/types";
 import type { WorkspacePrStatus } from "@/lib/projects/types";
+import type { Criterion } from "@/lib/tasks/types";
 
 export type ReviewTests = { state: "passed" | "failed" | "not_run"; command: string | null; detail: string };
 
@@ -20,6 +22,11 @@ export type ReviewState = {
   changes: { files: number; additions: number; deletions: number } | null;
   integration: ReviewIntegration | null;
   pr: WorkspacePrStatus | null;
+  /** The task's acceptance criteria, if it has any, and their current version. */
+  criteria: Criterion[] | null;
+  criteriaVersion: number;
+  /** Newest first, each marked when it covers an older commit or older criteria. */
+  evidence: ReviewEvidence[];
 };
 
 /** The summary line of a `<worker_report>` (its first line after the opening tag). */

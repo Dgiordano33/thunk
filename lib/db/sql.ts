@@ -22,7 +22,7 @@ export async function lockKey(tx: Db, key: string) {
 
 /** jsonb columns. Values for them are sent as JSON text, so arrays aren't mistaken for Postgres arrays. */
 const JSON_COLUMNS = new Set([
-  "assumptions", "actions", "anchor", "content_json", "context", "diff_stat", "input", "origin", "stat", "trigger_payload", "trigger_state",
+  "assumptions", "actions", "anchor", "content_json", "context", "criteria", "diff_stat", "input", "origin", "stat", "trigger_payload", "trigger_state",
 ]);
 
 /** Postgres prints `2026-11-19 20:47:19.278123+00`; the app compares and sorts ISO strings (`…T…+00:00`) as before. */

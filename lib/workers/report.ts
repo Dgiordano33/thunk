@@ -5,6 +5,7 @@ import { workspaceRepoTargets } from "@/lib/projects/repo-targets";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { findPrUrl, parseRoutineSummary } from "@/lib/routines/prompt";
 import type { RunDiffStat } from "@/lib/routines/types";
+import { stripEvidence } from "@/lib/evidence/types";
 export type RunReport = {
   summary: string;
   outcome: string | null;
@@ -15,7 +16,7 @@ export type RunReport = {
 /** What the run left behind: the agent's summary, the diff against the workspace base, and a PR if there is one. */
 export async function collectReport(opts: { project: Project; workspace: Workspace | null; markdown: string }): Promise<RunReport> {
   const { project, workspace, markdown } = opts;
-  const parsed = parseRoutineSummary(markdown.replace(/```worker-summary/g, "```routine-summary").replace(/^(branch|needs_person):.*$/gm, ""));
+  const parsed = parseRoutineSummary(stripEvidence(markdown).replace(/```worker-summary/g, "```routine-summary").replace(/^(branch|needs_person):.*$/gm, ""));
   let diffStat: RunDiffStat | null = null;
   const targets = workspace ? workspaceRepoTargets({ project, workspace }) : [];
   const perRepo = await Promise.all(targets.map(async (t) => ({ target: t, changes: await workspaceChanges(t.cwd, t.baseRef).catch(() => null) })));

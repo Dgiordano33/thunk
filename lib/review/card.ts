@@ -8,6 +8,7 @@ import { getSessionRow } from "@/lib/db/repo/sessions";
 import { getTask } from "@/lib/db/repo/tasks";
 import { latestIntegrationForTask, type Integration } from "@/lib/db/repo/integrations";
 import { resolveWhere } from "@/lib/notifications/service";
+import { recordPrChecks, reviewEvidence } from "@/lib/evidence/service";
 import type { ReviewIntegration, ReviewState, ReviewTests } from "./types";
 
 export class ReviewNotFound extends Error {}
@@ -58,11 +59,18 @@ export async function reviewState(sessionId: string): Promise<ReviewState> {
     deletions: measured.reduce((n, c) => n + c.deletions, 0),
   } : null;
   const latest = await latestIntegrationForTask(task.id);
-  const integration = latest ? integrationFor(task.id, latest, await branchHeads(ctx)) : null;
+  const heads = await branchHeads(ctx);
+  const integration = latest ? integrationFor(task.id, latest, heads) : null;
   const anchor = anchorTarget(ctx);
   const pr = anchor?.worktreePath && anchor.remote
     ? await workspacePrStatus({ cwd: anchor.cwd, defaultBranch: anchor.defaultBranch, baseRef: anchor.baseRef }).catch(() => null)
     : null;
   if (pr?.pr?.state === "MERGED") await resolveWhere({ sessionId, kinds: ["review_ready"] });
-  return { taskId: task.id, taskTitle: task.title, sessionId, workspaceId: session.workspaceId, branch: ctx.workspace.branch, changes, integration, pr };
+  const current = [...heads.values()].filter((h): h is string => Boolean(h));
+  if (pr?.pr?.state === "OPEN") await recordPrChecks(task, sessionId, pr.pr, current[0] ?? null).catch((err) => console.error("[thunk] PR check evidence failed", err));
+  const evidence = await reviewEvidence(task, current);
+  return {
+    taskId: task.id, taskTitle: task.title, sessionId, workspaceId: session.workspaceId, branch: ctx.workspace.branch, changes, integration, pr,
+    criteria: task.criteria ?? null, criteriaVersion: task.criteriaVersion ?? 0, evidence,
+  };
 }

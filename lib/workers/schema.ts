@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { TaskInputSchema } from "@/lib/tasks/schema";
+import { CriteriaSchema, TaskInputSchema } from "@/lib/tasks/schema";
+
+const Criteria = CriteriaSchema.optional().describe("Optional acceptance criteria: what done means, each { text, kind } with kind test, interaction, visual, source or other. Only for substantial work.");
 
 const Model = z.string().min(1).max(200);
 export const WORKER_MODES = ["worktree", "scout"] as const;
@@ -17,6 +19,7 @@ export const DelegateObject = z.object({
   mode: z.enum(WORKER_MODES).optional().describe("worktree (default): edits code in its own worktree. scout: read-only in its own environment and returns a report; works without a Git repository."),
   dependsOn: z.array(z.uuid()).max(10).optional().describe("Task IDs that must be done (accepted) before this one starts. The task is queued until then."),
   race: z.array(Model).min(2).max(3).optional().describe("Run the same task on 2–3 models, each in its own worktree. Pick the winner with workers_pick."),
+  criteria: Criteria,
 }).strict();
 export const DelegateSchema = DelegateObject.superRefine((d, ctx) => {
   if (d.workspaceId && d.repoIds) ctx.addIssue({ code: "custom", path: ["workspaceId"], message: "Choose workspaceId or repoIds, not both" });
@@ -33,6 +36,7 @@ export const PlanTaskObject = z.object({
   model: Model.optional(), mode: z.enum(WORKER_MODES).optional(),
   dependsOn: z.array(z.string().trim().min(1).max(40)).max(10).optional().describe("Keys of earlier tasks in this plan."),
   race: z.array(Model).min(2).max(3).optional(),
+  criteria: Criteria,
 }).strict();
 export const DelegationPlanObject = z.object({
   relayId: z.uuid().optional(),
