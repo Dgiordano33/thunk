@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { Sphere } from "@/components/space/sphere";
 import { PLANET_PALETTES } from "@/lib/world/system";
 import { FolderIcon, GitBranchIcon, MessageSquareIcon } from "lucide-react";
@@ -15,7 +16,7 @@ import { HandoffScene } from "./handoff-scene";
 import { Kbd } from "@/components/ui/kbd";
 import { label as shortcutLabel, useIsMac } from "@/lib/capture/shortcut";
 import { useUi } from "@/lib/store/ui-store";
-const LAST = 3;
+const LAST = 4;
 /** Vanilla's plain version of the handoff scene. */
 function Handoff() {
   const steps = [["You relay", "a thought or a note"], ["The chief splits it", "one task per item"], ["Workers build", "each in its own worktree"], ["You decide", "in the Inbox"]];
@@ -34,6 +35,7 @@ export function Hierarchy({ nested = false }: { nested?: boolean }) {
 }
 export function Intro({ hasProjects }: { hasProjects: boolean }) {
   const onboarding = useOnboarding();
+  const { look, setLook } = useLook();
   const pathname = usePathname();
   const desktop = useIsDesktop();
   const open = pathname === "/projects" && !onboarding.seen("intro");
@@ -42,15 +44,40 @@ export function Intro({ hasProjects }: { hasProjects: boolean }) {
   const mac = useIsMac();
   const keys = shortcut && mac !== null ? shortcutLabel(shortcut, mac) : "";
   const close = () => { onboarding.markSeen("intro"); setStep(0); };
-  const title = ["How work is organised", "Where context lives", "Write it down, relay it", "Your agents and setup"][step];
+  const title = ["Choose your theme", "How work is organised", "Where context lives", "Write it down, relay it", "Your agents and setup"][step];
   const content = <div className="space-y-5" onKeyDown={(e) => {
     if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); setStep((s) => Math.max(0, Math.min(LAST, s + (e.key === "ArrowRight" ? 1 : -1)))); }
   }}>
     {desktop ? <><DialogTitle>{title}</DialogTitle><DialogDescription>A quick introduction to Thunk.</DialogDescription></> : <><SheetTitle>{title}</SheetTitle><SheetDescription>A quick introduction to Thunk.</SheetDescription></>}
-    {step === 0 && <div className="space-y-3 text-sm"><p><strong>Project:</strong> a home for your chats, notes, canvases, tasks, and repos.</p><p><strong>Workspace:</strong> a clean environment created automatically when an agent starts an effort.</p><p><strong>Session:</strong> a chat with its own workspace. Agents on the same canvas share its workspace.</p>{desktop && <Hierarchy nested />}</div>}
-    {step === 1 && <div className="space-y-3 text-sm"><p><strong>Notes:</strong> plans and notebooks that you and agents both read and write.</p><p><strong>Tasks:</strong> the work list; send a task to a session.</p><p><strong>Canvas:</strong> boards of cards, images and charts that you and agents build together.</p><p><strong>Vault:</strong> docs, screenshots and transcripts you upload for agents to read.</p><p><strong>Memory:</strong> what agents learn as they work. Harvest keeps a workspace&apos;s memory in the project when the workspace goes.</p><p><strong>Routines:</strong> agent sessions that start on a schedule or event.</p><p>Agents read all of this, so write it down once.</p></div>}
-    {step === 2 && <div className="space-y-3 text-sm">
+    {step === 0 && <div className="space-y-4 text-sm">
+      <div className="grid grid-cols-2 gap-3">
+        {([
+          { value: "space", name: "Space", image: "space", detail: "Explore projects on a planet map." },
+          { value: "vanilla", name: "Plain", image: "plain", detail: "Browse projects in a sidebar and list." },
+        ] as const).map((option) => (
+          <Button
+            key={option.value}
+            variant={look === option.value ? "default" : "outline"}
+            className="h-auto min-w-0 flex-col items-stretch justify-start gap-0 overflow-hidden whitespace-normal p-0 text-left"
+            onClick={() => {
+              if (look !== option.value) setLook(option.value);
+              setStep(1);
+            }}
+          >
+            <Image src={`/onboarding/${option.image}.webp`} alt="" width={1120} height={690} unoptimized className="w-full border-b" />
+            <span className="p-3">
+              <span className="block font-medium">{look === option.value ? "Continue in" : "Switch to"} {option.name}</span>
+              <span className="mt-1 block text-xs font-normal">{option.detail}</span>
+            </span>
+          </Button>
+        ))}
+      </div>
+      <p className="text-muted-foreground text-xs">You can switch later in Settings → Appearance.</p>
+    </div>}
+    {step === 1 && <div className="space-y-3 text-sm"><p><strong>Project:</strong> a home for your chats, notes, canvases, tasks, and repos.</p><p><strong>Workspace:</strong> a clean environment created automatically when an agent starts an effort.</p><p><strong>Session:</strong> a chat with its own workspace. Agents on the same canvas share its workspace.</p>{desktop && <Hierarchy nested />}</div>}
+    {step === 2 && <div className="space-y-3 text-sm"><p><strong>Notes:</strong> plans and notebooks that you and agents both read and write.</p><p><strong>Tasks:</strong> the work list; send a task to a session.</p><p><strong>Canvas:</strong> boards of cards, images and charts that you and agents build together.</p><p><strong>Vault:</strong> docs, screenshots and transcripts you upload for agents to read.</p><p><strong>Memory:</strong> what agents learn as they work. Harvest keeps a workspace&apos;s memory in the project when the workspace goes.</p><p><strong>Routines:</strong> agent sessions that start on a schedule or event.</p><p>Agents read all of this, so write it down once.</p></div>}
+    {step === 3 && <div className="space-y-3 text-sm">
       <p>What you write becomes work agents do in the background, and comes back to you as decisions.</p>
       <HandoffScene />
       {desktop && <Handoff />}
@@ -60,8 +87,8 @@ export function Intro({ hasProjects }: { hasProjects: boolean }) {
       <p><strong>Inbox:</strong> the chief&apos;s answer arrives there as a message. Reply to keep going, or mark it done.</p>
     </div>}
     {step === LAST && <div className="space-y-3 text-sm"><AgentStatus /><p>Project instructions and connectors live in project settings.</p><p>A <code>thunk.json</code> in the repo sets Setup and Run scripts and notebooks.</p></div>}
-    <div className="flex items-center justify-center gap-2" aria-label={`Step ${step + 1} of ${LAST + 1}`}>{[0, 1, 2, 3].map((i) => <span key={i} aria-hidden="true" className={`size-2 rounded-full ${step === i ? "bg-foreground" : "bg-muted-foreground/30"}`} />)}</div>
-    <div className="flex flex-wrap gap-2"><Button className="max-md:self-start" variant="ghost" onClick={close}>Skip</Button><div className="ml-auto flex gap-2">{step > 0 && <Button variant="outline" onClick={() => setStep(step - 1)}>Back</Button>}{step < LAST ? <Button onClick={() => setStep(step + 1)}>Next</Button> : <Button onClick={() => { close(); if (!hasProjects) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-add-project]")?.click()); }}>{hasProjects ? "Done" : "Add your first project"}</Button>}</div></div>
+    <div className="flex items-center justify-center gap-2" aria-label={`Step ${step + 1} of ${LAST + 1}`}>{Array.from({ length: LAST + 1 }, (_, i) => i).map((i) => <span key={i} aria-hidden="true" className={`size-2 rounded-full ${step === i ? "bg-foreground" : "bg-muted-foreground/30"}`} />)}</div>
+    <div className="flex flex-wrap gap-2"><Button className="max-md:self-start" variant="ghost" onClick={close}>Skip</Button><div className="ml-auto flex gap-2">{step > 0 && <Button variant="outline" onClick={() => setStep(step - 1)}>Back</Button>}{step === 0 ? null : step < LAST ? <Button onClick={() => setStep(step + 1)}>Next</Button> : <Button onClick={() => { close(); if (!hasProjects) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-add-project]")?.click()); }}>{hasProjects ? "Done" : "Add your first project"}</Button>}</div></div>
   </div>;
-  return desktop ? <Dialog open={open} onOpenChange={(value) => { if (!value) close(); }}><DialogContent className="max-h-[85dvh] overflow-auto sm:max-w-lg">{content}</DialogContent></Dialog> : <Sheet open={open} onOpenChange={(value) => { if (!value) close(); }}><SheetContent side="bottom" className="max-h-[90dvh] overflow-auto p-5 pb-[max(4rem,env(safe-area-inset-bottom))]">{content}</SheetContent></Sheet>;
+  return desktop ? <Dialog open={open} onOpenChange={(value) => { if (!value) close(); }}><DialogContent className={`max-h-[85dvh] overflow-auto ${step === 0 ? "sm:max-w-5xl" : "sm:max-w-lg"}`}>{content}</DialogContent></Dialog> : <Sheet open={open} onOpenChange={(value) => { if (!value) close(); }}><SheetContent side="bottom" className="max-h-[90dvh] overflow-auto p-5 pb-[max(4rem,env(safe-area-inset-bottom))]">{content}</SheetContent></Sheet>;
 }
