@@ -34,6 +34,7 @@ test('Connections IPC refuses other windows and unexpected actions', async t => 
   let handler;
   let fakeWindow;
   class Window {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- The test captures the window the module constructs.
     constructor() { fakeWindow = this; this.webContents = { mainFrame: { url: '' }, setWindowOpenHandler() {}, on() {} }; }
     on() {}
     async loadURL(url) { this.webContents.mainFrame.url = url; }
