@@ -100,7 +100,7 @@ async function relayLedger(row: Capture) {
  const state = project ? await readWorkerState(project) : null;
  const ids = [...new Set(Object.values(state?.relayTasks?.[row.id] ?? {}))];
  const tasks = (await Promise.all(ids.map(getTask))).filter(t => t !== null);
- return { state, tasks };
+ return { project, state, tasks };
 }
 
 /** Resume the same request and task ledger. No routing or fresh delegation takes place here. Caller holds the capture lock. */
@@ -139,15 +139,23 @@ export async function sweepRelays(now = Date.now()) {
    const receipt=events.find(e=>e.type==='user_message' && e.messageId===row.message_id);
    const dequeued=events.find(e=>e.type==='message_dequeued' && e.messageId===row.message_id);
    const waiting=receipt?.type==='user_message' && receipt.queued && !dequeued;
-   const {state,tasks}=await relayLedger(row);
-   const workersBusy=tasks.some(t=>t.sessionId && BUSY.includes(getSession(t.sessionId)?.meta.status ?? ''));
+   const {project,state,tasks}=await relayLedger(row);
+   const sessionIds=[...new Set(tasks.flatMap(t=>[t.sessionId, ...Object.values(state?.races ?? {}).filter(r=>r.taskId===t.id).flatMap(r=>r.entries.map(e=>e.sessionId))]).filter((id): id is string => Boolean(id)))];
+   const workersBusy=sessionIds.some(id=>BUSY.includes(getSession(id)?.meta.status ?? ''));
    const workersQueued=state?.queue.some(q=>q.input?.relayId===row.id);
+   // A finished worker's report waits in a batch before it reaches the chief; it is still in flight.
+   const {savedReports}=await import('@/lib/workers/report-up');
+   const reportsPending=project ? (await Promise.all(sessionIds.map(id=>savedReports(project,id)))).some(rs=>rs.some(r=>!r.delivered)) : false;
+   const planPending=Object.values(state?.plans ?? {}).some(p=>p.relayId===row.id && p.status==='pending');
+   const outstanding=Boolean(workersBusy || workersQueued || reportsPending || planPending);
+   const terminal=!live || ['closed','error'].includes(live.meta.status);
    let error: string | null=null;
    const latestError=events.findLast(e=>e.type==='error' && e.seq > (dequeued?.seq ?? receipt?.seq ?? 0));
-   if (!live || ['closed','error'].includes(live.meta.status)) {
+   // Outstanding work reports back to the chief, which is resumed then, so a stopped chief alone does not fail the request.
+   if (terminal && !outstanding) {
      error=!row.session_id ? 'Dispatch stopped before a chief session was attached. Retry to deliver this request.' : latestError?.type==='error' ? `The chief stopped: ${latestError.message}` : 'The chief session stopped or the server restarted before it answered.';
-   } else if (waiting || workersBusy || workersQueued || BUSY.includes(live.meta.status)) {
-     if (!waiting && row.status==='queued') await withFileLock(`capture:${row.id}`,async()=>{
+   } else if (outstanding || waiting || BUSY.includes(live!.meta.status)) {
+     if (!terminal && !waiting && row.status==='queued') await withFileLock(`capture:${row.id}`,async()=>{
        const current=(await listCaptures()).find(r=>r.id===row.id);
        if(current?.status==='queued' && current.message_id===row.message_id) await saveCapture({...current,status:'working'});
      });

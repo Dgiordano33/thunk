@@ -10,8 +10,8 @@ const resolve=Module._resolveFilename;
 Module._resolveFilename=function(r,...args){if(r.startsWith('@/')){const base=path.join(__dirname,'..',r.slice(2));r=[base+'.ts',base+'.tsx'].find(fs.existsSync)||base;}return resolve.call(this,r,...args);};
 
 // Fakes for everything a capture touches outside its own table. `calls` records what the service asked for.
-let calls, tasks, queue, delegateResult, notified, resolved, routingResult, live, relayTasks, chiefQueued, chiefError, savedEvents;
-const reset=()=>{relayTasks={};chiefQueued=false;chiefError=null;savedEvents=[];live=[];routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
+let reports, plans, calls, tasks, queue, delegateResult, notified, resolved, routingResult, live, relayTasks, chiefQueued, chiefError, savedEvents;
+const reset=()=>{reports={};plans={};relayTasks={};chiefQueued=false;chiefError=null;savedEvents=[];live=[];routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
 reset();
 const workers={
  delegate:async(projectId,chief,input)=>{calls.push(['delegate',projectId,input]);if(delegateResult instanceof Error)throw delegateResult;return delegateResult;},
@@ -33,7 +33,8 @@ Module._load=function(r,p,m){
  if(r==='@/lib/tasks/service')return {patchTask:async(id,patch)=>{calls.push(['patchTask',id,patch]);},createTask:async(input)=>{const t={id:'t1',...input};tasks.set(t.id,t);return t;}};
  if(r==='@/lib/db/repo/tasks')return {getTask:async(id)=>tasks.get(id)??null,updateTask:async(id,patch)=>{calls.push(['updateTask',id,patch]);}};
  if(r==='@/lib/db/repo/projects')return {getProject:async(id)=>({id})};
- if(r==='@/lib/workers/state')return {readWorkerState:async()=>({queue,relayTasks})};
+ if(r==='@/lib/workers/state')return {readWorkerState:async()=>({queue,relayTasks,plans,races:{}})};
+ if(r==='@/lib/workers/report-up')return {savedReports:async(_project,id)=>reports[id]??[]};
  if(r==='@/lib/workers/service')return workers;
  if(r==='@/lib/projects/archive')return {archiveWorkspace:async(id)=>{calls.push(['archive',id]);}};
  return load.call(this,r,p,m);
@@ -219,6 +220,21 @@ test('a failed reply delivery retains the reply for recovery', async () => {
  await assert.rejects(service.actOnCapture('c','redirect','Finish B'),/Provider unavailable/);
  const failed=await get();assert.equal(failed.status,'failed');assert.equal(parseThread(failed.summary).at(-1).text,'Finish B');
  assert.match(failed.error,/Reply was not delivered/);
+});
+
+test('work still in flight for a relay keeps it working past the grace period', async () => {
+ const old=new Date(0).toISOString();
+ const stale=()=>globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p',updated_at:old}));
+ // A finished worker whose report is still batched for the chief.
+ stale();relayTasks={c:{work:'t9'}};tasks.set('t9',{id:'t9',sessionId:'w',status:'in_progress'});
+ live=[{id:'chief-p',meta:{status:'idle'},events:[]},{id:'w',meta:{status:'idle'},events:[]}];
+ reports={w:[{seq:1,delivered:false}]};assert.equal(await service.sweepRelays(),0);
+ // A plan for this relay waiting on the person's approval.
+ reports={w:[{seq:1,delivered:true}]};plans={x:{relayId:'c',status:'pending'}};assert.equal(await service.sweepRelays(),0);
+ // A chief that errored while its worker still runs is resumed by the worker's report.
+ plans={};live=[{id:'chief-p',meta:{status:'error'},events:[]},{id:'w',meta:{status:'running'},events:[]}];assert.equal(await service.sweepRelays(),0);
+ assert.equal((await get()).status,'working');
+ live=[{id:'chief-p',meta:{status:'idle'},events:[]},{id:'w',meta:{status:'idle'},events:[]}];assert.equal(await service.sweepRelays(),1);
 });
 
 test('unrelated project workers and queues do not conceal a stopped request', async () => {

@@ -52,7 +52,7 @@ const agent = {
 };
 const mocks = {
   "server-only": {},
-  "@/lib/db/repo/captures": { listCaptures: async () => relayRequests, captureTask: async () => null },
+  "@/lib/db/repo/captures": { listCaptures: async (all) => relayRequests.filter((r) => all || !["kept","discarded"].includes(r.status)), captureTask: async () => null },
   "@/lib/agent": agent,
   "@/lib/projects": {
     ensureMainWorkspace: async () => main,
@@ -660,6 +660,14 @@ test("overlapping files are flagged, branches trial-merge into an integration wo
   } finally { project.repos = saved; nextWorkspace = null; }
 });
 
+
+test("a worker report for a closed relay can still lead to follow-up delegation", async () => {
+  const relayId = id(); relayRequests.push({id:relayId,project_id:project.id,status:"kept"});
+  const chief = await service.openChief(project.id);
+  const started = await service.delegate(project.id,chief.id,{relayId,title:"Follow-up after close",brief:"Do it"});
+  assert.ok(started.taskId);
+  await assert.rejects(service.delegate(project.id,chief.id,{relayId:id(),title:"Unknown relay",brief:"Do it"}),/Relay request not found/);
+});
 
 test("resuming a relay reuses its completed and running tasks instead of creating workers twice", async () => {
   const relayId = id(); relayRequests.push({id:relayId,project_id:project.id});

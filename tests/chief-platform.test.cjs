@@ -31,13 +31,22 @@ Module._load = function (r, parent, main) {
 };
 const { chiefTools } = require("../lib/workers/tools.ts");
 const { CHIEF_TOOL_NAMES, PLATFORM_TOOL_NAMES, teamPrompt } = require("../lib/workers/prompt.ts");
-const chief = { id: "chief", meta: { origin: { kind: "chief" }, projectId: "p1", model: "claude-sonnet-5-5" }, ctx: { project, workspace: { slug: "main" } } };
+const chief = { id: "chief", meta: { origin: { kind: "chief" }, projectId: "p1", model: "claude-sonnet-5-5" }, events: [], ctx: { project, workspace: { slug: "main" } } };
 const tools = chiefTools(chief);
 const call = async (name, input = {}) => {
   const result = await tools.find((t) => t.name === name).handler(input);
   if (result.isError) throw new Error(result.content[0].text);
   return JSON.parse(result.content[0].text);
 };
+
+test("a session the chief starts for a relay is tracked with that relay", async () => {
+  const relayId = "11111111-1111-4111-8111-111111111111";
+  chief.events.push({ type: "user_message", seq: 1, messageId: "m1", content: `<relay id="${relayId}">\nDo it\n</relay>` });
+  try {
+    await call("sessions_start", { prompt: "Handle the relay", workspaceId: "w1" });
+    assert.equal(calls.at(-1)[3].relayId, relayId);
+  } finally { chief.events.length = 0; }
+});
 
 test("every platform tool is mounted for the chief only, auto-allowed and named in its prompt", () => {
   for (const name of PLATFORM_TOOL_NAMES) {

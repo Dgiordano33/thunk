@@ -94,7 +94,7 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     if (args.repoIds?.some((id) => !project.repos.some((r) => r.id === id))) throw new Error("Repository does not belong to project");
     const state = await readWorkerState(project);
     if (args.relayId) {
-      const request = (await listCaptures()).find((r) => r.id === args.relayId && r.project_id === projectId);
+      const request = (await listCaptures(true)).find((r) => r.id === args.relayId && r.project_id === projectId);
       if (!request) throw new Error("Relay request not found in this project");
     }
     const taskKey = args.title?.trim().toLocaleLowerCase() ?? (args.noteId ? `note:${args.noteId}` : undefined);
