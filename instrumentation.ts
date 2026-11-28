@@ -18,6 +18,8 @@ export async function register() {
     ensureScheduler();
     const { ensureTriageScheduler } = await import("./lib/home/triage");
     ensureTriageScheduler();
+    const { ensureBackupScheduler } = await import("./lib/backup/service");
+    ensureBackupScheduler();
     const { recoverVaultQueue } = await import("./lib/vault/service");
     void recoverVaultQueue().catch((err) => console.error("[thunk] vault recovery failed", err));
   }

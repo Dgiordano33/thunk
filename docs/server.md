@@ -96,11 +96,59 @@ CLAUDE_CODE_OAUTH_TOKEN=...            # from `claude setup-token`
 
 ## Keep your data
 
-Projects, workspaces, sessions, tasks and routines are kept in an embedded database in `~/.thunk/db`, beside the memory, notes and vault files, so they survive restarts and updates with no setup. Back up `~/.thunk` to keep everything; the Droplet's weekly backups already include it.
+Projects, workspaces, sessions, tasks and routines are kept in an embedded database in `~/.thunk/db`, beside the memory, notes and vault files, so they survive restarts and updates with no setup. Thunk backs all of it up every day; see [Backups](#backups). The Droplet's weekly backups also include `~/.thunk`.
 
 To use your own Postgres instead, such as Supabase, add `DATABASE_URL` with `thunk env`. For Supabase, copy the **Session pooler** string from **Connect** in the dashboard; Supabase's direct connection is IPv6-only unless you add its IPv4 add-on. Do not point the server and the Mac at the same database while both are running: both would run the scheduler and delivery polling.
 
 **Upgrading a server that used `SUPABASE_URL`.** Add `DATABASE_URL` with `thunk env` *before* deploying a version that needs it; older versions ignore it. A new version that finds only `SUPABASE_URL` keeps Thunk running but refuses to use any database, and `thunk doctor` shows `Data: NOT CONNECTED`. Remove the `SUPABASE_*` lines once `thunk doctor` shows `Database: ok`.
+
+## Backups
+
+Every day Thunk writes one archive, `~/.thunk/backups/thunk-<date>.tar.gz`, holding:
+
+- `projects/`, `config/` and `homes/` from `~/.thunk`: notes, memory, Vault, canvases, connectors and settings.
+- `db/<table>.jsonl`: every database table, read in one consistent snapshot. The format is the same for the embedded database and `DATABASE_URL`, so an archive from one restores into the other.
+- `manifest.json`: when it was made, the Thunk commit, the last migration, and row and file counts.
+
+Archives stay on the machine that runs Thunk. They protect against a bad write, a bad migration or a deleted project, not against losing the machine. To keep them elsewhere, point `dir` at a mounted volume.
+
+**The archive includes `config/integrations.json`, which holds your Linear and Slack tokens.** Archives are written with mode 0600 (readable only by your user) in a folder with mode 0700. Treat a copied archive like a password file.
+
+### Settings
+
+In **Settings → Automation → Backups**: on or off, the time of day, how many to keep, when the last one ran and its size, and **Back up now**. They are stored in `~/.thunk/config/backup.json`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Run the daily backup |
+| `time` | `"03:00"` | Time of day, in `tz` (your browser's time zone when saved from Settings), else the server's |
+| `keep` | `7` | Archives kept; older ones are deleted after each backup |
+| `dir` | `~/.thunk/backups` | Where archives go; an absolute path. Edit the file to change it |
+
+A backup missed while the server was off runs within a minute of starting. A failed backup shows its error in Settings and is retried an hour later. While the backup reads the embedded database (a few seconds), other database requests wait for it. A second Thunk that keeps its data in memory, because another one holds the database, does not back up.
+
+### From the command line
+
+```sh
+cd ~/thunk-server
+npm run data:backup                          # one archive now, then prune to `keep`
+npm run data:backup -- --with-transcripts    # also ~/.claude/projects
+```
+
+When the server is running and holds the embedded database, `data:backup` asks it to make the backup over `http://127.0.0.1:$PORT`; set `PORT` if it isn't 4500 (`PORT=4600 npm run data:backup` on a default server). Claude transcripts are left out by default because messages are already in the database; only resuming an old session needs them.
+
+### Restore
+
+```sh
+thunk stop
+cd ~/thunk-server
+npm run data:restore thunk-2026-11-27T03-00-00-000Z.tar.gz   # a name in the backups folder, or a path
+thunk start
+```
+
+Restore refuses while a Thunk holds `~/.thunk/db/thunk.lock`, and refuses an archive from a newer Thunk than the checkout. It moves the current `~/.thunk` to `~/.thunk.before-restore-<date>` (the `backups/` folder comes back with it), unpacks the files, creates a fresh database and loads every table. With `DATABASE_URL`, the database's current rows are saved to `~/.thunk.before-restore-<date>/db/` first, and the tables are replaced in one transaction. Transcripts in the archive are merged into `~/.claude/projects` without overwriting newer files. If anything fails, the previous data is put back. Delete the `.before-restore` folder once Thunk looks right.
+
+Routines come back as they were. Restoring a server's archive on a Mac (or the other way) while the original keeps running would fire them twice; turn them off on one side, or use `npm run db:pull` for a development copy.
 
 ## Browser tools
 

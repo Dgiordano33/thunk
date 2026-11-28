@@ -9,6 +9,8 @@
     "dev": "next dev -H 127.0.0.1 --port ${PORT:-${THUNK_PORT:-${CONDUCTOR_PORT:-4500}}}",
     "build": "next build",
     "db:pull": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db-pull.mjs",
+    "data:backup": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/backup.mjs",
+    "data:restore": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/restore.mjs",
     "server:sync-config": "node scripts/server/sync-config.mjs",
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
