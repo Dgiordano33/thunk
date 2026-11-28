@@ -7,6 +7,7 @@ export type WorkerMode = (typeof WORKER_MODES)[number];
 
 /** The plain object, for MCP tool shapes. DelegateSchema adds the cross-field rules. */
 export const DelegateObject = z.object({
+  relayId: z.uuid().optional().describe("The relay request this task belongs to. Preserve it when resuming work."),
   taskId: z.uuid().optional(), title: TaskInputSchema.shape.title.optional(),
   brief: z.string().max(20_000).optional(), noteId: TaskInputSchema.shape.noteId,
   workspaceId: z.uuid().optional().describe("Existing project workspace UUID. Omit for a fresh worktree; cannot combine with repoIds, scout or race."),
@@ -34,6 +35,7 @@ export const PlanTaskObject = z.object({
   race: z.array(Model).min(2).max(3).optional(),
 }).strict();
 export const DelegationPlanObject = z.object({
+  relayId: z.uuid().optional(),
   summary: z.string().trim().min(1).max(4000),
   tasks: z.array(PlanTaskObject).min(1).max(12),
   noteId: TaskInputSchema.shape.noteId,

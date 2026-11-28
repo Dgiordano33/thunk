@@ -18,6 +18,7 @@ const persisted = new Map();
 const tasks = new Map();
 const notes = new Map();
 const notifications = [];
+const relayRequests = [];
 let setupFailure = false;
 let workspaceInputs = [];
 const archivedWorkspaces = [];
@@ -51,6 +52,7 @@ const agent = {
 };
 const mocks = {
   "server-only": {},
+  "@/lib/db/repo/captures": { listCaptures: async () => relayRequests, captureTask: async () => null },
   "@/lib/agent": agent,
   "@/lib/projects": {
     ensureMainWorkspace: async () => main,
@@ -655,4 +657,19 @@ test("overlapping files are flagged, branches trial-merge into an integration wo
     assert.equal(archived.some((x) => x.workspaceId === wsA.id), false, "done but unmerged work is kept");
     assert.equal(archived.some((x) => x.workspaceId === wsB.id), false, "open tasks are kept");
   } finally { project.repos = saved; nextWorkspace = null; }
+});
+
+
+test("resuming a relay reuses its completed and running tasks instead of creating workers twice", async () => {
+  const relayId = id(); relayRequests.push({id:relayId,project_id:project.id});
+  const chief = await service.openChief(project.id);
+  const first = await service.delegate(project.id,chief.id,{relayId,title:"Unique recovery work",brief:"Do it"});
+  const count=tasks.size;
+  const again=await service.delegate(project.id,chief.id,{relayId,title:"Unique recovery work",brief:"Do it"});
+  assert.equal(again.taskId,first.taskId);assert.equal(again.reused,true);assert.equal(tasks.size,count);
+  tasks.get(first.taskId).status="done";
+  const completed=await service.delegate(project.id,chief.id,{relayId,taskId:first.taskId});
+  assert.equal(completed.reused,true);assert.equal(completed.status,"done");assert.equal(tasks.size,count);
+  const state=await load("@/lib/workers/state").readWorkerState(project);
+  assert.equal(state.relayTasks[relayId]["unique recovery work"],first.taskId);
 });

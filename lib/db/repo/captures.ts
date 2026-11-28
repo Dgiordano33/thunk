@@ -28,5 +28,5 @@ export async function captureTask(taskId: string, patch: Partial<Capture>) {
 export async function notifyReady(row: Capture) {
  if (!row.project_id) return;
  const {notify}=await import('@/lib/notifications/service');
- await notify({kind:'capture_ready',urgency:'action',projectId:row.project_id,workspaceId:row.workspace_id,sessionId:row.session_id,subjectKey:`capture:${row.id}`,title:row.title || row.text,detail:lastReport(row.summary),href:'/inbox'});
+ await notify({kind:'capture_ready',urgency:row.next_step || lastReport(row.summary)?.startsWith('Blocked:') ? 'action' : 'info',projectId:row.project_id,workspaceId:row.workspace_id,sessionId:row.session_id,requestKey:`capture:${row.id}`,subjectKey:`capture:${row.id}`,title:row.title || row.text,detail:lastReport(row.summary),href:'/inbox'});
 }

@@ -80,7 +80,7 @@ test('quick context explains a request and a typed reply answers the agent witho
 
     // The answers reached the sessions.
     await page.goto(permission.href);
-    await expect(page.getByText(/denied/i).first()).toBeVisible({ timeout: 60000 });
+    await expect(page.getByRole('img', { name: 'Denied', exact: true })).toBeVisible({ timeout: 60000 });
     await page.goto(question.href);
     await expect(page.getByText('Keep the workspace bar, but drop the branch name.')).toBeVisible({ timeout: 60000 });
 });
@@ -198,11 +198,11 @@ test('triage loop: answering a decision opens the next one, number keys answer, 
     expect(events).toContain('"type":"permission_resolved","requestId":"r1","decision":"allow"');
 
     // Earlier: the long session's three finished turns are one row with a count.
-    const fold = page.getByRole('button', { name: 'Show 2 earlier updates from this session' });
+    const fold = page.getByRole('button', { name: 'Show 2 earlier updates for this request' });
     await expect(fold).toBeVisible();
     await expect(page.locator('[data-notification]', { hasText: 'Long session · Turn finished' })).toHaveCount(1);
     await fold.click();
     await expect(page.locator('[data-notification]', { hasText: 'Long session · Turn finished' })).toHaveCount(3);
-    await page.getByRole('button', { name: 'Hide 2 earlier updates from this session' }).scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'Hide 2 earlier updates for this request' }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${SHOTS}/session-fold.png` });
 });

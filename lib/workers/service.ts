@@ -1,4 +1,4 @@
-import { captureTask } from '@/lib/db/repo/captures';
+import { captureTask, listCaptures } from '@/lib/db/repo/captures';
 import "server-only";
 import { linearBranch } from "@/lib/integrations/linear/sync";
 import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
@@ -10,7 +10,7 @@ import { getTask, listTasks } from "@/lib/db/repo/tasks";
 import { createTask, patchTask } from "@/lib/tasks/service";
 import { withFileLock } from "@/lib/notes/file-write";
 import { loadEvents } from "@/lib/db/repo/messages";
-import { notify } from "@/lib/notifications/service";
+import { notify, resolveBySubject } from "@/lib/notifications/service";
 import { routineSlug } from "@/lib/routines/types";
 import type { SessionMeta } from "@/lib/agent/types";
 import { startWorkerSession, sendBrief } from "./start";
@@ -53,10 +53,13 @@ export async function openChief(projectId: string, fresh = false) {
 }
 
 /** Send a message to the project's chief, resuming or starting it. Returns where it lives. */
-export async function messageChief(projectId: string, content: string) {
+export async function messageChief(projectId: string, content: string, messageId?: string, prepare?: (target: { sessionId: string; workspaceId: string }) => Promise<void>) {
   const chief = await openChief(projectId);
-  pushUserMessage(chief, content);
-  return { sessionId: chief.id, workspaceId: chief.meta.workspaceId };
+  // Persist the destination before dispatch so recovery can find the receipt even if the server stops immediately after send.
+  await prepare?.({ sessionId: chief.id, workspaceId: chief.meta.workspaceId });
+  const receipt = pushUserMessage(chief, content, { messageId });
+  const queued = chief.queuedMessages?.some((m) => m.id === receipt) ?? false;
+  return { sessionId: chief.id, workspaceId: chief.meta.workspaceId, messageId: receipt, queued };
 }
 
 const ACTIVE_STATES = ["starting", "running", "awaiting"];
@@ -89,14 +92,36 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
       if (chief?.meta.projectId !== projectId || chief.meta.origin?.kind !== "chief") throw new Error("Only this project's chief can delegate");
     }
     if (args.repoIds?.some((id) => !project.repos.some((r) => r.id === id))) throw new Error("Repository does not belong to project");
-    if (args.workspaceId) await workerTarget(projectId, args.workspaceId);
-    else if ((args.mode ?? "worktree") === "worktree") selectRepos(project, args.repoIds);
-    let task = args.taskId ? await getTask(args.taskId) : null;
-    if (args.taskId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
+    const state = await readWorkerState(project);
+    if (args.relayId) {
+      const request = (await listCaptures()).find((r) => r.id === args.relayId && r.project_id === projectId);
+      if (!request) throw new Error("Relay request not found in this project");
+    }
+    const taskKey = args.title?.trim().toLocaleLowerCase() ?? (args.noteId ? `note:${args.noteId}` : undefined);
+    const rememberTask = async (task: Task) => {
+      if (!args.relayId) return;
+      const relayId = args.relayId;
+      await updateWorkerState(project, (s) => {
+        const ledger = s.relayTasks[relayId] ??= {};
+        ledger[`id:${task.id}`] = task.id;
+        ledger[taskKey ?? task.title.trim().toLocaleLowerCase()] ??= task.id;
+      });
+    };
+    const previousId = args.relayId && taskKey ? state.relayTasks[args.relayId]?.[taskKey] : undefined;
+    // Recovery reuses the original ledger. A repeated delegate cannot launch another copy of an existing worker.
+    const requestedId = args.taskId ?? previousId;
+    let task = requestedId ? await getTask(requestedId) : null;
+    if (requestedId && (!task || task.projectId !== projectId)) throw new Error("Task not found in this project");
+    if (task && args.relayId && (task.sessionId || task.status === "done" || state.queue.some((q) => q.taskId === task!.id))) {
+      await rememberTask(task);
+      return { taskId: task.id, sessionId: task.sessionId, workspaceId: task.workspaceId, reused: true as const, status: task.status, message: "Existing task preserved. Inspect its report; use workers_message only for unfinished work." };
+    }
+    if (task?.status === "done") throw new Error("This task is already completed; create a new task only for new work");
     const owner = task?.sessionId && getSession(task.sessionId);
     if (owner && owner.id !== chiefSessionId && ACTIVE_STATES.includes(owner.meta.status)) throw new Error("Task already has an active session");
-    const state = await readWorkerState(project);
     if (task && state.queue.some((q) => q.taskId === task!.id)) throw new Error("Task is already queued");
+    if (args.workspaceId) await workerTarget(projectId, args.workspaceId);
+    else if ((args.mode ?? "worktree") === "worktree") selectRepos(project, args.repoIds);
     const dependsOn = [...new Set(args.dependsOn ?? [])];
     if (task && dependsOn.includes(task.id)) throw new Error("A task cannot depend on itself");
     const deps = await dependencyState(projectId, dependsOn);
@@ -104,6 +129,7 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     const noteId = args.noteId ?? task?.noteId;
     const note = noteId ? await noteBrief(project, noteId) : null;
     if (!task) task = await createTask({ projectId, title: args.title ?? note?.note.title.slice(0, 200) ?? "Delegated task", body: args.brief ?? null, noteId }, { createdBy: chiefSessionId ? "agent" : "user", createdInSessionId: chiefSessionId });
+    await rememberTask(task);
     const need = args.race?.length ?? 1;
     const free = MAX_WORKERS_PER_PROJECT - activeWorkers(projectId);
     if (deps.waiting.length || free < need) {
@@ -148,7 +174,7 @@ async function launch(project: Project, task: Task, args: DelegateInput, chiefSe
           // Linear attaches the PR to the issue when the branch carries its key.
           ...(task.external?.source === "linear" ? { branch: linearBranch(task.external.key, task.title) } : {}) });
       const live = await startWorkerSession({ workspaceId: workspace.id, title: raceId ? `${task.title} · ${model}` : task.title, model, permissionMode: scout ? "default" : args.permissionMode ?? "default",
-        origin: { kind: "worker", chiefSessionId, taskId: task.id, ...(target ? { existingWorkspace: true } : {}), ...(scout ? { scout: true } : {}), ...(raceId ? { raceId } : {}) } });
+        origin: { kind: "worker", chiefSessionId, taskId: task.id, ...(args.relayId ? { relayId: args.relayId } : {}), ...(target ? { existingWorkspace: true } : {}), ...(scout ? { scout: true } : {}), ...(raceId ? { raceId } : {}) } });
       started.push(live);
       entries.push({ sessionId: live.id, workspaceId: workspace.id, model: live.meta.model });
     }
@@ -368,8 +394,9 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
       overlaps.length ? `Overlaps: ${overlaps.map((o) => `${o.title} (${o.taskId}) on ${o.paths.slice(0, 5).join(", ")}${o.paths.length > 5 ? ` +${o.paths.length - 5}` : ""}`).join("; ")}` : "",
       `Workspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}`,
     ];
-    const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
-    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: "info", subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
+    const content = `<worker_report task="${origin.taskId}" session="${meta.id}" seq="${seq}" status="${status}"${origin.relayId ? ` relay="${origin.relayId}"` : ""}${race ? ` race="${race.id}"` : ""}>\n${lines.filter(Boolean).join("\n")}\n</worker_report>`;
+    if (previous) await resolveBySubject(`worker:${meta.id}:report:${previous.seq}`);
+    if (!capture) await notify({ projectId: meta.projectId, workspaceId: meta.workspaceId, sessionId: meta.id, kind: "worker_report", urgency: status === "failed" || status === "blocked" ? "action" : "info", requestKey: origin.relayId ? `capture:${origin.relayId}` : undefined, subjectKey: `worker:${meta.id}:report:${seq}`, title: `Worker · ${task?.title ?? origin.taskId} · ${status === "done" ? "Work completed" : status}`, detail: content, href: sessionPath(ctx.project, ctx.workspace, meta.id) });
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
     await queueReport(ctx.project, meta, seq, content);
     scheduleDrain(meta.projectId);

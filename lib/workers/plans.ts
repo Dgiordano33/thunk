@@ -30,7 +30,7 @@ export async function proposePlan(projectId: string, chiefSessionId: string, inp
   const path = `/api/projects/${projectId}/chief/plans/${plan.id}`;
   await notify({
     projectId, workspaceId: chief.meta.workspaceId, sessionId: chiefSessionId, kind: "delegation_plan", urgency: "action",
-    subjectKey: subject(plan.id), title: `Chief plan · ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}`,
+    requestKey: plan.relayId ? `capture:${plan.relayId}` : undefined, subjectKey: subject(plan.id), title: `Chief plan · ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}`,
     detail: renderPlan(plan), href: sessionPath(chief.ctx.project, chief.ctx.workspace, chiefSessionId),
     actions: [
       { label: "Approve", method: "POST", path, body: { decision: "approve" } },
@@ -61,7 +61,7 @@ export async function decidePlan(projectId: string, planId: string, decision: "a
         if (missing.length) { results.push({ key: t.key, title: t.title, error: `Skipped: ${missing.join(", ")} did not start` }); continue; }
         try {
           const started = await delegate(projectId, chiefId && getSession(chiefId)?.meta.origin?.kind === "chief" ? chiefId : null, {
-            title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId,
+            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId,
             dependsOn: t.dependsOn?.map((k) => plan.taskIds[k]),
           });
           plan.taskIds[t.key] = started.taskId;

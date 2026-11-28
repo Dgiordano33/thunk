@@ -59,7 +59,7 @@ const INFO: Partial<Record<NotificationKind, string>> = {
   turn_finished: "The agent finished its turn. Nothing is required; reply to keep it going.",
   turn_failed: "The turn failed. Reply to retry or redirect it.",
   session_error: "The session hit an error. Reply to retry, or open it to see what happened.",
-  worker_report: "A worker reported back. Nothing is required.",
+  worker_report: "A worker reported its result. Work completed does not mean reviewed or merged; inspect the report for blockers.",
   run_succeeded: "A routine run finished. Nothing is required.",
   run_failed: "A routine run failed. Open it to see the output.",
   script_failed: "A workspace script failed. Open the workspace to see its output.",
@@ -88,7 +88,7 @@ export function needFor(n: Pick<Notification, "kind" | "urgency" | "status">, op
 
 /** Whether a typed reply can reach an agent, and what it does there. `pending`: the request is still waiting in a live session. */
 export function replyFor(n: Pick<Notification, "kind" | "sessionId">, pending: boolean): NotificationContext["reply"] {
-  if (!n.sessionId) return null;
+  if (!n.sessionId || n.kind === "capture_ready") return null; // Relay has its own tracked reply composer.
   if (pending && n.kind === "question") return { mode: "answer", placeholder: "Answer in your own words…", send: "Send answer" };
   if (pending && n.kind === "permission") return { mode: "deny", placeholder: "Deny, and tell the agent what to do instead…", send: "Deny with note" };
   if (pending && n.kind === "plan") return { mode: "changes", placeholder: "Ask for changes to the plan…", send: "Request changes" };

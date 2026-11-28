@@ -1,6 +1,6 @@
 "use client";
 import { subscribeAppEvents } from "@/lib/client/app-events";
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Capture } from '@/lib/capture/types';
 
@@ -9,6 +9,8 @@ export function useCaptures() {
   const [rows, setRows] = useState<Capture[]>([]);
   const [limit, setLimit] = useState(8);
   const [error, setError] = useState('');
+  const inflight = useRef(new Set<string>());
+  const [pending, setPending] = useState<Set<string>>(new Set());
   // A redirect that names a project offers to keep that routing as a Home rule.
   const [rule, setRule] = useState<{ id: string; text: string } | null>(null);
   const refresh = useCallback(async () => {
@@ -24,6 +26,8 @@ export function useCaptures() {
     return () => unsubscribe();
   }, [refresh]);
   const act = useCallback(async function act(id: string, action: string, text?: string): Promise<boolean> {
+    if (inflight.current.has(id)) return false;
+    inflight.current.add(id); setPending(new Set(inflight.current));
     try {
       const r = await fetch(`/api/captures/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       if (!r.ok) throw new Error((await r.json()).error);
@@ -32,12 +36,18 @@ export function useCaptures() {
       if (action === 'discard') toast('Thought discarded', { action: { label: 'Undo', onClick: () => void act(id, 'restore') } });
       return true;
     } catch (e) { setError((e as Error).message); return false; }
+    finally { inflight.current.delete(id); setPending(new Set(inflight.current)); }
   }, [refresh]);
   const retry = useCallback(async (id: string, projectId?: string) => {
+    if (inflight.current.has(id)) return;
+    inflight.current.add(id); setPending(new Set(inflight.current));
+    try {
     const r = await fetch(`/api/captures/${id}/retry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId }) });
-    if (!r.ok) setError((await r.json()).error);
+    if (!r.ok) throw new Error((await r.json()).error);
     await refresh();
+    } catch(e) { setError((e as Error).message); }
+    finally { inflight.current.delete(id); setPending(new Set(inflight.current)); }
   }, [refresh]);
-  return { rows, limit, error, refresh, act, retry, rule, setRule };
+  return { rows, pending, limit, error, refresh, act, retry, rule, setRule };
 }
 export type Captures = ReturnType<typeof useCaptures>;

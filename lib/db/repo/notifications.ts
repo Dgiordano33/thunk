@@ -10,13 +10,13 @@ const mem = (g.__thunkMemNotifications ??= new Map());
 function fromRow(r: Row): Notification {
   return { id: r.id, kind: r.kind as NotificationKind, urgency: r.urgency as Notification["urgency"],
     projectId: r.project_id, workspaceId: r.workspace_id, sessionId: r.session_id, runId: r.run_id,
-    subjectKey: r.subject_key, title: r.title, detail: r.detail, href: r.href, actions: r.actions as Notification["actions"],
+    requestKey: r.request_key, subjectKey: r.subject_key, title: r.title, detail: r.detail, href: r.href, actions: r.actions as Notification["actions"],
     status: r.status as Notification["status"], readAt: r.read_at, resolvedAt: r.resolved_at, createdAt: r.created_at, updatedAt: r.updated_at };
 }
 export async function openNotification(input: NewNotification): Promise<{ row: Notification; created: boolean }> {
   const client = db();
   const now = new Date().toISOString();
-  const values = { workspaceId: null, sessionId: null, runId: null, detail: null, actions: [], ...input };
+  const values = { requestKey: null, workspaceId: null, sessionId: null, runId: null, detail: null, actions: [], ...input };
   if (!client) {
     const existing = [...mem.values()].find((n) => n.subjectKey === input.subjectKey && n.status === "open");
     const row: Notification = existing ? { ...existing, ...values, updatedAt: now } : {
@@ -28,7 +28,7 @@ export async function openNotification(input: NewNotification): Promise<{ row: N
     return { row, created: !existing };
   }
   const fields = { kind: values.kind, urgency: values.urgency, project_id: values.projectId,
-    workspace_id: values.workspaceId, session_id: values.sessionId, run_id: values.runId, subject_key: values.subjectKey,
+    workspace_id: values.workspaceId, session_id: values.sessionId, run_id: values.runId, subject_key: values.subjectKey, request_key: values.requestKey,
     title: values.title, detail: values.detail, href: values.href, actions: values.actions as Json };
   // The partial unique index arbitrates concurrent producers, including other server processes.
   try {
@@ -122,7 +122,7 @@ export async function restore(ids: string[]): Promise<Notification[]> {
 }
 export async function markRead(ids: string[]) {
   const read = await change({ ids }, undefined, true);
-  const resolved = await change({ ids: read.filter((n) => n.urgency === "info").map((n) => n.id) }, "resolved");
+  const resolved = await change({ ids: read.filter((n) => n.urgency === "info" && n.kind !== "capture_ready").map((n) => n.id) }, "resolved");
   return [...new Map([...read, ...resolved].map((n) => [n.id, n])).values()];
 }
 export async function countOpen(): Promise<NotificationCounts> {

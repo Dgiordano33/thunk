@@ -13,7 +13,10 @@ let made = 0;
 export async function newWorkspace(request: APIRequestContext, files: Record<string, string>): Promise<Workspace> {
     const res = await request.post('/api/projects', { data: { name: `Files ${Date.now().toString(36)} ${++made}`, repos: [] } });
     expect(res.ok(), await res.text()).toBe(true);
-    const { project, workspace } = await res.json();
+    const { project } = await res.json();
+    const created = await request.post('/api/workspaces', { data: { projectId: project.id } });
+    expect(created.ok(), await created.text()).toBe(true);
+    const { workspace } = await created.json();
     for (const [p, body] of Object.entries(files)) {
         const at = path.join(workspace.cwd, p);
         if (p.endsWith('/')) { mkdirSync(at, { recursive: true }); continue; }

@@ -255,3 +255,22 @@ test("database undo reopens dismissed rows without colliding with a newer open r
   assert.equal(restored[0].status, "open"); assert.equal(restored[0].resolvedAt, null);
   assert.deepEqual((await repo.listNotifications()).map((n) => n.subjectKey).sort(), ["r:1", "r:2"]);
 });
+
+
+test("a persisted request group keeps distinct approvals and reading an answer does not close it", async (t) => {
+  const { testDb } = require("./helpers/test-db.cjs");
+  const db = await testDb();
+  const mocked=t.mock.method(require("../lib/db/server.ts"),"db",()=>db);
+  t.after(()=>{mocked.mock.restore();return db.close();});
+  const [p]=await db.query("insert into projects (name,data_key,slug) values ('Request','request','request') returning id");
+  const group={...base,projectId:p.id,sessionId:undefined,requestKey:'capture:one'};
+  const a=(await repo.openNotification({...group,subjectKey:'permission:push',kind:'permission'})).row;
+  const b=(await repo.openNotification({...group,subjectKey:'permission:merge',kind:'permission'})).row;
+  assert.notEqual(a.id,b.id);assert.equal(a.requestKey,b.requestKey);
+  await repo.resolveBySubject(a.subjectKey);
+  assert.equal((await repo.getNotification(b.id)).status,'open');
+  const answer=(await repo.openNotification({...group,subjectKey:'capture:one',kind:'capture_ready',urgency:'info'})).row;
+  await repo.markRead([answer.id]);
+  assert.equal((await repo.getNotification(answer.id)).status,'open');
+  assert.ok((await repo.getNotification(answer.id)).readAt);
+});

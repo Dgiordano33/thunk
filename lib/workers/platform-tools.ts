@@ -62,7 +62,7 @@ export function platformTools(live: LiveSession, define: Define) {
         else workspaceId = (await (await import("@/lib/projects")).createWorkspace({ projectId: project.id, visibility: "workspace", setup: "await" })).id;
         const { delegate } = await import("./service");
         const started = await delegate(project.id, live.id, { title: name, brief: prompt, workspaceId, ...(model ? { model } : {}), ...(permissionMode ? { permissionMode } : {}) });
-        if (!("sessionId" in started)) return { ...started, workspaceId, note: "Queued: it starts when a worker slot frees." };
+        if (!("sessionId" in started) || !started.sessionId || !started.workspaceId) return { ...started, workspaceId, note: "Queued: it starts when a worker slot frees." };
         const { hrefForSession } = await import("@/lib/routes.server");
         return { ...started, href: await hrefForSession(started.workspaceId, started.sessionId) };
       }),

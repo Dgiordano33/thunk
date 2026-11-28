@@ -1,3 +1,4 @@
+import { relayIdFor } from "@/lib/capture/request";
 import { canvasPath } from "@/lib/routes";
 import type { LiveSession } from "@/lib/agent/session-registry";
 import type { HarnessEvent } from "@/lib/agent/types";
@@ -9,7 +10,8 @@ const PERMISSION_LABELS = { allow: "Allow", allow_always: "Allow for this sessio
 
 export async function sessionNotification(live: LiveSession, e: HarnessEvent & { advice?: string }) {
   const sessionId = live.id;
-  const base = { projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
+  const relayId = relayIdFor(live.meta.origin, live.events, e.seq);
+  const base = { requestKey: relayId ? `capture:${relayId}` : live.meta.origin?.kind === "routine" ? `run:${live.meta.origin.runId}` : undefined, projectId: live.meta.projectId, workspaceId: live.meta.workspaceId, sessionId,
     href: live.meta.origin?.kind === "board" ? canvasPath(live.ctx.project, live.meta.origin.boardId) : await hrefForSession(live.meta.workspaceId, sessionId) };
   if (e.type === "ask_question" && e.routedTo) return;
   if (e.type === "question_escalated") {
@@ -36,7 +38,7 @@ export async function sessionNotification(live: LiveSession, e: HarnessEvent & {
       detail: e.type === "permission_request" ? e.description ?? e.decisionReason ?? JSON.stringify(e.input) : e.type === "plan_proposed" ? e.plan : e.advice ?? null, actions });
   } else if (e.type === "permission_resolved" || e.type === "question_resolved" || e.type === "plan_resolved") {
     await resolveBySubject(`session:${sessionId}:req:${e.requestId}`);
-  } else if (e.type === "result" && live.meta.origin?.kind !== "routine" && live.meta.origin?.kind !== "worker" && live.meta.origin?.kind !== "top_chief") {
+  } else if (e.type === "result" && live.meta.origin?.kind !== "routine" && live.meta.origin?.kind !== "worker" && live.meta.origin?.kind !== "top_chief" && !relayId) {
     await notify({ ...base, kind: e.isError ? "turn_failed" : "turn_finished", urgency: "info",
       subjectKey: `session:${sessionId}:result:${e.seq}`, title: `${live.meta.title || "Agent"} · ${e.isError ? "Turn failed" : "Turn finished"}` });
   } else if (e.type === "error") {

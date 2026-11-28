@@ -323,14 +323,15 @@ function emitNow(live: LiveSession, body: HarnessEventBody) {
 export function pushUserMessage(
   live: LiveSession,
   content: string,
-  opts: { kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number }; images?: PromptImage[]; expandedContent?: string } = {},
+  opts: { messageId?: string; kind?: "prompt" | "revision"; documentId?: string; stat?: { edits: number; comments: number }; images?: PromptImage[]; expandedContent?: string } = {},
 ) {
   if (live.driver.isClosed) throw new Error("Session is closed");
   const queued = live.meta.status === "running" || live.meta.status === "awaiting";
   if (!live.meta.title && opts.kind !== "revision") {
     live.meta.title = content.replace(/\s+/g, " ").trim().slice(0, 80);
   }
-  const messageId = crypto.randomUUID();
+  const messageId = opts.messageId ?? crypto.randomUUID();
+  if (live.events.some((e) => e.type === "user_message" && e.messageId === messageId)) return messageId;
   emit(live, {
     type: "user_message",
     messageId,

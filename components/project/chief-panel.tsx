@@ -43,7 +43,7 @@ export function ChiefPanel({ projectId }: { projectId: string }) {
         ["Running", team.running],
         ["Waiting", team.waiting],
         ...(team.queued ? [["Queued", team.queued] as [string, React.ReactNode]] : []),
-        ["Done today", team.done],
+        ["Work completed today", team.done],
         ["Chief spend", usd(team.costUsd)],
         ["Worker spend today", usd(team.workerCostUsdToday)],
       ]}

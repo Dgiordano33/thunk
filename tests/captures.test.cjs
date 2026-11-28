@@ -10,14 +10,14 @@ const resolve=Module._resolveFilename;
 Module._resolveFilename=function(r,...args){if(r.startsWith('@/')){const base=path.join(__dirname,'..',r.slice(2));r=[base+'.ts',base+'.tsx'].find(fs.existsSync)||base;}return resolve.call(this,r,...args);};
 
 // Fakes for everything a capture touches outside its own table. `calls` records what the service asked for.
-let calls, tasks, queue, delegateResult, notified, resolved, routingResult, live;
-const reset=()=>{live=[];routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
+let calls, tasks, queue, delegateResult, notified, resolved, routingResult, live, relayTasks, chiefQueued, chiefError, savedEvents;
+const reset=()=>{relayTasks={};chiefQueued=false;chiefError=null;savedEvents=[];live=[];routingResult=null;calls=[];tasks=new Map();queue=[];delegateResult={taskId:'t1'};notified=[];resolved=[];globalThis.__captures?.clear();};
 reset();
 const workers={
  delegate:async(projectId,chief,input)=>{calls.push(['delegate',projectId,input]);if(delegateResult instanceof Error)throw delegateResult;return delegateResult;},
  messageWorker:async(...a)=>{calls.push(['message',...a]);},
  stopWorker:async(...a)=>{calls.push(['stop',...a]);},
- messageChief:async(projectId,content)=>{calls.push(['chief',projectId,content]);return {sessionId:'chief-'+projectId,workspaceId:'main-'+projectId};},
+ messageChief:async(projectId,content,messageId,prepare)=>{calls.push(['chief',projectId,content,messageId]);await prepare?.({sessionId:'chief-'+projectId,workspaceId:'main-'+projectId});if(chiefError)throw chiefError;return {sessionId:'chief-'+projectId,workspaceId:'main-'+projectId,messageId,queued:chiefQueued};},
 };
 const load=Module._load;
 Module._load=function(r,p,m){
@@ -28,12 +28,12 @@ Module._load=function(r,p,m){
  if(r==='@/lib/notifications/brief')return {runWithClaude:async()=>{if(routingResult)return routingResult;throw Error('No real model in tests');}};
  if(r==='@/lib/home/service')return {routeTargets:async()=>[{projectId:'p',name:'Project',slug:'project',workspaces:[]},{projectId:'q',name:'Other',slug:'other',workspaces:[]},{projectId:'home',name:'Home',slug:'home',workspaces:[]}],projectsOverview:async()=>[],ensureHomeProject:async()=>({id:'home',dataKey:'home'}),saveRoutingRule:async(t)=>{calls.push(['rule',t]);}};
  if(r==='@/lib/projects/memory')return {readMemory:async()=>''};
- if(r==='@/lib/notes/file-write')return {withFileLock:(_k,fn)=>fn()};
+ if(r==='@/lib/db/repo/messages')return {loadEvents:async()=>savedEvents};
  if(r==='@/lib/db/repo/workspaces')return {updateWorkspace:async(...a)=>{calls.push(['workspace',...a]);}};
  if(r==='@/lib/tasks/service')return {patchTask:async(id,patch)=>{calls.push(['patchTask',id,patch]);},createTask:async(input)=>{const t={id:'t1',...input};tasks.set(t.id,t);return t;}};
  if(r==='@/lib/db/repo/tasks')return {getTask:async(id)=>tasks.get(id)??null,updateTask:async(id,patch)=>{calls.push(['updateTask',id,patch]);}};
  if(r==='@/lib/db/repo/projects')return {getProject:async(id)=>({id})};
- if(r==='@/lib/workers/state')return {readWorkerState:async()=>({queue})};
+ if(r==='@/lib/workers/state')return {readWorkerState:async()=>({queue,relayTasks})};
  if(r==='@/lib/workers/service')return workers;
  if(r==='@/lib/projects/archive')return {archiveWorkspace:async(id)=>{calls.push(['archive',id]);}};
  return load.call(this,r,p,m);
@@ -138,11 +138,11 @@ test('a completed capture without a next step cannot trigger unspecified work', 
 test('a relay the chief dropped becomes a failed thought, and a late report still settles it', async () => {
  const old=new Date(Date.now()-10*60_000).toISOString();
  const stale=()=>{globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p',workspace_id:'main-p',updated_at:old}));};
- const session=(id,status,origin)=>({id,meta:{status,projectId:'p',origin}});
+ const session=(id,status,origin)=>({id,meta:{status,projectId:'p',origin},events:[]});
  // Not yet: the chief is mid-turn, a worker it started is running, or work is queued.
  stale();live=[session('chief-p','running',{kind:'chief'})];assert.equal(await service.sweepRelays(),0);
- live=[session('chief-p','idle',{kind:'chief'}),session('w','running',{kind:'worker'})];assert.equal(await service.sweepRelays(),0);
- live=[session('chief-p','idle',{kind:'chief'})];queue=[{taskId:'t9'}];assert.equal(await service.sweepRelays(),0);
+ relayTasks={c:{work:'t9'}};tasks.set('t9',{id:'t9',sessionId:'w',status:'in_progress'});live=[session('chief-p','idle',{kind:'chief'}),session('w','running',{kind:'worker'})];assert.equal(await service.sweepRelays(),0);
+ live=[session('chief-p','idle',{kind:'chief'})];queue=[{taskId:'t9',input:{relayId:'c'}}];assert.equal(await service.sweepRelays(),0);
  // Recent relays are left alone even when everything is idle.
  queue=[];globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p'}));assert.equal(await service.sweepRelays(),0);
  stale();assert.equal(await service.sweepRelays(),1);
@@ -160,4 +160,90 @@ test('a thread parses back into turns and tolerates a plain summary', () => {
  assert.deepEqual(parseThread(thread),[{who:'chief',text:'First'},{who:'you',text:'Why?'},{who:'chief',text:'Because.\n\nTwo paragraphs.'}]);
  assert.equal(lastReport(thread),'Because.\n\nTwo paragraphs.');
  assert.equal(lastReport(appendTurn(null,'you','Only me')),null);
+});
+
+
+test('queued replies keep their receipt and become working only after dequeue', async () => {
+ await repo.saveCapture(row({status:'ready',project_id:'p',session_id:'chief-p',summary:'First answer'}),true);
+ chiefQueued=true;
+ await service.actOnCapture('c','redirect','Check the unfinished item');
+ const queued=await get(); assert.equal(queued.status,'queued'); assert.ok(queued.message_id);
+ assert.equal(calls.at(-1)[3],queued.message_id);
+ const message={type:'user_message',messageId:queued.message_id,content:'Check it',queued:true,seq:1};
+ live=[{id:'chief-p',meta:{status:'running'},events:[message]}];
+ await service.sweepRelays(); assert.equal((await get()).status,'queued');
+ await assert.rejects(service.reportRelay('p','c','done','An old answer'),/newer reply queued/);
+ live[0].events.push({type:'message_dequeued',messageId:queued.message_id,seq:2});
+ await service.sweepRelays(); assert.equal((await get()).status,'working');
+ await service.reportRelay('p','c','done','Finished the item');
+ assert.equal((await get()).status,'ready'); assert.equal(notified.at(-1).urgency,'info');
+});
+
+test('a stopped chief exposes its actual error immediately and keeps the conversation', async () => {
+ await repo.saveCapture(row({status:'working',project_id:'p',session_id:'chief-p',message_id:'m',summary:'Existing answer'}),true);
+ live=[{id:'chief-p',meta:{status:'error'},events:[{type:'user_message',messageId:'m',seq:1},{type:'error',seq:2,message:'Provider authentication expired'}]}];
+ assert.equal(await service.sweepRelays(),1);
+ assert.match((await get()).error,/Provider authentication expired/);
+ assert.equal((await get()).summary,'Existing answer');
+});
+
+test('restart reconciles persisted queued receipts without dispatching the original request again', async () => {
+ await repo.saveCapture(row({status:'queued',project_id:'p',session_id:'chief-p',message_id:'m'}),true);
+ savedEvents=[{type:'user_message',messageId:'m',queued:true,seq:1}];
+ await service.recoverCaptures();
+ assert.equal((await get()).status,'failed'); assert.match((await get()).error,/server restarted/);
+ assert.equal(calls.length,0);
+});
+
+test('resume preserves completed tasks, includes unfinished tasks and never routes or delegates again', async () => {
+ await repo.saveCapture(row({status:'failed',project_id:'p',session_id:'chief-p',summary:appendTurn('Done A','you','Please finish B'),error:'Stopped'}),true);
+ relayTasks={c:{a:'a',b:'b'}};
+ tasks.set('a',{id:'a',title:'A',status:'done',sessionId:'sa'});tasks.set('b',{id:'b',title:'B',status:'blocked',sessionId:'sb'});
+ chiefQueued=true;
+ await Promise.allSettled([service.actOnCapture('c','resume'),service.actOnCapture('c','resume')]);
+ assert.equal(calls.filter(c=>c[0]==='chief').length,1);
+ assert.equal(calls.filter(c=>c[0]==='delegate').length,0);
+ assert.match(calls[0][2],/a: A — done/);assert.match(calls[0][2],/b: B — blocked/);assert.match(calls[0][2],/Please finish B/);
+ assert.equal((await get()).status,'queued');assert.equal(tasks.get('a').status,'done');
+});
+
+test('retrying an existing failed conversation resumes it instead of rerouting', async () => {
+ await repo.saveCapture(row({status:'failed',project_id:'p',session_id:'chief-p',summary:'Already built A'}),true);
+ await service.dispatchCapture('c');
+ assert.match(calls[0][2],/^<relay_resume/);assert.equal(calls.filter(c=>c[0]==='delegate').length,0);
+});
+
+test('a failed reply delivery retains the reply for recovery', async () => {
+ await repo.saveCapture(row({status:'ready',project_id:'p',session_id:'chief-p',summary:'First answer'}),true);
+ chiefError=new Error('Provider unavailable');
+ await assert.rejects(service.actOnCapture('c','redirect','Finish B'),/Provider unavailable/);
+ const failed=await get();assert.equal(failed.status,'failed');assert.equal(parseThread(failed.summary).at(-1).text,'Finish B');
+ assert.match(failed.error,/Reply was not delivered/);
+});
+
+test('unrelated project workers and queues do not conceal a stopped request', async () => {
+ globalThis.__captures.set('c',row({status:'working',project_id:'p',session_id:'chief-p',updated_at:new Date(0).toISOString()}));
+ live=[{id:'chief-p',meta:{status:'idle'},events:[]},{id:'other',meta:{status:'running'},events:[]}];
+ queue=[{taskId:'other',input:{relayId:'different'}}];
+ assert.equal(await service.sweepRelays(),1);
+});
+
+test('closing a conversation only files it and never approves its held-back action', async () => {
+ await repo.saveCapture(row({status:'ready',project_id:'p',session_id:'chief-p',next_step:'Merge the PR'}),true);
+ await service.actOnCapture('c','close');
+ assert.equal((await get()).status,'kept');assert.equal(calls.length,0);assert.deepEqual(resolved,['capture:c']);
+});
+
+
+test('dispatch persists the chief destination even when sending fails', async () => {
+ delete process.env.NEXT_PUBLIC_THUNK_E2E; routingResult=result('p'); chiefError=new Error('Connection lost before send');
+ await repo.saveCapture(row(),true);await service.dispatchCapture('c');
+ const failed=await get();assert.equal(failed.status,'failed');assert.equal(failed.session_id,'chief-p');assert.ok(failed.message_id);
+ chiefError=null;await service.dispatchCapture('c');
+ assert.match(calls.at(-1)[2],/^<relay_resume/);
+});
+
+test('a crash while preparing the chief cannot leave an unattached request queued forever', async () => {
+ globalThis.__captures.set('c',row({status:'queued',project_id:'p',updated_at:new Date(0).toISOString()}));
+ assert.equal(await service.sweepRelays(),1);assert.match((await get()).error,/before a chief session was attached/);
 });

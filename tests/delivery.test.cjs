@@ -177,3 +177,15 @@ test("delivery polling does no git or GitHub work without viewers or subscriptio
   await state.tick();
   assert.equal(calls, before);
 });
+
+
+test("delivery distinguishes completed local work, review, closed and verified merge", () => {
+  const {deliveryStage,deliveryCue}=require('../lib/projects/delivery-types.ts');
+  assert.equal(deliveryStage(null).label,"Not submitted for review");
+  assert.equal(deliveryStage({...raw(),isDraft:true}).label,"Draft");
+  assert.equal(deliveryStage(raw()).label,"Ready for review");
+  assert.equal(deliveryStage({...raw(),state:"CLOSED"}).label,"Closed without merging");
+  const merged={...raw(),state:"MERGED",checks:[{state:"fail"}]};
+  assert.equal(deliveryStage(merged).label,"Merged");
+  assert.equal(deliveryCue(merged).label,"Merged","old checks cannot obscure an observed merge");
+});

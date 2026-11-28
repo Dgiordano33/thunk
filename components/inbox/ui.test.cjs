@@ -23,7 +23,7 @@ for (const ext of [".ts", ".tsx"]) require.extensions[ext] = (mod, filename) => 
 }).outputText, filename);
 Module._load = function (name, ...rest) {
   if (name === "@/lib/store/notifications-store") return { useNotifications: (select) => select(state), useNotificationsEvents() {}, refreshNotifications() {} };
-  if (name === "@/components/capture/use-captures") return { useCaptures: () => ({ rows: captureRows, limit: 8, error: "", rule: null, setRule() {}, refresh: async () => {}, act: async () => true, retry: async () => {} }) };
+  if (name === "@/components/capture/use-captures") return { useCaptures: () => ({ rows: captureRows, pending: new Set(), limit: 8, error: "", rule: null, setRule() {}, refresh: async () => {}, act: async () => true, retry: async () => {} }) };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(query) };
   if (name === "@/components/ai-elements/message") return { MessageResponse: ({ children }) => React.createElement("div", null, children) };
   if (name === "@/components/hint") return { Hint: ({ children }) => children };
@@ -35,10 +35,10 @@ Module._load = originalLoad;
 const projects = [{ id: "thunk", name: "Thunk", workspaces: [{ id: "inbox", name: "notifications" }] }, { id: "docs", name: "Documentation", workspaces: [{ id: "main", name: "main" }] }];
 const base = { projectId: "thunk", workspaceId: "inbox", sessionId: null, runId: null, subjectKey: "preview", href: "/", detail: null, actions: [], readAt: null, resolvedAt: null, createdAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date().toISOString() };
 const sample = [
-  { ...base, id: "permission", kind: "permission", urgency: "action", status: "open", title: "Allow the agent to run the test suite?", detail: "npm run test:notifications — the agent is waiting for permission to continue.", actions: [{ label: "Allow", method: "POST", path: "/preview" }, { label: "Deny", method: "POST", path: "/preview" }] },
-  { ...base, id: "plan", kind: "plan", urgency: "action", status: "open", title: "The inbox implementation plan is ready for review", detail: "Review the proposed changes to notification grouping, request actions, and desktop alerts.", actions: [{ label: "Approve plan", method: "POST", path: "/preview" }] },
+  { ...base, id: "permission", subjectKey: "permission", kind: "permission", urgency: "action", status: "open", title: "Allow the agent to run the test suite?", detail: "npm run test:notifications — the agent is waiting for permission to continue.", actions: [{ label: "Allow", method: "POST", path: "/preview" }, { label: "Deny", method: "POST", path: "/preview" }] },
+  { ...base, id: "plan", subjectKey: "plan", kind: "plan", urgency: "action", status: "open", title: "The inbox implementation plan is ready for review", detail: "Review the proposed changes to notification grouping, request actions, and desktop alerts.", actions: [{ label: "Approve plan", method: "POST", path: "/preview" }] },
   { ...base, id: "run", kind: "run_succeeded", urgency: "info", status: "resolved", title: "Nightly checks completed", detail: "All tests passed. No changes needed.", projectId: "docs", workspaceId: "main" },
-  { ...base, id: "deploy", kind: "deploy_ready", urgency: "info", status: "resolved", title: "Your preview deployment is ready" },
+  { ...base, id: "deploy", subjectKey: "deploy", kind: "deploy_ready", urgency: "info", status: "resolved", title: "Your preview deployment is ready" },
 ];
 function renderInbox(overrides = {}, search = "") {
   state = { items: [], counts: { total: 0, action: 0, byProject: {} }, loaded: true, error: null, before: null, ...overrides };
@@ -52,7 +52,7 @@ test("empty inbox uses the shared frame and shows one useful empty state", () =>
 });
 test("decisions precede quiet history and retain permission controls and full details", () => {
   const html = renderInbox({ items: sample, counts: { total: 2, action: 2, byProject: { thunk: 2 } } });
-  assert.ok(html.indexOf(">Decisions<") < html.indexOf(">Earlier<"));
+  assert.ok(html.indexOf(">Decisions<") < html.indexOf(">Updates &amp; answers<"));
   assert.match(html, />Allow<\/button>/); assert.match(html, />Deny<\/button>/);
   assert.match(html, /<details/); assert.match(html, /npm run test:notifications/);
   assert.equal((html.match(/data-notification="true"/g) || []).length, 4);
@@ -73,17 +73,17 @@ test("a ready thought is a Decision in time order; thoughts under way stay in th
   captureRows = [thought("ready1", "ready", { next_step: null })];
   const completed = renderInbox({ items: [ready], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
   assert.doesNotMatch(completed, /Go ahead/);
-  assert.match(completed, />Keep</);
+  assert.match(completed, />Close conversation</);
   assert.match(completed, /Found the flaky test/);
   // A thought a chief handled comes back as a conversation with that chief, with no Relay vocabulary.
   captureRows = [thought("ready1", "ready", { task_id: null, mode: null, next_step: null, summary: "Found the flaky test\n\n[[you]]\nWhich one?\n\n[[chief]]\nThe login spec." })];
   const chat = renderInbox({ items: [ready], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
-  assert.match(chat, /aria-label="Chief: Look into ready1"/);
+  assert.match(chat, /aria-label="Chief · Answered: Look into ready1"/);
   assert.match(chat, /Conversation with the chief/); assert.match(chat, /Which one\?/); assert.match(chat, /The login spec\./);
-  assert.match(chat, /placeholder="Reply to the chief…"/); assert.match(chat, /data-action="1"[^>]*>Done</); assert.match(chat, />Open the chief</);
+  assert.match(chat, /placeholder="Reply to the chief…"/); assert.match(chat, /data-action="1"[^>]*>Close conversation</); assert.match(chat, />Open the chief</);
   assert.doesNotMatch(chat, /Redirect|Keep<|Relay|\[\[you\]\]/);
   captureRows = [];
-  const card = html.indexOf('aria-label="Thought ready: Look into ready1"');
+  const card = html.indexOf('aria-label="Result ready: Look into ready1"');
   assert.ok(card > 0, "the ready thought renders as a row in the feed");
   assert.ok(html.indexOf("Allow the agent") < card && card < html.indexOf("inbox implementation plan"), "newest first, interleaved with other decisions");
   assert.match(html, /Go ahead: Open a PR/); assert.match(html, /You said/); assert.match(html, /Found the flaky test/);
@@ -96,13 +96,13 @@ test("a ready thought is a Decision in time order; thoughts under way stay in th
 });
 const ci = (i, projectId = "thunk") => ({ ...base, projectId, id: `ci-${projectId}-${i}`, kind: "ci_failed", urgency: "action", status: "open", subjectKey: `pr:${i}:ci`,
   title: `CI failed · #${850 + i}`, detail: `Fix flaky test ${i}`, href: `https://github.com/acme/thunk/pull/${850 + i}`, createdAt: new Date(Date.now() - 86400000 - i * 1000).toISOString() });
-test("many CI failures collapse into one grouped list of one-line rows behind the decisions", () => {
+test("unrelated CI requests remain separate one-line groups behind decisions", () => {
   const many = [...sample, ...Array.from({ length: 13 }, (_, i) => ci(i))];
   const html = renderInbox({ items: many, counts: { total: 15, action: 15, byProject: { thunk: 15 } } });
   assert.ok(html.indexOf(">Decisions<") < html.indexOf(">Follow-ups<"));
   assert.equal((html.match(/border-l-\[var\(--status-attention\)\]/g) || []).length, 2, "only decisions get the card edge");
-  assert.match(html, />Dismiss 13</); assert.match(html, /Show 8 more/);
-  assert.equal((html.match(/Open PR on GitHub/g) || []).length, 5);
+  assert.doesNotMatch(html, />Dismiss 13</); assert.doesNotMatch(html, /Show 8 more/);
+  assert.equal((html.match(/Open PR on GitHub/g) || []).length, 13);
   assert.match(html, /Fix flaky test 0/); assert.match(html, /font-mono">#850</);
   assert.doesNotMatch(html, /CI failed · #850/, "the kind label is not repeated in the lead line");
   assert.match(html, /target="_blank"/); assert.doesNotMatch(html, /Take a look|Mark all read/);
@@ -136,7 +136,7 @@ test("bulk dismissal scope counts decisions so the inbox can confirm first", () 
   assert.equal(scope.count, 4); assert.equal(scope.decisions, 2);
   assert.equal(model.dismissScope([ci(1), ci(2)]).decisions, 0);
   const groups = model.groupFollowups([ci(1), ci(2, "docs"), ci(3)]);
-  assert.deepEqual(groups.map((g) => [g.projectId, g.items.length]), [["thunk", 2], ["docs", 1]]);
+  assert.deepEqual(groups.map((g) => [g.projectId, g.items.length]), [["thunk", 1], ["docs", 1], ["thunk", 1]]);
   assert.equal(model.destination(ci(1)), "Open PR on GitHub");
   assert.equal(model.destination({ ...base, kind: "turn_finished", sessionId: "s", href: "/w/s" }), "Open session");
 });
@@ -160,11 +160,11 @@ test("the triage loop moves to the next decision the person saw, then the one be
   assert.equal(model.nextDecision(["a"], "a", []), null);
 });
 test("earlier updates from one session fold under the newest, with a count to unfold them", () => {
-  const turn = (i, sessionId) => ({ ...base, id: `t${i}`, kind: "turn_finished", urgency: "info", status: "resolved", sessionId, title: `Phone layout · Turn ${i}`, createdAt: new Date(Date.now() - i * 60000).toISOString() });
+  const turn = (i, sessionId) => ({ ...base, id: `t${i}`, subjectKey: `turn:${i}`, kind: "turn_finished", urgency: "info", status: "resolved", sessionId, title: `Phone layout · Turn ${i}`, createdAt: new Date(Date.now() - i * 60000).toISOString() });
   const folds = model.foldBySession([turn(1, "s"), turn(2, null), turn(3, "s"), turn(4, "s"), turn(5, null)]);
   assert.deepEqual(folds.map((f) => [f.lead.id, f.rest.map((n) => n.id)]), [["t1", ["t3", "t4"]], ["t2", []], ["t5", []]]);
   const html = renderInbox({ items: [turn(1, "s"), turn(3, "s"), turn(4, "s"), turn(2, null)] });
-  assert.match(html, /aria-label="Show 2 earlier updates from this session"[^>]*aria-expanded="false"|aria-expanded="false"[^>]*aria-label="Show 2 earlier updates from this session"/);
+  assert.match(html, /aria-label="Show 2 earlier updates for this request"[^>]*aria-expanded="false"|aria-expanded="false"[^>]*aria-label="Show 2 earlier updates for this request"/);
   assert.match(html, />\+2<svg/); assert.match(html, /Phone layout · Turn 1/); assert.doesNotMatch(html, /Phone layout · Turn 3/, "folded rows stay hidden");
   assert.match(html, /Phone layout · Turn 2/, "rows from no session stand alone");
 });
@@ -175,3 +175,36 @@ test("decision options carry number keys, and a permission can be allowed for th
   assert.match(html, /<kbd[^>]*>1<\/kbd>–<kbd[^>]*>4<\/kbd> answer/);
 });
 module.exports = { renderInbox, sample };
+
+
+test("related decisions retain separate approvals while progress is quiet", () => {
+ const items=[
+  {...sample[0],id:'push',subjectKey:'push',title:'Push the branch?',requestKey:'capture:A'},
+  {...sample[0],id:'merge',subjectKey:'merge',title:'Merge the PR?',requestKey:'capture:A'},
+  {...sample[3],id:'progress',subjectKey:'progress',title:'Tests passed quietly',requestKey:'capture:A'},
+ ];
+ const html=renderInbox({items});
+ assert.match(html,/2 separate decisions/);
+ assert.equal((html.match(/>Allow<\/button>/g)||[]).length,2);
+ assert.match(html,/Show 1 related update/);assert.doesNotMatch(html,/Tests passed quietly/);
+ assert.equal(model.groupFollowups(items).length,1);
+ assert.equal(model.groupFollowups([...items,{...items[0],id:'different',requestKey:'capture:B'}]).length,2);
+});
+
+test("a queued chief reply and interruption show the saved conversation and recovery action", () => {
+ captureRows=[{id:'reply',text:'Build both tasks',status:'queued',project_id:'thunk',session_id:'chief',workspace_id:'inbox',task_id:null,summary:'Finished A\n\n[[you]]\nFinish B',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}];
+ let html=renderInbox();assert.match(html,/Queued · Thunk/);assert.match(html,/your reply is saved/);assert.match(html,/Finish B/);
+ captureRows[0]={...captureRows[0],status:'failed',error:'Provider disconnected. Completed task A is preserved.'};
+ html=renderInbox();assert.match(html,/Interrupted · Thunk/);assert.match(html,/Provider disconnected/);assert.match(html,/Resume unfinished work/);
+ assert.doesNotMatch(html,/Choose automatically/);captureRows=[];
+});
+
+
+test("an answered conversation leads its group and keeps related updates reachable", () => {
+ const answer={...base,id:'answer',kind:'capture_ready',subjectKey:'capture:answered',requestKey:'capture:answered',urgency:'info',status:'open',title:'Delivered'};
+ const progress={...sample[3],id:'progress',requestKey:'capture:answered',title:'Worker finished'};
+ captureRows=[{id:'answered',text:'Do it',status:'ready',task_id:null,project_id:'thunk',session_id:'chief',summary:'Here is the answer',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}];
+ const html=renderInbox({items:[progress,answer]});
+ assert.match(html,/Chief · Answered/);assert.match(html,/Show 1 related update/);assert.match(html,/Close conversation/);
+ assert.doesNotMatch(html,/Worker finished/);captureRows=[];
+});

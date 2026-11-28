@@ -25,11 +25,12 @@ export const DEFAULT_SLACK_KINDS: readonly NotificationKind[] = NOTIFICATION_GRO
 export type Notification = {
   id: string; kind: NotificationKind; urgency: "action" | "info";
   projectId: string; workspaceId: string | null; sessionId: string | null; runId: string | null;
+  requestKey?: string | null;
   subjectKey: string; title: string; detail: string | null; href: string;
   actions: { label: string; method: "POST"; path: string; body?: unknown }[];
   status: "open" | "resolved" | "dismissed";
   readAt: string | null; resolvedAt: string | null; createdAt: string; updatedAt: string;
 };
-export type NewNotification = Pick<Notification, "kind" | "urgency" | "projectId" | "subjectKey" | "title" | "href"> & Partial<Pick<Notification, "workspaceId" | "sessionId" | "runId" | "detail" | "actions">>;
+export type NewNotification = Pick<Notification, "kind" | "urgency" | "projectId" | "subjectKey" | "title" | "href"> & Partial<Pick<Notification, "workspaceId" | "sessionId" | "runId" | "detail" | "actions" | "requestKey">>;
 export type NotificationCounts = { total: number; action: number; byProject: Record<string, number> };
 export type NotificationEvent = { kind: "opened" | "updated"; notification: Notification };

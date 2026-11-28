@@ -1,4 +1,4 @@
-import { NOTIFICATION_LABELS, type Notification, type NotificationKind } from "@/lib/notifications/types";
+import type { Notification, NotificationKind } from "@/lib/notifications/types";
 
 /** Kinds where an agent is blocked on a person's answer, or a thought waits for review. They keep full cards; everything else is a one-line row. */
 export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "permission", "question", "plan", "delegation_plan", "agent_request"];
@@ -34,19 +34,20 @@ export function destination(n: Notification): string {
   return `Open ${host || "link"}`;
 }
 
+/** Grouping never replaces subjectKey: distinct approvals always remain separate items. */
+export function requestKey(n: Notification): string {
+  return `${n.projectId}:${n.requestKey ?? (/^(project:.*:pr:\d+):/.exec(n.subjectKey)?.[1]) ?? (n.runId ? `run:${n.runId}` : n.sessionId ? `session:${n.sessionId}` : n.subjectKey)}`;
+}
 export type Group = { key: string; projectId: string; kind: NotificationKind; label: string; items: Notification[] };
-/** Follow-ups grouped by project, then kind, in the order their newest item arrived. */
 export function groupFollowups(items: Notification[]): Group[] {
   const groups = new Map<string, Group>();
   for (const n of items) {
-    const key = `${n.projectId}:${n.kind}`;
+    const key = requestKey(n);
     let group = groups.get(key);
-    if (!group) groups.set(key, group = { key, projectId: n.projectId, kind: n.kind, label: NOTIFICATION_LABELS[n.kind], items: [] });
+    if (!group) groups.set(key, group = { key, projectId: n.projectId, kind: n.kind, label: describe(n).lead, items: [] });
     group.items.push(n);
   }
-  const byProject = new Map<string, Group[]>();
-  for (const g of groups.values()) byProject.set(g.projectId, [...byProject.get(g.projectId) ?? [], g]);
-  return [...byProject.values()].flat();
+  return [...groups.values()];
 }
 
 /** After rows leave the list, focus the one that took the first removed row's place, else the one before it. */
@@ -93,16 +94,21 @@ export function nextDecision(before: string[], left: string, now: string[]): str
 }
 
 export type SessionFold = { lead: Notification; rest: Notification[] };
-/** Earlier rows from one session fold under its newest, so a long session reads as one row. Rows without a session stand alone. */
+/** Quiet events fold by request; an open answer stays visible above its progress history. Legacy events fall back to session. */
 export function foldBySession(items: Notification[]): SessionFold[] {
   const folds: SessionFold[] = [];
   const bySession = new Map<string, SessionFold>();
   for (const n of items) {
-    const fold = n.sessionId ? bySession.get(n.sessionId) : undefined;
-    if (fold) { fold.rest.push(n); continue; }
+    const key = requestKey(n);
+    const fold = bySession.get(key);
+    if (fold) {
+      if (n.kind === "capture_ready" && n.status === "open" && fold.lead.kind !== "capture_ready") { fold.rest.unshift(fold.lead); fold.lead = n; }
+      else fold.rest.push(n);
+      continue;
+    }
     const next: SessionFold = { lead: n, rest: [] };
     folds.push(next);
-    if (n.sessionId) bySession.set(n.sessionId, next);
+    bySession.set(key, next);
   }
   return folds;
 }
