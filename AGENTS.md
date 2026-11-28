@@ -30,6 +30,7 @@ Before finishing: typecheck, lint, and the test suites for the area you touched.
 - No test framework or build step: tests are `node:test` `.cjs` files that transpile `.ts` on the fly with `typescript` and map `@/` to the repo root (see the top of any `tests/*.test.cjs`). Copy that preamble for new server tests.
 - Server tests need `--conditions=react-server` (so `server-only` imports resolve). Pure lib tests are `lib/**/*.test.mjs` and run without it.
 - `tests/helpers/test-db.cjs` gives an isolated database; never touch `~/.thunk` from tests.
+- `e2e/` is a smoke suite: one happy-path test per major surface, kept under a minute. Cover behavior details with `node:test` instead; add a browser test only for a new surface.
 
 ## Architecture
 
