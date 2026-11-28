@@ -7,7 +7,7 @@ import { FloatingWindow, WindowControls, useWindowHandle } from "@/components/wo
 import { DesktopAlerts } from "@/components/onboarding/desktop-alerts";
 import Link from "next/link";
 import {
-  ArrowUpRightIcon, BrainIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
+  ArrowUpRightIcon, BrainIcon, FilePenLineIcon, CheckCheckIcon, ChevronDownIcon, CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleDotIcon, ClipboardListIcon, EllipsisIcon, FileTextIcon,
   GitCompareIcon, GitMergeIcon, GitPullRequestIcon, HourglassIcon, InboxIcon, MessageSquareIcon, PanelBottomIcon, ReplyIcon, RocketIcon, ShieldQuestionIcon, SquareCheckIcon, SquareIcon, XIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -45,7 +45,7 @@ const RING = "focus-visible:ring-2 focus-visible:ring-ring";
 const ICONS: Partial<Record<NotificationKind, LucideIcon>> = {
   permission: ShieldQuestionIcon, question: MessageSquareIcon, agent_request: MessageSquareIcon, plan: ClipboardListIcon, delegation_plan: ClipboardListIcon,
   worker_report: FileTextIcon, review_ready: GitCompareIcon, review_requested: GitPullRequestIcon, ci_stuck: HourglassIcon, session_stuck: HourglassIcon, deploy_ready: RocketIcon,
-  pr_merged: GitMergeIcon, run_needs_attention: CircleDotIcon, memory_proposal: BrainIcon,
+  pr_merged: GitMergeIcon, run_needs_attention: CircleDotIcon, memory_proposal: BrainIcon, plan_changed: FilePenLineIcon,
 };
 const iconFor = (n: Notification) => ICONS[n.kind] ?? (FAILED_KINDS.includes(n.kind) ? CircleAlertIcon : CheckIcon);
 const ROW_SELECTOR = "[data-notification]";

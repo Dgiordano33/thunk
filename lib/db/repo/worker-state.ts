@@ -69,6 +69,17 @@ export async function dequeueDelegation(taskId: string): Promise<boolean> {
   return (await client.query("delete from worker_queue where task_id = $1 returning task_id", [taskId])).length > 0;
 }
 
+/** Change what a queued delegation will start with (an approved plan change). False when it is no longer queued. */
+export async function updateQueuedInput(taskId: string, patch: Partial<QueuedDelegation["input"]>): Promise<boolean> {
+  const client = db();
+  if (!client) {
+    const item = mem.queue.find((q) => q.taskId === taskId);
+    if (item) item.input = { ...item.input, ...structuredClone(patch) };
+    return Boolean(item);
+  }
+  return (await client.query("update worker_queue set input = input || $2::jsonb where task_id = $1 returning task_id", [taskId, json(patch)])).length > 0;
+}
+
 // ---------- races ----------
 
 export async function insertRaceRow(tx: Db, projectId: string, race: Race) {

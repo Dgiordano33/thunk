@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import type { LiveSession } from "@/lib/agent";
 import { DelegateObject, DelegationPlanObject } from "./schema";
+import { CriteriaSchema } from "@/lib/tasks/schema";
 import { platformTools } from "./platform-tools";
 import { workersPerProject } from "@/lib/setup/limits";
 
@@ -37,6 +38,14 @@ export function chiefTools(live: LiveSession) {
       await (await import("./questions")).escalateQuestion(questionId, recommendation, "The chief asked for your decision.", projectId);
       return { escalated: true };
     }),
+    define("tasks_revise", "Answer a <source_revision>: for each of its tasks, either affected: false, or affected: true with a one-line summary of what changed for that task, the complete new brief, and the new criteria (omit criteria to keep the current ones). The person approves or edits each change in their Inbox before anything reaches a worker; you get a <plan_change> message with the outcome.",
+      { revisionId: z.uuid(), tasks: z.array(z.object({
+        taskId: z.uuid(), affected: z.boolean(),
+        summary: z.string().trim().max(300).optional().describe("One line: what changes for this task. Required when affected."),
+        brief: z.string().trim().max(20_000).optional().describe("The complete new brief, replacing the current one. Required when affected."),
+        criteria: CriteriaSchema.optional().describe("The new acceptance criteria; omit to keep the current ones."),
+      }).strict()).min(1).max(50) },
+      async (input) => (await import("@/lib/sources/service")).proposeTaskChanges(projectId, live.id, input)),
     define("relay_report", "Settle a <relay>, once per pass, when its first pass is ready or blocked. The summary is what the person reads in their Inbox; nextStep names one specific step held back for their approval, and is omitted otherwise.",
       { relayId: z.uuid(), status: z.enum(["done", "blocked"]), summary: z.string().trim().min(1).max(8000), nextStep: z.string().trim().max(500).optional() },
       async ({ relayId, status, summary, nextStep }) => (await import("@/lib/capture/service")).reportRelay(projectId, relayId, status, summary, nextStep)),

@@ -79,6 +79,7 @@ const ACTION: Partial<Record<NotificationKind, string>> = {
   ci_failed: "CI is failing on this pull request. This clears itself once checks pass.",
   ci_stuck: "Checks have been pending for 30 minutes.",
   memory_proposal: "An agent proposed changes to project memory. Review each change, then apply or reject.",
+  plan_changed: "A plan or note that tasks came from changed. Review the chief's proposed changes per task; nothing reaches a worker until you approve.",
 };
 
 export function needFor(n: Pick<Notification, "kind" | "urgency" | "status">, opts: { toolName?: string | null; pending?: boolean } = {}): string {

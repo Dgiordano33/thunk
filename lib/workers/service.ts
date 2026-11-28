@@ -29,6 +29,8 @@ import { recordClaimed, runTestsOnFinish, workspaceHeads } from "@/lib/evidence/
 import { sessionPath } from "@/lib/routes";
 import type { Project } from "@/lib/projects/types";
 import { normalizeCriteria, type Task } from "@/lib/tasks/types";
+import { latestDocumentOf, linkTaskSources, sourceStamp } from "@/lib/sources/service";
+import { stampLabel } from "@/lib/sources/types";
 const g = globalThis as typeof globalThis & { __thunkWorkerWatchers?: WeakSet<LiveSession>; __thunkWorkerHousekeeping?: { unsubscribe: () => void; timer: ReturnType<typeof setInterval> } };
 const watched = g.__thunkWorkerWatchers ??= new WeakSet();
 
@@ -128,6 +130,9 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     if (!task) task = await createTask({ projectId, title: args.title ?? note?.note.title.slice(0, 200) ?? "Delegated task", body: args.brief ?? null, noteId }, { createdBy: chiefSessionId ? "agent" : "user", createdInSessionId: chiefSessionId });
     // Criteria approved with a plan, or given to delegate, become the task's; a change bumps its criteria version.
     if (args.criteria?.length) task = await patchTask(task.id, { criteria: normalizeCriteria(args.criteria) });
+    // What the task came from: a revision of the plan document or note later reaches it through the chief.
+    const documentId = args.sourceDocumentId ?? (chiefSessionId ? await latestDocumentOf(chiefSessionId) : null);
+    await linkTaskSources(project, task, { noteId, documentId }).catch((err) => console.error("[thunk] task sources failed", err));
     await rememberTask(task);
     const need = args.race?.length ?? 1;
     const cap = workersPerProject(), free = cap - activeWorkers(projectId);
@@ -378,11 +383,14 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const commitSha = origin.scout ? null : (await workspaceHeads(ctx).catch(() => []))[0] ?? null;
     const claimed = ownsTask && task ? await recordClaimed(task, meta.id, result.markdown, commitSha).catch((err) => { console.error("[thunk] evidence failed", err); return []; }) : [];
     const overlaps = origin.scout ? [] : (await workerOverlaps(await openWorkerWorkspaces(meta.projectId))).get(origin.taskId) ?? [];
+    // Thunk stamps which revision of the plan or note the worker had been sent, so review shows what the work implements.
+    const stamp = await sourceStamp(origin.taskId).catch(() => null);
     const lines = [
       report.summary, result.error ?? "", needsPerson ? `Needs person: ${needsPerson}` : "",
       origin.scout ? "Mode: scout (read-only, no branch)" : `Branch: ${ctx.workspace.branch ?? "none"}\nDiff: ${JSON.stringify(report.diffStat)}`,
       race ? `Race: ${race.id} · model ${getSession(meta.id)?.meta.model ?? "unknown"} · ${race.entries.length} racers${race.winner ? ` · winner ${race.winner}` : " · pick one with workers_pick"}` : "",
       stats ? `Cost: $${(result.costUsd || 0).toFixed(4)} this round · $${stats.costUsd.toFixed(4)} for the task over ${stats.rounds} round${stats.rounds === 1 ? "" : "s"}` : "",
+      stamp ? `${stampLabel(stamp)}${stamp.latest > stamp.version ? ` (the ${stamp.kind === "document" ? "plan" : "note"} is now v${stamp.latest}; that revision has not reached this worker)` : ""}` : "",
       task?.criteria?.length ? `Evidence: ${claimed.filter((e) => e.criterionId).length} of ${task.criteria.length} criteria reported by the worker` : "",
       overlaps.length ? `Overlaps: ${overlaps.map((o) => `${o.title} (${o.taskId}) on ${o.paths.slice(0, 5).join(", ")}${o.paths.length > 5 ? ` +${o.paths.length - 5}` : ""}`).join("; ")}` : "",
       `Workspace: ${sessionPath(ctx.project, ctx.workspace, meta.id)}`,
@@ -395,7 +403,7 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     await appendWorkLog(ctx.project, `[worker] ${status}: ${task?.title ?? origin.taskId} · ${report.summary}`);
     // Opt-in per project: run scripts.test in the worker's workspace and record the result. Runs after the report so it never delays it.
     if (status === "done" && !origin.scout && ownsTask && task) void runTestsOnFinish(ctx, task, meta.id).catch((err) => console.error("[thunk] finish tests failed", err));
-    await queueReport(ctx.project, meta, seq, content);
+    await queueReport(ctx.project, meta, seq, content, stamp);
     scheduleDrain(meta.projectId);
   });
 }

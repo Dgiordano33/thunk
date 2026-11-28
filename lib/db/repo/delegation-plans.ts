@@ -6,7 +6,7 @@ import { transaction } from "../sql";
 /** A plan as stored: the proposal, its decision, and each task with the id it was delegated as. */
 export type StoredPlan = Omit<DelegationPlan, "tasks"> & { projectId: string; tasks: (DelegationPlan["tasks"][number] & { taskId: string | null })[] };
 
-type PlanRow = { id: string; project_id: string; chief_session_id: string; relay_id: string | null; summary: string; note_id: string | null; status: string; created_at: string; decided_at: string | null; note: string | null };
+type PlanRow = { id: string; project_id: string; chief_session_id: string; relay_id: string | null; summary: string; note_id: string | null; source_document_id?: string | null; status: string; created_at: string; decided_at: string | null; note: string | null };
 type TaskRow = { plan_id: string; key: string; position: number; title: string; brief: string; model: string | null; mode: string | null; depends_on: string[]; race: string[] | null; task_id: string | null; criteria?: { id?: string; text: string; kind?: string }[] | null };
 
 const g = globalThis as typeof globalThis & { __thunkMemPlans?: Map<string, StoredPlan> };
@@ -25,7 +25,7 @@ function toPlan(row: PlanRow, rows: TaskRow[]): StoredPlan {
   }));
   return {
     id: row.id, projectId: row.project_id, chiefSessionId: row.chief_session_id, status: row.status as PlanStatus,
-    ...(row.relay_id ? { relayId: row.relay_id } : {}), summary: row.summary, ...(row.note_id ? { noteId: row.note_id } : {}),
+    ...(row.relay_id ? { relayId: row.relay_id } : {}), summary: row.summary, ...(row.note_id ? { noteId: row.note_id } : {}), ...(row.source_document_id ? { sourceDocumentId: row.source_document_id } : {}),
     createdAt: row.created_at, decidedAt: row.decided_at, note: row.note, tasks,
     taskIds: Object.fromEntries(tasks.flatMap((t) => t.taskId ? [[t.key, t.taskId]] : [])),
   };
@@ -34,9 +34,9 @@ function toPlan(row: PlanRow, rows: TaskRow[]): StoredPlan {
 /** Insert a plan and its tasks; a plan that already exists is left alone (the import runs more than once). */
 export async function insertPlanRows(tx: Db, projectId: string, plan: DelegationPlan) {
   const [inserted] = await tx.query<{ id: string }>(
-    `insert into delegation_plans (id, project_id, chief_session_id, relay_id, summary, note_id, status, created_at, decided_at, note)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) on conflict (id) do nothing returning id`,
-    [plan.id, projectId, plan.chiefSessionId, plan.relayId ?? null, plan.summary, plan.noteId ?? null, plan.status, plan.createdAt, plan.decidedAt, plan.note],
+    `insert into delegation_plans (id, project_id, chief_session_id, relay_id, summary, note_id, status, created_at, decided_at, note, source_document_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) on conflict (id) do nothing returning id`,
+    [plan.id, projectId, plan.chiefSessionId, plan.relayId ?? null, plan.summary, plan.noteId ?? null, plan.status, plan.createdAt, plan.decidedAt, plan.note, plan.sourceDocumentId ?? null],
   );
   if (!inserted) return;
   for (const [position, t] of plan.tasks.entries()) {

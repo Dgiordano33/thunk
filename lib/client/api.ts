@@ -131,6 +131,11 @@ export const api = {
   applyMemoryProposal: (id: string, body: { choices: import("@/lib/memory/types").MemoryItemChoice[]; memoryHash: string; document?: string }) =>
     post<import("@/lib/memory/service").ApplyResult>(`/api/memory-proposals/${id}/apply`, body),
   rejectMemoryProposal: (id: string) => post<{ proposal: import("@/lib/memory/types").MemoryProposal }>(`/api/memory-proposals/${id}/reject`, {}),
+  // Plan changes: a revised plan or note, and the chief's proposed task changes (lib/sources).
+  getPlanChange: (id: string) => call<import("@/lib/sources/service").PlanChangeReview>(`/api/plan-changes/${id}`),
+  applyPlanChange: (id: string, choices: import("@/lib/sources/types").PlanChangeChoice[]) =>
+    post<{ change: import("@/lib/sources/types").PlanChange }>(`/api/plan-changes/${id}/apply`, { choices }),
+  dismissPlanChange: (id: string) => post<{ change: import("@/lib/sources/types").PlanChange }>(`/api/plan-changes/${id}/dismiss`, {}),
   workspaceRuntime: (id: string) => call<RuntimeSnapshot>(`/api/workspaces/${id}/runtime`),
   workspaceProcess: (id: string, body:
     | { action: "setup" | "run" | "shell" }

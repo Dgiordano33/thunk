@@ -4,6 +4,7 @@ import { CriteriaSchema, TaskInputSchema } from "@/lib/tasks/schema";
 const Criteria = CriteriaSchema.optional().describe("Optional acceptance criteria: what done means, each { text, kind } with kind test, interaction, visual, source or other. Only for substantial work.");
 
 const Model = z.string().min(1).max(200);
+const SourceDocument = z.uuid().optional().describe("The document (one of your responses) this work implements, usually the plan you wrote. Omit to use your latest response. A revision of it later reaches the task.");
 export const WORKER_MODES = ["worktree", "scout"] as const;
 export type WorkerMode = (typeof WORKER_MODES)[number];
 
@@ -20,6 +21,7 @@ export const DelegateObject = z.object({
   dependsOn: z.array(z.uuid()).max(10).optional().describe("Task IDs that must be done (accepted) before this one starts. The task is queued until then."),
   race: z.array(Model).min(2).max(3).optional().describe("Run the same task on 2–3 models, each in its own worktree. Pick the winner with workers_pick."),
   criteria: Criteria,
+  sourceDocumentId: SourceDocument,
 }).strict();
 export const DelegateSchema = DelegateObject.superRefine((d, ctx) => {
   if (d.workspaceId && d.repoIds) ctx.addIssue({ code: "custom", path: ["workspaceId"], message: "Choose workspaceId or repoIds, not both" });
@@ -43,6 +45,7 @@ export const DelegationPlanObject = z.object({
   summary: z.string().trim().min(1).max(4000),
   tasks: z.array(PlanTaskObject).min(1).max(12),
   noteId: TaskInputSchema.shape.noteId,
+  sourceDocumentId: SourceDocument,
 }).strict();
 export const DelegationPlanSchema = DelegationPlanObject.superRefine((plan, ctx) => {
   const keys = new Set<string>();

@@ -4,6 +4,7 @@ import { handle, parseBody, requireLive } from "@/lib/api/http";
 import { RevisionBodySchema } from "@/lib/api/schemas";
 import { buildRevisionPayload } from "@/lib/revisions/build-payload";
 import { insertRevision, updateDocument } from "@/lib/db/repo/documents";
+import { documentRevised } from "@/lib/sources/service";
 
 /** Build the <document_revision> payload and push it as the next user message. */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/documents/[id]/revisions">) => {
@@ -28,6 +29,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/document
       stat,
     }),
   ]).catch((err) => console.error("[thunk] persist revision failed", err));
+  // Tasks delegated from this plan hear about it through their project's chief.
+  void documentRevised(id, body.baselineMarkdown, body.editedMarkdown).catch((err) => console.error("[thunk] source revision failed", err));
 
   return Response.json({ payload, stat });
 });

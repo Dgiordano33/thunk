@@ -1,7 +1,7 @@
 import type { Notification, NotificationKind } from "@/lib/notifications/types";
 
 /** Kinds where an agent is blocked on a person's answer, or a thought or finished branch waits for review. They keep full cards; everything else is a one-line row. */
-export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "review_ready", "permission", "question", "plan", "delegation_plan", "agent_request", "memory_proposal"];
+export const DECISION_KINDS: NotificationKind[] = ["capture_ready", "review_ready", "permission", "question", "plan", "delegation_plan", "agent_request", "memory_proposal", "plan_changed"];
 /** A ready thought closes through Keep, Discard, Go ahead or Redirect, never a bare dismiss that would strand the capture. */
 export const isDismissable = (n: Notification) => n.status === "open" && n.kind !== "capture_ready";
 const DELIVERY_KINDS: NotificationKind[] = ["ci_failed", "ci_stuck", "review_requested", "deploy_ready", "pr_merged"];
@@ -27,7 +27,7 @@ export function describe(n: Notification): { lead: string; ref: string | null; d
 export const isExternal = (href: string) => /^https?:\/\//.test(href);
 /** Name the destination so a link never hides that it leaves Thunk. */
 export function destination(n: Notification): string {
-  if (n.kind === "memory_proposal") return "Review changes";
+  if (n.kind === "memory_proposal" || n.kind === "plan_changed") return "Review changes";
   if (!isExternal(n.href)) return n.sessionId ? "Open session" : n.workspaceId ? "Open workspace" : "Open in Thunk";
   const host = (() => { try { return new URL(n.href).hostname; } catch { return ""; } })();
   if (n.kind === "deploy_ready") return "Open preview";

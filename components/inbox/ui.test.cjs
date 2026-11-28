@@ -243,3 +243,16 @@ test("the criteria table separates what Thunk checked from what the agent says, 
   assert.match(html, /shots\/login\.png/);
   assert.match(html, /No evidence yet/);
 });
+test("the review card says which plan revision the work implements; a plan change is a decision that leads to its review", () => {
+  assert.match(renderToStaticMarkup(React.createElement(reviewCard.SourceLine, { source: { kind: "document", sourceId: "d", version: 3, latest: 3 } })), /Implements plan v3/);
+  const behind = renderToStaticMarkup(React.createElement(reviewCard.SourceLine, { source: { kind: "note", sourceId: "n", version: 2, latest: 4 } }));
+  assert.match(behind, /Implements note v2[\s\S]*The note is now v4/);
+  const { SourceDiff } = require("./plan-change.tsx");
+  const diff = renderToStaticMarkup(React.createElement(SourceDiff, { diff: '<edits format="unified-diff" stat="+1 -1">\n--- before.md\n+++ after.md\n@@ -1 +1 @@\n-Send an email\n+Inbox only\n</edits>' }));
+  assert.match(diff, /Removed: <\/span>-Send an email[\s\S]*Added: <\/span>\+Inbox only/);
+  const change = { ...base, id: "change", subjectKey: "plan-change:c", kind: "plan_changed", urgency: "action", status: "open", title: "Plan changed · 1 task to update", detail: "“Notify” is now v2.\n- Email on review: Inbox only", href: "/inbox/plan-changes/c" };
+  assert.equal(model.sectionOf(change), "decision");
+  assert.equal(model.destination(change), "Review changes");
+  const html = renderInbox({ items: [change], counts: { total: 1, action: 1, byProject: { thunk: 1 } } });
+  assert.match(html, /Plan changed · 1 task to update[\s\S]*href="\/inbox\/plan-changes\/c"[^>]*>Review changes/);
+});

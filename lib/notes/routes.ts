@@ -7,6 +7,7 @@ import { MEMORY_NOTE_ID, type NoteScopeKind } from "./types";
 import { getWorkspace } from "@/lib/db/repo/workspaces";
 import type { NoteDirs } from "./store";
 import { getRepoFolder, setRepoFolderFiles } from "@/lib/db/repo/repo-folders";
+import { repoTaskLink } from "./task-link";
 
 // Route handlers shared by /api/projects/[id]/notes and /api/workspaces/[id]/notes.
 
@@ -90,6 +91,11 @@ export function noteItem(kind: NoteScopeKind) {
         throw err;
       });
       if (!note) throw new HttpError(404, "Note not found");
+      // Tasks delegated from this note hear about the edit through their project's chief, once the edits settle.
+      if (body.markdown !== undefined && id !== MEMORY_NOTE_ID) {
+        const { noteSaved } = await import("@/lib/sources/service");
+        noteSaved(kind === "repos" ? repoTaskLink(p.id, id) : id);
+      }
       return Response.json({ note });
     }),
     DELETE: handle(async (_req: Request, ctx: Ctx<{ id: string; noteId: string }>) => {

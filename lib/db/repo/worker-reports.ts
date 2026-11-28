@@ -1,11 +1,16 @@
 import "server-only";
+import type { SourceStamp } from "@/lib/sources/types";
 import { db, type Db } from "../server";
 
 /** A worker's report for one finished turn, waiting for (or already delivered to) its chief. */
-export type WorkerReport = { sessionId: string; seq: number; createdAt: string; content: string; chiefSessionId: string | null; delivered: boolean };
+export type WorkerReport = {
+  sessionId: string; seq: number; createdAt: string; content: string; chiefSessionId: string | null; delivered: boolean;
+  /** The plan or note version the worker had been sent when it reported, stamped by Thunk. */
+  sourceVersion?: SourceStamp | null;
+};
 
-type Row = { session_id: string; seq: number; content: string; chief_session_id: string | null; created_at: string; delivered_at: string | null };
-const toReport = (r: Row): WorkerReport => ({ sessionId: r.session_id, seq: r.seq, createdAt: r.created_at, content: r.content, chiefSessionId: r.chief_session_id, delivered: r.delivered_at !== null });
+type Row = { session_id: string; seq: number; content: string; chief_session_id: string | null; created_at: string; delivered_at: string | null; source_version?: SourceStamp | null };
+const toReport = (r: Row): WorkerReport => ({ sessionId: r.session_id, seq: r.seq, createdAt: r.created_at, content: r.content, chiefSessionId: r.chief_session_id, delivered: r.delivered_at !== null, sourceVersion: r.source_version ?? null });
 
 const g = globalThis as typeof globalThis & { __thunkMemWorkerReports?: Map<string, WorkerReport & { projectId: string }> };
 const mem = (g.__thunkMemWorkerReports ??= new Map());
@@ -14,9 +19,9 @@ const strip = ({ projectId, ...report }: WorkerReport & { projectId: string }): 
 
 export async function insertReportRow(tx: Db, projectId: string, r: WorkerReport) {
   const [row] = await tx.query<Row>(
-    `insert into worker_reports (session_id, seq, project_id, content, chief_session_id, created_at, delivered_at)
-     values ($1, $2, $3, $4, $5, $6, case when $7::boolean then now() end) on conflict (session_id, seq) do nothing returning *`,
-    [r.sessionId, r.seq, projectId, r.content, r.chiefSessionId, r.createdAt, r.delivered],
+    `insert into worker_reports (session_id, seq, project_id, content, chief_session_id, created_at, delivered_at, source_version)
+     values ($1, $2, $3, $4, $5, $6, case when $7::boolean then now() end, $8::jsonb) on conflict (session_id, seq) do nothing returning *`,
+    [r.sessionId, r.seq, projectId, r.content, r.chiefSessionId, r.createdAt, r.delivered, r.sourceVersion ? JSON.stringify(r.sourceVersion) : null],
   );
   return row ? toReport(row) : null;
 }

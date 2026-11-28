@@ -13,6 +13,7 @@ import type { ChangedFile, RepoChanges, WorkspaceChanges } from "@/lib/projects/
 import type { ReviewState } from "@/lib/review/types";
 import { observedFor, type ReviewEvidence } from "@/lib/evidence/types";
 import type { DiffComment } from "@/lib/review/diff";
+import { sourceLabel, stampLabel, type SourceStamp } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
 import { plural } from "./model";
 
@@ -83,6 +84,7 @@ export function ReviewParts({ sessionId, workspaceId, summary, tab, onChanged }:
     <Part title="Changes">
       {summary && <p className="line-clamp-4 whitespace-pre-wrap break-words">{summary}</p>}
       <p className="text-muted-foreground font-mono text-xs tabular-nums">{changes ? <>{plural(changes.files, "file")} · <span className="text-emerald-700 dark:text-emerald-400">+{changes.additions}</span> <span className="text-red-600 dark:text-red-400">−{changes.deletions}</span></> : "No Git changes to show"}{review.branch ? ` · ${review.branch}` : ""}</p>
+      {review.source && <SourceLine source={review.source} />}
       {changes && changes.files > 0 && <Button size="sm" variant="outline" tabIndex={tab} aria-expanded={diffOpen} className={RING} onClick={() => setDiffOpen((o) => !o)}>
         <ChevronRightIcon aria-hidden="true" className={cn("transition-transform duration-150 motion-reduce:transition-none", diffOpen && "rotate-90")} />{diffOpen ? "Hide diff" : "Review diff"}
       </Button>}
@@ -122,6 +124,14 @@ export function ReviewParts({ sessionId, workspaceId, summary, tab, onChanged }:
       </div>
     </Part>
   </div>;
+}
+
+/** Which revision of the plan or note the work implements, and whether a newer one exists. */
+export function SourceLine({ source }: { source: SourceStamp }) {
+  return <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
+    <span className="rounded-[4px] border px-1 font-mono text-[10px] font-medium">{stampLabel(source)}</span>
+    {source.latest > source.version && <Status cue="pending">The {sourceLabel(source.kind)} is now v{source.latest}</Status>}
+  </p>;
 }
 
 const STATUS_CUE: Record<ReviewEvidence["status"], Cue> = { pass: "pass", fail: "fail", unknown: "none" };

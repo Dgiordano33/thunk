@@ -1,5 +1,4 @@
-import { createTwoFilesPatch } from "diff";
-import { diffStat, ensureNl, escapeXml } from "@/lib/revisions/build-payload";
+import { editsBlock, ensureNl, escapeXml } from "@/lib/revisions/build-payload";
 import type { ContextKind } from "./types";
 
 /** Full text rides along up to this size, like a document revision's edited document. */
@@ -30,16 +29,7 @@ export function buildNoteUpdatePayload(input: { noteId: string; title: string; p
   const after = ensureNl(input.after);
   const parts = [`<note_update note_id="${attr(input.noteId)}" title="${attr(input.title)}" path="${attr(input.path)}">`];
   parts.push("This note changed since you last saw it. The user is sending the new version; treat it as current and replace what you knew of it.", "");
-  if (input.before !== null) {
-    const before = ensureNl(input.before);
-    const stat = diffStat(before, after);
-    if (stat.hunks > 0) {
-      const patch = createTwoFilesPatch("before.md", "after.md", before, after, "", "", { context: 3 })
-        .split("\n").filter((l) => !l.startsWith("===")).join("\n").trim();
-      parts.push(`<edits format="unified-diff" stat="+${stat.added} -${stat.removed}">`, patch, "</edits>");
-    } else parts.push(`<edits format="unified-diff" stat="+0 -0">(no text changes)</edits>`);
-    parts.push("");
-  }
+  if (input.before !== null) parts.push(editsBlock(input.before, after), "");
   if (after.length <= FULL_TEXT_LIMIT) parts.push("<current_note>", after.trimEnd(), "</current_note>");
   else parts.push(`<current_note omitted="true" chars="${after.length}" />`);
   parts.push("</note_update>");

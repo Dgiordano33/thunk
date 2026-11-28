@@ -68,7 +68,7 @@ const mocks = {
   "@/lib/db/repo/tasks": { getTask: async (id) => tasks.get(id), listTasks: async () => [...tasks.values()] },
   "@/lib/tasks/service": {
     createTask: async (input) => { const task = { id: id(), status: "open", ...input }; tasks.set(task.id, task); return task; },
-    patchTask: async (id, patch) => { const task = tasks.get(id); Object.assign(task, patch); return task; },
+    patchTask: async (id, patch) => { const task = tasks.get(id); const bump = patch.criteria !== undefined && JSON.stringify(patch.criteria) !== JSON.stringify(task.criteria ?? null); Object.assign(task, patch, bump ? { criteriaVersion: (task.criteriaVersion ?? 0) + 1 } : {}); return task; },
   },
   "@/lib/db/repo/sessions": { upsertSession: async () => {}, getSessionRow: async (id) => persisted.get(id)?.meta ?? null },
   "@/lib/db/repo/messages": { insertEvents: async () => {}, loadEvents: async (id) => sessions.get(id)?.events ?? persisted.get(id)?.events ?? [] },
@@ -774,4 +774,101 @@ test("criteria approved with a plan reach the worker's brief, and its evidence l
   assert.deepEqual(rows.map((r) => [r.criterionId, r.origin, r.type, r.status]).reverse(), [["c1", "claimed", "test", "pass"], ["c2", "claimed", "note", "unknown"]]);
   assert.ok(rows.every((r) => r.sessionId === live.id));
   assert.match((await reports.savedReport(live.id)).content, /Evidence: 2 of 2 criteria reported by the worker/);
+});
+
+test("a revised plan reaches its open tasks: email notifications become Inbox only", async () => {
+  await stopAll();
+  const plans = load("@/lib/workers/plans");
+  const documents = load("@/lib/db/repo/documents");
+  const sources = load("@/lib/sources/service");
+  const sourceRepo = load("@/lib/db/repo/task-sources");
+  const workerState = load("@/lib/db/repo/worker-state");
+  const { staleness } = load("@/lib/evidence/types");
+  const chief = await service.openChief(project.id);
+  assert.ok(prompt.CHIEF_TOOL_NAMES.includes("tasks_revise"));
+  assert.match(prompt.teamPrompt(chief.meta.origin), /<source_revision id=[\s\S]*tasks_revise/);
+  // The chief wrote the plan as its response; that document is what the tasks implement.
+  const plan = "# Notify on review\n\n1. Send an email to the person when a review card opens.\n2. Add a notifications settings page with an email toggle.\n3. Document review cards in the README.\n";
+  const documentId = id();
+  await documents.insertDocument({ id: documentId, sessionId: chief.id, kind: "response", version: 1, markdown: plan });
+  emit(chief, { type: "turn_complete", markdown: plan, documentId });
+  const proposed = await plans.proposePlan(project.id, chief.id, { summary: "Notify on review", tasks: [
+    { key: "email", title: "Email on review", brief: "Send an email to the person when a review card opens.", criteria: [{ text: "An email is sent when a review card opens", kind: "test" }] },
+    { key: "settings", title: "Notification settings", brief: "Add a notifications settings page with an email toggle.", dependsOn: ["email"] },
+    { key: "docs", title: "Document review cards", brief: "Describe review cards in the README." },
+  ] });
+  const { results } = await plans.decidePlan(project.id, proposed.planId, "approve");
+  const [email, settings, docs] = results.map((r) => r.taskId);
+  assert.equal(results[1].queued, true, "settings waits for the email task");
+  assert.deepEqual((await sourceRepo.listTaskSources(email)).map((s) => [s.kind, s.sourceId, s.version, s.deliveredVersion]), [["document", documentId, 1, 1]]);
+  // Evidence gathered against the first criteria.
+  const earlier = { criteriaVersion: tasks.get(email).criteriaVersion, commitSha: null };
+
+  // The person edits the plan: email notifications become Inbox only.
+  const edited = plan.replace("1. Send an email to the person when a review card opens.", "1. Show a review card in the Inbox only; send no email.").replace(" with an email toggle", "");
+  const [change] = await sources.documentRevised(documentId, plan, edited);
+  assert.equal(change.version, 2);
+  const message = chief.events.filter((e) => e.type === "user_message").at(-1).content;
+  assert.match(message, new RegExp(`^<source_revision id="${change.id}" source="document"`));
+  assert.match(message, /\n-1\. Send an email to the person when a review card opens\.\n[\s\S]*\n\+1\. Show a review card in the Inbox only; send no email\.\n/);
+  for (const taskId of [email, settings, docs]) assert.match(message, new RegExp(`<task id="${taskId}"`));
+  assert.equal(notifications.filter((n) => n.kind === "plan_changed").length, 0, "nothing reaches the person before the chief proposes");
+
+  // The chief answers with tasks_revise; the unaffected task already implements v2.
+  await assert.rejects(sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [{ taskId: email, affected: true }] }), /summary and the complete new brief/);
+  const answer = await sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [
+    { taskId: email, affected: true, summary: "Notify in the Inbox only; drop the email", brief: "Open a review card in the Inbox when work is ready. Send no email.", criteria: [{ text: "A review card appears in the Inbox", kind: "test" }, { text: "No email is sent", kind: "test" }] },
+    { taskId: settings, affected: true, summary: "No email toggle", brief: "Add a notifications settings page." },
+    { taskId: docs, affected: false, summary: "README text still holds" },
+  ] });
+  assert.equal(answer.status, "open");
+  const card = notifications.at(-1);
+  assert.equal(card.kind, "plan_changed");
+  assert.equal(card.urgency, "action");
+  assert.equal(card.href, `/inbox/plan-changes/${change.id}`);
+  assert.match(card.detail, /Email on review: Notify in the Inbox only/);
+  assert.match(card.detail, /Unaffected: Document review cards/);
+  assert.equal((await sourceRepo.listTaskSources(docs))[0].deliveredVersion, 2);
+  assert.equal((await sourceRepo.listTaskSources(email))[0].deliveredVersion, 1, "the email worker still has v1");
+  await assert.rejects(sources.proposeTaskChanges(project.id, chief.id, { revisionId: change.id, tasks: [{ taskId: docs, affected: false }] }), /already proposed/);
+
+  // The person approves the email change and edits the settings brief.
+  await assert.rejects(sources.decidePlanChange(change.id, [{ taskId: email, decision: "approved" }]), /every task/);
+  const applied = await sources.decidePlanChange(change.id, [{ taskId: email, decision: "approved" }, { taskId: settings, decision: "approved", brief: "Add a notifications settings page for Inbox options." }]);
+  assert.equal(applied.status, "applied");
+  assert.deepEqual(applied.items.map((i) => [i.taskId, i.decision, i.delivery]), [[email, "approved", "sent"], [settings, "approved", "queued"], [docs, "pending", null]]);
+  assert.equal(tasks.get(email).body, "Open a review card in the Inbox when work is ready. Send no email.");
+  assert.deepEqual(tasks.get(email).criteria.map((c) => c.text), ["A review card appears in the Inbox", "No email is sent"]);
+  assert.equal(tasks.get(email).criteriaVersion, earlier.criteriaVersion + 1, "revised criteria bump the version");
+  assert.equal(staleness(earlier, [], tasks.get(email).criteriaVersion), "criteria", "earlier evidence covers an older revision");
+  const worker = sessions.get(tasks.get(email).sessionId);
+  const update = worker.events.filter((e) => e.type === "user_message").at(-1).content;
+  assert.match(update, new RegExp(`^<task_update task="${email}" source="document" version="2">`));
+  assert.match(update, /Send no email/);
+  assert.match(update, /No email is sent/);
+  assert.equal((await workerState.listQueue(project.id)).find((q) => q.taskId === settings).input.brief, "Add a notifications settings page for Inbox options.");
+  assert.ok(resolved.includes(`plan-change:${change.id}`));
+  assert.match(chief.events.filter((e) => e.type === "user_message").at(-1).content, new RegExp(`^<plan_change id="${change.id}" status="applied">[\\s\\S]*sent to its worker`));
+  await assert.rejects(sources.decidePlanChange(change.id, []), /already applied/);
+
+  // The update was queued behind the worker's turn; it picks it up, then reports which revision it implements.
+  assert.equal(worker.queuedMessages.length, 1);
+  worker.queuedMessages.length = 0;
+  emit(worker, { type: "message_dequeued", messageId: id() });
+  finish(worker, "Inbox only now");
+  await until(async () => await reports.savedReport(worker.id));
+  const report = await reports.savedReport(worker.id);
+  assert.match(report.content, /Implements plan v2/);
+  assert.deepEqual(report.sourceVersion, { kind: "document", sourceId: documentId, version: 2, latest: 2 });
+  assert.equal(load("@/lib/review/types").reportSummary(report.content), "Inbox only now");
+
+  // A later revision the worker has not been sent shows on its next report.
+  const [second] = await sources.documentRevised(documentId, edited, `${edited}4. Mention it in the changelog.\n`);
+  assert.equal(second.version, 3);
+  await service.messageWorker(project.id, email, "One more pass");
+  finish(worker, "Done again");
+  await until(async () => (await reports.savedReport(worker.id)).seq > report.seq);
+  assert.match((await reports.savedReport(worker.id)).content, /Implements plan v2 \(the plan is now v3/);
+  await sources.dismissPlanChange(second.id);
+  for (const taskId of [email, settings, docs]) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
 });

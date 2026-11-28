@@ -1,6 +1,7 @@
 // Client-safe: the review card's shape, built on the server by lib/review/card.ts.
 import type { ReviewEvidence } from "@/lib/evidence/types";
 import type { WorkspacePrStatus } from "@/lib/projects/types";
+import type { SourceStamp } from "@/lib/sources/types";
 import type { Criterion } from "@/lib/tasks/types";
 
 export type ReviewTests = { state: "passed" | "failed" | "not_run"; command: string | null; detail: string };
@@ -27,6 +28,8 @@ export type ReviewState = {
   criteriaVersion: number;
   /** Newest first, each marked when it covers an older commit or older criteria. */
   evidence: ReviewEvidence[];
+  /** The plan or note version the latest report implements, and the newest version; null when the task has no source. */
+  source?: SourceStamp | null;
 };
 
 /** The summary line of a `<worker_report>` (its first line after the opening tag). */
@@ -35,7 +38,7 @@ export function reportSummary(content: string | null | undefined): string | null
   const body = content.replace(/^<worker_report[^>]*>\n?/, "").replace(/\n?<\/worker_report>\s*$/, "");
   const lines: string[] = [];
   for (const line of body.split("\n")) {
-    if (/^(Needs person|Mode|Branch|Diff|Race|Cost|Overlaps|Workspace|Evidence):/.test(line)) break;
+    if (/^(Needs person|Mode|Branch|Diff|Race|Cost|Overlaps|Workspace|Evidence):/.test(line) || /^Implements (plan|note) v\d+/.test(line)) break;
     lines.push(line);
   }
   return lines.join("\n").trim() || null;

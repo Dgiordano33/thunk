@@ -63,7 +63,7 @@ export async function decidePlan(projectId: string, planId: string, decision: "a
         if (missing.length) { results.push({ key: t.key, title: t.title, error: `Skipped: ${missing.join(", ")} did not start` }); continue; }
         try {
           const started = await delegate(projectId, chiefId && getSession(chiefId)?.meta.origin?.kind === "chief" ? chiefId : null, {
-            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId, criteria: t.criteria,
+            relayId: plan.relayId, title: t.title, brief: t.brief, model: t.model, mode: t.mode, race: t.race, noteId: plan.noteId, criteria: t.criteria, sourceDocumentId: plan.sourceDocumentId,
             dependsOn: t.dependsOn?.map((k) => plan.taskIds[k]),
           });
           plan.taskIds[t.key] = started.taskId;

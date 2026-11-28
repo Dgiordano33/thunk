@@ -55,18 +55,7 @@ export function buildRevisionPayload(input: RevisionInput): { payload: string; s
   parts.push(intro);
   parts.push("");
 
-  if (stat.hunks > 0) {
-    const patch = createTwoFilesPatch("original.md", "edited.md", baseline, edited, "", "", { context: 3 })
-      .split("\n")
-      .filter((l) => !l.startsWith("==="))
-      .join("\n")
-      .trim();
-    parts.push(`<edits format="unified-diff" stat="+${stat.added} -${stat.removed}">`);
-    parts.push(patch);
-    parts.push("</edits>");
-  } else {
-    parts.push(`<edits format="unified-diff" stat="+0 -0">(no direct edits)</edits>`);
-  }
+  parts.push(editsBlock(baseline, edited, { names: ["original.md", "edited.md"], empty: "(no direct edits)" }));
   parts.push("");
 
   parts.push(`<comments count="${comments.length}">`);
@@ -91,6 +80,24 @@ export function buildRevisionPayload(input: RevisionInput): { payload: string; s
   parts.push("</document_revision>");
 
   return { payload: parts.join("\n"), stat: { ...stat, comments: comments.length } };
+}
+
+/**
+ * The `<edits>` block every revision-style message carries: a unified diff of before → after with its stat.
+ * Shared by document revisions, note updates and source revisions so agents read one format.
+ */
+export function editsBlock(before: string, after: string, opts: { names?: [string, string]; empty?: string } = {}) {
+  const a = ensureNl(before);
+  const b = ensureNl(after);
+  const stat = diffStat(a, b);
+  if (stat.hunks === 0) return `<edits format="unified-diff" stat="+0 -0">${opts.empty ?? "(no text changes)"}</edits>`;
+  const [from, to] = opts.names ?? ["before.md", "after.md"];
+  const patch = createTwoFilesPatch(from, to, a, b, "", "", { context: 3 })
+    .split("\n")
+    .filter((l) => !l.startsWith("==="))
+    .join("\n")
+    .trim();
+  return [`<edits format="unified-diff" stat="+${stat.added} -${stat.removed}">`, patch, "</edits>"].join("\n");
 }
 
 export function ensureNl(s: string) {

@@ -9,6 +9,8 @@ import { getTask } from "@/lib/db/repo/tasks";
 import { latestIntegrationForTask, type Integration } from "@/lib/db/repo/integrations";
 import { resolveWhere } from "@/lib/notifications/service";
 import { recordPrChecks, reviewEvidence } from "@/lib/evidence/service";
+import { latestWorkerReport } from "@/lib/db/repo/worker-reports";
+import { listTaskSources } from "@/lib/db/repo/task-sources";
 import type { ReviewIntegration, ReviewState, ReviewTests } from "./types";
 
 export class ReviewNotFound extends Error {}
@@ -69,7 +71,10 @@ export async function reviewState(sessionId: string): Promise<ReviewState> {
   const current = [...heads.values()].filter((h): h is string => Boolean(h));
   if (pr?.pr?.state === "OPEN") await recordPrChecks(task, sessionId, pr.pr, current[0] ?? null).catch((err) => console.error("[thunk] PR check evidence failed", err));
   const evidence = await reviewEvidence(task, current);
+  const stamp = (await latestWorkerReport(sessionId))?.sourceVersion ?? null;
+  const sourceRow = stamp ? (await listTaskSources(task.id)).find((s) => s.kind === stamp.kind && s.sourceId === stamp.sourceId) : null;
   return {
+    source: stamp ? { ...stamp, latest: Math.max(stamp.latest, sourceRow?.version ?? 0) } : null,
     taskId: task.id, taskTitle: task.title, sessionId, workspaceId: session.workspaceId, branch: ctx.workspace.branch, changes, integration, pr,
     criteria: task.criteria ?? null, criteriaVersion: task.criteriaVersion ?? 0, evidence,
   };

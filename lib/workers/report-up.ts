@@ -12,10 +12,10 @@ const batches = g.__thunkReportBatches ??= new Map();
 /** The worker session's reports (the outbox to its chief), oldest first. */
 export const savedReports = (sessionId: string): Promise<Report[]> => listWorkerReports(sessionId);
 export const savedReport = (sessionId: string): Promise<Report | null> => latestWorkerReport(sessionId);
-export async function queueReport(project: Project, session: Pick<SessionMeta, "id" | "origin">, seq: number, content: string) {
+export async function queueReport(project: Project, session: Pick<SessionMeta, "id" | "origin">, seq: number, content: string, sourceVersion: WorkerReport["sourceVersion"] = null) {
   if (session.origin?.kind !== "worker") return;
   const chiefSessionId = session.origin.chiefSessionId;
-  enqueue(await saveWorkerReport(project.id, { sessionId: session.id, seq, content, chiefSessionId, delivered: !chiefSessionId }));
+  enqueue(await saveWorkerReport(project.id, { sessionId: session.id, seq, content, chiefSessionId, delivered: !chiefSessionId, sourceVersion }));
 }
 export function enqueue(report: Report) {
   if (report.delivered || !report.chiefSessionId) return;
