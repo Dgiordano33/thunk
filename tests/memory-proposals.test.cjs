@@ -226,6 +226,40 @@ test("the Harvest proposal session is read-only and its brief carries memory, so
   assert.match(brief, /memory_propose/);
 });
 
+test("the Memory upkeep template is weekly, off by default, and asks for memory_propose", () => {
+  const { ROUTINE_TEMPLATES } = require("../lib/routines/templates.ts");
+  const { ROUTINE_SCHEDULE_PRESETS } = require("../lib/routines/types.ts");
+  const upkeep = ROUTINE_TEMPLATES.find((t) => t.name === "Memory upkeep");
+  assert.ok(upkeep);
+  assert.equal(upkeep.enabled, false);
+  assert.equal(ROUTINE_SCHEDULE_PRESETS.find((p) => p.id === upkeep.schedule).cron, "0 9 * * 1");
+  for (const word of [/memory_propose/, /sources\.json/, /duplicates/, /contradict/, /reviewAfter/, /no longer exist/, /no items/]) assert.match(upkeep.prompt, word);
+  assert.ok(ROUTINE_TEMPLATES.filter((t) => t.name !== "Memory upkeep").every((t) => t.enabled), "the other templates still start on");
+});
+
+test("an upkeep run with nothing to propose resolves quietly; one with a proposal leaves only its card", async () => {
+  const ctx = await context("upkeep");
+  const routines = require("../lib/db/repo/routines.ts");
+  const { runNotification } = require("../lib/notifications/routines.ts");
+  const routine = await routines.insertRoutine({ projectId: ctx.project.id, name: "Memory upkeep", prompt: "Tidy", model: "claude-sonnet-5-5", permissionMode: "acceptEdits", targetKind: "workspace", targetWorkspaceId: ctx.workspace.id, scheduleCron: "0 9 * * 1", scheduleTz: "UTC", events: [], context: { notes: [], taskIds: [] }, webhookToken: null, enabled: false, catchUp: "skip", slackReport: false, maxRunsPerDay: 24, maxRunMinutes: 30, nextRunAt: null });
+  const runNotices = async (runId) => (await notifications.listNotifications({ status: "all" })).filter((n) => n.runId === runId);
+  const origin = (runId) => ({ kind: "routine", routineId: routine.id, runId, routineName: routine.name });
+
+  const quiet = await routines.insertRun({ routineId: routine.id, triggerSource: "cron", status: "running" });
+  await call(tool(ctx, origin(quiet.id)), { items: [] });
+  await runNotification({ ...quiet, status: "succeeded", summary: "Nothing to propose." });
+  assert.deepEqual(await runNotices(quiet.id), []);
+
+  const proposing = await routines.insertRun({ routineId: routine.id, triggerSource: "cron", status: "running" });
+  await call(tool(ctx, origin(proposing.id)), { items: [{ op: "remove", target: "- Tests live in tests/.", kind: "decision", reason: "Duplicate of AGENTS.md." }] });
+  await runNotification({ ...proposing, status: "succeeded", summary: "Proposed 1 change." });
+  assert.deepEqual((await runNotices(proposing.id)).map((n) => n.kind), ["memory_proposal"]);
+
+  const other = await routines.insertRun({ routineId: routine.id, triggerSource: "cron", status: "running" });
+  await runNotification({ ...other, status: "succeeded", summary: "Did other work." });
+  assert.deepEqual((await runNotices(other.id)).map((n) => n.kind), ["run_succeeded"], "runs that never called memory_propose still report");
+});
+
 test("proposals round-trip through Postgres", async (t) => {
   const { testDb } = require("./helpers/test-db.cjs");
   const db = await testDb();

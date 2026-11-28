@@ -9,6 +9,8 @@ export async function runNotification(run: RoutineRun) {
   if (!["needs_attention", "succeeded", "failed"].includes(run.status)) return;
   const routine = await getRoutine(run.routineId);
   if (!routine) return;
+  // A run that proposed a memory update has its proposal card instead; one that found nothing to propose stays quiet.
+  if (run.status === "succeeded" && await (await import("@/lib/memory/service")).runProposed(run.id)) return;
   const kind = run.status === "needs_attention" ? "run_needs_attention" : run.status === "succeeded" ? "run_succeeded" : "run_failed";
   await notify({ kind, urgency: run.status === "needs_attention" ? "action" : "info", projectId: routine.projectId,
     workspaceId: run.workspaceId, sessionId: run.sessionId, runId: run.id, subjectKey: `run:${run.id}:${run.status}`,
