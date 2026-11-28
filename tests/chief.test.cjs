@@ -59,7 +59,7 @@ const mocks = {
     createWorkspace: async (input) => { workspaceInputs.push(input); if (setupFailure) throw new Error("setup failed"); const workspace = nextWorkspace?.(input) ?? { ...main, id: id(), slug: input.name, branch: `thunk/${input.name}` }; nextWorkspace = null; workspaces.set(workspace.id, workspace); return workspace; },
     getWorkspaceContext: async (id) => workspaces.has(id) ? { project, workspace: workspaces.get(id) } : null,
   },
-  "@/lib/projects/paths": { projectConfigDir: () => tmp, workspaceMemoryFile: () => path.join(tmp, "MEMORY.md") },
+  "@/lib/projects/paths": { projectConfigDir: () => tmp, workspaceMemoryFile: () => path.join(tmp, "MEMORY.md"), sharedConfigDir: () => tmp },
   "@/lib/projects/repos": { sessionConfigRoot: () => tmp },
   "@/lib/prompts/context": { expandCommand: async (s) => s },
   "@/lib/db/repo/projects": { getProject: async (id) => id === project.id ? project : null, listProjects: async () => [project] },
@@ -681,4 +681,27 @@ test("resuming a relay reuses its completed and running tasks instead of creatin
   assert.equal(completed.reused,true);assert.equal(completed.status,"done");assert.equal(tasks.size,count);
   const state=await load("@/lib/workers/state").readWorkerState(project);
   assert.equal(state.relayTasks[relayId]["unique recovery work"],first.taskId);
+});
+
+test("the worker cap follows the limits setting without a restart", async () => {
+  const limits = load("@/lib/setup/limits");
+  const active = () => [...sessions.values()].filter((s) => s.meta.projectId === project.id && s.meta.origin?.kind === "worker" && ["starting", "running", "awaiting"].includes(s.meta.status)).length;
+  const started = [];
+  try {
+    limits.updateLimits({ workersPerProject: active() + 1 });
+    const fits = await service.delegate(project.id, null, { title: "Fits under the cap" });
+    started.push(fits.taskId);
+    assert.ok(fits.sessionId, "a free slot under the configured cap starts the worker");
+    const cap = active();
+    const waits = await service.delegate(project.id, null, { title: "Over the cap" });
+    started.push(waits.taskId);
+    assert.equal(waits.queued, true, "the configured cap queues the next task");
+    assert.match(waits.reason, new RegExp(`${cap} of ${cap} workers busy`));
+    assert.match(prompt.teamPrompt({ kind: "chief" }), cap === 1 ? /One worker runs at a time/ : new RegExp(`Up to ${cap} workers run at a time`));
+    limits.updateLimits({ workersPerProject: cap + 1 });
+    assert.deepEqual(await service.drainQueue(project.id), [waits.taskId], "raising the cap starts the queued task");
+  } finally {
+    for (const taskId of started) await service.stopWorker(project.id, taskId, "Cleanup").catch(() => {});
+    fs.rmSync(limits.limitsFile(), { force: true });
+  }
 });

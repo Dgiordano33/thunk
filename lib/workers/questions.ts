@@ -2,10 +2,9 @@ import "server-only";
 import { emit, getSession, pushUserMessage, refreshWaitingOn, resolvePending, resumeSession, type LiveSession } from "@/lib/agent";
 import type { Question } from "@/lib/agent/types";
 import { appendWorkLog } from "./log";
+import { chiefAnswerMs } from "@/lib/setup/limits";
 import { currentChiefId } from "./report-up";
 
-/** How long the chief has to answer before a question goes to the person. */
-export const CHIEF_ANSWER_MINUTES = 10;
 
 type Routed = { workerId: string; timer: ReturnType<typeof setTimeout> };
 // Pinned to globalThis so HMR keeps the timers attached to their questions.
@@ -17,7 +16,7 @@ const render = (questions: Question[]) => questions.map((q) =>
 ).join("\n");
 
 /** Post a worker's AskUserQuestion to its chief. The worker's call stays parked until someone answers. */
-export async function forwardQuestion(live: LiveSession, requestId: string, questions: Question[], { timeoutMs = CHIEF_ANSWER_MINUTES * 60_000 } = {}) {
+export async function forwardQuestion(live: LiveSession, requestId: string, questions: Question[], { timeoutMs = chiefAnswerMs() } = {}) {
   const origin = live.meta.origin;
   if (origin?.kind !== "worker" || !origin.chiefSessionId) return;
   const timer = setTimeout(() => void escalateQuestion(requestId, null, `The chief did not answer within ${Math.round(timeoutMs / 60_000)} minutes.`)

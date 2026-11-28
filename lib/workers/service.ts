@@ -20,7 +20,7 @@ import { appendWorkLog, carryChiefPlan } from "./log";
 import { noteBrief } from "./notes";
 import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
 
-export const MAX_WORKERS_PER_PROJECT = 4;
+import { workersPerProject } from "@/lib/setup/limits";
 import { DelegateSchema, type DelegateInput } from "./schema";
 import { readWorkerState, summarizeStats, updateWorkerState, type RaceEntry } from "./state";
 import { workerOverlaps } from "./conflicts";
@@ -131,11 +131,11 @@ export async function delegate(projectId: string, chiefSessionId: string | null,
     if (!task) task = await createTask({ projectId, title: args.title ?? note?.note.title.slice(0, 200) ?? "Delegated task", body: args.brief ?? null, noteId }, { createdBy: chiefSessionId ? "agent" : "user", createdInSessionId: chiefSessionId });
     await rememberTask(task);
     const need = args.race?.length ?? 1;
-    const free = MAX_WORKERS_PER_PROJECT - activeWorkers(projectId);
+    const cap = workersPerProject(), free = cap - activeWorkers(projectId);
     if (deps.waiting.length || free < need) {
       const queued = task;
       await updateWorkerState(project, (s) => { s.queue.push({ taskId: queued.id, chiefSessionId, input: { ...args, taskId: queued.id, ...(noteId ? { noteId } : {}) }, dependsOn, queuedAt: new Date().toISOString() }); });
-      const reason = deps.waiting.length ? `waiting for ${deps.waiting.join(", ")}` : `${MAX_WORKERS_PER_PROJECT - free} of ${MAX_WORKERS_PER_PROJECT} workers busy`;
+      const reason = deps.waiting.length ? `waiting for ${deps.waiting.join(", ")}` : `${cap - free} of ${cap} workers busy`;
       await appendWorkLog(project, `[chief] queued: ${task.title} (${task.id}) · ${reason}`);
       return { taskId: task.id, queued: true as const, reason, position: state.queue.length + 1 };
     }
@@ -242,7 +242,7 @@ export async function drainQueue(projectId: string) {
       }
       if (deps.waiting.length) continue;
       // Keep order among ready tasks: stop at the first that does not fit.
-      if (MAX_WORKERS_PER_PROJECT - activeWorkers(projectId) < (item.input.race?.length ?? 1)) break;
+      if (workersPerProject() - activeWorkers(projectId) < (item.input.race?.length ?? 1)) break;
       await dequeue();
       const chiefId = item.chiefSessionId ? await currentChiefId(item.chiefSessionId) : null;
       try {

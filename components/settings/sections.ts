@@ -10,7 +10,7 @@ export const SETTINGS_SECTIONS = [
   { id: "notifications", label: "Notifications", blurb: "What reaches you on the desktop and in Slack", scope: "server" },
   { id: "agents", label: "Agents", blurb: "Claude and Codex, and the setup sessions load", scope: "server" },
   { id: "integrations", label: "Integrations", blurb: "Slack and Linear", scope: "server" },
-  { id: "automation", label: "Automation", blurb: "Daily notes triage", scope: "server" },
+  { id: "automation", label: "Automation", blurb: "Daily notes triage and server limits", scope: "server" },
   { id: "usage", label: "Usage", blurb: "What agents report they cost", scope: "server" },
   { id: "help", label: "Help", blurb: "Intro, legend and hints", scope: "browser" },
 ] as const satisfies readonly { id: string; label: string; blurb: string; scope: SettingsScope }[];

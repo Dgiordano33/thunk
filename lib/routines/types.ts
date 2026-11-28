@@ -142,7 +142,5 @@ export const EVENT_LABELS: Record<RoutineEvent, string> = {
   task_completed: "A task is completed",
 };
 
-export const MAX_CONCURRENT_RUNS = 3;
-
 export const routineSlug = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "routine";

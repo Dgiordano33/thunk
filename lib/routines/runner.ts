@@ -12,12 +12,13 @@ import { prepareWorkspace } from "@/lib/projects/runtime";
 import type { Project, Workspace } from "@/lib/projects/types";
 import { getProject } from "@/lib/db/repo/projects";
 import { countRunsSince, insertRun, isSkip, startOfToday, updateRoutine, updateRun } from "@/lib/db/repo/routines";
+import { routineRunsAtOnce } from "@/lib/setup/limits";
 import { renderRoutineContext } from "./context";
 import { keepRunOutputs, runTasks, type KeptNote } from "./outputs";
 import { renderPrompt } from "./prompt";
 import { collectReport, writeRunNote } from "./report";
 import { routinesState as state, type ActiveRun } from "./state";
-import { MAX_CONCURRENT_RUNS, routineSlug, type Routine, type RoutineRun, type RunStatus, type RunTrigger, type SessionOrigin } from "./types";
+import { routineSlug, type Routine, type RoutineRun, type RunStatus, type RunTrigger, type SessionOrigin } from "./types";
 
 type Payload = Record<string, unknown> | null;
 
@@ -60,8 +61,9 @@ export async function fire(routine: Routine, trigger: RunTrigger, payload: Paylo
 /** Reserve before awaiting so every trigger shares the same concurrency and daily limits. */
 export async function startRun(routine: Routine, trigger: RunTrigger, payload: Payload = null): Promise<RoutineRun> {
   if (state.active.has(routine.id)) throw new RunRejected("the previous run is still in progress", 409);
-  if (state.active.size >= MAX_CONCURRENT_RUNS)
-    throw new RunRejected(`${MAX_CONCURRENT_RUNS} routine runs already in progress`, 429);
+  const atOnce = routineRunsAtOnce();
+  if (state.active.size >= atOnce)
+    throw new RunRejected(`${atOnce} routine run${atOnce === 1 ? "" : "s"} already in progress`, 429);
   const slot: ActiveRun = { runId: "", routineId: routine.id, sessionId: null, cancel: () => {} };
   state.active.set(routine.id, slot);
   let run: RoutineRun;
