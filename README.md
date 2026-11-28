@@ -38,7 +38,7 @@ cp .env.local.example .env.local   # every setting is optional
 npm run dev                        # http://127.0.0.1:4500
 ```
 
-Open the URL, add a project (any git repo or folder), and start a session.
+Open the URL, add a project (any git repo or folder), and start a session. The first-run introduction opens with a choice to continue in Space or switch to Plain. You can change the look later in **Settings → Appearance**.
 
 - **Auth:** set `ANTHROPIC_API_KEY` in `.env.local`, or leave it empty to use your local `claude` login.
 - **Port:** `npm run dev` uses `$PORT`, else `$THUNK_PORT`, else `$CONDUCTOR_PORT`, else 4500.
