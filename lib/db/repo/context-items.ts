@@ -112,7 +112,8 @@ export async function setContextItemRemoved(sessionId: string, id: string, remov
     if (item) Object.assign(item, { removedAt, updatedAt: new Date().toISOString() });
     return;
   }
-  await client.query("update session_context_items set removed_at = $1, updated_at = now() where session_id = $2 and id = $3", [removedAt, sessionId, id]);
+  // The database's clock, like created_at, so "removed after the last prompt build" compares like with like.
+  await client.query("update session_context_items set removed_at = case when $1::boolean then now() else null end, updated_at = now() where session_id = $2 and id = $3", [removed, sessionId, id]);
 }
 
 /** After Send update: the session now holds this version. */

@@ -24,7 +24,10 @@ const mocks = {
   "../server": { db: () => current, hasDatabase: () => Boolean(current) },
   "@/lib/db/server": { db: () => current, hasDatabase: () => Boolean(current) },
   "@/lib/agent/session-registry": { getSession: (id) => lives.get(id) },
-  "@/lib/agent": { getSession: (id) => lives.get(id), resumeSession: async (id) => lives.get(id) ?? null, pushUserMessage: (live, content) => { pushed.push({ id: live.id, content }); return "m1"; } },
+  "@/lib/agent": {
+    getSession: (id) => lives.get(id), listLiveSessions: () => [...lives.values()], isTerminated: () => false, WorkspaceArchivedError: class extends Error {},
+    resumeSession: async (id) => lives.get(id) ?? null, pushUserMessage: (live, content) => { pushed.push({ id: live.id, content }); return "m1"; },
+  },
   "@/lib/projects": { getWorkspaceContext: async () => wsCtx },
   "@/lib/db/repo/sessions": { getSessionRow: async (id) => ({ id, workspaceId: "w" }) },
   "@/lib/db/repo/tasks": { getTask: async (id) => tasks[id] ?? null },
@@ -47,6 +50,9 @@ const { recordContextItems, recordRead, sessionPersisted } = require("../lib/con
 const repo = require("../lib/db/repo/context-items.ts");
 const { contextGroup, REASONS } = require("../lib/context/types.ts");
 const route = require("../app/api/sessions/[id]/context/route.ts");
+const itemRoute = require("../app/api/sessions/[id]/context/[itemId]/route.ts");
+const holdersRoute = require("../app/api/context/note-sessions/route.ts");
+const { buildNoteUpdatePayload, buildAttachmentPayload } = require("../lib/context/payloads.ts");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "thunk-context-"));
 const note = (id, markdown, flags = {}) => ({ id, title: id, path: path.join(tmp, "notes", `${id}.md`), updatedAt: "2026-11-27T00:00:00Z", markdown, pinned: false, inject: false, actionable: false, openTasks: 0, ...flags });
@@ -142,4 +148,65 @@ test("the context route reports changedSince by hash; resume rewrites the prompt
   assert.equal((await route.GET(new Request("http://x"), ctx(crypto.randomUUID()))).status, 200);
   wsCtx = null;
   assert.equal((await route.GET(new Request("http://x"), ctx(crypto.randomUUID()))).status, 404);
+});
+
+const post = (body) => new Request("http://x", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+
+test("attach pushes a context_attachment and records it; Send update pushes a note_update diff and records the new hash", async () => {
+  const [w] = await current.query("select id from workspaces limit 1");
+  wsCtx = { project: { id: (await current.query("select id from projects limit 1"))[0].id, dataKey: "ctx", name: "Ctx" }, workspace: { id: w.id, slug: "main" } };
+  const id = crypto.randomUUID();
+  await current.query("insert into sessions (id, workspace_id, cwd, model, permission_mode) values ($1, $2, $3, 'claude-sonnet', 'default')", [id, w.id, tmp]);
+  lives.set(id, { id, ctx: wsCtx, meta: { title: "Worker" } });
+  sessionPersisted(id);
+  tasks["t-9"] = { id: "t-9", projectId: wsCtx.project.id, workspaceId: null, title: "Ship the view", body: "Details", status: "open", priority: 1, noteId: null };
+  pushed.length = 0;
+
+  let res = await route.POST(post({ kind: "task", id: "t-9" }), ctx(id));
+  assert.equal(res.status, 200);
+  assert.match(pushed[0].content, /^<context_attachment kind="task" id="t-9" title="Ship the view">/);
+  assert.match(pushed[0].content, /Details/);
+  let items = (await res.json()).items;
+  assert.equal(items.find((i) => i.refId === "t-9").origin, "attached");
+  assert.equal((await route.POST(post({ kind: "task", id: "nope" }), ctx(id))).status, 404);
+  tasks["t-x"] = { ...tasks["t-9"], id: "t-x", projectId: "elsewhere" };
+  assert.equal((await route.POST(post({ kind: "task", id: "t-x" }), ctx(id))).status, 404, "tasks from another project can't be attached");
+
+  const file = path.join(tmp, "notes", "brief.md");
+  fs.writeFileSync(file, "---\ntitle: Brief\n---\nShip on Monday.\n");
+  await recordContextItems(id, "prompt", notesPrompt(sessionNotes([note("brief", "Ship on Monday.\n", { inject: true, title: "Brief", path: file })])).items);
+  fs.writeFileSync(file, "---\ntitle: Brief\n---\nShip on Tuesday.\n");
+  items = (await (await route.GET(new Request("http://x"), ctx(id))).json()).items;
+  const brief = items.find((i) => i.refId === "brief");
+  assert.equal(brief.changedSince, true);
+  let holders = (await (await holdersRoute.GET(new Request(`http://x/?path=${encodeURIComponent(file)}`))).json()).sessions;
+  assert.deepEqual(holders.map((h) => [h.sessionId, h.changed]), [[id, true]]);
+
+  pushed.length = 0;
+  res = await itemRoute.POST(post({ action: "update" }), { params: Promise.resolve({ id, itemId: brief.id }) });
+  assert.equal(res.status, 200);
+  assert.match(pushed[0].content, /^<note_update note_id="brief" title="Brief"/);
+  assert.match(pushed[0].content, /-Ship on Monday\.\n\+Ship on Tuesday\./);
+  assert.equal((await res.json()).items.find((i) => i.refId === "brief").changedSince, false);
+  holders = (await (await holdersRoute.GET(new Request(`http://x/?path=${encodeURIComponent(file)}`))).json()).sessions;
+  assert.equal(holders[0].changed, false);
+  // Nothing new to send: no second message.
+  await itemRoute.POST(post({ action: "update" }), { params: Promise.resolve({ id, itemId: brief.id }) });
+  assert.equal(pushed.length, 1);
+
+  // Remove is for prompt items only; attached ones are already in the conversation.
+  const attached = items.find((i) => i.refId === "t-9");
+  assert.equal((await itemRoute.POST(post({ action: "remove" }), { params: Promise.resolve({ id, itemId: attached.id }) })).status, 400);
+  const removed = (await (await itemRoute.POST(post({ action: "remove" }), { params: Promise.resolve({ id, itemId: brief.id }) })).json()).items.find((i) => i.refId === "brief");
+  assert.ok(removed.removedAt);
+  assert.equal(removed.removalPending, true);
+  assert.equal((await (await itemRoute.POST(post({ action: "keep" }), { params: Promise.resolve({ id, itemId: brief.id }) })).json()).items.find((i) => i.refId === "brief").removedAt, null);
+});
+
+test("update and attachment payloads", () => {
+  const update = buildNoteUpdatePayload({ noteId: "n", title: "A <b>", path: "/n.md", before: null, after: "x" });
+  assert.match(update, /title="A &lt;b&gt;"/);
+  assert.doesNotMatch(update, /<edits/);
+  assert.match(update, /<current_note>\nx\n<\/current_note>/);
+  assert.match(buildAttachmentPayload({ kind: "note", id: "n", title: "N", path: "/n.md", text: "y".repeat(50_000) }), /cut at 40,000 characters/);
 });

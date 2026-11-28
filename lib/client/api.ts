@@ -173,6 +173,11 @@ export const api = {
   },
   workspaceArtifacts: (id: string) => call<{ artifacts: Artifact[] }>(`/api/workspaces/${id}/artifacts`),
   sessionContext: (id: string) => call<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context`),
+  attachContext: (id: string, ref: { kind: "note"; scope: import("@/lib/notes/types").NoteScope; id: string } | { kind: "task" | "vault"; id: string }) =>
+    post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context`, ref),
+  contextItemAction: (id: string, itemId: string, action: "update" | "remove" | "keep") =>
+    post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context/${itemId}`, { action }),
+  noteSessions: (path: string) => call<{ sessions: { sessionId: string; title: string; itemId: string; changed: boolean }[] }>(`/api/context/note-sessions?path=${encodeURIComponent(path)}`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
     call<{ path: string; content: string }>(`/api/${scope}/${id}/memory`),

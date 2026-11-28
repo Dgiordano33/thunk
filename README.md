@@ -122,7 +122,13 @@ Open a session and pick the workspace panel's **Context** tab (`?tab=context`) t
 - **Fetched later**: notes, memory files and Vault items the agent read itself, through `vault_read` or a `Read` of a file in the project's notes, memory or Vault directories.
 - **Left out**, with the reason: over the 24,000-character note limit (12,000 for pinned Vault summaries), not marked to inject, not pinned, or no longer there.
 
-An item whose file or task changed since the session got it shows **Changed, not sent**. Notes have no history, so the version is a hash of the text the session got. `GET /api/sessions/[id]/context` returns the items, each with `changedSince`.
+An item whose file or task changed since the session got it shows **Changed, not sent**. Notes have no history, so the version is a hash of the text the session got.
+
+- **Attach** picks a note, task or Vault item and pushes it into the running session as a `<context_attachment>` message (resuming the session if its runtime exited).
+- **Send update**, on a changed note, pushes a `<note_update>` with a unified diff from the session's copy to the current text (built like a document revision) and records the new version. The note editor shows the same **Changed, not sent** row, with Send update, for each running session that holds an older copy.
+- **Remove** leaves a prompt item out from the next start or resume; the running system prompt can't change mid-run, and the view says so until then. **Keep** undoes it.
+
+Context API: `GET /api/sessions/[id]/context` (items, each with `changedSince`), `POST /api/sessions/[id]/context` (`{kind: "note", scope, id}`, `{kind: "task" | "vault", id}`), `POST /api/sessions/[id]/context/[itemId]` (`{action: "update" | "remove" | "keep"}`), `GET /api/context/note-sessions?path=<note path>`.
 
 ## How it works
 

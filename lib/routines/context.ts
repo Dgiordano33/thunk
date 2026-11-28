@@ -24,7 +24,7 @@ async function scopeInProject(project: Project, ref: RoutineNoteRef) {
   return (await getWorkspace(ref.scope.id))?.projectId === project.id;
 }
 
-async function loadNote(project: Project, ref: RoutineNoteRef): Promise<Note | null> {
+export async function loadNote(project: Project, ref: RoutineNoteRef): Promise<Note | null> {
   if (!(await scopeInProject(project, ref))) return null;
   const dirs = await dirsForScope(ref.scope).catch(() => null);
   return dirs ? readNote(dirs, ref.id) : null;
@@ -42,7 +42,7 @@ export async function validateRoutineContext(project: Project, context: RoutineC
   }
 }
 
-function renderTask(task: Task, heading: string, linked: Note | null) {
+export function renderTask(task: Task, heading: string, linked: Note | null) {
   const meta = [
     `- **ID:** \`${task.id}\``,
     `- **Status:** ${TASK_STATUS_LABELS[task.status]} · **Priority:** ${task.priority}`,
@@ -53,7 +53,7 @@ function renderTask(task: Task, heading: string, linked: Note | null) {
 }
 
 /** Tasks reference project-owned notes independently of workspace links. */
-async function linkedNote(project: Project, task: Task) {
+export async function linkedNote(project: Project, task: Task) {
   if (!task.noteId) return null;
   return readNote(projectNoteDirs(project), task.noteId).catch(() => null);
 }
