@@ -26,6 +26,8 @@ A timer on the server checks GitHub every minute. When the checkout's branch (no
 - After `thunk rollback`, automatic updates pause until you run `thunk update main`. A commit whose build fails is not retried until the next commit lands.
 - If `package-lock.json` changed, the whole update waits for an idle moment, because reinstalling dependencies stops Thunk for a few minutes.
 
+Every pull request and every push to `main` runs the `ci` workflow (`.github/workflows/ci.yml`): typecheck, lint and `npm test`. With branch protection on `main` requiring `ci`, a PR that breaks them cannot merge and so cannot deploy. Pushing to `main` directly skips that gate. A separate `e2e` job runs the Playwright tests; it is not required yet.
+
 ## Everyday use
 
 Connect from your Mac. There is no password; Tailscale handles sign-in, and the first connection of the day may open a browser to confirm:
