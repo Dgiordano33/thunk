@@ -96,11 +96,15 @@ const fired = [];
 Module._load = function (request, parent, ...rest) {
   if (parent?.filename.endsWith("/routines/delivery-poll.ts")) {
     if (request === "@/lib/projects/delivery") return { deliveryHistories: () => histories, workspaceDeliveries: () => deliveries };
-    if (request === "@/lib/db/repo/routines") return {
-      listEnabledRoutines: async () => routines,
-      updateRoutine: async (id, patch) => { const routine = routines.find((r) => r.id === id); Object.assign(routine, patch); return routine; },
+    if (request === "@/lib/db/repo/routines") return { listEnabledRoutines: async () => routines };
+    // The outbox: record each queued trigger as [routineId, source, payload] and move the cursor with it.
+    if (request === "@/lib/db/repo/routine-triggers") return {
+      enqueueTriggers: async (id, triggers, cursor) => {
+        for (const t of triggers) fired.push([id, t.source, t.payload, t.dedupeKey]);
+        Object.assign(routines.find((r) => r.id === id), cursor);
+        return triggers.length;
+      },
     };
-    if (request === "./runner") return { fire: async (...args) => { fired.push(args); } };
   }
   return originalLoad.call(this, request, parent, ...rest);
 };
@@ -139,7 +143,7 @@ test("delivery triggers respect workspace branch, current head, recovery and loo
   assert.equal(pending(ephemeral, { ...history, events: history.events.map((e) => ({ ...e, branch: "thunk/auto" })) }, []).events.length, 0);
 });
 
-test("routine dispatch persists the cursor and routes event payloads through fire once", async () => {
+test("routine dispatch persists the cursor and queues each event's payload once", async () => {
   const initial = advance(empty(), [snapshot()]);
   routines = [routine()]; deliveries = [workspace]; histories = [{ projectId: "p", history: initial }];
   await poll();
@@ -149,6 +153,7 @@ test("routine dispatch persists the cursor and routes event payloads through fir
   assert.equal(fired[0][1], "ci_failed");
   assert.equal(fired[0][2].pr.branch, "topic");
   assert.equal(fired[0][2].checks[0].state, "fail");
+  assert.equal(fired[0][3], `delivery:r:${fired[0][2].id}`);
   await poll();
   assert.equal(fired.length, 1);
   routines = JSON.parse(JSON.stringify(routines));

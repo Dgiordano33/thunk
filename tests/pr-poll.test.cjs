@@ -25,7 +25,15 @@ function loadPoll({ project, routine, listings, failing = new Set() }) {
       listEnabledRoutines: async () => [routine],
       updateRoutine: async (_id, patch) => { updates.push(patch); routine.triggerState = patch.triggerState; },
     },
-    "./runner": { fire: async (_r, _event, payload) => void fired.push(payload.pr.url) },
+    // The outbox: queued triggers count as fired, and the cursor moves with them.
+    "@/lib/db/repo/routine-triggers": {
+      enqueueTriggers: async (_id, triggers, cursor) => {
+        for (const t of triggers) fired.push(t.payload.pr.url);
+        updates.push(cursor);
+        routine.triggerState = cursor.triggerState;
+        return triggers.length;
+      },
+    },
     "server-only": {},
   };
   const source = fs.readFileSync(path.join(__dirname, "../lib/routines/pr-poll.ts"), "utf8");
