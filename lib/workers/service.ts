@@ -18,7 +18,7 @@ import { watchWorker, type WorkerResult } from "./watch";
 import { collectReport } from "./report";
 import { appendWorkLog, carryChiefPlan } from "./log";
 import { noteBrief } from "./notes";
-import { currentChiefId, enqueue, queueReport, reportFile, savedReport, savedReports } from "./report-up";
+import { currentChiefId, enqueue, queueReport, savedReport, savedReports } from "./report-up";
 
 import { workersPerProject } from "@/lib/setup/limits";
 import { DelegateSchema, type DelegateInput } from "./schema";
@@ -259,7 +259,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
     if (session?.origin?.kind !== "worker") return null;
     const live = getSession(session.id);
     const ctx = live?.ctx ?? await getWorkspaceContext(session.workspaceId);
-    const report = ctx ? await savedReport(ctx.project, session.id) : null;
+    const report = await savedReport(session.id);
     const scout = Boolean(session.origin.scout);
     const race = session.origin.raceId ? await getRace(session.origin.raceId) : null;
     const stats = await getTaskStats(task.id);
@@ -267,7 +267,7 @@ export async function workersStatus(projectId: string, withDiff = false) {
       state: session.live ? session.status : "closed", waitingOn: session.live ? session.waitingOn ?? null : null, pendingPrompts: live?.pending.size ?? 0,
       branch: scout ? null : ctx?.workspace.branch ?? null, diffStat: withDiff && ctx && !scout ? (await collectReport({ ...ctx, markdown: "" })).diffStat : null,
       lastSummary: report?.content ?? null, finishedAt: report?.createdAt ?? null, stats: stats ? { ...stats, counted: undefined } : null,
-      race: race ? { raceId: race.id, winner: race.winner, entries: await Promise.all(race.entries.map(async (e) => ({ ...e, finished: Boolean(ctx && await savedReport(ctx.project, e.sessionId)) }))) } : null,
+      race: race ? { raceId: race.id, winner: race.winner, entries: await Promise.all(race.entries.map(async (e) => ({ ...e, finished: Boolean(await savedReport(e.sessionId)) }))) } : null,
       overlaps: [] as { taskId: string; title: string; paths: string[] }[] };
   })).then((r) => r.filter((row) => row !== null));
   if (withDiff) {
@@ -345,8 +345,8 @@ async function finishWorker(meta: Pick<SessionMeta, "id" | "origin" | "workspace
     const origin = meta.origin;
     const ctx = await getWorkspaceContext(meta.workspaceId);
     if (!ctx) return;
-    const previous = await savedReport(ctx.project, meta.id);
-    if (previous && previous.seq >= seq) { enqueue(reportFile(ctx.project, meta.id), previous); return; }
+    const previous = await savedReport(meta.id);
+    if (previous && previous.seq >= seq) { enqueue(previous); return; }
     // A scout reports research rather than code changes.
     const report = await collectReport({ ...ctx, workspace: origin.scout ? null : ctx.workspace, markdown: result.markdown });
     const needsPerson = /^needs_person:[ \t]*(.*)$/im.exec(result.markdown)?.[1]?.trim().replace(/^(none|false|no|n\/a)\.?$/i, "");
@@ -439,8 +439,9 @@ export async function recoverWorkers() {
     try {
       const project = await getProject(session.projectId);
       if (!project) continue;
-      const saved = await savedReport(project, session.id);
-      for (const report of await savedReports(project, session.id)) enqueue(reportFile(project, session.id), report);
+      const reports = await savedReports(session.id);
+      const saved = reports.at(-1) ?? null;
+      for (const report of reports) enqueue(report);
       const events = getSession(session.id)?.events ?? await loadEvents(session.id);
       const pending = new Set<string>();
       for (const event of events) {

@@ -194,3 +194,31 @@ test("routing plans and routes move from the Home project's routing/state.json i
   await importStateFiles();
   assert.equal((await routes.listRoutes())[0].status, "blocked", "importing again keeps newer rows");
 });
+
+test("worker report outboxes move from worker-reports/<session>.json into Postgres", async (t) => {
+  const projectId = await withDb(t);
+  const reports = require("../lib/db/repo/worker-reports.ts");
+  const [session, chief] = [id(), id()];
+  const dir = path.join(configDir("app"), "worker-reports");
+  const file = path.join(dir, `${session}.json`);
+  write(file, [
+    { seq: 4, createdAt: "2026-11-20T09:00:00.000Z", content: "<worker_report seq=\"4\">", chiefSessionId: chief, delivered: true },
+    { seq: 9, createdAt: "2026-11-20T10:00:00.000Z", content: "<worker_report seq=\"9\">", chiefSessionId: chief, delivered: false },
+  ]);
+  write(path.join(dir, "notes.json"), []);
+  await importStateFiles();
+  const saved = await reports.listWorkerReports(session);
+  assert.deepEqual(saved.map((r) => [r.sessionId, r.seq, r.delivered, r.chiefSessionId]), [[session, 4, true, chief], [session, 9, false, chief]]);
+  assert.equal((await reports.latestWorkerReport(session)).content, "<worker_report seq=\"9\">");
+  assert.equal(fs.existsSync(file), false);
+  assert.ok(fs.existsSync(`${file}.imported`));
+  assert.ok(fs.existsSync(path.join(dir, "notes.json")), "files that are not session outboxes are left alone");
+
+  // Saving the same turn again keeps the first copy; delivery is recorded once.
+  assert.equal((await reports.saveWorkerReport(projectId, { sessionId: session, seq: 9, content: "again", chiefSessionId: chief, delivered: false })).content, "<worker_report seq=\"9\">");
+  await reports.markReportsDelivered([{ sessionId: session, seq: 9 }]);
+  assert.equal((await reports.latestWorkerReport(session)).delivered, true);
+  const fresh = await reports.saveWorkerReport(projectId, { sessionId: session, seq: 12, content: "new", chiefSessionId: null, delivered: true });
+  assert.equal(fresh.delivered, true);
+  assert.deepEqual((await reports.listWorkerReports(session)).map((r) => r.seq), [4, 9, 12]);
+});

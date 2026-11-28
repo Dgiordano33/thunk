@@ -1,11 +1,12 @@
 import "server-only";
-import { rename } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { listProjects } from "@/lib/db/repo/projects";
 import { insertPlanRows } from "@/lib/db/repo/delegation-plans";
 import { insertIntegrationRow } from "@/lib/db/repo/integrations";
 import { insertRoutePlanRow, insertRouteRow, type Route, type RoutePlan } from "@/lib/db/repo/routes";
 import { HOME_DATA_KEY } from "@/lib/home/constants";
+import { insertReportRow, type WorkerReport } from "@/lib/db/repo/worker-reports";
 import { insertQueueRow, insertRaceRow, insertRelayRow, insertStatsRow } from "@/lib/db/repo/worker-state";
 import { readOptional } from "@/lib/notes/file-write";
 import { projectConfigDir } from "@/lib/projects/paths";
@@ -50,6 +51,19 @@ async function importRoutingState(tx: Db, state: { plans?: Record<string, RouteP
   for (const route of Object.values(state.routes ?? {})) await insertRouteRow(tx, route);
 }
 
+export const workerReportsDir = (project: Pick<Project, "dataKey">) => path.join(projectConfigDir(project.dataKey), "worker-reports");
+
+/** One worker session's report outbox (`<session id>.json`). */
+async function importWorkerReports(tx: Db, projectId: string, sessionId: string, reports: Omit<WorkerReport, "sessionId">[]) {
+  for (const r of reports) await insertReportRow(tx, projectId, { ...r, sessionId, delivered: Boolean(r.delivered) });
+}
+
+async function reportFiles(project: Project) {
+  const dir = workerReportsDir(project);
+  const names = await readdir(dir).catch((err: NodeJS.ErrnoException) => { if (err.code === "ENOENT") return []; throw err; });
+  return names.filter((n) => /^[0-9a-f-]{36}\.json$/i.test(n)).map((n) => ({ file: path.join(dir, n), sessionId: n.slice(0, -5) }));
+}
+
 /** Import one JSON file in one transaction, then rename it to `<file>.imported`. */
 async function importFile(client: Db, file: string, load: (tx: Db, value: never) => Promise<void>) {
   const text = await readOptional(file);
@@ -71,6 +85,9 @@ export async function importStateFiles() {
   const files: { file: string; load: (tx: Db, value: never) => Promise<void> }[] = [];
   for (const project of await listProjects({ includeHome: true })) {
     files.push({ file: workerStateFile(project), load: (tx, state: LegacyWorkerState) => importWorkerState(tx, project.id, state) });
+    for (const { file, sessionId } of await reportFiles(project)) {
+      files.push({ file, load: (tx, reports: Omit<WorkerReport, "sessionId">[]) => importWorkerReports(tx, project.id, sessionId, reports) });
+    }
     if (project.dataKey === HOME_DATA_KEY) files.push({ file: routingStateFile(project), load: importRoutingState });
   }
   for (const { file, load } of files) {

@@ -1,41 +1,23 @@
 import "server-only";
-import path from "node:path";
 import { getSession, listSessions, resumeSession, pushUserMessage } from "@/lib/agent";
 import type { SessionMeta } from "@/lib/agent/types";
 import type { Project } from "@/lib/projects/types";
-import { projectConfigDir } from "@/lib/projects/paths";
-import { readOptional, replaceFile, withFileLock } from "@/lib/notes/file-write";
 import { insertEvents } from "@/lib/db/repo/messages";
 import { getSessionRow } from "@/lib/db/repo/sessions";
+import { latestWorkerReport, listWorkerReports, markReportsDelivered, saveWorkerReport, type WorkerReport } from "@/lib/db/repo/worker-reports";
 
-type Report = { seq: number; createdAt: string; content: string; chiefSessionId: string | null; delivered: boolean };
-const g = globalThis as typeof globalThis & { __thunkReportBatches?: Map<string, { reports: Map<string, { file: string; report: Report }>; timer: ReturnType<typeof setTimeout> }> };
+type Report = WorkerReport;
+const g = globalThis as typeof globalThis & { __thunkReportBatches?: Map<string, { reports: Map<string, Report>; timer: ReturnType<typeof setTimeout> }> };
 const batches = g.__thunkReportBatches ??= new Map();
-export const reportFile = (project: Project, sessionId: string) => path.join(projectConfigDir(project.dataKey), "worker-reports", `${sessionId}.json`);
-export async function savedReports(project: Project, sessionId: string): Promise<Report[]> {
-  const text = await readOptional(reportFile(project, sessionId));
-  return text ? JSON.parse(text) : [];
-}
-export async function savedReport(project: Project, sessionId: string): Promise<Report | null> {
-  return (await savedReports(project, sessionId)).at(-1) ?? null;
-}
+/** The worker session's reports (the outbox to its chief), oldest first. */
+export const savedReports = (sessionId: string): Promise<Report[]> => listWorkerReports(sessionId);
+export const savedReport = (sessionId: string): Promise<Report | null> => latestWorkerReport(sessionId);
 export async function queueReport(project: Project, session: Pick<SessionMeta, "id" | "origin">, seq: number, content: string) {
   if (session.origin?.kind !== "worker") return;
   const chiefSessionId = session.origin.chiefSessionId;
-  const file = reportFile(project, session.id);
-  const report = await withFileLock(file, async () => {
-    const previous = await readOptional(file);
-    const saved: Report[] = previous ? JSON.parse(previous) : [];
-    const existing = saved.find((r) => r.seq === seq);
-    if (existing) return existing;
-    const next: Report = { seq, createdAt: new Date().toISOString(), content, chiefSessionId, delivered: !chiefSessionId };
-    const reports = [...saved.filter((r) => !r.delivered), next].sort((a, b) => a.seq - b.seq);
-    await replaceFile(file, JSON.stringify(reports), previous);
-    return next;
-  });
-  enqueue(file, report);
+  enqueue(await saveWorkerReport(project.id, { sessionId: session.id, seq, content, chiefSessionId, delivered: !chiefSessionId }));
 }
-export function enqueue(file: string, report: Report) {
+export function enqueue(report: Report) {
   if (report.delivered || !report.chiefSessionId) return;
   const chiefId = report.chiefSessionId;
   let batch = batches.get(chiefId);
@@ -45,7 +27,7 @@ export function enqueue(file: string, report: Report) {
     batch = { reports: new Map(), timer };
     batches.set(chiefId, batch);
   }
-  batch.reports.set(`${file}:${report.seq}`, { file, report });
+  batch.reports.set(`${report.sessionId}:${report.seq}`, report);
 }
 /** A worker answers to its project's newest chief, so "New chief" takes over work already running. Null when the chief was deleted. */
 export async function currentChiefId(chiefId: string) {
@@ -53,15 +35,7 @@ export async function currentChiefId(chiefId: string) {
   if (!meta) return null;
   return (await listSessions({ projectId: meta.projectId, limit: 10_000 })).find((s) => s.origin?.kind === "chief")?.id ?? chiefId;
 }
-async function markDelivered(pending: { file: string; report: Report }[]) {
-  for (const { file, report } of pending) await withFileLock(file, async () => {
-    const previous = await readOptional(file);
-    if (previous) {
-      const reports: Report[] = JSON.parse(previous);
-      await replaceFile(file, JSON.stringify(reports.map((r) => r.seq === report.seq ? { ...r, delivered: true } : r)), previous);
-    }
-  });
-}
+const markDelivered = (pending: Report[]) => markReportsDelivered(pending);
 export async function flushReports(chiefId: string) {
   const batch = batches.get(chiefId);
   if (!batch) return;
@@ -74,17 +48,17 @@ export async function flushReports(chiefId: string) {
     const live = targetId && chief && ["closed", "error"].includes(chief.meta.status) ? await resumeSession(targetId) : chief;
     // Each report already reached the inbox through notify; retrying cannot bring a deleted chief back.
     if (!live) return await markDelivered(pending);
-    const content = pending.map(({ report }) => report.content).join("\n\n");
+    const content = pending.map((report) => report.content).join("\n\n");
     // A persisted user message is the delivery receipt if we crash before clearing the outbox.
-    const unsent = pending.filter(({ report }) => !live.events.some((e) => e.type === "user_message" && e.content.includes(report.content)));
+    const unsent = pending.filter((report) => !live.events.some((e) => e.type === "user_message" && e.content.includes(report.content)));
     if (unsent.length) {
       const before = live.seq;
-      pushUserMessage(live, unsent.length === pending.length ? content : unsent.map(({ report }) => report.content).join("\n\n"));
+      pushUserMessage(live, unsent.length === pending.length ? content : unsent.map((report) => report.content).join("\n\n"));
       await insertEvents(live.id, live.events.filter((e) => e.seq > before && e.type === "user_message"));
     }
     await markDelivered(pending);
   } catch (err) {
-    for (const { file, report } of pending) enqueue(file, report);
+    for (const report of pending) enqueue(report);
     throw err;
   }
 }

@@ -124,7 +124,7 @@ test("chief delegates in isolated worktrees, caps concurrency, batches reports a
   assert.deepEqual(await service.drainQueue(project.id), [fifth.taskId], "a freed slot starts the queued task");
   assert.equal(tasks.get(fifth.taskId).status, "in_progress");
   await service.stopWorker(project.id, fifth.taskId, "Not needed for this test");
-  await until(async () => await reports.savedReport(project, workers[1].sessionId));
+  await until(async () => await reports.savedReport(workers[1].sessionId));
   assert.equal(chief.events.filter((e) => e.type === "user_message").length, 0);
   await reports.flushReports(chief.id);
   const delivered = chief.events.filter((e) => e.type === "user_message");
@@ -137,11 +137,11 @@ test("chief delegates in isolated worktrees, caps concurrency, batches reports a
   await service.stopWorker(project.id, workers[2].taskId, "No longer needed");
   assert.equal(tasks.get(workers[2].taskId).status, "cancelled");
   await service.stopWorker(project.id, workers[3].taskId, "Cleanup");
-  await until(async () => await reports.savedReport(project, workers[3].sessionId));
+  await until(async () => await reports.savedReport(workers[3].sessionId));
   await reports.flushReports(chief.id);
   await service.messageWorker(project.id, workers[0].taskId, "Please fix the test");
   finish(first, "Fixed test");
-  await until(async () => (await reports.savedReport(project, first.id))?.content.includes("Fixed test"));
+  await until(async () => (await reports.savedReport(first.id))?.content.includes("Fixed test"));
   await reports.flushReports(chief.id);
   const before = notifications.length;
   await service.recoverWorkers();
@@ -158,7 +158,7 @@ test("note brief round trip, direct worker completion and setup failure", async 
   assert.match(input, /Truncated; read the note path/);
   assert.ok(input.length < 25_000);
   finish(live);
-  await until(async () => await reports.savedReport(project, live.id));
+  await until(async () => await reports.savedReport(live.id));
   assert.equal(tasks.get(worker.taskId).status, "done");
   const chief = await service.openChief(project.id);
   chief.meta.status = "running";
@@ -167,7 +167,7 @@ test("note brief round trip, direct worker completion and setup failure", async 
   const assigned = await service.delegate(project.id, chief.id, { taskId: existing.id });
   assert.equal(assigned.taskId, existing.id);
   finish(sessions.get(assigned.sessionId));
-  await until(async () => await reports.savedReport(project, assigned.sessionId));
+  await until(async () => await reports.savedReport(assigned.sessionId));
   await reports.flushReports(chief.id);
   setupFailure = true;
   await assert.rejects(service.delegate(project.id, null, { title: "Broken setup" }), /setup failed/);
@@ -227,7 +227,7 @@ test("restart recovers detached results, reports interrupted work, and preserves
   finish(detached, "Finished while detached");
   persisted.set(detached.id, detached); sessions.delete(detached.id);
   await service.recoverWorkers();
-  assert.match((await reports.savedReport(project, detached.id)).content, /Finished while detached/);
+  assert.match((await reports.savedReport(detached.id)).content, /Finished while detached/);
   await reports.flushReports(chief.id);
   assert.match(chief.events.at(-1).content, /Finished while detached/);
   const count = notifications.length;
@@ -242,12 +242,12 @@ test("restart recovers detached results, reports interrupted work, and preserves
   persisted.set(interrupted.id, interrupted); sessions.delete(interrupted.id);
   await service.recoverWorkers();
   assert.equal(tasks.get(interrupted.meta.origin.taskId).status, "blocked");
-  assert.match((await reports.savedReport(project, interrupted.id)).content, /interrupted by server restart/);
+  assert.match((await reports.savedReport(interrupted.id)).content, /interrupted by server restart/);
   await reports.flushReports(chief.id);
 
   await reports.queueReport(project, detached.meta, 100, "<worker_report>First undelivered</worker_report>");
   await reports.queueReport(project, detached.meta, 200, "<worker_report>Second undelivered</worker_report>");
-  assert.equal((await reports.savedReports(project, detached.id)).filter((r) => !r.delivered).length, 2);
+  assert.equal((await reports.savedReports(detached.id)).filter((r) => !r.delivered).length, 2);
   await reports.flushReports(chief.id);
   assert.match(chief.events.at(-1).content, /First undelivered[\s\S]*Second undelivered/);
 });
@@ -262,15 +262,15 @@ test("reopening a finished worker neither arms a watcher nor changes its task", 
   emit(live, { type: "status", state: "closed" });
   await tick();
   assert.equal(tasks.get(taskId).status, "done");
-  assert.equal(await reports.savedReport(project, live.id), null);
+  assert.equal(await reports.savedReport(live.id), null);
 });
 
 test("an empty needs_person field does not block a finished worker", async () => {
   const worker = await service.delegate(project.id, null, { title: "Blank field" });
   finish(sessions.get(worker.sessionId), "```worker-summary\noutcome: done\nsummary: ok\nbranch: b\nneeds_person:\n```");
-  await until(async () => await reports.savedReport(project, worker.sessionId));
+  await until(async () => await reports.savedReport(worker.sessionId));
   assert.equal(tasks.get(worker.taskId).status, "done");
-  assert.match((await reports.savedReport(project, worker.sessionId)).content, /status="done"/);
+  assert.match((await reports.savedReport(worker.sessionId)).content, /status="done"/);
 });
 
 test("the chief cannot start a worker that bypasses permissions", async () => {
@@ -296,7 +296,7 @@ test("a deleted chief stops report retries", async () => {
   const meta = { id: id(), origin: { kind: "worker", chiefSessionId: ghost, taskId: id() } };
   await reports.queueReport(project, meta, 1, "<worker_report>Orphan</worker_report>");
   await reports.flushReports(ghost);
-  assert.equal((await reports.savedReport(project, meta.id)).delivered, true);
+  assert.equal((await reports.savedReport(meta.id)).delivered, true);
 });
 
 test("a new chief takes over reports from running workers", async () => {
@@ -307,7 +307,7 @@ test("a new chief takes over reports from running workers", async () => {
   fresh.meta.createdAt = new Date(Date.now() + 60_000).toISOString();
   const before = old.events.length;
   finish(sessions.get(worker.sessionId), "Handover complete");
-  await until(async () => await reports.savedReport(project, worker.sessionId));
+  await until(async () => await reports.savedReport(worker.sessionId));
   await reports.flushReports(old.id);
   assert.match(fresh.events.find((e) => e.type === "user_message").content, /Handover complete/);
   assert.equal(old.events.slice(before).some((e) => e.type === "user_message"), false);
@@ -403,11 +403,11 @@ test("delegation reuses existing workspaces, validates targets and serializes co
   assert.equal(sessions.get(worker.sessionId).ctx.workspace, target, "keeps the existing checkout and branch");
   finish(sessions.get(worker.sessionId));
   finish(sessions.get(second.sessionId));
-  await until(async () => await reports.savedReport(project, second.sessionId));
+  await until(async () => await reports.savedReport(second.sessionId));
   const followup = await service.delegate(project.id, chief.id, { title: "Next task", workspaceId: target.id });
   assert.equal(followup.workspaceId, target.id, "a finished worker does not block reuse");
   finish(sessions.get(followup.sessionId));
-  await until(async () => await reports.savedReport(project, followup.sessionId));
+  await until(async () => await reports.savedReport(followup.sessionId));
   await reports.flushReports(chief.id);
 });
 
@@ -492,8 +492,8 @@ test("a scout runs read-only in its own environment, needs no Git repository and
     assert.equal(prompt.readOnlySession({ kind: "worker", taskId: id(), chiefSessionId: null }), false);
     assert.match(prompt.teamPrompt(live.meta.origin), /read-only scout/);
     finish(live, "```worker-summary\noutcome: done\nsummary: The clock is mocked twice\nbranch: none\n```");
-    await until(async () => await reports.savedReport(project, live.id));
-    const report = (await reports.savedReport(project, live.id)).content;
+    await until(async () => await reports.savedReport(live.id));
+    const report = (await reports.savedReport(live.id)).content;
     assert.match(report, /Mode: scout/);
     assert.doesNotMatch(report, /^Diff:/m);
     assert.equal(tasks.get(scout.taskId).status, "done");
@@ -513,9 +513,9 @@ test("a race runs one task on several models; the pick hands the task to the win
   assert.match(prompt.teamPrompt(a.meta.origin), /Other workers are doing the same task/);
   finishWith(a, "Sonnet version", 0.4);
   finishWith(b, "Haiku version", 0.1);
-  await until(async () => (await reports.savedReport(project, a.id)) && (await reports.savedReport(project, b.id)));
+  await until(async () => (await reports.savedReport(a.id)) && (await reports.savedReport(b.id)));
   assert.equal(tasks.get(raced.taskId).status, "in_progress", "an undecided race leaves the task open");
-  assert.match((await reports.savedReport(project, b.id)).content, /pick one with workers_pick/);
+  assert.match((await reports.savedReport(b.id)).content, /pick one with workers_pick/);
   await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, id()), /not racing/);
   const picked = await service.pickRaceWinner(project.id, raced.taskId, b.id);
   assert.deepEqual(picked.archived, [a.meta.workspaceId]);
@@ -525,7 +525,7 @@ test("a race runs one task on several models; the pick hands the task to the win
   await assert.rejects(service.pickRaceWinner(project.id, raced.taskId, a.id), /already has a winner/);
   await service.messageWorker(project.id, raced.taskId, "Add a benchmark");
   finishWith(b, "Benchmark added", 0.2);
-  await until(async () => (await reports.savedReport(project, b.id))?.content.includes("Benchmark added"));
+  await until(async () => (await reports.savedReport(b.id))?.content.includes("Benchmark added"));
   assert.equal(tasks.get(raced.taskId).status, "done", "the winner owns the task after the pick");
   const history = await service.workersHistory(project.id);
   const row = history.recent.find((r) => r.taskId === raced.taskId);
@@ -541,13 +541,13 @@ test("stats count each finish once, including after recovery", async () => {
   const worker = await service.delegate(project.id, null, { title: "Counted once", model: "claude-sonnet-5-5" });
   const live = sessions.get(worker.sessionId);
   finishWith(live, "First pass", 0.25);
-  await until(async () => await reports.savedReport(project, live.id));
+  await until(async () => await reports.savedReport(live.id));
   await service.recoverWorkers();
   const stats = await workerRows.getTaskStats(worker.taskId);
   assert.equal(stats.rounds, 1);
   assert.equal(stats.costUsd, 0.25);
   assert.equal(stats.outcome, "done");
-  assert.match((await reports.savedReport(project, live.id)).content, /Cost: \$0\.2500 this round/);
+  assert.match((await reports.savedReport(live.id)).content, /Cost: \$0\.2500 this round/);
   const summary = workersState.summarizeStats([stats, { ...stats, taskId: id(), rounds: 3, costUsd: 0.75, outcome: "done" }]);
   assert.deepEqual(summary.map((s) => [s.model, s.tasks, s.avgRounds, s.firstRoundDone, s.totalCostUsd]), [["claude-sonnet-5-5", 2, 2, 1, 1]]);
 });
