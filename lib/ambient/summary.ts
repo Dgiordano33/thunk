@@ -21,11 +21,20 @@ export function workspaceActivity(sessions: ActivitySession[], workspaceId: stri
   return null;
 }
 
-export function summarizeUsage(entries: UsageEntry[], workspaceBySession: Map<string, string>, timeZone: string): UsageSummary {
+/** Cost already summed by day (YYYY-MM-DD in the viewer's time zone) and workspace, e.g. by the database. */
+export type UsageBucket = { day: string; workspaceId: string | null; cost: number };
+
+export function summarizeUsage(entries: UsageEntry[], workspaceBySession: Map<string, string>, timeZone: string, buckets: UsageBucket[] = []): UsageSummary {
   const days = new Map<string, number>();
   const workspaces = new Map<string, number>();
   const seen = new Set<string>();
   let total = 0;
+  for (const bucket of buckets) {
+    if (!Number.isFinite(bucket.cost)) continue;
+    total += bucket.cost;
+    days.set(bucket.day, (days.get(bucket.day) ?? 0) + bucket.cost);
+    if (bucket.workspaceId) workspaces.set(bucket.workspaceId, (workspaces.get(bucket.workspaceId) ?? 0) + bucket.cost);
+  }
   const formatter = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
   for (const entry of entries) {
     const key = `${entry.sessionId}:${entry.seq}`;

@@ -129,6 +129,8 @@ export type HarnessEventBody =
       costUsd: number;
       numTurns: number;
       durationMs: number;
+      /** The turn's main-loop tokens, when the runtime reports them (Claude; absent on older events). */
+      usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number };
     }
   | {
       type: "status";

@@ -52,6 +52,8 @@ On the server:
 
 A manual restart or update stops running agents and terminals, so use it when nothing is running. Routines that were interrupted recover on their own; sessions can be resumed by hand.
 
+A session whose agent has ended stays in server memory until nobody has had it open for 30 minutes; then it is dropped (checked every 10 minutes). Opening it again shows its history from the database, and Resume picks it up where it stopped. With no database (memory-only mode) ended sessions stay in memory. Usage totals read a per-turn table (`usage_results`) instead of every stored message.
+
 `thunk update` builds the new version beside the running one and switches over only when the build succeeds. A failed build leaves the running version alone. The only time Thunk stops during an update is when `package-lock.json` changed and dependencies have to be reinstalled.
 
 ### Open it in the Mac app

@@ -1,7 +1,7 @@
 import { captureTask, listCaptures } from '@/lib/db/repo/captures';
 import "server-only";
 import { linearBranch } from "@/lib/integrations/linear/sync";
-import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, type LiveSession } from "@/lib/agent";
+import { closeSession, getSession, listSessions, listLiveSessions, onSessionCreated, resumeSession, pushUserMessage, subscribe, sweepIdleSessions, type LiveSession } from "@/lib/agent";
 import { createWorkspace, getWorkspaceContext } from "@/lib/projects";
 import { getProject, listProjects } from "@/lib/db/repo/projects";
 import { getWorkspace } from "@/lib/db/repo/workspaces";
@@ -491,13 +491,16 @@ export async function recoverWorkers() {
 
 /**
  * Start queued work when a task changes (a dependency may now be done), and archive finished
- * worker workspaces and release idle effort worktrees now and then. Replaces the previous subscription and timer, so HMR does not stack them.
+ * worker workspaces, release idle effort worktrees and drop idle ended sessions from memory now and then. Replaces the previous subscription and timer, so HMR does not stack them.
  */
 export function ensureWorkerHousekeeping() {
   const previous = g.__thunkWorkerHousekeeping;
   if (previous) { previous.unsubscribe(); clearInterval(previous.timer); }
   const unsubscribe = subscribeTasks((e) => { if (e.kind === "changed") scheduleDrain(e.projectId); });
-  const timer = setInterval(() => void import("./cleanup").then(async (m) => { await m.cleanupWorkerWorkspaces(); await m.releaseIdleWorkspaces(); }).catch((err) => console.error("[thunk] workspace cleanup failed", err)), 10 * 60_000);
+  const timer = setInterval(() => {
+    try { sweepIdleSessions(); } catch (err) { console.error("[thunk] idle session sweep failed", err); }
+    void import("./cleanup").then(async (m) => { await m.cleanupWorkerWorkspaces(); await m.releaseIdleWorkspaces(); }).catch((err) => console.error("[thunk] workspace cleanup failed", err));
+  }, 10 * 60_000);
   timer.unref?.();
   g.__thunkWorkerHousekeeping = { unsubscribe, timer };
   void listProjects().then((projects) => { for (const p of projects) scheduleDrain(p.id, 0); }).catch((err) => console.error("[thunk] worker queue recovery failed", err));

@@ -95,6 +95,12 @@ export function handleMessage(live: LiveSession, msg: SDKMessage) {
         costUsd: msg.total_cost_usd,
         numTurns: msg.num_turns,
         durationMs: msg.duration_ms,
+        usage: msg.usage && {
+          inputTokens: msg.usage.input_tokens,
+          outputTokens: msg.usage.output_tokens,
+          cacheReadTokens: msg.usage.cache_read_input_tokens,
+          cacheCreationTokens: msg.usage.cache_creation_input_tokens,
+        },
       });
       if (live.pending.size === 0) setState(live, "idle");
       return;
