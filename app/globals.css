@@ -799,6 +799,7 @@
 .doc-prose summary { cursor: pointer; font-weight: 600; }
 .doc-prose .editor-toc { display: flex; flex-direction: column; gap: .25rem; padding: .75rem; border: 1px solid var(--border); border-radius: .375rem; }
 .doc-prose .editor-toc button { text-align: left; text-decoration: underline; cursor: pointer; }
+.doc-prose img[data-inline-image] { display: inline; max-width: 100%; height: auto; vertical-align: middle; }
 .doc-prose figure img { max-width: 100%; height: auto; border-radius: .375rem; }
 .doc-prose figure iframe { width: 100%; min-height: 320px; border: 1px solid var(--border); }
 .doc-prose figcaption { font-size: .85em; color: var(--muted-foreground); }

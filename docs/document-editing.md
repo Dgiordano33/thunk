@@ -13,7 +13,7 @@ Canvas text cards, notes, and editable assistant responses share document contro
 
 ## Storage and agent edits
 
-Ordinary prose remains Markdown. Rich tables and blocks use fenced `thunk-block-v1` JSON nodes so widths, merged cells, nested content, colors, and reference IDs survive file-backed note saves and agent edits. These blocks are rendered as editable content in Thunk. Other Markdown readers display their structured source.
+Ordinary prose, plain tables (one header row, no merged or resized cells), and images stay Markdown, including images inside a line of text and images with relative URLs. Richer tables and blocks use fenced `thunk-block-v1` JSON nodes so widths, merged cells, nested content, colors, and reference IDs survive file-backed note saves and agent edits. Checklist items inside these blocks still appear in Tasks and can be ticked from there. These blocks are rendered as editable content in Thunk. Other Markdown readers display their structured source.
 
 Agents should preserve the fence, node type, attributes, and unrelated content when changing a rich block. Text replacements inside these fences must preserve valid JSON escaping. Comment marks are stored separately and are not serialized into the fences.
 

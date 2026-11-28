@@ -15,7 +15,8 @@ function render(node: JSONContent, key: number): ReactNode {
     const tag = ({ bold: 'strong', italic: 'em', strike: 's', code: 'code', underline: 'u' } as Record<string, string>)[mark.type];
     return tag ? createElement(tag, {}, child) : child;
   }, node.text)}</Fragment>;
-  if (node.type === 'media') return <figure key={key} id={a.blockId}>{a.kind === 'image' ? <img src={safeMediaUrl(a.src)} alt={a.title}/> : <a href={safeMediaUrl(a.src)}>{a.title || a.src}</a>}<figcaption>{a.title}</figcaption></figure>;
+  if (node.type === 'media') return <figure key={key} id={a.blockId}>{a.kind === 'image' ? <img src={safeMediaUrl(a.src) || undefined} alt={a.title}/> : <a href={safeMediaUrl(a.src)}>{a.title || a.src}</a>}<figcaption>{a.title}</figcaption></figure>;
+  if (node.type === 'inlineImage') return <img key={key} src={safeMediaUrl(a.src) || undefined} alt={a.title}/>;
   if (node.type === 'tableOfContents') return <nav key={key} aria-label="Table of contents">Table of contents</nav>;
   if (node.type === 'richBlock') return a.kind === 'toggle' ? <details key={key} open id={a.blockId}><summary>{a.title}</summary>{children}</details> : <aside key={key} id={a.blockId} className="editor-callout">{children}</aside>;
   if (node.type === 'table') return <table key={key} id={a.blockId}><tbody>{children}</tbody></table>;
