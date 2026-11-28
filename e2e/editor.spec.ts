@@ -16,7 +16,7 @@ test('rich document editing survives reload and supports slash, table, toggle an
   await expect(root.locator('tr').first().locator('th')).toHaveCount(4);
   await root.getByRole('button', { name: 'Block', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
-  await expect.poll(async () => (await (await request.get(board.api)).json()).cards.find((x: {id:string}) => x.id === c.id).markdown, { timeout: 30000 }).toContain('thunk-block-v1');
+  await expect.poll(async () => (await (await request.get(board.api)).json()).cards.find((x: {id:string}) => x.id === c.id).markdown, { timeout: 30000 }).toMatch(/^\| Hobby /m);
   await page.reload(); await expect(card(page, c.id).locator('table')).toContainText('Hobby');
   await card(page, c.id).locator('.tiptap > p').last().click();
   await card(page, c.id).getByRole('button', { name: 'Insert / Turn into', exact: true }).click();

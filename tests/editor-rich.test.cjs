@@ -51,3 +51,36 @@ test('rich persistence strips comment marks without changing visible text', () =
  assert.ok(!md.includes('private-thread'));
  assert.equal(m.parse(md).content[0].content[0].content[0].text, 'A quote');
 });
+test('images inside text stay inline and round trip as plain markdown', () => {
+ const m = manager();
+ const md = 'See ![a](https://x.com/a.png) here';
+ const doc = m.parse(md);
+ assert.equal(doc.content[0].type, 'paragraph');
+ assert.equal(doc.content[0].content[1].type, 'inlineImage');
+ assert.equal(m.serialize(doc), md);
+ assert.equal(m.parse(m.serialize(m.parse('- item ![b](https://x.com/b.png)'))).content[0].type, 'bulletList');
+});
+test('relative image URLs survive a save', () => {
+ const m = manager();
+ assert.equal(m.serialize(m.parse('![diagram](./img.png)')), '![diagram](./img.png)');
+ assert.equal(m.parse('![diagram](./img.png)').content[0].attrs.src, './img.png');
+});
+test('plain tables stay GFM; merged or sized tables use rich blocks', () => {
+ const m = manager();
+ const md = m.serialize(m.parse('| a | b |\n|---|---|\n| 1 | 2 |'));
+ assert.ok(!md.includes('thunk-block-v1'));
+ assert.match(md, /\| a +\| b +\|/);
+ const merged = { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableHeader', attrs: { colspan: 2, rowspan: 1, colwidth: null }, content: [p('H')] }] }] };
+ assert.match(m.serialize({ type: 'doc', content: [merged] }), /thunk-block-v1/);
+});
+test('checklists inside rich blocks still surface as note tasks and can be ticked', () => {
+ const { extractTasks, setTaskDone } = require('../lib/notes/frontmatter.ts');
+ const m = manager();
+ const item = (text, checked) => ({ type: 'taskItem', attrs: { checked }, content: [{ type: 'paragraph', content: [{ type: 'text', text, marks: [{ type: 'ink', attrs: { tone: 'accent', highlight: false } }] }] }] });
+ const body = `- [ ] plain\n\n${m.serialize({ type: 'doc', content: [{ type: 'taskList', content: [item('buy milk', false), item('eggs', true)] }] })}\n`;
+ const tasks = extractTasks(body);
+ assert.deepEqual(tasks.map(t => [t.text, t.done]), [['plain', false], ['buy milk', false], ['eggs', true]]);
+ const ticked = setTaskDone(body, tasks[1].line, true);
+ assert.deepEqual(extractTasks(ticked).map(t => t.done), [false, true, true]);
+ assert.equal(m.parse(ticked).content[1].content[0].attrs.checked, true);
+});

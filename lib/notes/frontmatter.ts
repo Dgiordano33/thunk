@@ -149,16 +149,51 @@ export function noteExcerpt(body: string, title?: string, max = 140) {
 
 const TASK = /^(\s*[-*+]\s+)\[([ xX])\]\s+(.+)\r?$/;
 
-/** Every `- [ ]` / `- [x]` line in the body, outside fenced code. */
-export function extractTasks(body: string): Omit<NoteTask, "noteId" | "noteTitle" | "notePath">[] {
-  const tasks: Omit<NoteTask, "noteId" | "noteTitle" | "notePath">[] = [];
-  let fence = false;
-  body.split("\n").forEach((line, i) => {
-    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-    if (fence) return;
-    const m = TASK.exec(line);
+type BodyTask = Omit<NoteTask, "noteId" | "noteTitle" | "notePath">;
+type RichNode = { type?: string; text?: string; attrs?: { checked?: unknown }; content?: RichNode[] };
+const RICH_FENCE = /^(`{3,})thunk-block-v1\s*$/;
+const RICH_CHECKED = /^(\s*"checked"\s*:\s*)(true|false)(,?\s*)$/;
+const richText = (n: RichNode): string => n.text ?? (n.content ?? []).map(richText).join("");
+
+/**
+ * Checklist items saved inside a rich block (`thunk-block-v1` JSON). Each task is
+ * anchored to the line holding its `"checked"` attribute, so it can be ticked in place.
+ */
+function richTasks(lines: string[], start: number, end: number): BodyTask[] {
+  let root: RichNode;
+  try { root = JSON.parse(lines.slice(start, end).join("\n")); } catch { return []; }
+  const items: { text: string; done: boolean }[] = [];
+  const walk = (n: RichNode) => {
+    if (n?.type === "taskItem") items.push({ text: richText(n.content?.[0] ?? {}).trim(), done: n.attrs?.checked === true });
+    (Array.isArray(n?.content) ? n.content : []).forEach(walk);
+  };
+  walk(root);
+  const checkedLines: number[] = [];
+  for (let i = start; i < end; i++) if (RICH_CHECKED.test(lines[i])) checkedLines.push(i);
+  // Hand-edited or minified JSON can't be anchored line by line; leave it alone rather than guess.
+  if (checkedLines.length !== items.length) return [];
+  return items.flatMap((t, i) => (t.text ? [{ line: checkedLines[i], text: t.text, done: t.done }] : []));
+}
+
+/** Every `- [ ]` / `- [x]` line in the body, outside fenced code, plus checklist items inside rich blocks. */
+export function extractTasks(body: string): BodyTask[] {
+  const tasks: BodyTask[] = [];
+  const lines = body.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const rich = RICH_FENCE.exec(lines[i].replace(/\r$/, ""));
+    if (rich) {
+      const close = lines.findIndex((l, j) => j > i && l.replace(/\r$/, "") === rich[1]);
+      if (close > i) { tasks.push(...richTasks(lines, i + 1, close)); i = close; continue; }
+    }
+    const fence = /^\s*(```|~~~)/.exec(lines[i]);
+    if (fence) {
+      const close = lines.findIndex((l, j) => j > i && l.trimStart().startsWith(fence[1]));
+      i = close > i ? close : lines.length;
+      continue;
+    }
+    const m = TASK.exec(lines[i]);
     if (m) tasks.push({ line: i, text: m[3].trim(), done: m[2] !== " " });
-  });
+  }
   return tasks;
 }
 
@@ -166,7 +201,13 @@ export function extractTasks(body: string): Omit<NoteTask, "noteId" | "noteTitle
 export function setTaskDone(body: string, line: number, done: boolean) {
   const lines = body.split("\n");
   const m = TASK.exec(lines[line] ?? "");
-  if (!m) return body;
-  lines[line] = lines[line].replace(/^(\s*[-*+]\s+)\[[ xX]\]/, `$1[${done ? "x" : " "}]`);
-  return lines.join("\n");
+  if (m) {
+    lines[line] = lines[line].replace(/^(\s*[-*+]\s+)\[[ xX]\]/, `$1[${done ? "x" : " "}]`);
+    return lines.join("\n");
+  }
+  if (RICH_CHECKED.test(lines[line] ?? "") && extractTasks(body).some((t) => t.line === line)) {
+    lines[line] = lines[line].replace(RICH_CHECKED, `$1${done}$3`);
+    return lines.join("\n");
+  }
+  return body;
 }
