@@ -20,7 +20,7 @@ export async function harvestBrief({ project, workspace }: WorkspaceContext) {
     listTasks({ projectId: project.id, workspaceId: workspace.id, status: ["done"] }),
   ]);
   const finished = await Promise.all(tasks.slice(0, 30).map(async (task) => {
-    const report = task.sessionId ? await savedReport(project, task.sessionId).catch(() => null) : null;
+    const report = task.sessionId ? await savedReport(task.sessionId).catch(() => null) : null;
     return block("task", [task.title, task.body ?? "", report ? `Report:\n${clip(report.content, 4000)}` : ""].filter(Boolean).join("\n\n"), ` id="${task.id}"${task.sessionId ? ` session="${task.sessionId}"` : ""}`);
   }));
   return [
