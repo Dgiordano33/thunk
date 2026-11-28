@@ -1,6 +1,6 @@
 # Platform improvements: review, context, memory and reliability
 
-Status: proposed · Date: 2026-11-27
+Status: shipped · Planned 2026-11-27
 
 ## Goal
 
@@ -262,3 +262,17 @@ Today Harvest appends the workspace log under a dated heading (`lib/projects/har
 - **Claude transcripts** [4]: out of the archive by default, behind a flag.
 - **Thunk-run tests on finish** [11]: per-project setting, off by default.
 - **Plan-change summaries** [12]: the chief writes them.
+
+## How it shipped
+
+Everything above shipped, with these differences:
+
+- [9] Relay grace is not a setting. Request tracking turned that constant into an internal 30-second wait for a result to persist, so three limits remain: workers per project, routine runs at once, chief answer wait.
+- [4] Backups are on by default at 03:00 and keep 7. The folder is shown but only editable in `config/backup.json`. A command-line backup while the server runs asks the server to make it (`PORT=4600 npm run data:backup` on the Droplet).
+- [8] Webhook, Run-script and task triggers still go through `fire` and skip at once when a guardrail declines them; only cron, new-PR and delivery firings use `routine_triggers`. A trigger that gives up still writes a Skipped run, after the hour.
+- [6] Every trial merge is kept (`replaced_at` marks superseded ones), and delivered worker reports are kept as history. Memory-only mode no longer keeps orchestration state across restarts.
+- [10] Attached items have their own group in the Context tab. There is no page listing all context sets yet.
+- [11] Run tests on finish lives in `config/review.json` per project. Claimed evidence that names no criterion is stored but not shown.
+- [12] Only a person's note saves (debounced 60 s) trigger a source revision; the chief's own `notes_update` does not.
+- [2] Memory upkeep is read-only by its prompt only; routine sessions can't be marked read-only yet.
+- [1] Open PR handles the workspace's main repo only; Run again runs the trial merge inside the request.
