@@ -19,6 +19,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # Route types (PageProps, LayoutProps) are generated, not committed.
+      - run: npx next typegen
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
