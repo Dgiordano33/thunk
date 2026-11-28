@@ -177,6 +177,12 @@ export const api = {
     post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context`, ref),
   contextItemAction: (id: string, itemId: string, action: "update" | "remove" | "keep") =>
     post<{ items: import("@/lib/context/types").ContextViewItem[] }>(`/api/sessions/${id}/context/${itemId}`, { action }),
+  listContextSets: (projectId: string) => call<{ sets: import("@/lib/context/types").ContextSet[] }>(`/api/projects/${projectId}/context-sets`),
+  createContextSet: (projectId: string, body: import("@/lib/context/schema").ContextSetInput) =>
+    post<{ set: import("@/lib/context/types").ContextSet }>(`/api/projects/${projectId}/context-sets`, body),
+  updateContextSet: (id: string, patch: import("@/lib/context/schema").ContextSetPatch) =>
+    call<{ set: import("@/lib/context/types").ContextSet }>(`/api/context-sets/${id}`, { method: "PATCH", json: patch }),
+  deleteContextSet: (id: string) => call<{ ok: true }>(`/api/context-sets/${id}`, { method: "DELETE" }),
   noteSessions: (path: string) => call<{ sessions: { sessionId: string; title: string; itemId: string; changed: boolean }[] }>(`/api/context/note-sessions?path=${encodeURIComponent(path)}`),
   // Memory (project or workspace scope)
   getMemory: (scope: "projects" | "workspaces", id: string) =>
@@ -235,6 +241,7 @@ export const api = {
     images?: PromptImage[];
     resumeSdkSessionId?: string;
     title?: string;
+    contextSetId?: string;
   }) => post<{ id: string; workspaceId: string }>("/api/sessions", body),
   getSession: (id: string) => call<{ session: SessionMeta }>(`/api/sessions/${id}`),
   deleteSession: (id: string) => call(`/api/sessions/${id}`, { method: "DELETE" }),

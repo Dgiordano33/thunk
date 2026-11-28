@@ -97,3 +97,14 @@ export const REASONS = {
   removed: "Removed by you",
   missing: "No longer exists",
 };
+
+/** A note picked into a selection: which notebook, and the note's id. */
+export type ContextNoteRef = { scope: import("@/lib/notes/types").NoteScope; id: string };
+
+/** Notes, tasks and Vault items picked together: a routine's own list, or a saved set. */
+export type ContextSelection = { notes: ContextNoteRef[]; taskIds: string[]; vaultIds?: string[] };
+
+/** A named selection saved in a project, reusable by routines and new sessions. */
+export type ContextSet = { id: string; projectId: string; name: string; notes: ContextNoteRef[]; taskIds: string[]; vaultIds: string[]; createdAt: string; updatedAt: string };
+
+export const isEmptySelection = (s: ContextSelection) => !s.notes.length && !s.taskIds.length && !s.vaultIds?.length;

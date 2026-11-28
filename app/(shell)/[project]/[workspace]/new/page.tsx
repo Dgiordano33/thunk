@@ -42,6 +42,7 @@ export default async function NewChatPage({ params, searchParams }: PageProps<"/
       defaultModel={(typeof model === "string" && model) || latest?.model || env.DEFAULT_MODEL}
       defaultMode={latest?.permissionMode ?? "default"}
       disabled={ctx.workspace.status === "archived"}
+      contextProjectId={ctx.project.id}
     />
   );
 }

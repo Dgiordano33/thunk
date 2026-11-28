@@ -200,7 +200,7 @@ export function RoutineForm({
         />
       </Field>
 
-      <Field label="Context" hint="Each run reads the current text of these notes and tasks into its brief, so edits you make between runs are picked up.">
+      <Field label="Context" hint="Each run reads the current text of these notes, tasks and Vault items, or of a saved context set, into its brief, so edits you make between runs are picked up.">
         <ContextPicker projectId={projectId} value={context} onChange={setContext} />
       </Field>
 

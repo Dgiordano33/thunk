@@ -1,6 +1,6 @@
 // Shared between server and client. Keep free of server-only imports.
 import type { ChangedFile } from "@/lib/projects/types";
-import type { NoteScope } from "@/lib/notes/types";
+import type { ContextNoteRef, ContextSelection } from "@/lib/context/types";
 
 /** Where a run happens: an existing workspace, or a fresh worktree created per run. */
 export type RoutineTargetKind = "workspace" | "ephemeral";
@@ -30,10 +30,13 @@ export type RoutineTriggerState = {
 };
 
 /** A note the routine always reads: project, workspace or repo notebook. */
-export type RoutineNoteRef = { scope: NoteScope; id: string };
+export type RoutineNoteRef = ContextNoteRef;
 
-/** Notes and tasks attached to a routine. Each run reads their current content into its brief. */
-export type RoutineContext = { notes: RoutineNoteRef[]; taskIds: string[] };
+/**
+ * Notes, tasks and Vault items attached to a routine. Each run reads their current content into its
+ * brief. With `setId`, the routine uses that saved context set instead of its own lists.
+ */
+export type RoutineContext = ContextSelection & { setId?: string | null };
 
 export const EMPTY_ROUTINE_CONTEXT: RoutineContext = { notes: [], taskIds: [] };
 
