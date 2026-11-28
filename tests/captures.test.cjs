@@ -35,7 +35,7 @@ Module._load=function(r,p,m){
  if(r==='@/lib/db/repo/projects')return {getProject:async(id)=>({id})};
  if(r==='@/lib/db/repo/worker-state')return {isQueued:async(id)=>queue.some(q=>q.taskId===id),listQueue:async()=>queue,relayTaskIds:async(id)=>[...new Set(Object.values(relayTasks[id]??{}))],racesForTask:async()=>[]};
  if(r==='@/lib/db/repo/delegation-plans')return {hasPendingPlanForRelay:async(id)=>Object.values(plans).some(p=>p.relayId===id&&p.status==='pending')};
- if(r==='@/lib/workers/report-up')return {savedReports:async(_project,id)=>reports[id]??[]};
+ if(r==='@/lib/workers/report-up')return {savedReports:async(id)=>reports[id]??[]};
  if(r==='@/lib/workers/service')return workers;
  if(r==='@/lib/projects/archive')return {archiveWorkspace:async(id)=>{calls.push(['archive',id]);}};
  return load.call(this,r,p,m);

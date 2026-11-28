@@ -99,9 +99,8 @@ const BUSY = ['starting','running','awaiting'];
 async function relayLedger(row: Capture) {
  const ids = row.project_id ? await relayTaskIds(row.id) : [];
  const tasks = (await Promise.all(ids.map(getTask))).filter(t => t !== null);
- const project = row.project_id ? await getProject(row.project_id) : null;
  const queued = row.project_id ? (await listQueue(row.project_id)).some(q=>q.input?.relayId===row.id) : false;
- return { project, tasks, queued };
+ return { tasks, queued };
 }
 
 /** Resume the same request and task ledger. No routing or fresh delegation takes place here. Caller holds the capture lock. */
@@ -140,13 +139,13 @@ export async function sweepRelays(now = Date.now()) {
    const receipt=events.find(e=>e.type==='user_message' && e.messageId===row.message_id);
    const dequeued=events.find(e=>e.type==='message_dequeued' && e.messageId===row.message_id);
    const waiting=receipt?.type==='user_message' && receipt.queued && !dequeued;
-   const {project,tasks,queued:workersQueued}=await relayLedger(row);
+   const {tasks,queued:workersQueued}=await relayLedger(row);
    const races=(await Promise.all(tasks.map(t=>racesForTask(t.id)))).flat();
    const sessionIds=[...new Set(tasks.flatMap(t=>[t.sessionId, ...races.filter(r=>r.taskId===t.id).flatMap(r=>r.entries.map(e=>e.sessionId))]).filter((id): id is string => Boolean(id)))];
    const workersBusy=sessionIds.some(id=>BUSY.includes(getSession(id)?.meta.status ?? ''));
    // A finished worker's report waits in a batch before it reaches the chief; it is still in flight.
    const {savedReports}=await import('@/lib/workers/report-up');
-   const reportsPending=project ? (await Promise.all(sessionIds.map(id=>savedReports(project,id)))).some(rs=>rs.some(r=>!r.delivered)) : false;
+   const reportsPending=(await Promise.all(sessionIds.map(id=>savedReports(id)))).some(rs=>rs.some(r=>!r.delivered));
    const planPending=await hasPendingPlanForRelay(row.id);
    const outstanding=Boolean(workersBusy || workersQueued || reportsPending || planPending);
    const terminal=!live || ['closed','error'].includes(live.meta.status);
